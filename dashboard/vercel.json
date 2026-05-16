@@ -1,0 +1,7 @@
+{
+  "buildCommand": "pip install --upgrade pip && pip install -r requirements.txt",
+  "outputDirectory": ".",
+  "framework": "streamlit",
+  "installCommand": "pip install --upgrade pip && pip install -r requirements.txt",
+  "devCommand": "streamlit run app.py --server.port $PORT"
+}

@@ -1,0 +1,41 @@
+{
+  "last_post_id": "post_24_70829_829",
+  "scraped_post_ids": [
+    "post_14_68454_8454",
+    "post_9_70829_829",
+    "post_20_45903_5903",
+    "post_1_94192_4192",
+    "post_17_10271_271",
+    "post_6_43975_3975",
+    "post_7_46890_6890",
+    "post_3_22206_2206",
+    "post_8_82443_2443",
+    "post_19_68454_8454",
+    "post_5_70829_829",
+    "post_23_55833_5833",
+    "post_18_31820_1820",
+    "post_21_86033_6033",
+    "post_0_78070_8070",
+    "post_22_68454_8454",
+    "post_16_10065_65",
+    "post_4_21638_1638",
+    "post_15_67146_7146",
+    "post_24_70829_829",
+    "post_11_70829_829",
+    "post_10_13317_3317",
+    "post_12_68454_8454",
+    "post_13_30900_900",
+    "post_2_20200_200"
+  ],
+  "stats": {
+    "posts_scraped": 25,
+    "posts_duplicated": 158,
+    "comments_scraped": 0,
+    "comments_duplicated": 0,
+    "errors": 0,
+    "start_time": 1778970343.4270358,
+    "checkpoints_saved": 0
+  },
+  "page_id": "SantaAnaAlcaldia",
+  "last_updated": "2026-05-16T16:27:17.836644"
+}

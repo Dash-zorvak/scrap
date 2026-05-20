@@ -201,17 +201,35 @@ class BulkFacebookScraper:
                     return values[-1].get("value", 0)
         return None
 
+    def _get_all_posts_paginated(self, fields: str = "post_id,views_count", limit: int = 5000) -> list:
+        """Fetch all posts using pagination (Supabase max 1000 per request)."""
+        all_posts = []
+        page_size = 1000
+        offset = 0
+        while offset < limit:
+            remaining = limit - offset
+            fetch = min(page_size, remaining)
+            r = self.storage.client.table("fb_posts")\
+                .select(fields)\
+                .order("created_time", desc=True)\
+                .range(offset, offset + fetch - 1)\
+                .execute()
+            batch = r.data or []
+            if not batch:
+                break
+            all_posts.extend(batch)
+            offset += len(batch)
+            if len(batch) < fetch:
+                break
+            logger.info(f"  Fetched {len(all_posts)} posts so far...")
+        return all_posts
+
     def phase_2_views(self, max_posts: int = 5000, checkpoint: int = 50):
         """Fase 2: Backfill de views_count para posts existentes."""
         logger.info("=" * 50)
         logger.info("FASE 2: Views (backfill)")
         logger.info("=" * 50)
-        r = self.storage.client.table("fb_posts")\
-            .select("post_id,views_count")\
-            .order("created_time", desc=True)\
-            .limit(max_posts)\
-            .execute()
-        posts = r.data or []
+        posts = self._get_all_posts_paginated("post_id,views_count", max_posts)
         logger.info(f"Total posts to process: {len(posts)}")
         start = time.time()
         updated = 0

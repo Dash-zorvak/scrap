@@ -22,3 +22,12 @@ outputs/*.json
 
 # Logs
 *.log
+
+# Session / Cookies (sensitive)
+cookies.json
+tiktok_cookies.json
+tiktok_session.json
+src/tiktok_session_cookies.json
+
+# Checkpoints (generated)
+*_checkpoint.json

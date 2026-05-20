@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -19,8 +20,16 @@ def get_supabase_client() -> Client:
 
 
 class SupabaseStorage:
-    def __init__(self):
+    def __init__(self, local_backup: bool = True):
         self.client = get_supabase_client()
+        self.local = None
+        if local_backup:
+            try:
+                from src.storage.db import LocalStorage
+                self.local = LocalStorage()
+                logger.info("Local SQLite backup initialized")
+            except Exception as e:
+                logger.warning(f"Local backup not available: {e}")
 
     def insert_fb_post(self, post: Dict[str, Any]) -> bool:
         try:
@@ -46,38 +55,11 @@ class SupabaseStorage:
                 "zona": post.get("zona", ""),
             }
             self.client.table("fb_posts").upsert(data, on_conflict="post_id").execute()
+            if self.local:
+                self.local.insert_fb_post(post)
             return True
         except Exception as e:
             logger.error(f"Error inserting FB post: {e}")
-            return False
-
-    def insert_tt_post(self, post: Dict[str, Any]) -> bool:
-        try:
-            hashtags = post.get("hashtags", [])
-            if isinstance(hashtags, list):
-                hashtags = ",".join(hashtags)
-
-            data = {
-                "video_id": post.get("video_id"),
-                "username": post.get("username", ""),
-                "description": post.get("description", "")[:10000],
-                "create_time": post.get("create_time"),
-                "likes_count": post.get("likes_count", 0),
-                "comments_count": post.get("comments_count", 0),
-                "shares_count": post.get("shares_count", 0),
-                "views_count": post.get("views_count", 0),
-                "favorites_count": post.get("favorites_count", 0),
-                "video_url": post.get("video_url", ""),
-                "hashtags": hashtags,
-                "sentiment": post.get("sentiment", ""),
-                "sentiment_score": post.get("sentiment_score", 0),
-                "topic_category": post.get("topic_category", ""),
-                "zona": post.get("zona", ""),
-            }
-            self.client.table("tt_posts").upsert(data, on_conflict="video_id").execute()
-            return True
-        except Exception as e:
-            logger.error(f"Error inserting TT post: {e}")
             return False
 
     def insert_fb_comment(self, comment: Dict[str, Any]) -> bool:
@@ -96,32 +78,11 @@ class SupabaseStorage:
                 "zona": comment.get("zona", ""),
             }
             self.client.table("fb_comments").upsert(data, on_conflict="comment_id").execute()
+            if self.local:
+                self.local.insert_fb_comment(comment)
             return True
         except Exception as e:
             logger.error(f"Error inserting FB comment: {e}")
-            return False
-
-    def insert_tt_comment(self, comment: Dict[str, Any]) -> bool:
-        try:
-            data = {
-                "comment_id": comment.get("comment_id"),
-                "video_id": comment.get("video_id", ""),
-                "message": comment.get("message", "")[:5000],
-                "author_name": comment.get("author_name", ""),
-                "author_unique_id": comment.get("author_unique_id", ""),
-                "author_avatar": comment.get("author_avatar", ""),
-                "create_time": comment.get("create_time"),
-                "likes_count": comment.get("like_count", comment.get("likes_count", 0)),
-                "reply_count": comment.get("reply_count", 0),
-                "sentiment": comment.get("sentiment", ""),
-                "sentiment_score": comment.get("sentiment_score", 0),
-                "topic_category": comment.get("topic_category", ""),
-                "zona": comment.get("zona", ""),
-            }
-            self.client.table("tt_comments").upsert(data, on_conflict="comment_id").execute()
-            return True
-        except Exception as e:
-            logger.error(f"Error inserting TT comment: {e}")
             return False
 
     def insert_problematica(self, problematica: Dict[str, Any]) -> bool:
@@ -137,6 +98,8 @@ class SupabaseStorage:
                 "sentiment_score": problematica.get("sentiment_score", 0),
             }
             self.client.table("problematicas").insert(data).execute()
+            if self.local:
+                self.local.insert_problematica(problematica)
             return True
         except Exception as e:
             logger.error(f"Error inserting problematica: {e}")
@@ -156,6 +119,8 @@ class SupabaseStorage:
                 "metric_data": insight.get("metric_data", {}),
             }
             self.client.table("insights").insert(data).execute()
+            if self.local:
+                self.local.insert_insight(insight)
             return True
         except Exception as e:
             logger.error(f"Error inserting insight: {e}")
@@ -180,6 +145,8 @@ class SupabaseStorage:
             self.client.table("daily_metrics").upsert(
                 data, on_conflict="platform,date"
             ).execute()
+            if self.local:
+                self.local.insert_daily_metric(metric)
             return True
         except Exception as e:
             logger.error(f"Error inserting daily metric: {e}")
@@ -199,39 +166,15 @@ class SupabaseStorage:
             logger.error(f"Error getting FB posts: {e}")
             return []
 
-    def get_tt_posts(self, limit: int = 100, offset: int = 0) -> List[Dict]:
+    def get_daily_metrics(self, days: int = 30) -> List[Dict]:
         try:
             result = (
-                self.client.table("tt_posts")
+                self.client.table("daily_metrics")
                 .select("*")
-                .order("create_time", desc=True)
-                .range(offset, offset + limit - 1)
+                .order("date", desc=True)
+                .limit(days)
                 .execute()
             )
-            return result.data or []
-        except Exception as e:
-            logger.error(f"Error getting TT posts: {e}")
-            return []
-
-    def get_daily_metrics(self, platform: str = "all", days: int = 30) -> List[Dict]:
-        try:
-            if platform == "all":
-                result = (
-                    self.client.table("daily_metrics")
-                    .select("*")
-                    .order("date", desc=True)
-                    .limit(days * 2)
-                    .execute()
-                )
-            else:
-                result = (
-                    self.client.table("daily_metrics")
-                    .select("*")
-                    .eq("platform", platform)
-                    .order("date", desc=True)
-                    .limit(days)
-                    .execute()
-                )
             return result.data or []
         except Exception as e:
             logger.error(f"Error getting daily metrics: {e}")
@@ -285,16 +228,8 @@ class SupabaseStorage:
             fb_count = (
                 self.client.table("fb_posts").select("id", count="exact").execute().count
             )
-            tt_count = (
-                self.client.table("tt_posts").select("id", count="exact").execute().count
-            )
             fb_comments = (
                 self.client.table("fb_comments")
-                .select("id", count="exact")
-                .execute().count
-            )
-            tt_comments = (
-                self.client.table("tt_comments")
                 .select("id", count="exact")
                 .execute().count
             )
@@ -312,29 +247,72 @@ class SupabaseStorage:
                 .execute().count
             )
 
-            tt_positive = (
-                self.client.table("tt_posts")
-                .select("id", count="exact")
-                .eq("sentiment", "positive")
-                .execute().count
-            )
-            tt_negative = (
-                self.client.table("tt_posts")
-                .select("id", count="exact")
-                .eq("sentiment", "negative")
-                .execute().count
-            )
-
             return {
                 "fb_posts": fb_count,
-                "tt_posts": tt_count,
                 "fb_comments": fb_comments,
-                "tt_comments": tt_comments,
                 "fb_positive": fb_positive,
                 "fb_negative": fb_negative,
-                "tt_positive": tt_positive,
-                "tt_negative": tt_negative,
             }
         except Exception as e:
             logger.error(f"Error getting executive summary: {e}")
             return {}
+
+    def verify_sync(self) -> Dict[str, Dict]:
+        if not self.local:
+            return {"error": "Local backup not configured"}
+        tables = [
+            ("fb_posts", "post_id"),
+            ("fb_comments", "comment_id"),
+            ("problematicas", None),
+            ("insights", None),
+            ("daily_metrics", None),
+        ]
+        result = {}
+        for table, id_col in tables:
+            try:
+                supabase_count = self.client.table(table).select("*", count="exact").execute().count
+            except Exception as e:
+                supabase_count = -1
+                logger.warning(f"Error counting {table} in Supabase: {e}")
+
+            local_count = self.local.count(table)
+
+            diff = None
+            if supabase_count >= 0 and local_count >= 0:
+                diff = supabase_count - local_count
+
+            result[table] = {
+                "supabase": supabase_count,
+                "local": local_count,
+                "diff": diff,
+                "match": diff == 0 if diff is not None else None,
+            }
+
+            if id_col and diff and diff == 0:
+                try:
+                    supabase_ids = set()
+                    page = 0
+                    page_size = 1000
+                    while True:
+                        rows = self.client.table(table).select(id_col).range(page * page_size, (page + 1) * page_size - 1).execute().data
+                        if not rows:
+                            break
+                        supabase_ids.update(r[id_col] for r in rows)
+                        if len(rows) < page_size:
+                            break
+                        page += 1
+
+                    local_ids = self.local.get_all_ids(table, id_col)
+
+                    only_in_supabase = supabase_ids - local_ids
+                    only_in_local = local_ids - supabase_ids
+                    result[table]["only_in_supabase"] = len(only_in_supabase)
+                    result[table]["only_in_local"] = len(only_in_local)
+                    if only_in_supabase:
+                        result[table]["missing_from_local"] = list(only_in_supabase)[:10]
+                    if only_in_local:
+                        result[table]["missing_from_supabase"] = list(only_in_local)[:10]
+                except Exception as e:
+                    logger.warning(f"Error comparing {table} IDs: {e}")
+
+        return result

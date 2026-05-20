@@ -45,40 +45,6 @@ CREATE TABLE fb_comments (
     scraped_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Posts de TikTok
-CREATE TABLE tt_posts (
-    id TEXT PRIMARY KEY,
-    username TEXT NOT NULL,
-    description TEXT,
-    create_time TIMESTAMPTZ,
-    likes_count INTEGER DEFAULT 0,
-    comments_count INTEGER DEFAULT 0,
-    shares_count INTEGER DEFAULT 0,
-    views_count INTEGER DEFAULT 0,
-    video_url TEXT,
-    sentiment TEXT DEFAULT '',
-    sentiment_score FLOAT DEFAULT 0.0,
-    topic_category TEXT,
-    topics_detected JSONB,
-    scraped_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Comments de TikTok
-CREATE TABLE tt_comments (
-    id TEXT PRIMARY KEY,
-    video_id TEXT NOT NULL,
-    message TEXT,
-    author_name TEXT,
-    create_time TIMESTAMPTZ,
-    likes_count INTEGER DEFAULT 0,
-    sentiment TEXT DEFAULT '',
-    sentiment_score FLOAT DEFAULT 0.0,
-    topic_category TEXT,
-    zone_detected TEXT,
-    issue_keywords JSONB,
-    scraped_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- ============================================
 -- TABLAS DE ANÁLISIS
 -- ============================================
@@ -140,12 +106,6 @@ CREATE INDEX idx_fb_comments_post ON fb_comments(post_id);
 CREATE INDEX idx_fb_comments_zone ON fb_comments(zone_detected);
 CREATE INDEX idx_fb_comments_topic ON fb_comments(topic_category);
 
-CREATE INDEX idx_tt_posts_created ON tt_posts(create_time);
-CREATE INDEX idx_tt_posts_sentiment ON tt_posts(sentiment);
-CREATE INDEX idx_tt_posts_topic ON tt_posts(topic_category);
-CREATE INDEX idx_tt_comments_video ON tt_comments(video_id);
-CREATE INDEX idx_tt_comments_zone ON tt_comments(zone_detected);
-
 CREATE INDEX idx_zone_topics_zone ON zone_topics(zone);
 CREATE INDEX idx_insights_created ON insights(created_at);
 CREATE INDEX idx_daily_metrics_date ON daily_metrics(date);
@@ -183,30 +143,20 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Calcular NSI (Net Sentiment Index)
-CREATE OR REPLACE FUNCTION calculate_nsi(p_platform TEXT, p_days INTEGER DEFAULT 30)
+CREATE OR REPLACE FUNCTION calculate_nsi(p_days INTEGER DEFAULT 30)
 RETURNS FLOAT AS $$
 DECLARE
     total INTEGER;
     positives INTEGER;
     negatives INTEGER;
 BEGIN
-    IF p_platform = 'facebook' THEN
-        SELECT COUNT(*), 
-               COUNT(*) FILTER (WHERE sentiment = 'positive'),
-               COUNT(*) FILTER (WHERE sentiment = 'negative')
-        INTO total, positives, negatives
-        FROM fb_posts
-        WHERE created_time >= NOW() - (p_days || ' days')::INTERVAL
-          AND sentiment IN ('positive', 'negative', 'neutral');
-    ELSE
-        SELECT COUNT(*),
-               COUNT(*) FILTER (WHERE sentiment = 'positive'),
-               COUNT(*) FILTER (WHERE sentiment = 'negative')
-        INTO total, positives, negatives
-        FROM tt_posts
-        WHERE create_time >= NOW() - (p_days || ' days')::INTERVAL
-          AND sentiment IN ('positive', 'negative', 'neutral');
-    END IF;
+    SELECT COUNT(*), 
+           COUNT(*) FILTER (WHERE sentiment = 'positive'),
+           COUNT(*) FILTER (WHERE sentiment = 'negative')
+    INTO total, positives, negatives
+    FROM fb_posts
+    WHERE created_time >= NOW() - (p_days || ' days')::INTERVAL
+      AND sentiment IN ('positive', 'negative', 'neutral');
 
     IF total = 0 THEN RETURN 0; END IF;
 

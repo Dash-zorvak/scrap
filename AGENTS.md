@@ -1,26 +1,35 @@
 # scrapeo-social
 
-> **Plan V2 Activo**: Ver `PLAN_V2.md` para la estrategia actualizada.
+Analítica de percepción pública para Facebook de Alcaldía de Santa Ana (página Jose Chicas).
 
-Analítica de percepción pública para redes sociales de Alcaldía de Santa Ana.
+## Meta
 
-## Objetivo
+Extraer y analizar todos los posts, reacciones, vistas y comentarios de la página de Facebook Jose Chicas usando Graph API, almacenar en Supabase con backup SQLite local, y presentar un dashboard ejecutivo en Streamlit con análisis de sentimiento, temas, zonas e insights accionables.
 
-Extraer y analizar contenido del último año de:
-- **Facebook**: 20,000 posts (10K Alcaldía + 10K Alcalde)
-- **TikTok**: 4,000 videos (2K Alcaldía + 2K Alcalde)
+## Stack
 
-Con análisis de reacciones, sentimiento, temas clave, datos demográficos y marketing ejecutivo.
+- **Scraping**: Facebook Graph API (`FB_ACCESS_TOKEN` con permisos `pages_read_engagement`, `pages_read_user_content`, `pages_manage_posts`, `read_insights`)
+- **Almacenamiento**: Supabase (PostgreSQL cloud) + SQLite local (`data/backup.db`) como backup de verificación
+- **Análisis**: `SentimentAnalyzer` (español, 3 niveles), Topic Detection (10 categorías), Zone Mapping (Centro/Norte/Sur/Este)
+- **Dashboard**: Streamlit (`dashboard/app.py`) — 7 tabs: Ejecutivo, Zonas, Temas, Tendencia, Insights, Posts, Comentarios
+- **Notificaciones**: Telegram bot para checkpoints de scraping
+- **Infra**: Python 3.11 venv
 
-## Volúmenes
+## Estado Actual
 
-| Plataforma | Cuenta | Posts/Videos | Comentarios Estimados |
-|------------|--------|--------------|----------------------|
-| Facebook | Alcaldía | 10,000 | ~1,000,000 |
-| Facebook | Alcalde | 10,000 | ~1,000,000 |
-| TikTok | Alcaldía | 2,000 | ~200,000 |
-| TikTok | Alcalde | 2,000 | ~200,000 |
-| **TOTAL** | | **24,000** | **~2,400,000** |
+| Recurso | Cantidad |
+|---------|----------|
+| Posts FB | 4,763 |
+| Comentarios FB | 20,951 |
+| Likes | ~95K |
+| Loves | ~36K |
+| Hahas | ~6K |
+| Sads | ~1.4K |
+| Angrys | ~2.2K |
+| Shares | ~15K |
+| Vistas | ~3.9M (3,822 posts con views > 0) |
+| Sentimiento (posts) | 2,696 positive · 301 negative · 1,766 neutral → NSI ~79.9% |
+| Sentimiento (comentarios) | 9,082 positive · 1,414 negative · 5,627 neutral → NSI ~73% |
 
 ## Estructura del Proyecto
 
@@ -34,19 +43,14 @@ scrapeo-social/
 │   │   ├── trends.py             # Análisis de tendencias
 │   │   └── reporting.py          # Generación de informes JSON/PNG
 │   ├── fb_scraper/
-│   │   ├── playwright_scraper.py # Scraper FB con Playwright
+│   │   ├── graph_api_scraper.py  # Scraper FB vía Graph API
+│   │   ├── deep_scraper.py       # Scraper FB profundo
 │   │   └── models.py             # FBPostData, FBCommentData
-│   ├── tiktok_scraper/
-│   │   ├── scraper.py            # Scraper TT (JSON embebido)
-│   │   ├── resilient_scraper.py  # TT con anti-ban
-│   │   ├── bruteforce_scraper.py # TT brute-force (7 métodos)
-│   │   ├── api_scraper.py        # TT vía API pública
-│   │   └── models.py             # TTPostData, TTCommentData
 │   └── storage/
 │       ├── db.py                 # SQLite + SQLAlchemy
 │       └── supabase_client.py    # Supabase storage
-├── scripts/
-│   └── tt_login.py               # Login helper TikTok
+├── dashboard/
+│   └── app.py                    # Streamlit dashboard (7 tabs)
 ├── data/                         # SQLite database
 ├── outputs/                      # Informes JSON y gráficos
 ├── .env                          # Credenciales y configuración
@@ -56,132 +60,47 @@ scrapeo-social/
 ## Comandos
 
 ```bash
-./scrapeo scrape --platform facebook          # Scrapear FB
-./scrapeo scrape --platform tiktok            # Scrapear TikTok
-./scrapeo scrape --platform all              # Ambas plataformas
-./scrapeo scrape-tt --user alcaldiasa        # Brute-force TT (8 métodos)
-./scrapeo scrape-tt --comments               # TT + comentarios
-./scrapeo tt-login                           # Login manual TT (captura cookies)
-./scrapeo analyze --platform all             # Generar informe
-./scrapeo status                             # Ver estado de BD
+./scrapeo graph-scrape   # Scraping vía Graph API
+./scrapeo deep-scrape    # Deep scraping alternativo
+./scrapeo analyze        # Generar métricas e insights
+./scrapeo status         # Estado de BD
+./scrapeo verify         # Comparar Supabase vs backup local
+./scrapeo sync           # Sincronizar Supabase → local
+./scrapeo estimate N     # Proyectar tiempo para scrapear N posts (default: 20,000)
+streamlit run dashboard/app.py  # Dashboard ejecutivo (Bloomberg-style, 8 tabs)
 ```
 
-## Configuración (.env)
+## Fases Ejecutadas
 
-```env
-# Facebook
-FB_PAGE_URL=https://www.facebook.com/SantaAnaAlcaldia
-FB_PAGE_NAME=Santa Ana Alcaldía
-FB_EMAIL=dagorosales40@gmail.com
-FB_PASSWORD=...
+1. **Posts**: 4,763 posts scrapeados vía Graph API, ~96 min, ~0.8 posts/s
+2. **Views**: 3,822 posts actualizados con views_count, 54 min
+3. **Comentarios**: procesados 1,100/4,763 posts, 20,951 comentarios en Supabase + SQLite
 
-# TikTok
-TT_USERNAME=alcaldiasa
+## Decisiones Clave
 
-# Scraping
-MAX_POSTS=20000
-DAYS_BACK=730
-```
+1. **Solo Facebook**: TikTok eliminado completamente del proyecto
+2. **3 fases secuenciales**: posts → views → comments, con checkpoints cada N items
+3. **Comentarios con stickers/imágenes**: detectados via `attachment.type`, guardados como `[sticker]`/`[image]`/`[video]`
+4. **Posts compartidos**: via `_get_post_metadata` → salta páginas que no son Jose Chicas
+5. **Dashboard todo-en-uno**: una sola app Streamlit con todas las vistas
+6. **Backup dual**: Supabase (primario) + SQLite local (verificación vía `./scrapeo verify`)
+
+## Issues Conocidos
+
+- **Venv**: Python 3.11 venv en sistema 3.14 causa `ModuleNotFoundError` con pydantic-core, cryptography, numpy — requiere `pip install --force-reinstall` periódicamente
+- **Graph API**: posts eliminados/borrados devuelven `(#100) Object does not exist` — se loggean y se saltan
+- **Phase 3**: checkpoint en 1,100/4,763 (parada manual)
 
 ## Entorno de Ejecución
 
 ```bash
-# El wrapper ./scrapeo ya activa el venv automáticamente
 ./scrapeo status
-
 # O manualmente:
 source venv/bin/activate
 python -m src.main status
 ```
 
-## Plan de Trabajo
-
-### Fase 1: Creación y Calentamiento de Cuentas FB
-
-1. **Crear 3-5 cuentas Facebook** desde cero
-2. **Calentamiento** (mínimo 3 días):
-   -行为 humana natural: likes, comentarios, seguimientos
-   - Evitar contenido político inicialmente
-   - Usar distintas IPs/dispositivos si es posible
-3. **Rotación**: cada cuenta usada max 25-40 posts/día
-
-### Fase 2: Configuración de Scraper FB
-
-El scraper actual requiere login. Necesita:
-- `FB_EMAIL` y `FB_PASSWORD` en .env
-- Considerar agregar más cuentas al config para rotación automática
-
-### Fase 3: Scraping Piloto
-
-- ~500 posts de FB
-- ~100 videos de TT
-- Medir: CAPTCHAs, bloqueos, shadowbans
-- Ajustar delays según resultados
-
-### Fase 4: Scraping a Escala
-
-- Facebook: 20,000 posts (2 cuentas objetivo)
-- TikTok: 4,000 videos
-- Monitoreo continuo de límites
-
-### Fase 5: Análisis e Informe
-
-El informe debe incluir:
-- Distribución de reacciones (like, love, care, haha, wow, sad, angry)
-- Sentimiento por post y por tema
-- **Insight clave**: "En el post ID X se mencionó '[palabra]' y eso provocó [reacción] según análisis de comentarios. Este tema le interesa a la población."
-
-Formato JSON del informe:
-```json
-{
-  "post_id": "...",
-  "platform": "fb|tt",
-  "timestamp": "...",
-  "text": "...",
-  "reactions": {"total": N, "by_type": {...}},
-  "topics_detected": [{"main": "...", "confidence": 0.9}],
-  "comment_sentiment": "positive|negative|neutral",
-  "actionable_insight": "En el post se mencionó X y eso provocó Y"
-}
-```
-
-## Límites y Mitigación
-
-| Plataforma | Límite Diario | Delay Entre Acciones |
-|------------|---------------|---------------------|
-| Facebook   | 25-40 posts/cuenta | 15-45 segundos |
-| TikTok     | 60-80 videos/cuenta | 10-30 segundos |
-
-**Mitigaciones**:
-- Delays aleatorios
-- Scraping solo 8am-6pm hora local
-- Rotación de user-agents
-- Comportamiento humano simulado
-- Checkpointing cada 50 posts
-- **Brute-force**: 8 métodos distintos en cascada
-
-## Estrategia Brute-Force TikTok
-
-El scraper **bruteforce_scraper.py** implementa 8 métodos en cascada:
-
-| # | Método | Requiere | Efectividad |
-|---|--------|----------|-------------|
-| 1 | API con session cookies | Login manual previo | ★★★★★ |
-| 2 | item/detail API | Cookies opcional | ★★★☆☆ |
-| 3 | Mobile API (iPhone) | Nada | ★★★★☆ |
-| 4 | Playwright + stealth | playwright instalado | ★★★★☆ |
-| 5 | Selenium con evasión | ChromeDriver | ★★★★☆ |
-| 6 | RSS feed | Nada | ★★☆☆☆ |
-| 7 | Feed API alternativo | Nada | ★★★☆☆ |
-| 8 | Búsqueda por keyword | Nada | ★★☆☆☆ |
-
-**Flujo**: API con cookies → Mobile API → Feed API → Search → Playwright → Selenium → RSS → Fallback
-
-**Para mejores resultados**: Ejecutar `./scrapeo tt-login` primero para capturar cookies de sesión.
-
 ## Notas Importantes
 
 1. **Sin propuesta de campaña**: El entregable es solo análisis de datos para presentar al edil
-2. **Sin temas definidos aún**: El detector de temas se entrenará con los datos extraídos
-3. **Password FB vacío**: Actualmente sin credenciales en .env
-4. **TikTok**: Solo configurable un username en .env, considerar extensión para múltiples cuentas
+2. **Graph API** con `FB_ACCESS_TOKEN` requiere permisos: `pages_read_engagement`, `pages_read_user_content`, `pages_manage_posts`, `read_insights`

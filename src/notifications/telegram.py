@@ -64,13 +64,12 @@ class TelegramNotifier:
         """
         return self.send(message)
     
-    def notify_daily_summary(self, fb_posts: int, tt_posts: int, nsi: float, top_issue: str) -> bool:
+    def notify_daily_summary(self, fb_posts: int, nsi: float, top_issue: str) -> bool:
         nsi_emoji = "🟢" if nsi > 0 else "🔴" if nsi < 0 else "🟡"
         message = f"""
 📋 *RESUMEN DIARIO*
 
 *Facebook:* {fb_posts:,} posts
-*TikTok:* {tt_posts:,} videos
 *NSI:* {nsi_emoji} {nsi}
 *Tema más crítico:* {top_issue}
 *Hora:* {self._current_time()}
@@ -106,9 +105,9 @@ def notify_alert(alert_type: str, description: str):
     notifier = TelegramNotifier()
     notifier.notify_critical_alert(alert_type, description)
 
-def notify_daily(fb_posts: int, tt_posts: int, nsi: float, top_issue: str):
+def notify_daily(fb_posts: int, nsi: float, top_issue: str):
     notifier = TelegramNotifier()
-    notifier.notify_daily_summary(fb_posts, tt_posts, nsi, top_issue)
+    notifier.notify_daily_summary(fb_posts, nsi, top_issue)
 
 def notify_error(error_type: str, description: str):
     notifier = TelegramNotifier()

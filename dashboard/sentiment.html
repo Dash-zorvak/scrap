@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Análisis de Sentimiento — Jose Chicas</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050510;
+  --surface:#0b0b1a;
+  --surface2:#111128;
+  --border:#1a1a3e;
+  --fg:#c8c8e0;
+  --muted:#6b6b8a;
+  --cyan:#00f0ff;
+  --green:#00ff88;
+  --amber:#ffb000;
+  --red:#ff3355;
+  --purple:#8860ff;
+  --blue:#5599ff;
+  --font-mono:'JetBrains Mono','SF Mono','Fira Code',ui-monospace,monospace;
+  --font-sans:system-ui,-apple-system,sans-serif;
+  --radius:6px;
+}
+html{font-size:14px}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-sans);min-height:100vh;padding:20px;-webkit-font-smoothing:antialiased}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 4px 16px;border-bottom:1px solid var(--border);margin-bottom:24px}
+.topbar-left{display:flex;align-items:center;gap:14px}
+.topbar h1{font-family:var(--font-mono);font-size:13px;font-weight:400;color:var(--cyan);letter-spacing:.5px;text-transform:uppercase}
+.topbar h1 span{color:var(--muted)}
+.nav-links{display:flex;gap:2px;margin-bottom:20px;flex-wrap:wrap}
+.nav-links a{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);text-decoration:none;padding:8px 14px;border:1px solid transparent;border-radius:var(--radius);transition:.15s}
+.nav-links a:hover{border-color:var(--border);color:var(--fg)}
+.nav-links a.active{color:var(--cyan);border-color:var(--cyan);background:rgba(0,240,255,.06)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.card-title{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px}
+.grid{display:grid;gap:12px}
+.grid-2{grid-template-columns:1fr 1fr}
+.grid-3{grid-template-columns:1fr 1fr 1fr}
+.grid-main{grid-template-columns:1.8fr 1.2fr;gap:12px}
+.sentiment-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:6px 0}
+.sentiment-bar .seg{height:100%}
+.sentiment-bar .pos{background:var(--green)}
+.sentiment-bar .neu{background:var(--amber)}
+.sentiment-bar .neg{background:var(--red)}
+.topic-item{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(26,26,62,.3)}
+.topic-item:last-child{border-bottom:none}
+.topic-item .t-name{font-family:var(--font-mono);font-size:11px}
+.topic-item .t-val{font-family:var(--font-mono);font-size:11px}
+.data-table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:11px}
+.data-table th{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.5px;font-weight:400}
+.data-table td{padding:7px 10px;border-bottom:1px solid rgba(26,26,62,.5)}
+.data-table tr:hover td{background:rgba(0,240,255,.03)}
+.data-table .pos{color:var(--green)}
+.data-table .neg{color:var(--red)}
+.data-table .neu{color:var(--amber)}
+.data-table .right{text-align:right}
+.mono{font-family:var(--font-mono)}
+.text-green{color:var(--green)}
+.text-red{color:var(--red)}
+.text-amber{color:var(--amber)}
+.text-cyan{color:var(--cyan)}
+.text-muted{color:var(--muted)}
+.scroll-y{overflow-y:auto;max-height:500px}
+.search-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;color:var(--fg);font-family:var(--font-mono);font-size:12px;width:100%;outline:none;transition:.15s}
+.search-box:focus{border-color:var(--cyan)}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:9px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.3px}
+.pill.pos{background:rgba(0,255,136,.12);color:var(--green)}
+.pill.neu{background:rgba(255,176,0,.12);color:var(--amber)}
+.pill.neg{background:rgba(255,51,85,.12);color:var(--red)}
+@media(max-width:1024px){.grid-2,.grid-main,.grid-3{grid-template-columns:1fr}}
+@media(max-width:600px){.topbar{flex-direction:column;align-items:flex-start;gap:8px}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>SENTIMIENTO <span>//</span> JOSE CHICAS <span>·</span> SAN SALVADOR ESTE</h1>
+  </div>
+  <div class="mono" style="font-size:11px;color:var(--muted)" id="currentDate"></div>
+</div>
+<nav class="nav-links">
+  <a href="dashboard.html">⬥ Dashboard</a>
+  <a href="sentiment.html" class="active">⬥ Sentimiento</a>
+  <a href="insights.html">⬥ Insights</a>
+  <a href="indices.html">⬥ Índices</a>
+  <a href="index.html">⬥ Inicio</a>
+</nav>
+<div id="app"></div>
+<script src="data.js"></script>
+<script>
+document.getElementById('currentDate').textContent = new Date().toLocaleDateString('es-SV',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+function init(){
+  const d = DASH_DATA, m = MONTHLY_DATA;
+  const months = Object.keys(m).slice(-24); // 2 years
+  const rd = d.reactionDistribution;
+
+  // Sentiment overview
+  const sPos = d.totalPosts>0?Object.values(d.topics).reduce((s,t)=>s+t.sentiment_pos,0):0;
+  const sNeu = d.totalPosts>0?Object.values(d.topics).reduce((s,t)=>s+t.sentiment_neu,0):0;
+  const sNeg = d.totalPosts>0?Object.values(d.topics).reduce((s,t)=>s+t.sentiment_neg,0):0;
+  const sTot = sPos+sNeu+sNeg;
+
+  // Topics sorted by net sentiment
+  const topics = Object.entries(d.topics).sort((a,b)=>b[1].total_reactions-a[1].total_reactions);
+
+  // Zone sentiment
+  const zones = Object.entries(d.zones).sort((a,b)=>b[1].count-a[1].count);
+
+  // Monthly sentiment trend
+  const yearData = {};
+  months.forEach(k => {
+    const yr = k.slice(0,4);
+    if(!yearData[yr]) yearData[yr] = {pos:0,neu:0,neg:0,angrys:0};
+  });
+  Object.entries(d.yearly || {}).forEach(([yr,v]) => {
+    yearData[yr] = {pos:v.pos||0, neu:v.neu||0, neg:v.neg||0, angrys:v.angrys||0};
+  });
+
+  // Top controversial posts from data
+  const rawPosts = d.controversialPosts || [];
+
+  const html = `
+    <div class="grid grid-main">
+      <div>
+        <!-- Sentiment global gauge -->
+        <div class="card">
+          <div class="card-title">Sentimiento Global · ${fmt(sTot)} publicaciones clasificadas</div>
+          <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+            <div style="text-align:center">
+              <div style="font-family:var(--font-mono);font-size:48px;font-weight:500;color:${sPos/sTot>0.5?'var(--green)':'var(--amber)'}">${(sPos/sTot*100).toFixed(1)}%</div>
+              <div class="mono" style="font-size:10px;color:var(--green)">Positivo</div>
+            </div>
+            <div style="flex:1;min-width:200px">
+              <div class="sentiment-bar" style="height:12px">
+                <div class="seg pos" style="flex:${sPos}"></div>
+                <div class="seg neu" style="flex:${sNeu}"></div>
+                <div class="seg neg" style="flex:${sNeg}"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:11px;margin-top:4px">
+                <span style="color:var(--green)">${pct(sPos/sTot)} <span class="text-muted">(positivo)</span></span>
+                <span style="color:var(--amber)">${pct(sNeu/sTot)} <span class="text-muted">(neutral)</span></span>
+                <span style="color:var(--red)">${pct(sNeg/sTot)} <span class="text-muted">(negativo)</span></span>
+              </div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px">
+            <div style="background:var(--surface2);border-radius:var(--radius);padding:10px;text-align:center">
+              <div class="mono" style="font-size:18px;color:var(--green)">${fmt(sPos)}</div>
+              <div class="mono" style="font-size:9px;color:var(--muted)">Posts Positivos</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:var(--radius);padding:10px;text-align:center">
+              <div class="mono" style="font-size:18px;color:var(--amber)">${fmt(sNeu)}</div>
+              <div class="mono" style="font-size:9px;color:var(--muted)">Posts Neutrales</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:var(--radius);padding:10px;text-align:center">
+              <div class="mono" style="font-size:18px;color:var(--red)">${fmt(sNeg)}</div>
+              <div class="mono" style="font-size:9px;color:var(--muted)">Posts Negativos</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sentiment by topic -->
+        <div class="card">
+          <div class="card-title">Sentimiento por Tópico</div>
+          ${topics.slice(0,11).map(([k,v]) => {
+            const t = v.sentiment_pos+v.sentiment_neu+v.sentiment_neg;
+            if(t===0)return'';
+            return `<div style="margin-bottom:8px">
+              <div class="topic-item" style="padding:4px 0">
+                <span class="t-name">${k.replace(/_/g,' ')} <span class="text-muted">(${fmt(v.count)} pubs)</span></span>
+                <span class="t-val">${(v.sentiment_pos/t*100).toFixed(0)}% pos · ${(v.sentiment_neg/t*100).toFixed(0)}% neg · neto: <span style="color:${v.net_sentiment>0.9?'var(--green)':v.net_sentiment>0.8?'var(--amber)':'var(--red)'}">${(v.net_sentiment*100).toFixed(1)}%</span></span>
+              </div>
+              <div class="sentiment-bar" style="height:6px">
+                <div class="seg pos" style="flex:${v.sentiment_pos}"></div>
+                <div class="seg neu" style="flex:${v.sentiment_neu}"></div>
+                <div class="seg neg" style="flex:${v.sentiment_neg}"></div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div>
+        <!-- Sentiment by zone -->
+        <div class="card">
+          <div class="card-title">Sentimiento por Zona</div>
+          ${zones.map(([k,v]) => {
+            const ratioLikes = v.likes+v.loves;
+            const ratioNeg = v.angrys+v.sads;
+            const total = ratioLikes+ratioNeg;
+            const p = total>0?ratioLikes/total*100:0;
+            const c = p>90?'var(--green)':p>80?'var(--amber)':'var(--red)';
+            return `<div class="topic-item">
+              <span class="t-name">${k==='unknown'?'Sin especificar':k}</span>
+              <span style="display:flex;align-items:center;gap:6px">
+                <span class="t-val">${fmt(v.count)} pubs</span>
+                <span class="mono" style="font-size:9px;color:${c}">${p.toFixed(1)}% aprob</span>
+              </span>
+            </div>
+            <div style="height:3px;background:var(--border);border-radius:2px;margin-bottom:6px;overflow:hidden">
+              <div style="width:${p}%;height:100%;background:${p>90?'var(--green)':p>80?'var(--amber)':'var(--red)'};border-radius:2px"></div>
+            </div>`;
+          }).join('')}
+        </div>
+
+        <!-- Sentiment by year -->
+        <div class="card">
+          <div class="card-title">Evolución de Sentimiento por Año</div>
+          ${Object.entries(yearData).sort((a,b)=>a[0].localeCompare(b[0])).map(([yr,v]) => {
+            const t = v.pos+v.neu+v.neg;
+            if(t===0)return'';
+            return `<div style="margin-bottom:8px">
+              <div class="topic-item" style="padding:4px 0">
+                <span class="t-name">${yr}</span>
+                <span class="t-val">${(v.pos/t*100).toFixed(0)}% pos · ${(v.neg/t*100).toFixed(0)}% neg · ${fmt(v.angrys)} angrys</span>
+              </div>
+              <div class="sentiment-bar" style="height:5px">
+                <div class="seg pos" style="flex:${v.pos}"></div>
+                <div class="seg neu" style="flex:${v.neu}"></div>
+                <div class="seg neg" style="flex:${v.neg}"></div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+
+        <!-- Posts más controversiales -->
+        <div class="card">
+          <div class="card-title">Posts Más Controversiales</div>
+          <div class="scroll-y" style="max-height:320px">
+          ${(rawPosts.length > 0 ? rawPosts : d.topPosts || []).slice(0,15).map(p => {
+            const ratio = (p.angrys||0)+(p.sads||0);
+            const total = (p.likes||0)+(p.loves||0)+ratio;
+            const pctNeg = total>0?(ratio/total*100).toFixed(1):'0';
+            return `<div class="topic-item" style="flex-direction:column;align-items:stretch;gap:4px;padding:8px 0">
+              <div style="display:flex;justify-content:space-between">
+                <span class="t-name" style="font-size:10px;color:var(--muted)">${(p.message||'').slice(0,80)}${(p.message||'').length>80?'…':''}</span>
+              </div>
+              <div style="display:flex;gap:10px;font-size:10px;font-family:var(--font-mono)">
+                <span style="color:var(--red)">⬡ ${fmt(p.angrys||0)} angry</span>
+                <span style="color:var(--blue)">⬡ ${fmt(p.sads||0)} sad</span>
+                <span style="color:var(--green)">⬡ ${fmt(p.likes||0)} likes</span>
+                <span style="color:var(--amber)">⬡ ${pctNeg}% neg</span>
+              </div>
+            </div>`;
+          }).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer info -->
+    <div style="padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px">
+      <span class="mono" style="font-size:10px;color:var(--muted)">${fmt(sTot)} publicaciones clasificadas · ${fmt(sPos)} positivas · ${fmt(sNeu)} neutrales · ${fmt(sNeg)} negativas</span>
+      <span class="mono" style="font-size:9px;color:var(--muted)">CLASIFICACIÓN: Automática por análisis de contenido</span>
+    </div>
+  `;
+  document.getElementById('app').innerHTML = html;
+}
+init();
+</script>
+</body>
+</html>

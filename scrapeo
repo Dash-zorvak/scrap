@@ -1,4 +1,8 @@
 #!/bin/bash
 DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DIR/venv/bin/activate"
+if [ "$1" = "estimate" ]; then
+    target="${2:-20000}"
+    exec python3 "$DIR/src/analyzer/estimation.py" "$target"
+fi
 exec python3 -m src.main "$@"

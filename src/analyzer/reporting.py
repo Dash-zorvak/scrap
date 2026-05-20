@@ -26,18 +26,15 @@ class ReportGenerator:
         self.trends = TrendAnalyzer(db_session)
         os.makedirs(output_dir, exist_ok=True)
 
-    def generate_full_report(self, platform: str = "all") -> dict:
+    def generate_full_report(self, platform: str = "facebook") -> dict:
         report = {
             "generated_at": datetime.now().isoformat(),
             "platforms": {},
             "summary": {},
         }
 
-        platforms = ["facebook", "tiktok"] if platform == "all" else [platform]
-
-        for pf in platforms:
-            pf_report = self._platform_report(pf)
-            report["platforms"][pf] = pf_report
+        pf_report = self._platform_report("facebook")
+        report["platforms"]["facebook"] = pf_report
 
         report["summary"] = self._global_summary(report["platforms"])
 
@@ -50,7 +47,7 @@ class ReportGenerator:
         logger.info(f"Report saved to {json_path}")
 
         if HAS_MPL:
-            self._generate_charts(report, platforms)
+            self._generate_charts(report, ["facebook"])
 
         return report
 
@@ -65,8 +62,7 @@ class ReportGenerator:
             "top_posts": top_posts,
         }
 
-        if platform == "facebook":
-            report["reaction_breakdown"] = self.trends.reaction_breakdown()
+        report["reaction_breakdown"] = self.trends.reaction_breakdown()
 
         latest_sentiment = sentiment_trend.get("positive", [])
         recent_pos = latest_sentiment[-3:] if len(latest_sentiment) >= 3 else latest_sentiment

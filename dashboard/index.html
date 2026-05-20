@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jose Chicas · San Salvador Este — Analítica Digital</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050510;
+  --surface:#0b0b1a;
+  --surface2:#111128;
+  --border:#1a1a3e;
+  --fg:#c8c8e0;
+  --muted:#6b6b8a;
+  --cyan:#00f0ff;
+  --green:#00ff88;
+  --amber:#ffb000;
+  --red:#ff3355;
+  --purple:#8860ff;
+  --font-mono:'JetBrains Mono','SF Mono','Fira Code',ui-monospace,monospace;
+  --font-sans:system-ui,-apple-system,sans-serif;
+  --radius:8px;
+}
+html{font-size:14px}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-sans);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;-webkit-font-smoothing:antialiased}
+.hero{text-align:center;margin-bottom:40px}
+.hero h1{font-family:var(--font-mono);font-size:13px;font-weight:400;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px}
+.hero h1 span{color:var(--muted)}
+.hero h2{font-family:var(--font-sans);font-size:28px;font-weight:500;color:var(--fg);margin-bottom:6px}
+.hero p{font-size:14px;color:var(--muted);max-width:480px;line-height:1.6}
+.hero .sub{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:10px}
+.screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;max-width:1000px;width:100%}
+.screen-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;text-decoration:none;color:var(--fg);transition:.2s;position:relative;overflow:hidden}
+.screen-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;opacity:0;transition:.2s}
+.screen-card:hover{border-color:var(--cyan);transform:translateY(-2px)}
+.screen-card:hover::before{opacity:1}
+.screen-card:nth-child(1)::before{background:var(--cyan)}
+.screen-card:nth-child(2)::before{background:var(--green)}
+.screen-card:nth-child(3)::before{background:var(--amber)}
+.screen-card:nth-child(4)::before{background:var(--purple)}
+.screen-card .icon{font-size:28px;margin-bottom:10px;display:block}
+.screen-card .name{font-family:var(--font-mono);font-size:14px;font-weight:500;margin-bottom:4px}
+.screen-card .desc{font-size:11px;color:var(--muted);line-height:1.5}
+.screen-card .arrow{font-family:var(--font-mono);font-size:11px;color:var(--cyan);margin-top:10px;display:inline-block;opacity:0;transition:.2s}
+.screen-card:hover .arrow{opacity:1}
+.footer{margin-top:40px;text-align:center;font-family:var(--font-mono);font-size:9px;color:var(--muted);letter-spacing:.5px}
+@media(max-width:600px){
+  .hero h2{font-size:22px}
+  .screens{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>PANEL DE ANALÍTICA DIGITAL <span>//</span> BLOOMBERG TERMINAL</h1>
+  <h2>Jose Chicas · San Salvador Este</h2>
+  <p>Dashboard ejecutivo con inteligencia de datos: sentimiento, detección de temas, índices compuestos y análisis de reacciones en redes sociales.</p>
+  <div class="sub">Facebook · 4,763 publicaciones · 701K+ reacciones · 5.8M+ visualizaciones · 2017–2025</div>
+</div>
+
+<div class="screens">
+  <a href="dashboard.html" class="screen-card">
+    <span class="icon">⬥</span>
+    <div class="name">Dashboard Ejecutivo</div>
+    <div class="desc">KPIs globales, distribución de reacciones, mapa de zonas, ranking de tópicos, engagement mensual y sentimiento por tema.</div>
+    <span class="arrow">→ Abrir</span>
+  </a>
+  <a href="sentiment.html" class="screen-card">
+    <span class="icon">◈</span>
+    <div class="name">Análisis de Sentimiento</div>
+    <div class="desc">Desglose por post, tópico y zona. Evolución anual, posts más controversiales y clasificación de sentimiento.</div>
+    <span class="arrow">→ Abrir</span>
+  </a>
+  <a href="insights.html" class="screen-card">
+    <span class="icon">◉</span>
+    <div class="name">Explorador de Insights</div>
+    <div class="desc">Navegá por palabras clave y descubrí qué reacciones provocan. Correlación término → reacción con datos reales.</div>
+    <span class="arrow">→ Abrir</span>
+  </a>
+  <a href="indices.html" class="screen-card">
+    <span class="icon">◆</span>
+    <div class="name">Índices Compuestos</div>
+    <div class="desc">Engagement, Sentimiento Neto, Controversia, Efectividad y Riesgo Reputacional. Métricas compuestas estilo Bloomberg.</div>
+    <span class="arrow">→ Abrir</span>
+  </a>
+</div>
+
+<div class="footer">
+  DATOS EN VIVO DESDE SUPABASE · ${new Date().toLocaleDateString('es-SV')} · PODER EJECUTIVO
+</div>
+</body>
+</html>

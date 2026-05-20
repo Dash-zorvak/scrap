@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Índices Compuestos — Jose Chicas</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050510;
+  --surface:#0b0b1a;
+  --surface2:#111128;
+  --border:#1a1a3e;
+  --fg:#c8c8e0;
+  --muted:#6b6b8a;
+  --cyan:#00f0ff;
+  --green:#00ff88;
+  --amber:#ffb000;
+  --red:#ff3355;
+  --purple:#8860ff;
+  --blue:#5599ff;
+  --font-mono:'JetBrains Mono','SF Mono','Fira Code',ui-monospace,monospace;
+  --font-sans:system-ui,-apple-system,sans-serif;
+  --radius:6px;
+}
+html{font-size:14px}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-sans);min-height:100vh;padding:20px;-webkit-font-smoothing:antialiased}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 4px 16px;border-bottom:1px solid var(--border);margin-bottom:24px}
+.topbar-left{display:flex;align-items:center;gap:14px}
+.topbar h1{font-family:var(--font-mono);font-size:13px;font-weight:400;color:var(--cyan);letter-spacing:.5px;text-transform:uppercase}
+.topbar h1 span{color:var(--muted)}
+.nav-links{display:flex;gap:2px;margin-bottom:20px;flex-wrap:wrap}
+.nav-links a{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);text-decoration:none;padding:8px 14px;border:1px solid transparent;border-radius:var(--radius);transition:.15s}
+.nav-links a:hover{border-color:var(--border);color:var(--fg)}
+.nav-links a.active{color:var(--cyan);border-color:var(--cyan);background:rgba(0,240,255,.06)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.card-title{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px}
+.grid{display:grid;gap:12px}
+.grid-2{grid-template-columns:1fr 1fr}
+.grid-main{grid-template-columns:1.5fr 1fr;gap:12px}
+.index-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.index-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;position:relative;overflow:hidden}
+.index-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.index-card.engagement::before{background:var(--cyan)}
+.index-card.sentiment::before{background:var(--green)}
+.index-card.controversy::before{background:var(--amber)}
+.index-card.effectiveness::before{background:var(--purple)}
+.index-card.risk::before{background:var(--red)}
+.index-title{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:8px}
+.index-value{font-family:var(--font-mono);font-size:42px;font-weight:500;letter-spacing:-1px}
+.index-card.engagement .index-value{color:var(--cyan)}
+.index-card.sentiment .index-value{color:var(--green)}
+.index-card.controversy .index-value{color:var(--amber)}
+.index-card.effectiveness .index-value{color:var(--purple)}
+.index-card.risk .index-value{color:var(--red)}
+.index-sub{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:4px}
+.index-desc{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
+.index-bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:12px}
+.index-bar .fill{height:100%;border-radius:3px;transition:width 1.5s}
+.data-table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:11px}
+.data-table th{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.5px;font-weight:400}
+.data-table td{padding:7px 10px;border-bottom:1px solid rgba(26,26,62,.5)}
+.data-table tr:hover td{background:rgba(0,240,255,.03)}
+.data-table .right{text-align:right}
+.topic-item{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(26,26,62,.3)}
+.topic-item:last-child{border-bottom:none}
+.topic-item .t-name{font-family:var(--font-mono);font-size:11px}
+.topic-item .t-val{font-family:var(--font-mono);font-size:11px}
+.mono{font-family:var(--font-mono)}
+.text-green{color:var(--green)}
+.text-red{color:var(--red)}
+.text-amber{color:var(--amber)}
+.text-cyan{color:var(--cyan)}
+.text-muted{color:var(--muted)}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+@media(max-width:1024px){.grid-2,.grid-main{grid-template-columns:1fr}}
+@media(max-width:600px){.topbar{flex-direction:column;align-items:flex-start;gap:8px}.index-value{font-size:32px}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>ÍNDICES <span>//</span> JOSE CHICAS <span>·</span> SAN SALVADOR ESTE</h1>
+  </div>
+  <div class="mono" style="font-size:11px;color:var(--muted)" id="currentDate"></div>
+</div>
+<nav class="nav-links">
+  <a href="dashboard.html">⬥ Dashboard</a>
+  <a href="sentiment.html">⬥ Sentimiento</a>
+  <a href="insights.html">⬥ Insights</a>
+  <a href="indices.html" class="active">⬥ Índices</a>
+  <a href="index.html">⬥ Inicio</a>
+</nav>
+<div id="app"></div>
+<script src="data.js"></script>
+<script>
+document.getElementById('currentDate').textContent = new Date().toLocaleDateString('es-SV',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+function init(){
+  const d = DASH_DATA;
+  const m = MONTHLY_DATA;
+  const ix = d.indices;
+  const rd = d.reactionDistribution;
+
+  // Monthly index trends (last 24 months)
+  const months = Object.keys(m);
+  const last24 = months.slice(-24);
+  const engTrend = last24.map(k => {
+    const v = m[k];
+    return +((v.reactions+v.comments+v.shares)/Math.max(v.views,1)*100).toFixed(1);
+  });
+  const contTrend = last24.map(k => {
+    const v = m[k];
+    const tr = v.reactions || 1;
+    return +((v.angrys+v.sads)/tr*100).toFixed(2);
+  });
+  const effTrend = last24.map(k => {
+    const v = m[k];
+    const tr = v.reactions || 1;
+    return +((v.likes+v.loves)/tr*100).toFixed(1);
+  });
+  const maxEng = Math.max(...engTrend);
+  const maxCont = Math.max(...contTrend);
+  const labels24 = last24.map(k => k.slice(5)+'/'+k.slice(2,4));
+
+  const topics = Object.entries(d.topics).sort((a,b)=>b[1].total_reactions-a[1].total_reactions);
+
+  const indexDefs = [
+    {
+      id:'engagement', label:'Engagement', value: ix.engagement + '%',
+      desc:'Mide qué tan activamente la audiencia interactúa con el contenido. Combina todas las reacciones, comentarios y compartidos dividido por visualizaciones. Un ratio alto significa contenido que conecta.',
+      color:'var(--cyan)', bg:'rgba(0,240,255,.1)',
+      status: ix.engagement > 15 ? 'Excelente' : ix.engagement > 10 ? 'Bueno' : ix.engagement > 5 ? 'Regular' : 'Bajo',
+      fillPct: Math.min(ix.engagement/30*100, 100)
+    },
+    {
+      id:'sentiment', label:'Sentimiento Neto', value: (ix.netSentiment*100).toFixed(1) + '%',
+      desc:'Diferencia entre reacciones positivas (likes + loves) y negativas (angrys + sads) sobre el total de reacciones. Cercano al 100% indica aprobación casi unánime.',
+      color:'var(--green)', bg:'rgba(0,255,136,.1)',
+      status: ix.netSentiment > 0.9 ? 'Excelente' : ix.netSentiment > 0.8 ? 'Bueno' : ix.netSentiment > 0.6 ? 'Regular' : 'Crítico',
+      fillPct: Math.min(ix.netSentiment*100, 100)
+    },
+    {
+      id:'controversy', label:'Controversia', value: (ix.controversy*100).toFixed(2) + '%',
+      desc:'Proporción de reacciones negativas (enojo + tristeza) sobre el total. Un índice bajo significa poco contenido polarizante. Útil para detectar temas sensibles.',
+      color:'var(--amber)', bg:'rgba(255,176,0,.1)',
+      status: ix.controversy < 0.02 ? 'Bajo' : ix.controversy < 0.05 ? 'Moderado' : 'Alto',
+      fillPct: Math.min(ix.controversy/0.1*100, 100),
+      invert: true
+    },
+    {
+      id:'effectiveness', label:'Efectividad', value: (ix.effectiveness*100).toFixed(1) + '%',
+      desc:'Porcentaje de reacciones que son explícitamente positivas (likes + loves) sobre el total. Indica qué tan bien resuena el mensaje con la audiencia.',
+      color:'var(--purple)', bg:'rgba(136,96,255,.1)',
+      status: ix.effectiveness > 0.95 ? 'Excelente' : ix.effectiveness > 0.9 ? 'Bueno' : ix.effectiveness > 0.8 ? 'Regular' : 'Bajo',
+      fillPct: Math.min(ix.effectiveness*100, 100)
+    },
+    {
+      id:'risk', label:'Riesgo Reputacional', value: ix.riskReputacional + '%',
+      desc:'Índice compuesto = controversia × exposición (views/reacciones). Combina qué tan negativo es el contenido con cuánta visibilidad tiene. Mide el riesgo real para la imagen pública.',
+      color:'var(--red)', bg:'rgba(255,51,85,.1)',
+      status: ix.riskReputacional < 0.5 ? 'Bajo' : ix.riskReputacional < 2 ? 'Moderado' : 'Alto',
+      fillPct: Math.min(ix.riskReputacional/5*100, 100),
+      invert: true
+    }
+  ];
+
+  const html = `
+    <div class="index-grid">
+      ${indexDefs.map(idx => `
+        <div class="index-card ${idx.id}">
+          <div class="index-title">${idx.label}</div>
+          <div class="index-value">${idx.value}</div>
+          <div class="index-sub">
+            <span class="status-dot" style="background:${idx.color}"></span>${idx.status}
+          </div>
+          <div class="index-desc">${idx.desc}</div>
+          <div class="index-bar">
+            <div class="fill" style="width:${idx.fillPct}%;background:${idx.color}${idx.invert?';opacity:.6':''}"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="grid-2" style="margin-top:12px">
+      <div class="card">
+        <div class="card-title">Engagement Mensual (${labels24[0]} → ${labels24[labels24.length-1]})</div>
+        <div style="display:flex;align-items:flex-end;gap:2px;height:100px;padding:8px 0">
+          ${engTrend.map((v,i) => `
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+              <span class="mono" style="font-size:7px;color:var(--muted)">${v}%</span>
+              <div style="width:100%;background:rgba(0,240,255,.08);border-radius:2px;height:80px;position:relative;overflow:hidden">
+                <div style="position:absolute;bottom:0;left:0;right:0;height:${v/maxEng*100}%;background:linear-gradient(to top,var(--cyan),rgba(0,240,255,.35));border-radius:2px;transition:height 1.5s"></div>
+              </div>
+              <span class="mono" style="font-size:6px;color:var(--muted)">${labels24[i]}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Controversia Mensual</div>
+        <div style="display:flex;align-items:flex-end;gap:2px;height:100px;padding:8px 0">
+          ${contTrend.map((v,i) => `
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+              <span class="mono" style="font-size:7px;color:var(--muted)">${v}%</span>
+              <div style="width:100%;background:rgba(255,176,0,.08);border-radius:2px;height:80px;position:relative;overflow:hidden">
+                <div style="position:absolute;bottom:0;left:0;right:0;height:${v/maxCont*100}%;background:linear-gradient(to top,var(--amber),rgba(255,176,0,.35));border-radius:2px;transition:height 1.5s"></div>
+              </div>
+              <span class="mono" style="font-size:6px;color:var(--muted)">${labels24[i]}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-main" style="margin-top:12px">
+      <div class="card">
+        <div class="card-title">Índices por Tópico</div>
+        <table class="data-table">
+          <thead><tr>
+            <th>Tópico</th><th class="right">Eng</th><th class="right">Sent.</th><th class="right">Cont.</th><th class="right">Efect.</th>
+          </tr></thead>
+          <tbody>
+          ${topics.slice(0,11).map(([k,v]) => {
+            const eng = v.count>0 ? ((v.total_reactions+v.comments+v.shares)/Math.max(v.views,1)*100).toFixed(1) : '—';
+            const sent = (v.net_sentiment*100).toFixed(1);
+            const cont = (v.controversy*100).toFixed(2);
+            const eff = (v.effectiveness*100).toFixed(1);
+            return `<tr>
+              <td>${k.replace(/_/g,' ')}</td>
+              <td class="right">${eng}%</td>
+              <td class="right" style="color:${v.net_sentiment>0.9?'var(--green)':v.net_sentiment>0.8?'var(--amber)':'var(--red)'}">${sent}%</td>
+              <td class="right" style="color:${v.controversy>0.03?'var(--red)':v.controversy>0.015?'var(--amber)':'var(--green)'}">${cont}%</td>
+              <td class="right" style="color:${v.effectiveness>0.95?'var(--green)':v.effectiveness>0.9?'var(--amber)':'var(--red)'}">${eff}%</td>
+            </tr>`;
+          }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">Resumen Ejecutivo</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.7">
+          <p style="margin-bottom:8px"><strong style="color:var(--cyan)">Salud Digital:</strong> El ecosistema digital de Jose Chicas muestra una salud general <strong style="color:var(--green)">positiva</strong> con ${(ix.netSentiment*100).toFixed(1)}% de sentimiento neto favorable.</p>
+          <p style="margin-bottom:8px"><strong style="color:var(--cyan)">Engagement:</strong> El ratio de engagement de ${ix.engagement}% indica que por cada 100 visualizaciones, ~14 generan una interacción — consistente con páginas públicas municipales.</p>
+          <p style="margin-bottom:8px"><strong style="color:var(--cyan)">Riesgos:</strong> El riesgo reputacional de ${ix.riskReputacional}% es bajo. Los temas más sensibles son <strong style="color:var(--amber)">educación</strong> (controversia: ${(d.topics.educacion?.controversy*100||0).toFixed(1)}%) y <strong style="color:var(--amber)">obras públicas</strong> (${(d.topics.obras_publicas?.controversy*100||0).toFixed(1)}%).</p>
+          <p style="margin-bottom:8px"><strong style="color:var(--cyan)">VOLUMEN:</strong> ${fmt(d.totalPosts)} publicaciones · ${short(d.totalViews)} visualizaciones · ${fmt(d.totalComments)} comentarios · ${fmt(d.totalReactions)} reacciones totales.</p>
+          <p style="margin-bottom:8px"><strong style="color:var(--cyan)">PERÍODO:</strong> ${d.dateRange.from.slice(0,10)} → ${d.dateRange.to.slice(0,10)} (${Math.round((new Date(d.dateRange.to)-new Date(d.dateRange.from))/(86400000*30))} meses de datos).</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-top:12px">
+      <span class="mono" style="font-size:10px;color:var(--muted)">5 ÍNDICES COMPUESTOS · Engagement · Sentimiento Neto · Controversia · Efectividad · Riesgo Reputacional</span>
+      <span class="mono" style="font-size:9px;color:var(--muted)">FÓRMULAS: Ver metodología abajo</span>
+    </div>
+  `;
+  document.getElementById('app').innerHTML = html;
+}
+init();
+</script>
+</body>
+</html>

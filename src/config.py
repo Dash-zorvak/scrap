@@ -12,11 +12,6 @@ class Config:
     FB_PASSWORD = os.getenv("FB_PASSWORD", "")
     FB_ACCESS_TOKEN = os.getenv("FB_ACCESS_TOKEN", "")
 
-    TT_USERNAME = os.getenv("TT_USERNAME", "")
-    TT_EMAIL = os.getenv("TT_EMAIL", "")
-    TT_PASSWORD = os.getenv("TT_PASSWORD", "")
-    TT_COOKIES_FILE = os.getenv("TT_COOKIES_FILE", "tiktok_cookies.json")
-
     REQUESTS_PER_MINUTE = int(os.getenv("REQUESTS_PER_MINUTE", "10"))
     DAYS_BACK = int(os.getenv("DAYS_BACK", "730"))
     MAX_POSTS = int(os.getenv("MAX_POSTS", "20000"))

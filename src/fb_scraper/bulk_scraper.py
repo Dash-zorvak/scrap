@@ -21,9 +21,10 @@ from src.storage.supabase_client import SupabaseStorage
 from src.config import Config
 from src.analyzer.sentiment import SentimentAnalyzer
 from src.analyzer.topic_detection import get_main_topic, detect_zona
+from src.notifications.telegram import TelegramNotifier
 
 logger = logging.getLogger(__name__)
-CHECKPOINT_FILE = "scraper_checkpoint.json"
+CHECKPOINT_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "scraper_checkpoint.json")
 
 
 class BulkFacebookScraper:
@@ -36,6 +37,7 @@ class BulkFacebookScraper:
         self.page_name = cfg.FB_PAGE_NAME or "Jose Chicas"
         self.storage = SupabaseStorage()
         self.analyzer = SentimentAnalyzer()
+        self.notifier = TelegramNotifier()
 
     def _request(self, endpoint: str, params: dict = None, retries: int = 2) -> Optional[dict]:
         url = f"{FB_GRAPH_API}/{endpoint}"
@@ -272,32 +274,60 @@ class BulkFacebookScraper:
 
     # ---------- FASE 3: COMMENTS ----------
 
+    def _get_post_metadata(self, post_id: str) -> Optional[dict]:
+        """Check if post is shared from another page or has restrictions."""
+        data = self._request(post_id, {"fields": "from"})
+        return data
+
     def _get_comments(self, post_id: str, limit: int = 100) -> List[dict]:
-        params = {"fields": "id,message,created_time,from,like_count,parent_id", "limit": min(limit, 100), "filter": "stream"}
+        params = {"fields": "id,message,created_time,from,like_count,parent_id,attachment", "limit": min(limit, 100), "filter": "stream"}
         all_comments = []
         data = self._request(f"{post_id}/comments", params)
         if data and "data" in data:
             all_comments.extend(data["data"])
             while "paging" in data and "next" in data["paging"]:
-                after = data["paging"]["next"].split("after=")[1].split("&")[0]
+                try:
+                    after = data["paging"]["next"].split("after=")[1].split("&")[0]
+                except (IndexError, KeyError):
+                    break
                 params["after"] = after
                 data = self._request(f"{post_id}/comments", params)
                 if data and "data" in data:
                     all_comments.extend(data["data"])
                 else:
                     break
+        elif data is None:
+            meta = self._get_post_metadata(post_id)
+            if meta:
+                fb_from = meta.get("from", {})
+                if isinstance(fb_from, dict) and fb_from.get("id") != self.page_id:
+                    logger.warning(f"  Post {post_id} shared from {fb_from.get('name', fb_from.get('id', 'unknown'))} — skipping comments")
         return all_comments
 
     def _get_replies(self, comment_id: str) -> List[dict]:
-        params = {"fields": "id,message,created_time,from,like_count", "limit": 100}
+        params = {"fields": "id,message,created_time,from,like_count,attachment", "limit": 100}
         data = self._request(f"{comment_id}/comments", params)
         return data["data"] if data and "data" in data else []
 
     def _save_comment(self, comment: dict, post_id: str, parent_id: str = None) -> bool:
         cid = comment.get("id", "")
-        msg = comment.get("message", "") or ""
-        if not cid or not msg:
+        if not cid:
             return False
+        msg = comment.get("message", "") or ""
+        if not msg:
+            att = comment.get("attachment")
+            if isinstance(att, dict):
+                mtype = att.get("type", "media")
+                if mtype == "sticker":
+                    msg = "[sticker]"
+                elif mtype in ("photo", "animated_image_autoplay", "file_upload"):
+                    msg = "[image]"
+                elif mtype == "video_inline":
+                    msg = "[video]"
+                else:
+                    msg = f"[{mtype}]"
+            else:
+                msg = "[sin_texto]"
         sentiment, score = self.analyzer.analyze(msg)
         topic = get_main_topic(msg)
         zona = detect_zona(msg)
@@ -321,20 +351,20 @@ class BulkFacebookScraper:
         logger.info("=" * 50)
         logger.info("FASE 3: Comments + Replies")
         logger.info("=" * 50)
-        r = self.storage.client.table("fb_posts")\
-            .select("post_id")\
-            .order("created_time", desc=True)\
-            .execute()
-        all_posts = r.data or []
-        if max_posts:
-            all_posts = all_posts[:max_posts]
+        total_limit = max_posts if max_posts else 50000
+        all_posts = self._get_all_posts_paginated("post_id", total_limit)
         logger.info(f"Total posts: {len(all_posts)}")
+        start_idx = self._load_checkpoint("phase_3")
+        if start_idx > 0:
+            logger.info(f"Resuming from checkpoint: {start_idx}")
         start = time.time()
         total_comments = 0
         total_replies = 0
         errors = 0
         posts_done = 0
         for i, post in enumerate(all_posts):
+            if i < start_idx:
+                continue
             pid = post["post_id"]
             comments = self._get_comments(pid)
             for c in comments:
@@ -356,9 +386,28 @@ class BulkFacebookScraper:
                 self._save_checkpoint("phase_3", i + 1, len(all_posts))
                 logger.info(f"  [{i+1}/{len(all_posts)} posts] comments={total_comments} "
                             f"replies={total_replies} errors={errors} | {elapsed/60:.1f} min")
+                pct = (i + 1) / len(all_posts) * 100
+                rate = total_comments / elapsed if elapsed > 0 else 0
+                self.notifier.send(
+                    f"📘 *Fase 3 — Comentarios*\n\n"
+                    f"*Posts:* {i+1}/{len(all_posts)} ({pct:.1f}%)\n"
+                    f"*Comentarios:* {total_comments:,}\n"
+                    f"*Replies:* {total_replies:,}\n"
+                    f"*Errores:* {errors}\n"
+                    f"*Ritmo:* {rate:.1f} com/s\n"
+                    f"*⏱️* {elapsed/60:.0f} min"
+                )
         elapsed = time.time() - start
         logger.info(f"Fase 3 done: {total_comments} comments, {total_replies} replies, "
                     f"{errors} errors, {elapsed:.0f}s")
+        self.notifier.send(
+            f"✅ *Fase 3 COMPLETADA*\n\n"
+            f"*Posts procesados:* {len(all_posts)}\n"
+            f"*Comentarios totales:* {total_comments:,}\n"
+            f"*Replies:* {total_replies:,}\n"
+            f"*Errores:* {errors}\n"
+            f"*⏱️* {elapsed/60:.1f} min"
+        )
         if os.path.exists(CHECKPOINT_FILE):
             os.remove(CHECKPOINT_FILE)
         return {"comments": total_comments, "replies": total_replies, "errors": errors, "elapsed": elapsed}

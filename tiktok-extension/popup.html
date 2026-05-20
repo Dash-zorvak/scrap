@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 400px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a1a;
+      color: #fff;
+      padding: 20px;
+    }
+    h1 { font-size: 18px; margin-bottom: 15px; color: #fe2c55; }
+    h2 { font-size: 14px; margin: 15px 0 10px; color: #25f4ee; }
+    
+    .status {
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 13px;
+    }
+    .status.idle { background: #333; }
+    .status.running { background: #25f4ee; color: #000; }
+    .status.done { background: #00f2a9; color: #000; }
+    .status.error { background: #fe2c55; }
+    
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 10px;
+      transition: 0.2s;
+    }
+    .btn-primary {
+      background: #fe2c55;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #e02549; }
+    .btn-primary:disabled { background: #666; cursor: not-allowed; }
+    .btn-secondary {
+      background: #333;
+      color: #fff;
+    }
+    .btn-secondary:hover { background: #444; }
+    
+    .stats {
+      background: #252525;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #333;
+    }
+    .stats-row:last-child { border: none; }
+    .stats-label { color: #888; }
+    .stats-value { font-weight: 600; }
+    
+    .log {
+      background: #0d0d0d;
+      border-radius: 8px;
+      padding: 10px;
+      height: 150px;
+      overflow-y: auto;
+      font-size: 11px;
+      font-family: monospace;
+      color: #888;
+    }
+    .log-entry { margin: 4px 0; }
+    .log-entry.info { color: #25f4ee; }
+    .log-entry.success { color: #00f2a9; }
+    .log-entry.error { color: #fe2c55; }
+    
+    .progress-bar {
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      margin: 10px 0;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #fe2c55, #25f4ee);
+      width: 0%;
+      transition: width 0.3s;
+    }
+    
+    .options {
+      margin: 15px 0;
+    }
+    .option {
+      display: flex;
+      align-items: center;
+      padding: 8px 0;
+    }
+    .option input {
+      margin-right: 10px;
+    }
+    
+    .download-link {
+      display: none;
+      text-align: center;
+      margin-top: 10px;
+    }
+    .download-link a {
+      color: #25f4ee;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>📱 TikTok Scraper Pro</h1>
+  
+  <div id="status" class="status idle">Listo para extraer datos</div>
+  
+  <div class="progress-bar">
+    <div id="progress" class="progress-fill"></div>
+  </div>
+  
+  <div class="options">
+    <label class="option">
+      <input type="checkbox" id="extractComments" checked>
+      Extraer comentarios de cada video
+    </label>
+    <label class="option">
+      <input type="checkbox" id="scrollAll" checked>
+      Cargar todos los videos del perfil
+    </label>
+  </div>
+  
+  <button id="scrapeBtn" class="btn btn-primary">🚀 Iniciar Scraping</button>
+  <button id="stopBtn" class="btn btn-secondary" disabled>⏹ Detener</button>
+  
+  <div class="stats" id="stats" style="display:none;">
+    <h2>📊 Estadísticas</h2>
+    <div class="stats-row">
+      <span class="stats-label">Videos encontrados:</span>
+      <span class="stats-value" id="videoCount">0</span>
+    </div>
+    <div class="stats-row">
+      <span class="stats-label">Comentarios extraídos:</span>
+      <span class="stats-value" id="commentCount">0</span>
+    </div>
+    <div class="stats-row">
+      <span class="stats-label">Tiempo:</span>
+      <span class="stats-value" id="timeSpent">0s</span>
+    </div>
+  </div>
+  
+  <h2>📝 Log</h2>
+  <div class="log" id="log"></div>
+  
+  <div class="download-link" id="downloadLink">
+    <a href="#" id="downloadBtn" download>💾 Descargar datos (JSON)</a>
+  </div>
+  
+  <div class="preview" id="preview" style="display:none; margin-top: 15px;">
+    <h2>📋 Vista previa</h2>
+    <pre id="previewData" style="background: #111; padding: 10px; border-radius: 5px; font-size: 10px; max-height: 200px; overflow: auto; white-space: pre-wrap; word-break: break-all;"></pre>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

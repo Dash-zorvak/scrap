@@ -27,34 +27,43 @@ Con análisis de reacciones, sentimiento, temas clave, datos demográficos y mar
 ```
 scrapeo-social/
 ├── src/
-│   ├── main.py              # CLI: scrape, analyze, status
-│   ├── config.py           # Configuración desde .env
+│   ├── main.py                    # CLI: scrape, analyze, status
+│   ├── config.py                 # Configuración desde .env
 │   ├── analyzer/
-│   │   ├── sentiment.py    # Analizador español (3 niveles)
-│   │   ├── trends.py       # Análisis de tendencias
-│   │   └── reporting.py   # Generación de informes JSON/PNG
+│   │   ├── sentiment.py          # Analizador español (3 niveles)
+│   │   ├── trends.py             # Análisis de tendencias
+│   │   └── reporting.py          # Generación de informes JSON/PNG
 │   ├── fb_scraper/
-│   │   ├── playwright_scraper.py  # Scraper FB con Playwright
-│   │   └── models.py       # FBPostData, FBCommentData
+│   │   ├── playwright_scraper.py # Scraper FB con Playwright
+│   │   └── models.py             # FBPostData, FBCommentData
 │   ├── tiktok_scraper/
-│   │   ├── scraper.py      # Scraper TT (JSON embebido)
-│   │   └── models.py       # TTPostData, TTCommentData
+│   │   ├── scraper.py            # Scraper TT (JSON embebido)
+│   │   ├── resilient_scraper.py  # TT con anti-ban
+│   │   ├── bruteforce_scraper.py # TT brute-force (7 métodos)
+│   │   ├── api_scraper.py        # TT vía API pública
+│   │   └── models.py             # TTPostData, TTCommentData
 │   └── storage/
-│       └── db.py           # SQLite + SQLAlchemy
-├── data/                   # SQLite database
-├── outputs/                # Informes JSON y gráficos
-├── .env                    # Credenciales y configuración
-└── scrapeo                 # Wrapper: activa venv y ejecuta main
+│       ├── db.py                 # SQLite + SQLAlchemy
+│       └── supabase_client.py    # Supabase storage
+├── scripts/
+│   └── tt_login.py               # Login helper TikTok
+├── data/                         # SQLite database
+├── outputs/                      # Informes JSON y gráficos
+├── .env                          # Credenciales y configuración
+└── scrapeo                       # Wrapper: activa venv y ejecuta main
 ```
 
 ## Comandos
 
 ```bash
-./scrapeo scrape --platform facebook   # Scrapear FB
-./scrapeo scrape --platform tiktok     # Scrapear TikTok
-./scrapeo scrape --platform all       # Ambas plataformas
-./scrapeo analyze --platform all      # Generar informe
-./scrapeo status                      # Ver estado de BD
+./scrapeo scrape --platform facebook          # Scrapear FB
+./scrapeo scrape --platform tiktok            # Scrapear TikTok
+./scrapeo scrape --platform all              # Ambas plataformas
+./scrapeo scrape-tt --user alcaldiasa        # Brute-force TT (8 métodos)
+./scrapeo scrape-tt --comments               # TT + comentarios
+./scrapeo tt-login                           # Login manual TT (captura cookies)
+./scrapeo analyze --platform all             # Generar informe
+./scrapeo status                             # Ver estado de BD
 ```
 
 ## Configuración (.env)
@@ -149,6 +158,26 @@ Formato JSON del informe:
 - Rotación de user-agents
 - Comportamiento humano simulado
 - Checkpointing cada 50 posts
+- **Brute-force**: 8 métodos distintos en cascada
+
+## Estrategia Brute-Force TikTok
+
+El scraper **bruteforce_scraper.py** implementa 8 métodos en cascada:
+
+| # | Método | Requiere | Efectividad |
+|---|--------|----------|-------------|
+| 1 | API con session cookies | Login manual previo | ★★★★★ |
+| 2 | item/detail API | Cookies opcional | ★★★☆☆ |
+| 3 | Mobile API (iPhone) | Nada | ★★★★☆ |
+| 4 | Playwright + stealth | playwright instalado | ★★★★☆ |
+| 5 | Selenium con evasión | ChromeDriver | ★★★★☆ |
+| 6 | RSS feed | Nada | ★★☆☆☆ |
+| 7 | Feed API alternativo | Nada | ★★★☆☆ |
+| 8 | Búsqueda por keyword | Nada | ★★☆☆☆ |
+
+**Flujo**: API con cookies → Mobile API → Feed API → Search → Playwright → Selenium → RSS → Fallback
+
+**Para mejores resultados**: Ejecutar `./scrapeo tt-login` primero para capturar cookies de sesión.
 
 ## Notas Importantes
 

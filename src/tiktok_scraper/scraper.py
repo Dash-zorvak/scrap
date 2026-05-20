@@ -3,12 +3,14 @@ import logging
 import re
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 
 from playwright.sync_api import sync_playwright, Page, Browser
 from playwright_stealth import Stealth
 
 from src.tiktok_scraper.models import TTPostData, TTCommentData
+from src.analyzer.sentiment import SentimentAnalyzer
+from src.analyzer.topic_detection import get_main_topic, detect_zona, extract_problematicas
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +24,13 @@ class TikTokScraper:
         headless: bool = False,
         email: str = "",
         password: str = "",
+        cookies_file: str = "",
     ):
         self.proxy_url = proxy_url
         self.headless = headless
         self.email = email
         self.password = password
+        self.cookies_file = cookies_file
 
     def _create_browser(self) -> Browser:
         launch_opts = {
@@ -56,6 +60,17 @@ class TikTokScraper:
             locale="es",
             timezone_id="America/El_Salvador",
         )
+        
+        # Load cookies if provided
+        if self.cookies_file:
+            try:
+                with open(self.cookies_file, 'r') as f:
+                    cookies = json.load(f)
+                context.add_cookies(cookies)
+                logger.info(f"Loaded cookies from {self.cookies_file}")
+            except Exception as e:
+                logger.warning(f"Failed to load cookies: {e}")
+        
         page = context.new_page()
         Stealth().apply_stealth_sync(page)
         return page
@@ -294,3 +309,114 @@ class TikTokScraper:
             browser.close()
 
         return videos
+
+    def extract_video_comments(self, video_id: str, max_comments: int = None) -> list[dict]:
+        """
+        Extract comments for a TikTok video using the public API.
+
+        Args:
+            video_id: TikTok video ID (aweme_id)
+            max_comments: Maximum number of comments to extract (None for all)
+
+        Returns:
+            List of comment dictionaries with keys matching Supabase tt_comments table
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        comments = []
+        cursor = 0
+        has_more = True
+
+        while has_more and (max_comments is None or len(comments) < max_comments):
+            try:
+                # Calculate how many comments to fetch in this batch
+                batch_size = 20  # TikTok API standard batch size
+                if max_comments is not None:
+                    remaining = max_comments - len(comments)
+                    if remaining <= 0:
+                        break
+                    batch_size = min(batch_size, remaining)
+
+                # Make API request
+                url = "https://www.tiktok.com/api/comment/list/"
+                params = {
+                    "aweme_id": video_id,
+                    "count": str(batch_size),
+                    "cursor": str(cursor),
+                }
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+                    "Referer": "https://www.tiktok.com/",
+                }
+
+                import requests
+                response = requests.get(url, params=params, headers=headers, timeout=10)
+                if response.status_code != 200:
+                    logger.warning(f"Failed to fetch comments for video {video_id}: HTTP {response.status_code}")
+                    break
+
+                data = response.json()
+
+                # Extract comments from response
+                batch_comments = data.get("comments", [])
+                has_more = data.get("has_more", False)
+                cursor = data.get("cursor", 0)
+
+                # Process each comment
+                for comment in batch_comments:
+                    try:
+                        # Extract comment data
+                        comment_id = comment.get("cid")
+                        text = comment.get("text", "")
+                        create_time = comment.get("create_time")
+                        like_count = comment.get("digg_count", 0)
+
+                        # Extract author information
+                        user_info = comment.get("user", {})
+                        author_name = user_info.get("nickname", "") or user_info.get("unique_id", "")
+
+                        # Convert timestamp
+                        if create_time:
+                            try:
+                                from datetime import datetime
+                                created_time = datetime.fromtimestamp(int(create_time))
+                            except (ValueError, TypeError):
+                                created_time = None
+                        else:
+                            created_time = None
+
+                        # Apply NLP analysis
+                        analyzer = SentimentAnalyzer()
+                        sentiment_label, sentiment_score = analyzer.analyze(text)
+                        topic = get_main_topic(text)
+                        zona = detect_zona(text)
+
+                        # Build comment dictionary
+                        comment_data = {
+                            "comment_id": str(comment_id),
+                            "video_id": str(video_id),
+                            "message": text[:5000],  # Limit to match DB column size
+                            "author_name": author_name[:100],  # Limit author name length
+                            "created_time": created_time.isoformat() if created_time else None,
+                            "like_count": like_count,
+                            "sentiment": sentiment_label,
+                            "sentiment_score": sentiment_score,
+                            "topic_category": topic,
+                            "zona": zona,
+                        }
+
+                        comments.append(comment_data)
+
+                    except Exception as e:
+                        logger.warning(f"Error processing comment for video {video_id}: {e}")
+                        continue
+
+                # Add delay to avoid rate limiting
+                time.sleep(random.uniform(0.5, 1.5))
+
+            except Exception as e:
+                logger.warning(f"Error fetching comments for video {video_id}: {e}")
+                break
+
+        return comments

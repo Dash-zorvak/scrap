@@ -38,6 +38,7 @@ class SupabaseStorage:
                 "angrys_count": post.get("angrys_count", 0),
                 "comments_count": post.get("comments_count", 0),
                 "shares_count": post.get("shares_count", 0),
+                "views_count": post.get("views_count", 0),
                 "post_url": post.get("post_url", ""),
                 "sentiment": post.get("sentiment", ""),
                 "sentiment_score": post.get("sentiment_score", 0),
@@ -52,6 +53,10 @@ class SupabaseStorage:
 
     def insert_tt_post(self, post: Dict[str, Any]) -> bool:
         try:
+            hashtags = post.get("hashtags", [])
+            if isinstance(hashtags, list):
+                hashtags = ",".join(hashtags)
+
             data = {
                 "video_id": post.get("video_id"),
                 "username": post.get("username", ""),
@@ -61,7 +66,9 @@ class SupabaseStorage:
                 "comments_count": post.get("comments_count", 0),
                 "shares_count": post.get("shares_count", 0),
                 "views_count": post.get("views_count", 0),
+                "favorites_count": post.get("favorites_count", 0),
                 "video_url": post.get("video_url", ""),
+                "hashtags": hashtags,
                 "sentiment": post.get("sentiment", ""),
                 "sentiment_score": post.get("sentiment_score", 0),
                 "topic_category": post.get("topic_category", ""),
@@ -82,6 +89,7 @@ class SupabaseStorage:
                 "author_name": comment.get("author_name", ""),
                 "created_time": comment.get("created_time"),
                 "like_count": comment.get("like_count", 0),
+                "parent_comment_id": comment.get("parent_comment_id"),
                 "sentiment": comment.get("sentiment", ""),
                 "sentiment_score": comment.get("sentiment_score", 0),
                 "topic_category": comment.get("topic_category", ""),
@@ -100,8 +108,11 @@ class SupabaseStorage:
                 "video_id": comment.get("video_id", ""),
                 "message": comment.get("message", "")[:5000],
                 "author_name": comment.get("author_name", ""),
+                "author_unique_id": comment.get("author_unique_id", ""),
+                "author_avatar": comment.get("author_avatar", ""),
                 "create_time": comment.get("create_time"),
-                "like_count": comment.get("like_count", 0),
+                "likes_count": comment.get("like_count", comment.get("likes_count", 0)),
+                "reply_count": comment.get("reply_count", 0),
                 "sentiment": comment.get("sentiment", ""),
                 "sentiment_score": comment.get("sentiment_score", 0),
                 "topic_category": comment.get("topic_category", ""),

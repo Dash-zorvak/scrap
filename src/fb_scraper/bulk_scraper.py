@@ -204,27 +204,8 @@ class BulkFacebookScraper:
         return None
 
     def _get_all_posts_paginated(self, fields: str = "post_id,views_count", limit: int = 5000) -> list:
-        """Fetch all posts using pagination (Supabase max 1000 per request)."""
-        all_posts = []
-        page_size = 1000
-        offset = 0
-        while offset < limit:
-            remaining = limit - offset
-            fetch = min(page_size, remaining)
-            r = self.storage.client.table("fb_posts")\
-                .select(fields)\
-                .order("created_time", desc=True)\
-                .range(offset, offset + fetch - 1)\
-                .execute()
-            batch = r.data or []
-            if not batch:
-                break
-            all_posts.extend(batch)
-            offset += len(batch)
-            if len(batch) < fetch:
-                break
-            logger.info(f"  Fetched {len(all_posts)} posts so far...")
-        return all_posts
+        """Fetch all posts from local storage."""
+        return self.storage.get_all_posts_paginated(fields=fields, limit=limit)
 
     def phase_2_views(self, max_posts: int = 5000, checkpoint: int = 50):
         """Fase 2: Backfill de views_count para posts existentes."""
@@ -251,10 +232,7 @@ class BulkFacebookScraper:
                 continue
             views = self._get_post_views(pid)
             if views is not None:
-                self.storage.client.table("fb_posts")\
-                    .update({"views_count": views})\
-                    .eq("post_id", pid)\
-                    .execute()
+                self.storage.update_post_views(pid, views)
                 updated += 1
                 total_views += views
             else:
@@ -420,7 +398,7 @@ def main():
     parser.add_argument("--phase", choices=["1", "2", "3", "all"], default="1",
                         help="1=posts, 2=views, 3=comments")
     parser.add_argument("--max", type=int, default=5000, help="Max posts (fase 1 y 2)")
-    parser.add_argument("--batch", type=int, default=50, help="Checkpoint cada N items")
+    parser.add_argument("--batch", type=int, default=5, help="Checkpoint cada N items")
     parser.add_argument("--no-replies", action="store_true", help="Saltar replies en fase 3")
     args = parser.parse_args()
 

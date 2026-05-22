@@ -9,7 +9,7 @@ Extraer y analizar todos los posts, reacciones, vistas y comentarios de la pági
 ## Stack
 
 - **Scraping**: Facebook Graph API (`FB_ACCESS_TOKEN` con permisos `pages_read_engagement`, `pages_read_user_content`, `pages_manage_posts`, `read_insights`)
-- **Almacenamiento**: Supabase (PostgreSQL cloud) + SQLite local (`data/backup.db`) como backup de verificación
+- **Almacenamiento**: SQLite local (`data/backup.db`) vía SQLAlchemy
 - **Análisis**: `SentimentAnalyzer` (español, 3 niveles), Topic Detection (10 categorías), Zone Mapping (Centro/Norte/Sur/Este)
 - **Dashboard**: Streamlit (`dashboard/app.py`) — 7 tabs: Ejecutivo, Zonas, Temas, Tendencia, Insights, Posts, Comentarios
 - **Notificaciones**: Telegram bot para checkpoints de scraping
@@ -19,17 +19,11 @@ Extraer y analizar todos los posts, reacciones, vistas y comentarios de la pági
 
 | Recurso | Cantidad |
 |---------|----------|
-| Posts FB | 4,763 |
-| Comentarios FB | 20,951 |
-| Likes | ~95K |
-| Loves | ~36K |
-| Hahas | ~6K |
-| Sads | ~1.4K |
-| Angrys | ~2.2K |
-| Shares | ~15K |
-| Vistas | ~3.9M (3,822 posts con views > 0) |
-| Sentimiento (posts) | 2,696 positive · 301 negative · 1,766 neutral → NSI ~79.9% |
-| Sentimiento (comentarios) | 9,082 positive · 1,414 negative · 5,627 neutral → NSI ~73% |
+| Posts FB | 170 |
+| Comentarios FB | 5,879 |
+| Views | 170 posts con views |
+| Sentimiento | 78.8% positivo, 14.7% neutral, 6.5% negativo |
+| Dashboard | HTML estático con `data.js` generado desde SQLite |
 
 ## Estructura del Proyecto
 
@@ -48,7 +42,7 @@ scrapeo-social/
 │   │   └── models.py             # FBPostData, FBCommentData
 │   └── storage/
 │       ├── db.py                 # SQLite + SQLAlchemy
-│       └── supabase_client.py    # Supabase storage
+│       └── supabase_client.py    # Wrapper de LocalStorage (compatibilidad)
 ├── dashboard/
 │   └── app.py                    # Streamlit dashboard (7 tabs)
 ├── data/                         # SQLite database
@@ -62,19 +56,21 @@ scrapeo-social/
 ```bash
 ./scrapeo graph-scrape   # Scraping vía Graph API
 ./scrapeo deep-scrape    # Deep scraping alternativo
-./scrapeo analyze        # Generar métricas e insights
+./scrapeo analyze        # Generar métricas, insights y exportar dashboard/data.js
 ./scrapeo status         # Estado de BD
-./scrapeo verify         # Comparar Supabase vs backup local
-./scrapeo sync           # Sincronizar Supabase → local
+./scrapeo export-dashboard  # Exportar SQLite → dashboard/data.js
 ./scrapeo estimate N     # Proyectar tiempo para scrapear N posts (default: 20,000)
-streamlit run dashboard/app.py  # Dashboard ejecutivo (Bloomberg-style, 8 tabs)
+
+# Dashboard estático (abrir en navegador directamente):
+open dashboard/index.html
 ```
 
 ## Fases Ejecutadas
 
-1. **Posts**: 4,763 posts scrapeados vía Graph API, ~96 min, ~0.8 posts/s
-2. **Views**: 3,822 posts actualizados con views_count, 54 min
-3. **Comentarios**: procesados 1,100/4,763 posts, 20,951 comentarios en Supabase + SQLite
+1. **Posts (Graph API)**: 170 posts scrapeados (en progreso — target 500)
+2. **Views**: 170 posts con views_count (completado)
+3. **Comentarios**: 5,879 comentarios extraídos de los posts scrapeados
+4. **Análisis**: Sentimiento, tópicos y zonas mapeados en los 170 posts
 
 ## Decisiones Clave
 
@@ -82,14 +78,15 @@ streamlit run dashboard/app.py  # Dashboard ejecutivo (Bloomberg-style, 8 tabs)
 2. **3 fases secuenciales**: posts → views → comments, con checkpoints cada N items
 3. **Comentarios con stickers/imágenes**: detectados via `attachment.type`, guardados como `[sticker]`/`[image]`/`[video]`
 4. **Posts compartidos**: via `_get_post_metadata` → salta páginas que no son Jose Chicas
-5. **Dashboard todo-en-uno**: una sola app Streamlit con todas las vistas
-6. **Backup dual**: Supabase (primario) + SQLite local (verificación vía `./scrapeo verify`)
+5. **Dashboard HTML estático**: genera `dashboard/data.js` desde SQLite via `./scrapeo analyze` o `./scrapeo export-dashboard`
+6. **Solo SQLite local**: sin dependencia de Supabase
 
 ## Issues Conocidos
 
 - **Venv**: Python 3.11 venv en sistema 3.14 causa `ModuleNotFoundError` con pydantic-core, cryptography, numpy — requiere `pip install --force-reinstall` periódicamente
 - **Graph API**: posts eliminados/borrados devuelven `(#100) Object does not exist` — se loggean y se saltan
-- **Phase 3**: checkpoint en 1,100/4,763 (parada manual)
+- **Phase 3**: checkpoint en 350/4,763 (parada manual, datos reseteados para scrape nuevo)
+- **Supabase eliminado**: ahora solo SQLite local. `SupabaseStorage` es un wrapper de `LocalStorage` por compatibilidad.
 
 ## Entorno de Ejecución
 

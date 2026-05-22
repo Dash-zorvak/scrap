@@ -2,317 +2,89 @@ import json
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from supabase import create_client, Client
-from src.config import Config
+
+from src.storage.db import LocalStorage
 
 logger = logging.getLogger(__name__)
 
-_supabase_client: Optional[Client] = None
-
-
-def get_supabase_client() -> Client:
-    global _supabase_client
-    if _supabase_client is None:
-        cfg = Config()
-        _supabase_client = create_client(cfg.SUPABASE_URL, cfg.SUPABASE_KEY)
-        logger.info("Supabase client initialized")
-    return _supabase_client
-
 
 class SupabaseStorage:
+    """Local-only storage. Name kept for backward compatibility."""
+
     def __init__(self, local_backup: bool = True):
-        self.client = get_supabase_client()
-        self.local = None
-        if local_backup:
-            try:
-                from src.storage.db import LocalStorage
-                self.local = LocalStorage()
-                logger.info("Local SQLite backup initialized")
-            except Exception as e:
-                logger.warning(f"Local backup not available: {e}")
+        self.local = LocalStorage()
 
     def insert_fb_post(self, post: Dict[str, Any]) -> bool:
-        try:
-            data = {
-                "post_id": post.get("post_id"),
-                "page_id": post.get("page_id", ""),
-                "page_name": post.get("page_name", ""),
-                "message": post.get("message", "")[:10000],
-                "created_time": post.get("created_time"),
-                "likes_count": post.get("likes_count", 0),
-                "loves_count": post.get("loves_count", 0),
-                "hahas_count": post.get("hahas_count", 0),
-                "wows_count": post.get("wows_count", 0),
-                "sads_count": post.get("sads_count", 0),
-                "angrys_count": post.get("angrys_count", 0),
-                "comments_count": post.get("comments_count", 0),
-                "shares_count": post.get("shares_count", 0),
-                "views_count": post.get("views_count", 0),
-                "post_url": post.get("post_url", ""),
-                "sentiment": post.get("sentiment", ""),
-                "sentiment_score": post.get("sentiment_score", 0),
-                "topic_category": post.get("topic_category", ""),
-                "zona": post.get("zona", ""),
-            }
-            self.client.table("fb_posts").upsert(data, on_conflict="post_id").execute()
-            if self.local:
-                self.local.insert_fb_post(post)
-            return True
-        except Exception as e:
-            logger.error(f"Error inserting FB post: {e}")
-            return False
+        return self.local.insert_fb_post(post)
 
     def insert_fb_comment(self, comment: Dict[str, Any]) -> bool:
-        try:
-            data = {
-                "comment_id": comment.get("comment_id"),
-                "post_id": comment.get("post_id", ""),
-                "message": comment.get("message", "")[:5000],
-                "author_name": comment.get("author_name", ""),
-                "created_time": comment.get("created_time"),
-                "like_count": comment.get("like_count", 0),
-                "parent_comment_id": comment.get("parent_comment_id"),
-                "sentiment": comment.get("sentiment", ""),
-                "sentiment_score": comment.get("sentiment_score", 0),
-                "topic_category": comment.get("topic_category", ""),
-                "zona": comment.get("zona", ""),
-            }
-            self.client.table("fb_comments").upsert(data, on_conflict="comment_id").execute()
-            if self.local:
-                self.local.insert_fb_comment(comment)
-            return True
-        except Exception as e:
-            logger.error(f"Error inserting FB comment: {e}")
-            return False
+        return self.local.insert_fb_comment(comment)
 
     def insert_problematica(self, problematica: Dict[str, Any]) -> bool:
-        try:
-            data = {
-                "platform": problematica.get("platform", ""),
-                "post_id": problematica.get("post_id", ""),
-                "comment_id": problematica.get("comment_id", ""),
-                "topic": problematica.get("topic", ""),
-                "zona": problematica.get("zona", ""),
-                "message": problematica.get("message", ""),
-                "sentiment": problematica.get("sentiment", ""),
-                "sentiment_score": problematica.get("sentiment_score", 0),
-            }
-            self.client.table("problematicas").insert(data).execute()
-            if self.local:
-                self.local.insert_problematica(problematica)
-            return True
-        except Exception as e:
-            logger.error(f"Error inserting problematica: {e}")
-            return False
+        return self.local.insert_problematica(problematica)
 
     def insert_insight(self, insight: Dict[str, Any]) -> bool:
-        try:
-            data = {
-                "insight_type": insight.get("insight_type", ""),
-                "title": insight.get("title", ""),
-                "description": insight.get("description", ""),
-                "topic": insight.get("topic", ""),
-                "zona": insight.get("zona", ""),
-                "sentiment": insight.get("sentiment", ""),
-                "priority": insight.get("priority", 0),
-                "post_id": insight.get("post_id", ""),
-                "metric_data": insight.get("metric_data", {}),
-            }
-            self.client.table("insights").insert(data).execute()
-            if self.local:
-                self.local.insert_insight(insight)
-            return True
-        except Exception as e:
-            logger.error(f"Error inserting insight: {e}")
-            return False
+        return self.local.insert_insight(insight)
 
     def insert_daily_metric(self, metric: Dict[str, Any]) -> bool:
-        try:
-            data = {
-                "platform": metric.get("platform", ""),
-                "date": metric.get("date", datetime.now().date()),
-                "total_posts": metric.get("total_posts", 0),
-                "total_comments": metric.get("total_comments", 0),
-                "total_reactions": metric.get("total_reactions", 0),
-                "positive_pct": metric.get("positive_pct", 0),
-                "negative_pct": metric.get("negative_pct", 0),
-                "neutral_pct": metric.get("neutral_pct", 0),
-                "nsi": metric.get("nsi", 0),
-                "cai": metric.get("cai", 0),
-                "top_topics": metric.get("top_topics", []),
-                "top_problematicas": metric.get("top_problematicas", []),
-            }
-            self.client.table("daily_metrics").upsert(
-                data, on_conflict="platform,date"
-            ).execute()
-            if self.local:
-                self.local.insert_daily_metric(metric)
-            return True
-        except Exception as e:
-            logger.error(f"Error inserting daily metric: {e}")
-            return False
+        return self.local.insert_daily_metric(metric)
 
     def get_fb_posts(self, limit: int = 100, offset: int = 0) -> List[Dict]:
-        try:
-            result = (
-                self.client.table("fb_posts")
-                .select("*")
-                .order("created_time", desc=True)
-                .range(offset, offset + limit - 1)
-                .execute()
-            )
-            return result.data or []
-        except Exception as e:
-            logger.error(f"Error getting FB posts: {e}")
-            return []
+        return self.local.get_fb_posts(limit=limit, offset=offset)
+
+    def get_fb_post(self, post_id: str) -> Optional[Dict]:
+        return self.local.get_fb_post(post_id)
 
     def get_daily_metrics(self, days: int = 30) -> List[Dict]:
-        try:
-            result = (
-                self.client.table("daily_metrics")
-                .select("*")
-                .order("date", desc=True)
-                .limit(days)
-                .execute()
-            )
-            return result.data or []
-        except Exception as e:
-            logger.error(f"Error getting daily metrics: {e}")
-            return []
+        return self.local.get_daily_metrics(days=days)
 
     def get_problematicas_by_zone(self, days: int = 30) -> List[Dict]:
-        try:
-            result = (
-                self.client.table("problematicas")
-                .select("*")
-                .gte("detected_at", datetime.now().isoformat())
-                .execute()
-            )
-            return result.data or []
-        except Exception as e:
-            logger.error(f"Error getting problematicas: {e}")
-            return []
+        return self.local.get_problematicas_by_zone(days=days)
 
     def get_insights(self, limit: int = 20) -> List[Dict]:
-        try:
-            result = (
-                self.client.table("insights")
-                .select("*")
-                .order("priority", desc=True)
-                .limit(limit)
-                .execute()
-            )
-            return result.data or []
-        except Exception as e:
-            logger.error(f"Error getting insights: {e}")
-            return []
+        return self.local.get_insights(limit=limit)
 
     def get_zonas(self) -> List[Dict]:
-        try:
-            result = self.client.table("zonas").select("*").execute()
-            return result.data or []
-        except Exception as e:
-            logger.error(f"Error getting zonas: {e}")
-            return []
+        return self.local.get_zonas()
 
     def get_topics(self) -> List[Dict]:
-        try:
-            result = self.client.table("topics").select("*").execute()
-            return result.data or []
-        except Exception as e:
-            logger.error(f"Error getting topics: {e}")
-            return []
+        return self.local.get_topics()
 
     def get_executive_summary(self) -> Dict:
+        return self.local.get_executive_summary()
+
+    def get_fb_comments(self, limit: int = 100, offset: int = 0) -> List[Dict]:
+        return self.local.get_fb_comments(limit=limit, offset=offset)
+
+    def get_all_posts_paginated(self, fields: str = "post_id", limit: int = 5000) -> list:
+        return self.local.get_all_posts_paginated(fields=fields, limit=limit)
+
+    def get_posts_comment_counts(self) -> Dict[str, int]:
+        return self.local.get_posts_comment_counts()
+
+    def get_posts_without_comments(self) -> list:
+        return self.local.get_posts_without_comments()
+
+    def post_exists(self, post_id: str) -> bool:
+        return self.local.post_exists(post_id)
+
+    def update_post_views(self, post_id: str, views_count: int) -> bool:
+        return self.local.update_post_views(post_id, views_count)
+
+    def purge_all(self) -> bool:
         try:
-            fb_count = (
-                self.client.table("fb_posts").select("id", count="exact").execute().count
-            )
-            fb_comments = (
-                self.client.table("fb_comments")
-                .select("id", count="exact")
-                .execute().count
-            )
-
-            fb_positive = (
-                self.client.table("fb_posts")
-                .select("id", count="exact")
-                .eq("sentiment", "positive")
-                .execute().count
-            )
-            fb_negative = (
-                self.client.table("fb_posts")
-                .select("id", count="exact")
-                .eq("sentiment", "negative")
-                .execute().count
-            )
-
-            return {
-                "fb_posts": fb_count,
-                "fb_comments": fb_comments,
-                "fb_positive": fb_positive,
-                "fb_negative": fb_negative,
-            }
+            tables = ["fb_posts", "fb_comments", "problematicas", "insights", "daily_metrics"]
+            for table in tables:
+                self.local.purge_table(table)
+            logger.info("All data purged")
+            return True
         except Exception as e:
-            logger.error(f"Error getting executive summary: {e}")
-            return {}
+            logger.error(f"Error purging data: {e}")
+            return False
 
     def verify_sync(self) -> Dict[str, Dict]:
-        if not self.local:
-            return {"error": "Local backup not configured"}
-        tables = [
-            ("fb_posts", "post_id"),
-            ("fb_comments", "comment_id"),
-            ("problematicas", None),
-            ("insights", None),
-            ("daily_metrics", None),
-        ]
-        result = {}
-        for table, id_col in tables:
-            try:
-                supabase_count = self.client.table(table).select("*", count="exact").execute().count
-            except Exception as e:
-                supabase_count = -1
-                logger.warning(f"Error counting {table} in Supabase: {e}")
+        return {"note": "Local-only storage. No sync needed."}
 
-            local_count = self.local.count(table)
-
-            diff = None
-            if supabase_count >= 0 and local_count >= 0:
-                diff = supabase_count - local_count
-
-            result[table] = {
-                "supabase": supabase_count,
-                "local": local_count,
-                "diff": diff,
-                "match": diff == 0 if diff is not None else None,
-            }
-
-            if id_col and diff and diff == 0:
-                try:
-                    supabase_ids = set()
-                    page = 0
-                    page_size = 1000
-                    while True:
-                        rows = self.client.table(table).select(id_col).range(page * page_size, (page + 1) * page_size - 1).execute().data
-                        if not rows:
-                            break
-                        supabase_ids.update(r[id_col] for r in rows)
-                        if len(rows) < page_size:
-                            break
-                        page += 1
-
-                    local_ids = self.local.get_all_ids(table, id_col)
-
-                    only_in_supabase = supabase_ids - local_ids
-                    only_in_local = local_ids - supabase_ids
-                    result[table]["only_in_supabase"] = len(only_in_supabase)
-                    result[table]["only_in_local"] = len(only_in_local)
-                    if only_in_supabase:
-                        result[table]["missing_from_local"] = list(only_in_supabase)[:10]
-                    if only_in_local:
-                        result[table]["missing_from_supabase"] = list(only_in_local)[:10]
-                except Exception as e:
-                    logger.warning(f"Error comparing {table} IDs: {e}")
-
-        return result
+    @property
+    def client(self):
+        raise AttributeError("Supabase client no longer available. Use local storage only.")

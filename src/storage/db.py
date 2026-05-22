@@ -296,6 +296,31 @@ class LocalStorage:
             logger.error(f"Local backup error (daily_metric): {e}")
             return False
 
+    # ── purge ────────────────────────────────────────────────
+
+    def purge_table(self, table: str) -> bool:
+        try:
+            s = self._session()
+            model_map = {
+                "fb_posts": FBPost,
+                "fb_comments": FBComment,
+                "problematicas": Problema,
+                "insights": Insight,
+                "daily_metrics": DailyMetric,
+            }
+            model = model_map.get(table)
+            if model is None:
+                s.close()
+                return False
+            s.query(model).delete()
+            s.commit()
+            s.close()
+            logger.info(f"Local purge: {table}")
+            return True
+        except Exception as e:
+            logger.error(f"Local backup error (purge {table}): {e}")
+            return False
+
     # ── counts ───────────────────────────────────────────────
 
     def count(self, table: str) -> int:
@@ -337,3 +362,286 @@ class LocalStorage:
         except Exception as e:
             logger.error(f"Error reading ids from {table}: {e}")
             return set()
+
+    # ── reads (for dashboard & analysis) ─────────────────────
+
+    def get_fb_posts(self, limit: int = 100, offset: int = 0) -> list:
+        try:
+            s = self._session()
+            rows = s.query(FBPost).order_by(FBPost.created_time.desc().nullslast()).offset(offset).limit(limit).all()
+            s.close()
+            result = []
+            for r in rows:
+                result.append({
+                    "post_id": r.post_id,
+                    "page_id": r.page_id,
+                    "page_name": r.page_name,
+                    "message": r.message,
+                    "created_time": r.created_time.isoformat() if r.created_time else None,
+                    "likes_count": r.likes_count,
+                    "loves_count": r.loves_count,
+                    "hahas_count": r.hahas_count,
+                    "wows_count": r.wows_count,
+                    "sads_count": r.sads_count,
+                    "angrys_count": r.angrys_count,
+                    "comments_count": r.comments_count,
+                    "shares_count": r.shares_count,
+                    "views_count": r.views_count,
+                    "post_url": r.post_url,
+                    "sentiment": r.sentiment,
+                    "sentiment_score": r.sentiment_score,
+                    "topic_category": r.topic_category,
+                    "zona": r.zona,
+                })
+            return result
+        except Exception as e:
+            logger.error(f"Error reading fb_posts: {e}")
+            return []
+
+    def get_fb_post(self, post_id: str) -> Optional[dict]:
+        try:
+            s = self._session()
+            r = s.query(FBPost).filter(FBPost.post_id == post_id).first()
+            s.close()
+            if not r:
+                return None
+            return {
+                "post_id": r.post_id,
+                "page_id": r.page_id,
+                "page_name": r.page_name,
+                "message": r.message,
+                "created_time": r.created_time.isoformat() if r.created_time else None,
+                "likes_count": r.likes_count,
+                "loves_count": r.loves_count,
+                "hahas_count": r.hahas_count,
+                "wows_count": r.wows_count,
+                "sads_count": r.sads_count,
+                "angrys_count": r.angrys_count,
+                "comments_count": r.comments_count,
+                "shares_count": r.shares_count,
+                "views_count": r.views_count,
+                "post_url": r.post_url,
+                "sentiment": r.sentiment,
+                "sentiment_score": r.sentiment_score,
+                "topic_category": r.topic_category,
+                "zona": r.zona,
+            }
+        except Exception as e:
+            logger.error(f"Error reading fb_post {post_id}: {e}")
+            return None
+
+    def get_fb_posts_all(self, fields: str = None, limit: int = 5000) -> list:
+        try:
+            s = self._session()
+            query = s.query(FBPost).order_by(FBPost.created_time.desc().nullslast())
+            if limit:
+                query = query.limit(limit)
+            rows = query.all()
+            s.close()
+            result = []
+            for r in rows:
+                d = {"post_id": r.post_id}
+                if fields:
+                    flds = [f.strip() for f in fields.split(",")]
+                    if "views_count" in flds:
+                        d["views_count"] = r.views_count
+                    if "comments_count" in flds:
+                        d["comments_count"] = r.comments_count
+                result.append(d)
+            return result
+        except Exception as e:
+            logger.error(f"Error reading all fb_posts: {e}")
+            return []
+
+    def get_posts_comment_counts(self) -> dict:
+        try:
+            s = self._session()
+            rows = s.query(FBPost.post_id, FBPost.comments_count).all()
+            s.close()
+            return {r.post_id: r.comments_count for r in rows if r.comments_count and r.comments_count > 0}
+        except Exception as e:
+            logger.error(f"Error reading comment counts: {e}")
+            return {}
+
+    def get_posts_without_comments(self) -> list:
+        try:
+            s = self._session()
+            all_rows = s.query(FBPost.post_id).all()
+            all_ids = {r.post_id for r in s.query(FBComment.post_id).distinct().all()}
+            s.close()
+            return [r.post_id for r in all_rows if r.post_id not in all_ids]
+        except Exception as e:
+            logger.error(f"Error getting posts without comments: {e}")
+            return []
+
+    def post_exists(self, post_id: str) -> bool:
+        try:
+            s = self._session()
+            r = s.query(FBPost.post_id).filter(FBPost.post_id == post_id).first()
+            s.close()
+            return r is not None
+        except Exception as e:
+            logger.error(f"Error checking post exists: {e}")
+            return False
+
+    def update_post_views(self, post_id: str, views_count: int) -> bool:
+        try:
+            s = self._session()
+            r = s.query(FBPost).filter(FBPost.post_id == post_id).first()
+            if r:
+                r.views_count = views_count
+                s.commit()
+            s.close()
+            return True
+        except Exception as e:
+            logger.error(f"Error updating post views: {e}")
+            return False
+
+    def get_executive_summary(self) -> dict:
+        try:
+            s = self._session()
+            fb_posts = s.query(FBPost).count()
+            fb_comments = s.query(FBComment).count()
+            fb_positive = s.query(FBPost).filter(FBPost.sentiment == "positive").count()
+            fb_negative = s.query(FBPost).filter(FBPost.sentiment == "negative").count()
+            s.close()
+            return {
+                "fb_posts": fb_posts,
+                "fb_comments": fb_comments,
+                "fb_positive": fb_positive,
+                "fb_negative": fb_negative,
+            }
+        except Exception as e:
+            logger.error(f"Error getting executive summary: {e}")
+            return {}
+
+    def get_fb_comments(self, limit: int = 100, offset: int = 0) -> list:
+        try:
+            s = self._session()
+            rows = s.query(FBComment).order_by(FBComment.created_time.desc().nullslast()).offset(offset).limit(limit).all()
+            s.close()
+            result = []
+            for r in rows:
+                result.append({
+                    "comment_id": r.comment_id,
+                    "post_id": r.post_id,
+                    "message": r.message,
+                    "author_name": r.author_name,
+                    "created_time": r.created_time.isoformat() if r.created_time else None,
+                    "like_count": r.like_count,
+                    "parent_comment_id": r.parent_comment_id,
+                    "sentiment": r.sentiment,
+                    "sentiment_score": r.sentiment_score,
+                    "topic_category": r.topic_category,
+                    "zona": r.zona,
+                })
+            return result
+        except Exception as e:
+            logger.error(f"Error reading fb_comments: {e}")
+            return []
+
+    def get_daily_metrics(self, days: int = 30) -> list:
+        try:
+            s = self._session()
+            from datetime import timedelta, date
+            cutoff = date.today() - timedelta(days=days)
+            rows = s.query(DailyMetric).filter(DailyMetric.date >= cutoff).order_by(DailyMetric.date.desc()).all()
+            s.close()
+            result = []
+            for r in rows:
+                result.append({
+                    "platform": r.platform,
+                    "date": r.date.isoformat() if r.date else None,
+                    "total_posts": r.total_posts,
+                    "total_comments": r.total_comments,
+                    "total_reactions": r.total_reactions,
+                    "positive_pct": r.positive_pct,
+                    "negative_pct": r.negative_pct,
+                    "neutral_pct": r.neutral_pct,
+                    "nsi": r.nsi,
+                    "cai": r.cai,
+                    "top_topics": r.top_topics if isinstance(r.top_topics, list) else json.loads(r.top_topics or "[]"),
+                    "top_problematicas": r.top_problematicas if isinstance(r.top_problematicas, list) else json.loads(r.top_problematicas or "[]"),
+                })
+            return result
+        except Exception as e:
+            logger.error(f"Error reading daily_metrics: {e}")
+            return []
+
+    def get_zonas(self) -> list:
+        try:
+            s = self._session()
+            rows = s.query(FBPost.zona, sa.func.count(FBPost.zona)).filter(FBPost.zona != "").group_by(FBPost.zona).all()
+            s.close()
+            return [{"zona": r[0], "count": r[1]} for r in rows]
+        except Exception as e:
+            logger.error(f"Error reading zonas: {e}")
+            return []
+
+    def get_topics(self) -> list:
+        try:
+            s = self._session()
+            rows = s.query(FBPost.topic_category, sa.func.count(FBPost.topic_category)).filter(FBPost.topic_category != "").group_by(FBPost.topic_category).all()
+            s.close()
+            return [{"topic": r[0], "count": r[1]} for r in rows]
+        except Exception as e:
+            logger.error(f"Error reading topics: {e}")
+            return []
+
+    def get_insights(self, limit: int = 20) -> list:
+        try:
+            s = self._session()
+            rows = s.query(Insight).order_by(Insight.priority.desc()).limit(limit).all()
+            s.close()
+            result = []
+            for r in rows:
+                md = r.metric_data
+                if isinstance(md, str):
+                    try:
+                        md = json.loads(md)
+                    except:
+                        md = {}
+                result.append({
+                    "id": r.id,
+                    "insight_type": r.insight_type,
+                    "title": r.title,
+                    "description": r.description,
+                    "topic": r.topic,
+                    "zona": r.zona,
+                    "sentiment": r.sentiment,
+                    "priority": r.priority,
+                    "post_id": r.post_id,
+                    "metric_data": md,
+                })
+            return result
+        except Exception as e:
+            logger.error(f"Error reading insights: {e}")
+            return []
+
+    def get_problematicas_by_zone(self, days: int = 30) -> list:
+        try:
+            s = self._session()
+            from datetime import timedelta, datetime
+            cutoff = datetime.now() - timedelta(days=days)
+            rows = s.query(Problema).filter(Problema.detected_at >= cutoff).all()
+            s.close()
+            result = []
+            for r in rows:
+                result.append({
+                    "id": r.id,
+                    "platform": r.platform,
+                    "post_id": r.post_id,
+                    "comment_id": r.comment_id,
+                    "topic": r.topic,
+                    "zona": r.zona,
+                    "message": r.message,
+                    "sentiment": r.sentiment,
+                    "sentiment_score": r.sentiment_score,
+                })
+            return result
+        except Exception as e:
+            logger.error(f"Error reading problematicas: {e}")
+            return []
+
+    def get_all_posts_paginated(self, fields: str = "post_id", limit: int = 5000) -> list:
+        return self.get_fb_posts_all(fields=fields, limit=limit)

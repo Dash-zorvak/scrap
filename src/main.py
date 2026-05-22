@@ -9,16 +9,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.logging import RichHandler
-from rich.progress import (
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    BarColumn,
-    TaskProgressColumn,
-    TimeRemainingColumn,
-)
-from rich.table import Table
-from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 
 from src.config import Config
 from src.storage.supabase_client import SupabaseStorage
@@ -26,6 +17,7 @@ from src.analyzer.sentiment import SentimentAnalyzer
 from src.analyzer.topic_detection import get_main_topic, detect_zona, extract_problematicas
 from src.analyzer.executive_metrics import ExecutiveMetrics
 
+logger = logging.getLogger(__name__)
 console = Console()
 
 
@@ -141,7 +133,8 @@ def cmd_graph_scrape(args, cfg, storage):
 
     stats = scraper.scrape(
         max_posts=args.max,
-        get_comments=args.comments,
+        get_comments=getattr(args, "comments", True),
+        get_replies=getattr(args, "replies", True),
     )
 
     console.print(f"\n[bold green]Completado[/bold green]")
@@ -208,7 +201,191 @@ def cmd_scrape(args, cfg, storage):
     if posts:
         console.print(f"[green]Analyzing sentiment for {len(posts)} posts...[/green]")
         saved = analyze_and_save_posts(posts, storage, analyzer)
-        console.print(f"[bold green]Saved {saved} Facebook posts to Supabase[/bold green]")
+        console.print(f"[bold green]Saved {saved} Facebook posts[/bold green]")
+
+
+def _export_dashboard_data(storage):
+    """Export SQLite data to dashboard/data.js."""
+    import json
+    from collections import defaultdict
+    from datetime import datetime
+
+    posts = storage.get_fb_posts(limit=10000)
+    comments = storage.get_fb_comments(limit=50000)
+
+    total = len(posts)
+    total_reactions = sum(p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("hahas_count", 0)
+                          + p.get("wows_count", 0) + p.get("sads_count", 0) + p.get("angrys_count", 0) for p in posts)
+    total_comments = sum(p.get("comments_count", 0) for p in posts)
+    total_shares = sum(p.get("shares_count", 0) for p in posts)
+    total_views = sum(p.get("views_count", 0) for p in posts)
+
+    rd = {
+        "likes": sum(p.get("likes_count", 0) for p in posts),
+        "loves": sum(p.get("loves_count", 0) for p in posts),
+        "hahas": sum(p.get("hahas_count", 0) for p in posts),
+        "wows": sum(p.get("wows_count", 0) for p in posts),
+        "sads": sum(p.get("sads_count", 0) for p in posts),
+        "angrys": sum(p.get("angrys_count", 0) for p in posts),
+    }
+
+    n = total_reactions or 1
+    net_sentiment = (rd["likes"] + rd["loves"] - rd["angrys"] - rd["sads"]) / n
+    controversy = (rd["angrys"] + rd["sads"]) / n
+    effectiveness = (rd["likes"] + rd["loves"]) / n
+    engagement = ((total_reactions + total_comments + total_shares) / max(total_views, 1)) * 100
+    risk = controversy * (total_views / max(total_reactions, 1))
+
+    indices = {
+        "engagement": round(engagement, 2),
+        "netSentiment": round(net_sentiment, 4),
+        "controversy": round(controversy, 4),
+        "effectiveness": round(effectiveness, 4),
+        "riskReputacional": round(risk, 2),
+    }
+
+    topic_names = ["uncategorized", "medio_ambiente", "educacion", "empleo", "movilidad",
+                   "seguridad", "servicios_publicos", "obras_publicas", "salud", "corrupcion", "transparencia"]
+    topics = {}
+    for tn in topic_names:
+        tp = [p for p in posts if p.get("topic_category", "uncategorized") == tn]
+        likes = sum(p.get("likes_count", 0) for p in tp)
+        loves = sum(p.get("loves_count", 0) for p in tp)
+        hahas = sum(p.get("hahas_count", 0) for p in tp)
+        wows = sum(p.get("wows_count", 0) for p in tp)
+        sads = sum(p.get("sads_count", 0) for p in tp)
+        angrys = sum(p.get("angrys_count", 0) for p in tp)
+        tr = likes + loves + hahas + wows + sads + angrys
+        sent_pos = sum(1 for p in tp if p.get("sentiment") == "positive")
+        sent_neu = sum(1 for p in tp if p.get("sentiment") == "neutral")
+        sent_neg = sum(1 for p in tp if p.get("sentiment") == "negative")
+        topics[tn] = {
+            "count": len(tp), "likes": likes, "loves": loves, "hahas": hahas, "wows": wows,
+            "sads": sads, "angrys": angrys,
+            "comments": sum(p.get("comments_count", 0) for p in tp),
+            "shares": sum(p.get("shares_count", 0) for p in tp),
+            "views": sum(p.get("views_count", 0) for p in tp),
+            "sentiment_pos": sent_pos, "sentiment_neu": sent_neu, "sentiment_neg": sent_neg,
+            "total_reactions": tr,
+            "net_sentiment": round((likes + loves - angrys - sads) / max(tr, 1), 4),
+            "controversy": round((angrys + sads) / max(tr, 1), 4),
+            "effectiveness": round((likes + loves) / max(tr, 1), 4),
+        }
+
+    zone_names = ["Este", "unknown", "Norte", "Centro", "Sur", "Oeste"]
+    zones = {}
+    for zn in zone_names:
+        zp = [p for p in posts if p.get("zona", "unknown") == zn]
+        zones[zn] = {
+            "count": len(zp),
+            "likes": sum(p.get("likes_count", 0) for p in zp),
+            "loves": sum(p.get("loves_count", 0) for p in zp),
+            "angrys": sum(p.get("angrys_count", 0) for p in zp),
+            "sads": sum(p.get("sads_count", 0) for p in zp),
+            "comments": sum(p.get("comments_count", 0) for p in zp),
+            "shares": sum(p.get("shares_count", 0) for p in zp),
+            "views": sum(p.get("views_count", 0) for p in zp),
+        }
+
+    monthly = {}
+    for p in posts:
+        ct = p.get("created_time")
+        if ct:
+            try:
+                dt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
+                key = dt.strftime("%Y-%m")
+                if key not in monthly:
+                    monthly[key] = {"posts": 0, "reactions": 0, "comments": 0, "shares": 0,
+                                    "views": 0, "likes": 0, "loves": 0, "angrys": 0, "sads": 0}
+                monthly[key]["posts"] += 1
+                monthly[key]["reactions"] += (p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("hahas_count", 0)
+                                              + p.get("wows_count", 0) + p.get("sads_count", 0) + p.get("angrys_count", 0))
+                monthly[key]["comments"] += p.get("comments_count", 0)
+                monthly[key]["shares"] += p.get("shares_count", 0)
+                monthly[key]["views"] += p.get("views_count", 0)
+                monthly[key]["likes"] += p.get("likes_count", 0)
+                monthly[key]["loves"] += p.get("loves_count", 0)
+                monthly[key]["angrys"] += p.get("angrys_count", 0)
+                monthly[key]["sads"] += p.get("sads_count", 0)
+            except (ValueError, TypeError):
+                pass
+
+    yearly = {}
+    for p in posts:
+        ct = p.get("created_time")
+        if ct:
+            try:
+                dt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
+                key = dt.strftime("%Y")
+                if key not in yearly:
+                    yearly[key] = {"pos": 0, "neu": 0, "neg": 0, "angrys": 0}
+                s = p.get("sentiment", "")
+                if s == "positive":
+                    yearly[key]["pos"] += 1
+                elif s == "negative":
+                    yearly[key]["neg"] += 1
+                else:
+                    yearly[key]["neu"] += 1
+                yearly[key]["angrys"] += p.get("angrys_count", 0)
+            except (ValueError, TypeError):
+                pass
+
+    top_posts = sorted(posts, key=lambda p: p.get("likes_count", 0) + p.get("comments_count", 0) * 2, reverse=True)[:50]
+    top_posts_data = []
+    for p in top_posts:
+        top_posts_data.append({
+            "id": p.get("post_id", ""),
+            "message": (p.get("message", "") or "")[:200],
+            "created": p.get("created_time", ""),
+            "topic": p.get("topic_category", ""),
+            "zona": p.get("zona", ""),
+            "sentiment": p.get("sentiment", ""),
+            "likes": p.get("likes_count", 0),
+            "loves": p.get("loves_count", 0),
+            "hahas": p.get("hahas_count", 0),
+            "wows": p.get("wows_count", 0),
+            "sads": p.get("sads_count", 0),
+            "angrys": p.get("angrys_count", 0),
+            "comments": p.get("comments_count", 0),
+            "shares": p.get("shares_count", 0),
+            "views": p.get("views_count", 0),
+        })
+
+    dates = [p.get("created_time") for p in posts if p.get("created_time")]
+    date_range = {"from": min(dates) if dates else datetime.now().isoformat(),
+                  "to": max(dates) if dates else datetime.now().isoformat()}
+
+    dash_data = {
+        "page": "Jose Chicas — San Salvador Este",
+        "totalPosts": total,
+        "totalReactions": total_reactions,
+        "totalComments": total_comments,
+        "totalShares": total_shares,
+        "totalViews": total_views,
+        "reactionDistribution": rd,
+        "indices": indices,
+        "topics": topics,
+        "zones": zones,
+        "monthly": monthly,
+        "yearly": yearly,
+        "topPosts": top_posts_data,
+        "keywordInsights": {},
+        "topKeywords": {},
+        "topBigrams": {},
+        "controversialPosts": [],
+        "dateRange": date_range,
+    }
+
+    dash_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard", "data.js")
+    with open(dash_path, "w", encoding="utf-8") as f:
+        f.write(f"const DASH_DATA = {json.dumps(dash_data, ensure_ascii=False)};\n")
+        f.write(f"const MONTHLY_DATA = {json.dumps(monthly, ensure_ascii=False)};\n")
+        f.write('const fmt = n => n.toLocaleString("es-SV");\n')
+        f.write('const pct = n => (n*100).toFixed(2)+"%";\n')
+        f.write('const short = n => n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(1)+"K":String(n);\n')
+
+    logger.info(f"Dashboard data exported to {dash_path}")
+    return len(posts)
 
 
 def cmd_analyze(args, cfg, storage):
@@ -226,13 +403,15 @@ def cmd_analyze(args, cfg, storage):
         storage.insert_insight(insight)
     console.print(f"[green]Generated {len(fb_insights)} Facebook insights[/green]")
 
-    console.print(f"[bold green]Análisis completado. Dashboard actualizado en Supabase.[/bold green]")
+    exported = _export_dashboard_data(storage)
+    console.print(f"[bold green]Dashboard data exported: {exported} posts → dashboard/data.js[/bold green]")
+    console.print(f"[bold green]Análisis completado.[/bold green]")
 
 
 def cmd_status(args, cfg, storage):
     summary = storage.get_executive_summary()
 
-    table = Table(title="Supabase Database Status")
+    table = Table(title="Database Status (SQLite)")
     table.add_column("Metric", style="cyan")
     table.add_column("Count", style="bold")
 
@@ -248,142 +427,34 @@ def cmd_status(args, cfg, storage):
     console.print(table)
 
 
-def cmd_verify(args, cfg, storage):
-    if not storage.local:
-        console.print("[red]Error: Local backup not configured[/red]")
+
+
+
+def cmd_phase3(args, cfg, storage):
+    console.print(Panel("[bold cyan]PHASE 3 RESUME — Complete Comment Extraction[/bold cyan]"))
+    from src.fb_scraper.phase3_resume import Phase3Resumer
+
+    resumer = Phase3Resumer(access_token=cfg.FB_ACCESS_TOKEN, page_id=cfg.FB_PAGE_ID)
+    stats = resumer.run(
+        get_replies=not getattr(args, "no_replies", False),
+        checkpoint_every=getattr(args, "checkpoint_every", 50),
+    )
+    console.print(f"[green]Done: {stats['posts_processed']} posts, {stats['comments_scraped']} comments, {stats['replies_scraped']} replies, {stats['errors']} errors[/green]")
+
+
+def cmd_reset(args, cfg, storage):
+    console.print(Panel("[bold red]⚠ RESET — Purge all data[/bold red]"))
+    console.print("[yellow]Deleting all data from: fb_posts, fb_comments, problematicas, insights, daily_metrics[/yellow]")
+    console.print("[yellow]This will also delete the local SQLite backup![/yellow]")
+    confirm = input("Type 'RESET' to confirm: ")
+    if confirm != "RESET":
+        console.print("[green]Cancelled.[/green]")
         return
-
-    console.print(Panel("[bold cyan]Verificando sincronización Supabase  Local[/bold cyan]"))
-
-    result = storage.verify_sync()
-    if "error" in result:
-        console.print(f"[red]{result['error']}[/red]")
-        return
-
-    table = Table(title="Estado de Sincronización")
-    table.add_column("Tabla", style="cyan")
-    table.add_column("Supabase", justify="right", style="bold")
-    table.add_column("Local", justify="right", style="bold")
-    table.add_column("Diferencia", justify="right")
-    table.add_column("Estado", justify="center")
-
-    all_match = True
-    for tbl, info in result.items():
-        sup = info.get("supabase", -1)
-        loc = info.get("local", -1)
-        diff = info.get("diff")
-        match = info.get("match")
-
-        sup_str = str(sup) if sup >= 0 else "[red]error[/red]"
-        loc_str = str(loc) if loc >= 0 else "[red]error[/red]"
-
-        if match is True:
-            status = "[green]OK[/green]"
-        elif match is False:
-            status = f"[red]ERROR ({diff:+d})[/red]"
-            all_match = False
-        else:
-            status = "[yellow]?[/yellow]"
-            all_match = False
-
-        diff_str = f"{diff:+d}" if diff is not None else "[yellow]?[/yellow]"
-        table.add_row(tbl, sup_str, loc_str, diff_str, status)
-
-        if match is False and "only_in_supabase" in info:
-            missing = info.get("missing_from_local", [])
-            if missing:
-                table.add_row(
-                    f"  faltan en local",
-                    "",
-                    "",
-                    "",
-                    f"[red]{info['only_in_supabase']} IDs[/red]",
-                )
-
-    console.print(table)
-
-    if all_match:
-        console.print("[bold green]Todas las tablas están sincronizadas[/bold green]")
+    ok = storage.purge_all()
+    if ok:
+        console.print("[bold green]All data purged successfully.[/bold green]")
     else:
-        console.print(
-            "[yellow]Hay diferencias entre Supabase y el backup local[/yellow]"
-        )
-        console.print(
-            "[dim]Ejecuta un scrapeo completo para re-sincronizar[/dim]"
-        )
-
-    console.print(f"\n[dim]Backup local: {storage.local.db_path}[/dim]")
-
-
-def cmd_sync(args, cfg, storage):
-    if not storage.local:
-        console.print("[red]Error: Local backup not configured[/red]")
-        return
-
-    console.print(Panel("[bold cyan]Sincronizando Supabase  Local Backup[/bold cyan]"))
-
-    local = storage.local
-    tables = [
-        ("fb_posts", "post_id"),
-        ("fb_comments", "comment_id"),
-    ]
-
-    local_inserter_map = {
-        "fb_posts": local.insert_fb_post,
-        "fb_comments": local.insert_fb_comment,
-    }
-
-    for table_name, id_col in tables:
-        console.print(f"\n[bold]Sincronizando {table_name}...[/bold]")
-
-        supabase_count = 0
-        try:
-            supabase_count = storage.client.table(table_name).select("*", count="exact").execute().count
-        except Exception as e:
-            console.print(f"[red]Error getting count for {table_name}: {e}[/red]")
-            continue
-
-        local_count = local.count(table_name)
-        if supabase_count <= local_count:
-            console.print(f"  [green]Ya sincronizado ({local_count} registros)[/green]")
-            continue
-
-        missing = supabase_count - local_count
-        console.print(f"  Supabase: {supabase_count}, Local: {local_count}  {missing} pendientes")
-
-        synced = 0
-        batch_size = 100
-        offset = 0
-
-        with Progress(
-            TextColumn(f"[progress.description]{{task.description}}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task(f"  Descargando {missing} registros...", total=missing)
-
-            while offset < supabase_count:
-                try:
-                    rows = storage.client.table(table_name).select("*").order(id_col, desc=True).range(offset, offset + batch_size - 1).execute().data
-                except Exception as e:
-                    console.print(f"  [red]Error fetching {table_name}: {e}[/red]")
-                    break
-
-                if not rows:
-                    break
-
-                local_inserter = local_inserter_map[table_name]
-                for row in rows:
-                    local_inserter(row)
-                    synced += 1
-                    progress.update(task, advance=1)
-
-                offset += batch_size
-
-        console.print(f"  [green] {synced} registros sincronizados[/green]")
-
-    console.print("\n[bold green]Sincronización completada[/bold green]")
+        console.print("[red]Error during purge.[/red]")
 
 
 def cmd_estimate(args, cfg, storage):
@@ -410,7 +481,7 @@ def main():
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
-    scrape_parser = subparsers.add_parser("scrape", help="Scrape social media data to Supabase")
+    scrape_parser = subparsers.add_parser("scrape", help="Scrape social media data")
     scrape_parser.add_argument(
         "--platform",
         choices=["facebook", "all"],
@@ -424,7 +495,10 @@ def main():
     graph_parser.add_argument("--page-id", default="395582594151511", help="Facebook Page ID")
     graph_parser.add_argument("--page-name", default="Jose Chicas", help="Nombre de la página")
     graph_parser.add_argument("--max", type=int, default=1000, help="Posts objetivo")
-    graph_parser.add_argument("--comments", action="store_true", help="Extraer comentarios también")
+    graph_parser.add_argument("--comments", action="store_true", default=True, help="Extraer comentarios también")
+    graph_parser.add_argument("--replies", action="store_true", default=True, help="Extraer replies también")
+    graph_parser.add_argument("--no-comments", dest="comments", action="store_false", help="Saltar comentarios")
+    graph_parser.add_argument("--no-replies", dest="replies", action="store_false", help="Saltar replies")
 
     deep_parser = subparsers.add_parser("deep-scrape", help="Deep scraping - extracción completa con NLP y anti-ban")
     deep_parser.add_argument("--max", type=int, default=10000, help="Posts objetivo")
@@ -444,11 +518,13 @@ def main():
     )
 
     subparsers.add_parser("status", help="Show database status")
-
-    verify_parser = subparsers.add_parser("verify", help="Verify sync between Supabase and local backup")
-    subparsers.add_parser("sync", help="Sync existing Supabase data to local backup")
+    subparsers.add_parser("reset", help="Purge all data from database")
+    subparsers.add_parser("export-dashboard", help="Export SQLite data to dashboard/data.js")
     estimate_parser = subparsers.add_parser("estimate", help="Estimate scrape time for target posts")
     estimate_parser.add_argument("--target", type=int, default=20000, help="Target number of posts")
+    phase3_parser = subparsers.add_parser("phase3", help="Resume Phase 3 - complete comment extraction")
+    phase3_parser.add_argument("--no-replies", action="store_true", help="Skip reply threads")
+    phase3_parser.add_argument("--checkpoint-every", type=int, default=50, help="Checkpoint every N posts")
 
     args = parser.parse_args()
 
@@ -469,10 +545,13 @@ def main():
         cmd_deep_scrape(args, cfg, storage)
     elif args.command == "analyze":
         cmd_analyze(args, cfg, storage)
-    elif args.command == "verify":
-        cmd_verify(args, cfg, storage)
-    elif args.command == "sync":
-        cmd_sync(args, cfg, storage)
+    elif args.command == "reset":
+        cmd_reset(args, cfg, storage)
+    elif args.command == "export-dashboard":
+        exported = _export_dashboard_data(storage)
+        console.print(f"[bold green]Dashboard exported: {exported} posts → dashboard/data.js[/bold green]")
+    elif args.command == "phase3":
+        cmd_phase3(args, cfg, storage)
     elif args.command == "status":
         cmd_status(args, cfg, storage)
     elif args.command == "estimate":

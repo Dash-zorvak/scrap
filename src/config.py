@@ -18,9 +18,6 @@ class Config:
 
     PROXY_URL = os.getenv("PROXY_URL", "")
 
-    SUPABASE_URL = os.getenv("SUPABASE_URL", "https://hsflgjdvaemjqbcmaxvl.supabase.co")
-    SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhzZmxnamR2YWVtanFiY21heHZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MzIwOTUsImV4cCI6MjA5NDQwODA5NX0.lT7BTQ_gwPLX0nN8M8m3w3XB8dDx8UDXwsi10fZiwg4")
-
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 

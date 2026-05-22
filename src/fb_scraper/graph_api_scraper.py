@@ -64,13 +64,14 @@ class GraphAPIScraper:
             "replies_scraped": 0,
             "views_total": 0,
             "errors": 0,
+            "error_codes": {},
             "start_time": None,
         }
 
         if not self.access_token:
             raise ValueError("FB_ACCESS_TOKEN no encontrado en .env")
 
-    def _make_request(self, endpoint: str, params: dict = None) -> Optional[dict]:
+    def _make_request(self, endpoint: str, params: dict = None, count_error: bool = True) -> Optional[dict]:
         """Hace request a Graph API con manejo de errores."""
         url = f"{FB_GRAPH_API}/{endpoint}"
         params = params or {}
@@ -81,15 +82,25 @@ class GraphAPIScraper:
             data = response.json()
 
             if "error" in data:
-                logger.error(f"Graph API Error: {data['error']}")
-                self.stats["errors"] += 1
+                code = data["error"].get("code", 0)
+                msg = data["error"].get("message", "")[:120]
+                if code == 100 and ("does not exist" in msg or "Object does not exist" in msg):
+                    logger.debug(f"Post {endpoint} deleted: {msg}")
+                else:
+                    logger.error(f"Graph API Error ({code}): {msg}")
+                    if count_error:
+                        self.stats["errors"] += 1
+                        if code not in self.stats.get("error_codes", {}):
+                            self.stats.setdefault("error_codes", {})[code] = 0
+                        self.stats["error_codes"][code] = self.stats["error_codes"].get(code, 0) + 1
                 return None
 
             return data
 
         except Exception as e:
             logger.error(f"Request error: {e}")
-            self.stats["errors"] += 1
+            if count_error:
+                self.stats["errors"] += 1
             return None
 
     def get_posts(self, limit: int = 100, max_pages: int = 100) -> List[Dict]:
@@ -141,6 +152,8 @@ class GraphAPIScraper:
         """Obtiene detalles completos de un post incluyendo reacciones por tipo y views."""
         fields = (
             "id,message,created_time,"
+            "permalink_url,"
+            "attachments{title,description,url,type},"
             "reactions.summary(true),"
             "comments.summary(true),"
             "shares"
@@ -159,7 +172,9 @@ class GraphAPIScraper:
         return data
 
     def _get_reactions_by_type(self, post_id: str) -> Dict[str, int]:
-        """Extrae reacciones por tipo usando la sintaxis de fields."""
+        """Extrae reacciones por tipo. No cuenta errores (es esperado que
+        algunos tipos no estén disponibles)."""
+        url = f"{FB_GRAPH_API}/{post_id}"
         reaction_fields = [
             "reactions.type(LIKE).summary(true).as(r_like)",
             "reactions.type(LOVE).summary(true).as(r_love)",
@@ -168,9 +183,14 @@ class GraphAPIScraper:
             "reactions.type(SAD).summary(true).as(r_sad)",
             "reactions.type(ANGRY).summary(true).as(r_angry)",
         ]
-
-        fields = ",".join(reaction_fields)
-        data = self._make_request(post_id, {"fields": fields})
+        data = None
+        try:
+            resp = requests.get(url, params={"fields": ",".join(reaction_fields), "access_token": self.access_token}, timeout=15)
+            d = resp.json()
+            if "error" not in d:
+                data = d
+        except Exception:
+            pass
 
         counts = {}
         if data:
@@ -196,24 +216,21 @@ class GraphAPIScraper:
         return counts
 
     def _get_post_views(self, post_id: str) -> Optional[int]:
-        """Obtiene número de visualizaciones del post usando read_insights."""
-        try:
-            metrics = [
-                "post_impressions",
-                "post_impressions_unique",
-                "post_views",
-                "post_views_unique",
-            ]
-            for metric in metrics:
-                data = self._make_request(f"{post_id}/insights", {"metric": metric})
-                if data and "data" in data and len(data["data"]) > 0:
+        """Obtiene número de visualizaciones del post usando read_insights.
+        No cuenta errores de insights como errores del scraper (es esperado que
+        muchas métricas no estén disponibles)."""
+        url = f"{FB_GRAPH_API}/{post_id}/insights"
+        metrics = ["post_impressions", "post_impressions_unique", "post_views", "post_views_unique"]
+        for metric in metrics:
+            try:
+                resp = requests.get(url, params={"metric": metric, "access_token": self.access_token}, timeout=15)
+                data = resp.json()
+                if "error" not in data and "data" in data and len(data["data"]) > 0:
                     values = data["data"][0].get("values", [])
                     if values:
-                        val = values[-1].get("value", 0)
-                        logger.info(f"  Views for {post_id}: {val} (metric: {metric})")
-                        return val
-        except Exception as e:
-            logger.debug(f"Could not get views for {post_id}: {e}")
+                        return values[-1].get("value", 0)
+            except Exception:
+                pass
         return None
 
     def get_comments(self, post_id: str, limit: int = 100) -> List[Dict]:
@@ -292,15 +309,13 @@ class GraphAPIScraper:
             # Extract views
             views_count = post_data.get("views_count", 0)
 
+            # Use actual permalink_url from API, fallback to constructed URL
+            post_url = post_data.get("permalink_url", "") or f"https://www.facebook.com/{post_id}"
+
             # Analyze sentiment
             sentiment, score = self.analyzer.analyze(message)
             topic = get_main_topic(message)
             zona = detect_zona(message)
-
-            # Extract hashtags and mentions
-            import re
-            hashtags = re.findall(r"#(\w+)", message)
-            mentions = re.findall(r"@(\w+)", message)
 
             post_record = {
                 "post_id": post_id,
@@ -317,7 +332,7 @@ class GraphAPIScraper:
                 "comments_count": comments_count,
                 "shares_count": shares_count,
                 "views_count": views_count,
-                "post_url": f"https://www.facebook.com/{post_id}",
+                "post_url": post_url,
                 "sentiment": sentiment,
                 "sentiment_score": score,
                 "topic_category": topic,
@@ -410,17 +425,29 @@ class GraphAPIScraper:
             except Exception as e:
                 logger.error(f"Error processing comment: {e}")
 
+    def _check_token(self) -> bool:
+        """Verifica que el token sea válido antes de empezar."""
+        try:
+            resp = requests.get(
+                f"{FB_GRAPH_API}/me",
+                params={"access_token": self.access_token},
+                timeout=10,
+            )
+            data = resp.json()
+            if "error" in data:
+                logger.error(f"Token inválido: {data['error']}")
+                return False
+            logger.info(f"Token OK — app: {data.get('name', 'me')}, id: {data.get('id', '?')}")
+            return True
+        except Exception as e:
+            logger.error(f"Error verificando token: {e}")
+            return False
+
     def scrape(self, max_posts: int = 1000, get_comments: bool = True, get_replies: bool = True):
         """Ejecuta scraping completo."""
-        self.notifier.send(f"""
-📊 *GRAPH API SCRAPER INICIADO*
-
-*Página:* {self.page_name}
-*Page ID:* {self.page_id}
-*Target:* {max_posts} posts
-*Comentarios:* {"Sí" if get_comments else "No"}
-*Replies:* {"Sí" if get_replies else "No"}
-        """)
+        if not self._check_token():
+            logger.error("Token inválido o expirado. Deteniendo scrape.")
+            return self.stats
 
         self.stats["start_time"] = time.time()
 
@@ -431,6 +458,13 @@ class GraphAPIScraper:
         # Get ALL posts (no date filter - for full extraction)
         logger.info(f"Posts retrieved (all): {len(post_ids)}")
 
+        self.notifier.send(
+            f"🚀 *Fase 1 — Graph API*\n"
+            f"Página: {self.page_name}\n"
+            f"Target: {max_posts} posts · {len(post_ids)} obtenidos\n"
+            f"Comentarios: {'Sí' if get_comments else 'No'} · Replies: {'Sí' if get_replies else 'No'}"
+        )
+
         # Step 2: Get full details for each post
         for i, post_id_data in enumerate(post_ids):
             post_id = post_id_data.get("id", "")
@@ -439,42 +473,56 @@ class GraphAPIScraper:
 
             logger.info(f"Fetching details for post {i+1}/{len(post_ids)}: {post_id}")
 
-            # Get full post details
+            # Get full post details (errors already counted inside get_post_details)
             full_post = self.get_post_details(post_id)
             if full_post:
                 success = self.process_post(full_post)
 
+                comments_before = self.stats["comments_scraped"]
                 if success and get_comments:
                     self.process_comments(post_id, get_replies=get_replies)
+                comments_this_post = self.stats["comments_scraped"] - comments_before
             else:
-                logger.warning(f"Failed to get details for post {post_id}")
-                self.stats["errors"] += 1
+                comments_this_post = 0
 
-            if (i + 1) % 5 == 0:
+            # Early notification: post 1, then every 5, or when a post has many comments
+            if i == 0 and comments_this_post > 0:
+                self.notifier.send(
+                    f"▶️ *Fase 1 iniciada* — {self.page_name}\n"
+                    f"Post 1: +{comments_this_post} comentarios · {self.stats['comments_scraped']} total\n"
+                    f"Ritmo: esperando primer lote de 5 posts..."
+                )
+            if (i + 1) % 5 == 0 or comments_this_post > 200:
                 elapsed = (time.time() - self.stats["start_time"]) / 60
-                self.notifier.send(f"""
-📊 *PROGRESO*
-
-*Posts:* {self.stats['posts_scraped']}/{len(post_ids)}
-*Comentarios:* {self.stats['comments_scraped']}
-*Replies:* {self.stats['replies_scraped']}
-*Views:* {self.stats['views_total']}
-*Errores:* {self.stats['errors']}
-*Tiempo:* {elapsed:.1f} min
-                """)
+                pct = (i + 1) / len(post_ids) * 100
+                rate = (i + 1) / elapsed if elapsed > 0 else 0
+                eta = (len(post_ids) - i - 1) / rate if rate > 0 else 0
+                err_info = f"⚠ Errores: {self.stats['errors']}"
+                if self.stats.get("error_codes"):
+                    top_codes = sorted(self.stats["error_codes"].items(), key=lambda x: -x[1])[:2]
+                    err_info += " (" + ", ".join(f"#{c}={n}" for c, n in top_codes) + ")"
+                self.notifier.send(
+                    f"📊 *Fase 1* · {self.page_name}\n"
+                    f"Posts: {self.stats['posts_scraped']}/{len(post_ids)} ({pct:.0f}%)\n"
+                    f"Coment: {self.stats['comments_scraped']} · Replies: {self.stats['replies_scraped']}\n"
+                    f"Views: {self.stats['views_total']:,} · {err_info}\n"
+                    f"Ritmo: {rate:.1f} post/min · ETA: {eta:.0f} min\n"
+                    f"Post actual: +{comments_this_post} coment"
+                )
 
         elapsed = (time.time() - self.stats["start_time"]) / 60
 
-        self.notifier.send(f"""
-✅ *GRAPH API SCRAPER COMPLETADO*
+        err_info = f"Errores: {self.stats['errors']}"
+        if self.stats.get("error_codes"):
+            top_codes = sorted(self.stats["error_codes"].items(), key=lambda x: -x[1])[:3]
+            err_info += " (" + ", ".join(f"#{c}={n}" for c, n in top_codes) + ")"
 
-*Posts extraídos:* {self.stats['posts_scraped']}
-*Comentarios extraídos:* {self.stats['comments_scraped']}
-*Replies (hilos):* {self.stats['replies_scraped']}
-*Visualizaciones:* {self.stats['views_total']}
-*Errores:* {self.stats['errors']}
-*Tiempo total:* {elapsed:.1f} min
-        """)
+        self.notifier.send(
+            f"✅ *Fase 1 completa* — {self.page_name}\n"
+            f"Posts: {self.stats['posts_scraped']} · Comentarios: {self.stats['comments_scraped']}\n"
+            f"Replies: {self.stats['replies_scraped']} · Views: {self.stats['views_total']:,}\n"
+            f"Tiempo: {elapsed:.0f} min · {err_info}"
+        )
 
         return self.stats
 

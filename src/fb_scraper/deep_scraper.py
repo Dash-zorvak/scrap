@@ -414,8 +414,7 @@ class FacebookDeepScraper:
 
     def _is_duplicate(self, post_id: str) -> bool:
         scraped_ids = self.checkpoint.get_scraped_post_ids()
-        existing = self.storage.client.table("fb_posts").select("id").eq("post_id", post_id).execute()
-        return post_id in scraped_ids or (existing.data and len(existing.data) > 0)
+        return post_id in scraped_ids or self.storage.post_exists(post_id)
 
     def _save_checkpoint(self, post_id: str, post_ids: Set):
         state = {

@@ -37,9 +37,7 @@ class ResilientScraper:
         post_id = post.get('post_id')
 
         try:
-            existing = self.storage.client.table('fb_posts').select('id').eq('post_id', post_id).execute()
-
-            if existing.data:
+            if self.storage.post_exists(post_id):
                 self.stats['duplicates'] += 1
                 return False
 

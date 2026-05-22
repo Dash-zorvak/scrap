@@ -5,4 +5,8 @@ if [ "$1" = "estimate" ]; then
     target="${2:-20000}"
     exec python3 "$DIR/src/analyzer/estimation.py" "$target"
 fi
+if [ "$1" = "phase3" ]; then
+    shift
+    exec python3 -m src.main phase3 "$@"
+fi
 exec python3 -m src.main "$@"

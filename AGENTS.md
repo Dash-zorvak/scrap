@@ -19,10 +19,12 @@ Extraer y analizar todos los posts, reacciones, vistas y comentarios de la pági
 
 | Recurso | Cantidad |
 |---------|----------|
-| Posts FB | 170 |
-| Comentarios FB | 5,879 |
-| Views | 170 posts con views |
-| Sentimiento | 78.8% positivo, 14.7% neutral, 6.5% negativo |
+| Posts FB | 259 |
+| Comentarios FB | 3,490+ |
+| Views | 120+ posts con views |
+| Sentimiento | 66% positivo, 11% negativo, 23% neutral |
+| Tópicos detectados | 162/259 (63%) |
+| Zonas detectadas | 52/259 (20%) |
 | Dashboard | HTML estático con `data.js` generado desde SQLite |
 
 ## Estructura del Proyecto
@@ -64,22 +66,23 @@ scrapeo-social/
 ## Comandos
 
 ```bash
-./scrapeo graph-scrape   # Scraping vía Graph API
-./scrapeo deep-scrape --search "Jose Chicas" --max 500 --headless  # Deep scraping búsqueda
-./scrapeo deep-search "Jose Chicas" 500   # Atajo para deep-scrape con search + headless
-./scrapeo analyze        # Generar métricas, insights y exportar dashboard/data.js
-./scrapeo status         # Estado de BD
-./scrapeo export-dashboard  # Exportar SQLite → dashboard/data.js
-./scrapeo nlp            # Pipeline NLP (emociones, entidades, colocaciones, tópicos)
-./scrapeo nlp --batch 1000 --no-collocations --no-topics  # Solo emociones+entidades
-./scrapeo nlp --n-topics 10   # Extraer 10 tópicos latentes
-./scrapeo estimate N     # Proyectar tiempo para scrapear N posts (default: 20,000)
-./scrapeo bulk-scrape 500 "Jose Chicas"  # Graph API + Deep Search combinado
+./scrapeo graph-scrape --max 500    # Scraping vía Graph API
+./scrapeo analyze --reclassify     # Métricas, insights, re-clasificar tópicos/zonas, exportar dashboard
+./scrapeo cambridge                # Cambridge Index — alertas predictivas y sensibilidad por tópico
+./scrapeo status                   # Estado de BD
+./scrapeo export-dashboard         # Exportar SQLite → dashboard/data.js
+./scrapeo nlp --batch 1000         # Pipeline NLP (emociones, entidades, colocaciones, tópicos)
+./scrapeo nlp --batch 500 --no-collocations --no-topics  # Solo emociones+entidades
+./scrapeo phase3                   # Extraer comentarios pendientes
+./scrapeo estimate N               # Proyectar tiempo para scrapear N posts
 
-# Dashboard estático (abrir en navegador directamente):
+# Test:
+pytest tests/                      # 79 tests (topic detection + Cambridge Index)
+
+# Dashboard estático (abrir en navegador):
 open dashboard/index.html
 
-# Dashboard ciencia de datos (Streamlit):
+# Dashboard Streamlit:
 streamlit run dashboard/streamlit_app.py
 ```
 

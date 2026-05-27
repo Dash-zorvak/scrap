@@ -8,75 +8,152 @@ TOPIC_KEYWORDS = {
     "obras_publicas": [
         "bache", "baches", "calle", "calles", "carpeta", "asfalto", "puente",
         "parque", "obra", "obras", "cordón", "summo", "vereda", "acera",
-        "drenaje", "alcantarillado", "construcción", "reparación"
+        "drenaje", "alcantarillado", "construcción", "reparación", "pavimento",
+        "pavimentación", "adoquín", "adoquinado", "infraestructura", "callejón",
+        "bulevar", "carretera", "rotonda", "redondel", "pasarela", "andén",
+        "mejoramiento vial", "vialidad", "construyendo", "reconstrucción",
+        "remodelación", "embellecimiento", "jardín", "jardines", "área verde",
+        "cancha", "canchas", "deportiva", "polideportivo", "pista", "estadio",
+        "gimnasio", "parque infantil", "juegos", "mirador", "turístico"
     ],
     "seguridad": [
         "robo", "robos", "asalto", "asaltos", "delincuencia", "delincuente",
-        "seguridad", "policía", "crimen", "matar", "muerte", "asesinato",
-        "pandilla", "extorsión", "amenaza", "violencia", "asociación"
+        "seguridad", "policía", "policia", "crimen", "matar", "muerte", "asesinato",
+        "pandilla", "extorsión", "amenaza", "violencia", "asociación",
+        "cámaras", "videovigilancia", "patrullaje", "seguridad ciudadana",
+        "prevención", "iluminación", "alumbrado público", "denuncia",
+        "protección", "resguardo", "militares", "ejército", "pnc", "fgr"
     ],
     "servicios_publicos": [
         "agua", "luz", "electricidad", "basura", "recolección", "servicio",
         "corte", "servicios", "tubería", "alcantarillado", "desague",
-        "potable", "cloro", "afectado", "sin agua", "sin luz"
+        "potable", "cloro", "afectado", "sin agua", "sin luz",
+        "alumbrado", "alumbrado público", "fuga", "cañería", "tubería rota",
+        "mantenimiento", "limpieza", "aseo", "mercado", "cementerio",
+        "registro", "municipal", "tramite", "trámite", "permiso"
     ],
     "empleo": [
         "trabajo", "empleo", "desempleo", "desempleado", "negocio", "negocios",
         "empresa", "empresas", "trabajador", "patrón", "formal", "informal",
-        "empleo", "vacante", "contratar"
+        "vacante", "contratar", "feria de empleo", "oportunidad laboral",
+        "emprendedor", "emprendimiento", "microempresa", "mipyme",
+        "capacitación", "capacitacion", "taller", "curso", "formación",
+        "empleo joven", "bolsa de trabajo"
     ],
     "salud": [
-        "hospital", "hospital", "clínica", "doctor", "doctora", "salud",
-        "enfermedad", "enfermo", "consulta", "médico", "clínica", "centro de salud",
-        "emergencia", "ambulancia", "vacuna"
+        "hospital", "clínica", "clinica", "doctor", "doctora", "salud",
+        "enfermedad", "enfermo", "consulta", "médico", "medico", "centro de salud",
+        "emergencia", "ambulancia", "vacuna", "farmacia", "medicina",
+        "campaña de salud", "jornada médica", "odontología", "optometría",
+        "donación de sangre", "papanicolaou", "ultrasonido", "rayos x",
+        "consulta externa", "atención médica", "bienestar", "nutrición"
     ],
     "educacion": [
         "escuela", "colegio", "educación", "educacion", "maestro", "maestra",
-        "estudiante", "alumno", "clase", "colegio", "universidad", "becas",
-        "material", "uniforme"
+        "estudiante", "alumno", "clase", "universidad", "becas",
+        "material", "uniforme", "instituto", "paquete escolar", "entrega de",
+        "kit escolar", "zapatos", "mochila", "cuaderno", "libros",
+        "infraestructura educativa", "aula", "computadora", "laboratorio",
+        "biblioteca", "cursos", "talleres educativos", "niños", "jóvenes",
+        "estudiantes", "bachillerato", "educación básica", "inscripción"
     ],
     "movilidad": [
-        "tráfico", "trafico", "transito", "tránsito", "carro", "carros",
-        "vehículo", "bus", "buses", "ruta", "parada", "semáforo", "semaforo",
-        "embotellamiento", "congestion", "vía", "carretera"
+        "tráfico", "trafico", "transito", "tránsito", "transporte",
+        "carro", "carros", "vehículo", "vehiculo", "bus", "buses", "ruta",
+        "parada", "semáforo", "semaforo", "embotellamiento", "congestión",
+        "congestion", "vía", "carretera", "taxi", "motocicleta", "bicicleta",
+        "ciclovía", "ciclovia", "estacionamiento", "parqueo", "peatonal",
+        "peatón", "peaton", "señalización", "señal de tránsito", "transporte público"
     ],
     "corrupcion": [
-        "corrupto", "corrupta", "corrupción", "robo", "ladrón", "ladrones",
-        "mentira", "mentiras", "fraude", "desvío", "malversación", "pego",
-        "tráfico de influencia", "cohecho"
+        "corrupto", "corrupta", "corrupción", "corrupcion", "robo",
+        "ladrón", "ladrones", "ladrona", "mentira", "mentiras", "fraude",
+        "desvío", "malversación", "tráfico de influencias", "cohecho",
+        "soborno", "nepotismo", "impunidad", "encubrimiento", "desfalco",
+        "mal gobierno", "autoritarismo", "dictadura", "represión", "represivo",
+        "oposición", "tiranía", "abusos", "abuso de poder"
     ],
     "medio_ambiente": [
-        "contaminación", "basura", "río", "arbol", "árbol", "verde",
-        "contaminacion", "ambiente", "ecología", "ecologia", "reserva",
-        "bosque", "playa", "contaminante"
+        "contaminación", "contaminacion", "basura", "río", "rio",
+        "árbol", "arbol", "verde", "ambiente", "ecología", "ecologia",
+        "reserva", "bosque", "playa", "contaminante", "reciclaje",
+        "reciclar", "cambio climático", "sostenible", "sostenibilidad",
+        "áreas verdes", "areas verdes", "parque nacional", "naturaleza",
+        "fauna", "flora", "cuenca", "quebrada", "mangle", "ecosistema",
+        "reforestación", "reforestacion", "jornada de limpieza",
+        "desechos sólidos", "desechos solidos", "separación de basura",
+        "punto limpio", "vertedero", "relleno sanitario"
     ],
     "transparencia": [
-        "información", "informacion", "transparente", "donde está", "gasto",
-        "gastos", "presupuesto", "informe", "rendición", "cuenta", " pública"
+        "información", "informacion", "transparente", "donde está",
+        "gasto", "gastos", "presupuesto", "informe", "rendición",
+        "rendicion", "cuenta pública", "transparencia", "acceso a la información",
+        "rendición de cuentas", "auditoría", "auditoria", "ley de acceso",
+        "datos abiertos", "portal de transparencia", "licitación",
+        "contratación", "contratacion", "obra pública", "inversión"
+    ],
+    "cultura": [
+        "cultura", "evento", "festival", "desfile", "concierto",
+        "presentación", "artístico", "artistica", "música", "musica",
+        "baile", "tradición", "tradicion", "folclor", "folklore",
+        "fiestas patronales", "procesión", "feria", "exposición",
+        "exposicion", "museo", "teatro", "danza", "pintura", "artesanía",
+        "artesania", "patrimonio", "cultural", "turismo", "turística",
+        "turístico", "atractivo", "paseo", "convivencia", "familiar"
+    ],
+    "deportes": [
+        "deporte", "deportivo", "deportiva", "fútbol", "futbol",
+        "béisbol", "beisbol", "baloncesto", "basquetbol", "voleybol",
+        "voleibol", "natación", "natacion", "atletismo", "ciclismo",
+        "maratón", "maraton", "caminata", "competencia", "torneo",
+        "campeonato", "entrenamiento", "entrenar", "ejercicio",
+        "actividad física", "actividad fisica", "saludable", "bienestar",
+        "jóvenes", "jovenes", "niños", "skate", "patinaje"
     ],
 }
 
 ZONA_KEYWORDS = {
+    "Centro": [
+        "centro", "centro de santa ana", "casco urbano", "paracentral",
+        "calle principal", "avenida central", "mercado", "plaza",
+        "plaza mayor", "palacio municipal", "catedral", "parque libertad",
+        "parque colón", "colonia centro", "barrio el centro",
+        "calle libertad", "avenida independencia", "1ª calle poniente",
+        "2ª avenida sur", "zona 1"
+    ],
     "Norte": [
         "norte", "norte de santa ana", "villa jardín", "villa jardin",
         "urbanización norte", "barrio norte", "sector norte", "la china",
-        "san antonio", "san josé", "santa rosa", "el rodeo", "la rivera"
+        "san antonio", "san josé", "santa rosa", "el rodeo", "la rivera",
+        "colonia norte", "residencial norte", "las flores", "santa rosa",
+        "cantón norte", "caserío norte", "santa ana norte",
+        "san sebastián", "san rafael norte", "ciudad real", "villa sol",
+        "los pinos", "altos del norte"
     ],
     "Sur": [
         "sur", "sur de santa ana", "colonia sur", "sector sur", "la libertad",
-        "el mango", "san marcos", "concepción", "el sunzal"
-    ],
-    "Centro": [
-        "centro", "city center", "downtown", "casco urbano", "paracentral",
-        "calle principal", "avenida central", "mercado", "plaza"
+        "el mango", "san marcos", "concepción", "el sunzal",
+        "residencial sur", "colonia santa lucía", "colonia santa ana sur",
+        "cantón sur", "el porvenir", "san isidro", "san miguel",
+        "santa ana sur", "villa maría", "la playa", "playa", "costa",
+        "cantón el mango", "san antonio sur", "las palmeras"
     ],
     "Este": [
         "este de santa ana", "sector este", "zona este", "al este",
-        "el palomar", "santa lucia", "san rafael", "las brisas"
+        "el palomar", "santa lucia", "san rafael", "las brisas",
+        "colonia este", "cantón este", "san josé este",
+        "residencial este", "villa del este", "santa ana este",
+        "los ángeles", "el progreso", "san luis", "la esperanza",
+        "san carlos", "lourdes", "santa rita", "buenos aires"
     ],
     "Oeste": [
-        "oeste", "west", "sector oeste", "la costa", "el puerto", "punta",
-        "santa mariña", "san juan", "los cobanos"
+        "oeste", "oeste de santa ana", "sector oeste", "zona oeste",
+        "la costa", "san juan", "los cobanos",
+        "colonia oeste", "cantón oeste", "residencial oeste",
+        "villa oeste", "santa ana oeste", "san cristóbal",
+        "santa marta", "el congo", "san jerónimo", "la montañona",
+        "metapán", "texistepeque", "candelaria", "coatepeque",
+        "el país", "san isidro oeste", "la joya"
     ],
 }
 

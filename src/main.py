@@ -482,6 +482,26 @@ def _export_dashboard_data(storage):
 def cmd_analyze(args, cfg, storage):
     console.print(Panel("[bold yellow]Generating analysis and insights...[/bold yellow]"))
 
+    if not getattr(args, "no_reclassify", False):
+        from src.analyzer.topic_detection import get_main_topic, detect_zona
+        posts = storage.get_fb_posts(limit=10000)
+        updated = 0
+        for p in posts:
+            topic = get_main_topic(p.get("message", ""))
+            zona = detect_zona(p.get("message", ""))
+            needs_update = False
+            if topic and topic != p.get("topic_category", ""):
+                p["topic_category"] = topic
+                needs_update = True
+            if zona and zona != p.get("zona", ""):
+                p["zona"] = zona
+                needs_update = True
+            if needs_update:
+                storage.insert_fb_post(p)
+                updated += 1
+        if updated:
+            console.print(f"[green]Reclassified {updated} posts (topic/zona)[/green]")
+
     metrics_calc = ExecutiveMetrics(storage)
 
     fb_metrics = metrics_calc.generate_daily_metrics("facebook")
@@ -729,6 +749,8 @@ def main():
         default="all",
         help="Platform to analyze",
     )
+    analyze_parser.add_argument("--reclassify", dest="no_reclassify", action="store_false", default=False, help="Re-run topic/zone detection on all posts")
+    analyze_parser.add_argument("--no-reclassify", dest="no_reclassify", action="store_true", help="Skip reclassification")
 
     subparsers.add_parser("status", help="Show database status")
     subparsers.add_parser("reset", help="Purge all data from database")

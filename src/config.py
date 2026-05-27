@@ -1,3 +1,4 @@
+import json
 import os
 from dotenv import load_dotenv
 
@@ -8,6 +9,14 @@ class Config:
     FB_PAGE_URL = os.getenv("FB_PAGE_URL", "")
     FB_PAGE_ID = os.getenv("FB_PAGE_ID", "")
     FB_PAGE_NAME = os.getenv("FB_PAGE_NAME", "")
+
+    @property
+    def deep_page_urls(self):
+        raw = os.getenv("DEEP_PAGE_URLS", "[]")
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return [u.strip() for u in raw.split(",") if u.strip()]
     FB_EMAIL = os.getenv("FB_EMAIL", "")
     FB_PASSWORD = os.getenv("FB_PASSWORD", "")
     FB_ACCESS_TOKEN = os.getenv("FB_ACCESS_TOKEN", "")
@@ -27,3 +36,33 @@ class Config:
     @property
     def has_facebook_login(self):
         return bool(self.FB_EMAIL and self.FB_PASSWORD)
+
+    @property
+    def pages(self):
+        raw = os.getenv("FB_PAGES", "")
+        if raw:
+            try:
+                pages = json.loads(raw)
+                if pages:
+                    return pages
+            except json.JSONDecodeError:
+                pass
+        if self.FB_PAGE_ID and self.FB_PAGE_NAME:
+            return [{"id": self.FB_PAGE_ID, "name": self.FB_PAGE_NAME, "url": self.FB_PAGE_URL}]
+        if self.FB_PAGE_URL and not self.FB_PAGE_ID:
+            return [{"url": self.FB_PAGE_URL, "name": self.FB_PAGE_NAME or self.FB_PAGE_URL}]
+        return []
+
+    def get_page(self, index=0):
+        ps = self.pages
+        if index < len(ps):
+            return ps[index]
+        return {"id": self.FB_PAGE_ID, "name": self.FB_PAGE_NAME, "url": self.FB_PAGE_URL}
+
+    def resolve_page(self, page_id=None, page_name=None):
+        if page_id and page_name:
+            return {"id": page_id, "name": page_name}
+        for p in self.pages:
+            if p.get("id") == (page_id or self.FB_PAGE_ID):
+                return p
+        return self.get_page(0)

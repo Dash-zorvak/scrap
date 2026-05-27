@@ -32,8 +32,11 @@ scrapeo-social/
 ├── src/
 │   ├── main.py                    # CLI: scrape, analyze, status
 │   ├── config.py                 # Configuración desde .env
+│   ├── intelligence/
+│   │   └── cambridge_index.py    # Cambridge Index: TS, 5 alertas predictivas, supresión
 │   ├── analyzer/
 │   │   ├── sentiment.py          # Analizador español (3 niveles)
+│   │   ├── anomaly_detector.py   # 5 alertas: controversia, sentimiento, engagement, topic, zona
 │   │   ├── trends.py             # Análisis de tendencias
 │   │   └── reporting.py          # Generación de informes JSON/PNG
 │   ├── fb_scraper/
@@ -43,8 +46,15 @@ scrapeo-social/
 │   └── storage/
 │       ├── db.py                 # SQLite + SQLAlchemy
 │       └── supabase_client.py    # Wrapper de LocalStorage (compatibilidad)
+├── tests/
+│   └── test_cambridge_index.py   # 52 tests: TS, alerts, supresión, integración
 ├── dashboard/
-│   └── app.py                    # Streamlit dashboard (7 tabs)
+│   ├── streamlit_app.py          # Streamlit dashboard (7 tabs)
+│   ├── dashboard.html            # Panel ejecutivo HTML estático
+│   ├── indices.html              # Índices compuestos
+│   ├── sentiment.html            # Sentimiento por tópico/zona
+│   ├── insights.html             # Explorador de insights
+│   └── index.html                # Landing page
 ├── data/                         # SQLite database
 ├── outputs/                      # Informes JSON y gráficos
 ├── .env                          # Credenciales y configuración
@@ -55,14 +65,22 @@ scrapeo-social/
 
 ```bash
 ./scrapeo graph-scrape   # Scraping vía Graph API
-./scrapeo deep-scrape    # Deep scraping alternativo
+./scrapeo deep-scrape --search "Jose Chicas" --max 500 --headless  # Deep scraping búsqueda
+./scrapeo deep-search "Jose Chicas" 500   # Atajo para deep-scrape con search + headless
 ./scrapeo analyze        # Generar métricas, insights y exportar dashboard/data.js
 ./scrapeo status         # Estado de BD
 ./scrapeo export-dashboard  # Exportar SQLite → dashboard/data.js
+./scrapeo nlp            # Pipeline NLP (emociones, entidades, colocaciones, tópicos)
+./scrapeo nlp --batch 1000 --no-collocations --no-topics  # Solo emociones+entidades
+./scrapeo nlp --n-topics 10   # Extraer 10 tópicos latentes
 ./scrapeo estimate N     # Proyectar tiempo para scrapear N posts (default: 20,000)
+./scrapeo bulk-scrape 500 "Jose Chicas"  # Graph API + Deep Search combinado
 
 # Dashboard estático (abrir en navegador directamente):
 open dashboard/index.html
+
+# Dashboard ciencia de datos (Streamlit):
+streamlit run dashboard/streamlit_app.py
 ```
 
 ## Fases Ejecutadas
@@ -71,6 +89,10 @@ open dashboard/index.html
 2. **Views**: 170 posts con views_count (completado)
 3. **Comentarios**: 5,879 comentarios extraídos de los posts scrapeados
 4. **Análisis**: Sentimiento, tópicos y zonas mapeados en los 170 posts
+5. **NLP Pipeline (nuevo)**: Emociones (6 categorías), entidades (spaCy + gazetteer), colocaciones (bigramas/trigramas), tópicos latentes (LDA)
+6. **Dashboard Streamlit (nuevo)**: 7 tabs — Ejecutivo, Emociones, Entidades, Tópicos Latentes, Colocaciones, Anomalías, Diagnóstico
+7. **Detección de anomalías**: Picos de controversia, disonancia entidad-sentimiento, caída de engagement, tópicos con rechazo inusual
+8. **Cambridge Index (nuevo)**: Topic Sensitivity (11 topics, base 0.6–1.6, ajuste trimestral), 5 alertas predictivas (ICI, SDI, EFI, TAI, ZDI) con supresión (cooldown, deadband, sample mínimos)
 
 ## Decisiones Clave
 
@@ -87,6 +109,11 @@ open dashboard/index.html
 - **Graph API**: posts eliminados/borrados devuelven `(#100) Object does not exist` — se loggean y se saltan
 - **Phase 3**: checkpoint en 350/4,763 (parada manual, datos reseteados para scrape nuevo)
 - **Supabase eliminado**: ahora solo SQLite local. `SupabaseStorage` es un wrapper de `LocalStorage` por compatibilidad.
+
+## Bugs Fixed
+
+- **Deep-scraper postId collision**: `new Uint8Array(8)` en JS crea array de ceros, no valores aleatorios → todos los posts tenían `postId = "deep_0000..."`. Fix: usar hash determinista del mensaje (`postIdFromMessage()`) con doble hash 32-bit para IDs únicos y estables entre scrolls (`deep_scraper.py:335-346`).
+- **TimeoutGuard residual**: `guard.__exit__()` en bloque de autenticación referenciaba variable no definida (TimeoutGuard removido previamente). Fix: eliminar llamado huérfano (`deep_scraper.py:642`).
 
 ## Entorno de Ejecución
 

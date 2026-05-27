@@ -71,9 +71,21 @@ class SupabaseStorage:
     def update_post_views(self, post_id: str, views_count: int) -> bool:
         return self.local.update_post_views(post_id, views_count)
 
+    def insert_nlp_result(self, data: Dict[str, Any]) -> bool:
+        return self.local.insert_nlp_result(data)
+
+    def get_nlp_results(self, item_type: str = None, analysis_type: str = None, limit: int = 5000) -> list:
+        return self.local.get_nlp_results(item_type=item_type, analysis_type=analysis_type, limit=limit)
+
+    def get_nlp_result(self, item_type: str, item_id: str, analysis_type: str) -> Optional[dict]:
+        return self.local.get_nlp_result(item_type, item_id, analysis_type)
+
+    def count_nlp_pending(self, item_type: str) -> int:
+        return self.local.count_nlp_pending(item_type)
+
     def purge_all(self) -> bool:
         try:
-            tables = ["fb_posts", "fb_comments", "problematicas", "insights", "daily_metrics"]
+            tables = ["fb_posts", "fb_comments", "problematicas", "insights", "daily_metrics", "nlp_results"]
             for table in tables:
                 self.local.purge_table(table)
             logger.info("All data purged")

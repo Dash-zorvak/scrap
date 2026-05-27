@@ -71,8 +71,8 @@ ZONA_KEYWORDS = {
         "calle principal", "avenida central", "mercado", "plaza"
     ],
     "Este": [
-        "este", "este de santa ana", "sector este", "la阳性", "el palomar",
-        "santa lucia", "san rafael", "las brisas"
+        "este de santa ana", "sector este", "zona este", "al este",
+        "el palomar", "santa lucia", "san rafael", "las brisas"
     ],
     "Oeste": [
         "oeste", "west", "sector oeste", "la costa", "el puerto", "punta",

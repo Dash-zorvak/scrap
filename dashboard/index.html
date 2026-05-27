@@ -3,91 +3,255 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Jose Chicas · San Salvador Este — Analítica Digital</title>
+<title>BL00MB3RG :: Alcaldía de Santa Ana</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#050510;
-  --surface:#0b0b1a;
-  --surface2:#111128;
-  --border:#1a1a3e;
-  --fg:#c8c8e0;
-  --muted:#6b6b8a;
-  --cyan:#00f0ff;
-  --green:#00ff88;
-  --amber:#ffb000;
-  --red:#ff3355;
-  --purple:#8860ff;
+  --bg:#050510;  --surface:#0b0b1a;  --surface2:#111128;  --border:#1a1a3e;
+  --fg:#c8c8e0;  --muted:#6b6b8a;  --dim:#2a2a4a;
+  --cyan:#00f0ff;  --green:#00ff88;  --amber:#ffb000;  --red:#ff3355;
+  --purple:#8860ff;  --blue:#5599ff;
   --font-mono:'JetBrains Mono','SF Mono','Fira Code',ui-monospace,monospace;
   --font-sans:system-ui,-apple-system,sans-serif;
-  --radius:8px;
 }
-html{font-size:14px}
-body{background:var(--bg);color:var(--fg);font-family:var(--font-sans);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;-webkit-font-smoothing:antialiased}
-.hero{text-align:center;margin-bottom:40px}
-.hero h1{font-family:var(--font-mono);font-size:13px;font-weight:400;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px}
-.hero h1 span{color:var(--muted)}
-.hero h2{font-family:var(--font-sans);font-size:28px;font-weight:500;color:var(--fg);margin-bottom:6px}
-.hero p{font-size:14px;color:var(--muted);max-width:480px;line-height:1.6}
-.hero .sub{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:10px}
-.screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;max-width:1000px;width:100%}
-.screen-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;text-decoration:none;color:var(--fg);transition:.2s;position:relative;overflow:hidden}
-.screen-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;opacity:0;transition:.2s}
-.screen-card:hover{border-color:var(--cyan);transform:translateY(-2px)}
-.screen-card:hover::before{opacity:1}
-.screen-card:nth-child(1)::before{background:var(--cyan)}
-.screen-card:nth-child(2)::before{background:var(--green)}
-.screen-card:nth-child(3)::before{background:var(--amber)}
-.screen-card:nth-child(4)::before{background:var(--purple)}
-.screen-card .icon{font-size:28px;margin-bottom:10px;display:block}
-.screen-card .name{font-family:var(--font-mono);font-size:14px;font-weight:500;margin-bottom:4px}
-.screen-card .desc{font-size:11px;color:var(--muted);line-height:1.5}
-.screen-card .arrow{font-family:var(--font-mono);font-size:11px;color:var(--cyan);margin-top:10px;display:inline-block;opacity:0;transition:.2s}
-.screen-card:hover .arrow{opacity:1}
-.footer{margin-top:40px;text-align:center;font-family:var(--font-mono);font-size:9px;color:var(--muted);letter-spacing:.5px}
-@media(max-width:600px){
-  .hero h2{font-size:22px}
-  .screens{grid-template-columns:1fr}
-}
+html{font-size:13px}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-mono);height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:0 16px;-webkit-font-smoothing:antialiased}
+.ticker-bar{height:28px;display:flex;align-items:center;border-bottom:1px solid var(--border);gap:0;flex-shrink:0;overflow:hidden;position:relative}
+.ticker-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--cyan);background:var(--surface);padding:0 12px;height:28px;display:flex;align-items:center;border-right:1px solid var(--border);flex-shrink:0}
+.ticker-scroll{flex:1;overflow:hidden;position:relative;height:28px}
+.ticker-items{display:flex;gap:32px;white-space:nowrap;position:absolute;animation:ticker 40s linear infinite;height:28px;align-items:center}
+.ticker-items:hover{animation-play-state:paused}
+@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.ticker-item{font-size:10px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.ticker-item .val{color:var(--fg);font-weight:500}
+.ticker-item .up{color:var(--green)}
+.ticker-item .dn{color:var(--red)}
+.header{display:flex;align-items:center;justify-content:space-between;padding:8px 4px 6px;border-bottom:1px solid var(--border);flex-shrink:0}
+.header-left{display:flex;align-items:center;gap:16px}
+.header h1{font-size:11px;font-weight:400;color:var(--cyan);letter-spacing:.8px;text-transform:uppercase}
+.header h1 span{color:var(--muted);font-weight:300}
+.header .clock{font-size:10px;color:var(--muted);letter-spacing:.3px}
+.header .status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:8px 0;flex-shrink:0}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:8px 10px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi.engagement::before{background:var(--cyan)}
+.kpi.sentiment::before{background:var(--green)}
+.kpi.controversy::before{background:var(--amber)}
+.kpi.effectiveness::before{background:var(--purple)}
+.kpi.risk::before{background:var(--red)}
+.kpi.nsi::before{background:var(--blue)}
+.kpi-label{font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:2px}
+.kpi-value{font-size:20px;font-weight:500;letter-spacing:-.3px;line-height:1.2}
+.kpi.engagement .kpi-value{color:var(--cyan)}
+.kpi.sentiment .kpi-value{color:var(--green)}
+.kpi.controversy .kpi-value{color:var(--amber)}
+.kpi.effectiveness .kpi-value{color:var(--purple)}
+.kpi.risk .kpi-value{color:var(--red)}
+.kpi.nsi .kpi-value{color:var(--blue)}
+.kpi-sub{font-size:8px;color:var(--muted);margin-top:1px}
+.main-body{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:8px 0;flex:1;min-height:0}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:4px;display:flex;flex-direction:column;overflow:hidden}
+.panel-header{font-size:8px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:7px 10px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.panel-body{flex:1;overflow-y:auto;padding:6px 8px;scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
+.panel-body::-webkit-scrollbar{width:3px}
+.panel-body::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+.alert-item{padding:6px 8px;margin-bottom:4px;border-radius:3px;border-left:3px solid;background:rgba(255,255,255,.02);cursor:default}
+.alert-item:hover{background:rgba(255,255,255,.04)}
+.alert-item .a-type{font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.alert-item .a-title{font-size:11px;font-weight:500;margin:1px 0}
+.alert-item .a-desc{font-size:9px;color:var(--muted);line-height:1.4}
+.alert-item.crit{border-left-color:var(--red)}
+.alert-item.crit .a-title{color:var(--red)}
+.alert-item.high{border-left-color:#ff8866}
+.alert-item.high .a-title{color:#ff8866}
+.alert-item.med{border-left-color:var(--amber)}
+.alert-item.med .a-title{color:var(--amber)}
+.alert-item.low{border-left-color:var(--muted)}
+.alert-item.low .a-title{color:var(--muted)}
+.ts-table{width:100%;border-collapse:collapse;font-size:10px}
+.ts-table td{padding:4px 6px;border-bottom:1px solid rgba(26,26,62,.3)}
+.ts-table tr:last-child td{border-bottom:none}
+.ts-table tr:hover td{background:rgba(0,240,255,.03)}
+.ts-bar{height:4px;border-radius:2px;background:var(--border);overflow:hidden}
+.ts-bar .fill{height:100%;border-radius:2px;transition:width 1s}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:10px;gap:6px}
+.empty-state .big{font-size:28px;opacity:.3}
+.nav-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:6px 0;flex-shrink:0}
+.nav-btn{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:8px 12px;text-decoration:none;color:var(--fg);display:flex;align-items:center;gap:10px;transition:.15s}
+.nav-btn:hover{border-color:var(--cyan);background:var(--surface2)}
+.nav-btn .icon{font-size:16px;flex-shrink:0}
+.nav-btn .info{display:flex;flex-direction:column;gap:1px}
+.nav-btn .lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.nav-btn .val{font-size:10px;font-weight:500}
+.footer{display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-top:1px solid var(--border);flex-shrink:0;font-size:8px;color:var(--muted);letter-spacing:.3px}
+@media(max-width:1024px){.kpi-row{grid-template-columns:repeat(3,1fr)}.main-body{grid-template-columns:1fr}}
+@media(max-width:600px){.kpi-row{grid-template-columns:1fr 1fr}.nav-row{grid-template-columns:1fr 1fr}.header{flex-direction:column;align-items:flex-start;gap:4px}}
 </style>
 </head>
 <body>
-<div class="hero">
-  <h1>PANEL DE ANALÍTICA DIGITAL <span>//</span> BLOOMBERG TERMINAL</h1>
-  <h2>Jose Chicas · San Salvador Este</h2>
-  <p>Dashboard ejecutivo con inteligencia de datos: sentimiento, detección de temas, índices compuestos y análisis de reacciones en redes sociales.</p>
-  <div class="sub">Facebook · 4,763 publicaciones · 701K+ reacciones · 5.8M+ visualizaciones · 2017–2025</div>
+
+<div class="ticker-bar">
+  <span class="ticker-label">⬥ LIVE</span>
+  <div class="ticker-scroll">
+    <div class="ticker-items" id="ticker"></div>
+  </div>
 </div>
 
-<div class="screens">
-  <a href="dashboard.html" class="screen-card">
-    <span class="icon">⬥</span>
-    <div class="name">Dashboard Ejecutivo</div>
-    <div class="desc">KPIs globales, distribución de reacciones, mapa de zonas, ranking de tópicos, engagement mensual y sentimiento por tema.</div>
-    <span class="arrow">→ Abrir</span>
-  </a>
-  <a href="sentiment.html" class="screen-card">
-    <span class="icon">◈</span>
-    <div class="name">Análisis de Sentimiento</div>
-    <div class="desc">Desglose por post, tópico y zona. Evolución anual, posts más controversiales y clasificación de sentimiento.</div>
-    <span class="arrow">→ Abrir</span>
-  </a>
-  <a href="insights.html" class="screen-card">
-    <span class="icon">◉</span>
-    <div class="name">Explorador de Insights</div>
-    <div class="desc">Navegá por palabras clave y descubrí qué reacciones provocan. Correlación término → reacción con datos reales.</div>
-    <span class="arrow">→ Abrir</span>
-  </a>
-  <a href="indices.html" class="screen-card">
-    <span class="icon">◆</span>
-    <div class="name">Índices Compuestos</div>
-    <div class="desc">Engagement, Sentimiento Neto, Controversia, Efectividad y Riesgo Reputacional. Métricas compuestas estilo Bloomberg.</div>
-    <span class="arrow">→ Abrir</span>
-  </a>
+<div class="header">
+  <div class="header-left">
+    <span class="status-dot"></span>
+    <h1>BL00MB3RG <span>//</span> ALCALDÍA DE SANTA ANA <span>·</span> GUSTAVO ACEVEDO</h1>
+  </div>
+  <div class="clock" id="clock"></div>
 </div>
+
+<div class="kpi-row" id="kpis"></div>
+
+<div class="main-body">
+  <div class="panel">
+    <div class="panel-header"><span>⚠ ALERTAS PREDICTIVAS</span><span id="alertCount" style="color:var(--muted)">0</span></div>
+    <div class="panel-body" id="alertsPanel"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><span>◎ SENSIBILIDAD POR TÓPICO</span><span style="color:var(--muted)">Cambridge Index</span></div>
+    <div class="panel-body" id="tsPanel"></div>
+  </div>
+</div>
+
+<div class="nav-row" id="navRow"></div>
 
 <div class="footer">
-  DATOS DESDE SQLITE · ${new Date().toLocaleDateString('es-SV')} · PODER EJECUTIVO
+  <span id="footerLeft">DATOS: SQLite · Sin datos</span>
+  <span id="footerRight">Fuente: Facebook API</span>
 </div>
+
+<script src="data.js"></script>
+<script>
+function fmt(n){try{return Number(n).toLocaleString('es-SV')}catch{return String(n)}}
+function pct(n){return (Number(n)*100).toFixed(1)+'%'}
+function short(n){n=Number(n);return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':String(n)}
+function sevClass(s){return s>=4?'crit':s>=3?'high':s>=2?'med':'low'}
+function sevColor(s){return s>=4?'var(--red)':s>=3?'#ff8866':s>=2?'var(--amber)':'var(--muted)'}
+
+function tick(){
+  const now=new Date();
+  document.getElementById('clock').textContent=now.toLocaleDateString('es-SV',{weekday:'short',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+setInterval(tick,1000);tick();
+
+function buildTicker(d){
+  const items=[];
+  const ix=d&&d.indices?d.indices:{};
+  items.push(`NSI <span class="val">${ix.nsi??'—'}%</span>`);
+  items.push(`ENG <span class="val">${ix.engagement??'—'}%</span>`);
+  items.push(`CONT <span class="val ${(ix.controversy||0)>0.03?'dn':'up'}">${ix.controversy?pct(ix.controversy):'—'}</span>`);
+  items.push(`SENT <span class="val ${(ix.netSentiment||0)<0.7?'dn':'up'}">${ix.netSentiment?pct(ix.netSentiment):'—'}</span>`);
+  items.push(`EFECT <span class="val ${(ix.effectiveness||0)<0.85?'dn':'up'}">${ix.effectiveness?pct(ix.effectiveness):'—'}</span>`);
+  items.push(`RIESGO <span class="val ${(ix.riskReputacional||0)>2?'dn':'up'}">${ix.riskReputacional??'—'}%</span>`);
+  if(d&&d.totalPosts){items.push(`POSTS <span class="val">${fmt(d.totalPosts)}</span>`)}
+  if(d&&d.totalComments){items.push(`CMTS <span class="val">${fmt(d.totalComments)}</span>`)}
+  if(d&&d.totalViews){items.push(`VIEWS <span class="val">${short(d.totalViews)}</span>`)}
+  const html=items.map(t=>`<span class="ticker-item">⬥ ${t}</span>`).join('');
+  document.getElementById('ticker').innerHTML=html+html;
+}
+
+function buildKPIs(d){
+  const ix=d&&d.indices?d.indices:{};
+  const rd=d&&d.reactionDistribution?d.reactionDistribution:{};
+  const totalR=rd.likes+rd.loves+rd.hahas+rd.wows+rd.sads+rd.angrys||1;
+  const kpis=[
+    {cls:'engagement',lbl:'Engagement',val:ix.engagement?ix.engagement.toFixed(1)+'%':'—',sub:`${fmt(totalR)} reacc`},
+    {cls:'sentiment',lbl:'Sent. Neto',val:ix.netSentiment?pct(ix.netSentiment):'—',sub:`${rd.likes+rd.loves||0} pos · ${rd.angrys+rd.sads||0} neg`},
+    {cls:'controversy',lbl:'Controversia',val:ix.controversy?pct(ix.controversy):'—',sub:`${fmt(rd.angrys+rd.sads)} negativas`},
+    {cls:'effectiveness',lbl:'Efectividad',val:ix.effectiveness?pct(ix.effectiveness):'—',sub:`${fmt(rd.likes+rd.loves)} aprob`},
+    {cls:'risk',lbl:'Riesgo Rep.',val:ix.riskReputacional?ix.riskReputacional.toFixed(1)+'%':'—',sub:ix.controversy<0.03?'Bajo':ix.controversy<0.08?'Medio':'Alto'},
+    {cls:'nsi',lbl:'NSI',val:ix.nsi?ix.nsi.toFixed(1):'—',sub:`Pob: ${d&&d.totalPosts?fmt(d.totalPosts):'—'} · Views: ${d&&d.totalViews?short(d.totalViews):'—'}`}
+  ];
+  document.getElementById('kpis').innerHTML=kpis.map(k=>
+    `<div class="kpi ${k.cls}"><div class="kpi-label">${k.lbl}</div><div class="kpi-value">${k.val}</div><div class="kpi-sub">${k.sub}</div></div>`
+  ).join('');
+}
+
+function buildAlerts(d){
+  const panel=document.getElementById('alertsPanel');
+  const count=document.getElementById('alertCount');
+  const alerts=d&&d.alerts?d.alerts:[];
+  count.textContent=alerts.length;
+  if(!alerts.length){
+    panel.innerHTML=`<div class="empty-state"><div class="big">✓</div><div>Sin alertas activas</div><div style="font-size:8px">Sistema en verde</div></div>`;
+    return;
+  }
+  panel.innerHTML=alerts.slice(0,8).map(a=>
+    `<div class="alert-item ${sevClass(a.severity)}">
+      <div class="a-type">${a.type.toUpperCase()} · ${a.severity_label.toUpperCase()} · score ${a.score}</div>
+      <div class="a-title">${a.title}</div>
+      <div class="a-desc">${a.description}${a.topic?' · '+a.topic.replace(/_/g,' ').title():''}${a.zona?' · Zona: '+a.zona:''}</div>
+    </div>`
+  ).join('');
+}
+
+function buildTS(d){
+  const panel=document.getElementById('tsPanel');
+  const ts=d&&d.topicSensitivity?d.topicSensitivity:{};
+  const keys=Object.keys(ts);
+  if(!keys.length){
+    panel.innerHTML=`<div class="empty-state"><div class="big">◎</div><div>Sin datos de sensibilidad</div></div>`;
+    return;
+  }
+  const maxBase=Math.max(...keys.map(k=>ts[k].base));
+  let html='<table class="ts-table">';
+  keys.sort((a,b)=>ts[b].base-ts[a].base).forEach(k=>{
+    const v=ts[k];
+    const pct=v.base/maxBase*100;
+    const c=v.base>=1.4?'var(--red)':v.base>=1.2?'var(--amber)':v.base>=1.0?'var(--cyan)':'var(--green)';
+    html+=`<tr><td style="width:40%">${k.replace(/_/g,' ')}</td>
+      <td style="width:15%;color:${c};font-weight:500">${v.base.toFixed(1)}</td>
+      <td style="width:10%;color:var(--muted)">${v.posts}</td>
+      <td style="width:35%"><div class="ts-bar"><div class="fill" style="width:${pct}%;background:${c}"></div></div></td></tr>`;
+  });
+  html+='</table>';
+  panel.innerHTML=html;
+}
+
+function buildNav(d){
+  const pages=[
+    {icon:'⬥',lbl:'Dashboard',val:'Panel ejecutivo',href:'dashboard.html'},
+    {icon:'◈',lbl:'Sentimiento',val:'Por tópico y zona',href:'sentiment.html'},
+    {icon:'▣',lbl:'Insights',val:'Keywords y reacciones',href:'insights.html'},
+    {icon:'◆',lbl:'Índices',val:'5 compuestos + Cambridge',href:'indices.html'}
+  ];
+  document.getElementById('navRow').innerHTML=pages.map(p=>
+    `<a href="${p.href}" class="nav-btn">
+      <span class="icon">${p.icon}</span>
+      <div class="info"><span class="lbl">${p.lbl}</span><span class="val">${p.val}</span></div>
+    </a>`
+  ).join('');
+}
+
+function buildFooter(d){
+  const left=document.getElementById('footerLeft');
+  const right=document.getElementById('footerRight');
+  if(d&&d.totalPosts){
+    const from=d.dateRange&&d.dateRange.from?d.dateRange.from.slice(0,10):'—';
+    const to=d.dateRange&&d.dateRange.to?d.dateRange.to.slice(0,10):'—';
+    left.textContent=`DATOS: SQLite · ${fmt(d.totalPosts)} pubs · ${fmt(d.totalReactions)} reacc · ${fmt(d.totalComments)} cmts · ${short(d.totalViews)} views · ${from} → ${to}`;
+    right.textContent='Fuente: Facebook Graph API · Cambridge Index v1.0';
+  }
+}
+
+function init(){
+  const d=typeof DASH_DATA!=='undefined'?DASH_DATA:null;
+  buildTicker(d);
+  buildKPIs(d);
+  buildAlerts(d);
+  buildTS(d);
+  buildNav(d);
+  buildFooter(d);
+}
+document.addEventListener('DOMContentLoaded',init);
+if(document.readyState!=='loading')init();
+</script>
 </body>
 </html>

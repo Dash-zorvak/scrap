@@ -249,12 +249,56 @@ function init(){
       </div>
     </div>
 
+    <div class="card" style="margin-top:12px">
+      <div class="card-title">Cambridge Index — Alertas Predictivas</div>
+      <div id="cambridgeAlerts"></div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="card-title">Sensibilidad por Tópico (Topic Sensitivity)</div>
+      <div id="topicSensitivity"></div>
+    </div>
+
     <div style="padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-top:12px">
       <span class="mono" style="font-size:10px;color:var(--muted)">5 ÍNDICES COMPUESTOS · Engagement · Sentimiento Neto · Controversia · Efectividad · Riesgo Reputacional</span>
-      <span class="mono" style="font-size:9px;color:var(--muted)">FÓRMULAS: Ver metodología abajo</span>
+      <span class="mono" style="font-size:9px;color:var(--muted)">CAMBRIDGE INDEX: ICI · SDI · EFI · TAI · ZDI</span>
     </div>
   `;
   document.getElementById('app').innerHTML = html;
+
+  const d = DASH_DATA;
+  if (d && d.alerts && d.alerts.length) {
+    const ca = document.getElementById('cambridgeAlerts');
+    ca.innerHTML = d.alerts.slice(0, 8).map(a => {
+      const c = a.severity >= 4 ? 'var(--red)' : a.severity >= 3 ? '#ff8866' : a.severity >= 2 ? 'var(--amber)' : 'var(--muted)';
+      return `<div style="background:var(--surface2);border-left:3px solid ${c};border-radius:4px;padding:10px 12px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="mono" style="font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">${a.type.toUpperCase()} · ${a.severity_label.toUpperCase()}</span>
+          <span class="mono" style="font-size:9px;color:${c}">score ${a.score}</span>
+        </div>
+        <div class="mono" style="font-size:12px;font-weight:500;margin:2px 0">${a.title}</div>
+        <div style="font-size:10px;color:var(--muted)">${a.description}</div>
+      </div>`;
+    }).join('');
+  } else {
+    document.getElementById('cambridgeAlerts').innerHTML = '<div class="mono" style="font-size:10px;color:var(--green);padding:8px">✓ Sistema de alertas en verde. Sin anomalías detectadas.</div>';
+  }
+  if (d && d.topicSensitivity) {
+    const ts = d.topicSensitivity;
+    const keys = Object.keys(ts).sort((a,b) => ts[b].base - ts[a].base);
+    const maxB = Math.max(...keys.map(k => ts[k].base));
+    let th = '<table class="data-table"><thead><tr><th>Tópico</th><th class="right">Base</th><th class="right">Posts</th><th></th></tr></thead><tbody>';
+    keys.forEach(k => {
+      const v = ts[k];
+      const c = v.base >= 1.4 ? 'var(--red)' : v.base >= 1.2 ? 'var(--amber)' : v.base >= 1.0 ? 'var(--cyan)' : 'var(--green)';
+      th += `<tr><td>${k.replace(/_/g,' ')}</td><td class="right" style="color:${c};font-weight:500">${v.base.toFixed(1)}</td><td class="right">${fmt(v.posts)}</td>
+        <td><div class="index-bar"><div class="fill" style="width:${v.base/maxB*100}%;background:${c}"></div></div></td></tr>`;
+    });
+    th += '</tbody></table>';
+    document.getElementById('topicSensitivity').innerHTML = th;
+  } else {
+    document.getElementById('topicSensitivity').innerHTML = '<div class="mono" style="font-size:10px;color:var(--muted);padding:8px">◎ Sin datos de sensibilidad — ejecutá ./scrapeo analyze</div>';
+  }
 }
 init();
 </script>

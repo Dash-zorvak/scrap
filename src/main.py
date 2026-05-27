@@ -3,6 +3,7 @@ import argparse
 import logging
 import os
 import sys
+import time as time_module
 from datetime import datetime, timedelta
 
 from rich.console import Console
@@ -16,9 +17,32 @@ from src.storage.supabase_client import SupabaseStorage
 from src.analyzer.sentiment import SentimentAnalyzer
 from src.analyzer.topic_detection import get_main_topic, detect_zona, extract_problematicas
 from src.analyzer.executive_metrics import ExecutiveMetrics
+from src.intelligence.cambridge_index import run_all_detectors, SuppressionEngine
 
 logger = logging.getLogger(__name__)
 console = Console()
+
+
+def timer(func):
+    """Decorator that wraps a command function with elapsed time reporting."""
+    from functools import wraps
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        cmd_name = func.__name__.replace("cmd_", "").replace("_", "-")
+        console.print(f"[dim]⏱ Inicio: {datetime.now().strftime('%H:%M:%S')}[/dim]")
+        t0 = time_module.time()
+        result = func(*args, **kwargs)
+        elapsed = time_module.time() - t0
+        mins, secs = divmod(int(elapsed), 60)
+        hrs, mins = divmod(mins, 60)
+        if hrs > 0:
+            console.print(f"[bold green]✅ {cmd_name} completado en {hrs}h {mins}m {secs}s[/bold green]")
+        elif mins > 0:
+            console.print(f"[bold green]✅ {cmd_name} completado en {mins}m {secs}s[/bold green]")
+        else:
+            console.print(f"[bold green]✅ {cmd_name} completado en {secs}s[/bold green]")
+        return result
+    return wrapper
 
 
 LOG_LEVELS = {
@@ -109,11 +133,29 @@ class ProgressTracker:
         self.progress.stop()
 
 
+def _resolve_page(args, cfg):
+    if getattr(args, "page", None) is not None:
+        return cfg.get_page(args.page)
+    page_id = getattr(args, "page_id", None) or cfg.FB_PAGE_ID
+    page_name = getattr(args, "page_name", None) or cfg.FB_PAGE_NAME
+    page_url = getattr(args, "page_url", None) or cfg.FB_PAGE_URL
+    result = {"id": page_id, "name": page_name, "url": page_url}
+    result["has_id"] = bool(page_id and not page_id.startswith("http"))
+    return result
+
+
+@timer
 def cmd_graph_scrape(args, cfg, storage):
     console.print(Panel("[bold green]Graph API SCRAPER[/bold green]"))
+    page = _resolve_page(args, cfg)
     token = args.token or cfg.FB_ACCESS_TOKEN
-    page_id = args.page_id or cfg.FB_PAGE_ID
-    page_name = args.page_name or cfg.FB_PAGE_NAME
+    page_id = page.get("id", "")
+    page_name = page.get("name", "?")
+
+    if not page.get("has_id"):
+        console.print("[yellow]Esta página no tiene un ID numérico — Graph API no es compatible[/yellow]")
+        console.print("[yellow]Usá 'deep-scrape' o 'scrape' para páginas públicas[/yellow]")
+        return
 
     if not token:
         console.print("[red]Error: No FB_ACCESS_TOKEN. Pásalo con --token o configúralo en .env[/red]")
@@ -142,19 +184,52 @@ def cmd_graph_scrape(args, cfg, storage):
     console.print(f"Comentarios: {stats['comments_scraped']}")
 
 
+@timer
 def cmd_deep_scrape(args, cfg, storage):
     console.print(Panel("[bold red]DEEP SCRAPER - Extracción Completa[/bold red]"))
-    console.print(f"[bold]Página ID:[/bold] {args.page_id}")
-    console.print(f"[bold]Desde:[/bold] {args.start}")
-    console.print(f"[bold]Target:[/bold] {args.max} posts")
+    page = _resolve_page(args, cfg)
+    page_id = page.get("id", "")
+    page_name = page.get("name", "?")
+    page_url = page.get("url", "")
+
+    search_keyword = getattr(args, "search", "")
+    cli_page_url = getattr(args, "page_url", "")
+
+    page_urls = None
+    if search_keyword:
+        page_urls = []
+    elif cli_page_url:
+        page_urls = [cli_page_url]
+    elif cfg.deep_page_urls:
+        page_urls = cfg.deep_page_urls
+    else:
+        p_url = page.get("url", "")
+        if p_url:
+            page_urls = [p_url]
+        elif page_id:
+            page_urls = [f"https://www.facebook.com/{page_id}"]
+
+    if search_keyword:
+        console.print(f"[bold]Búsqueda:[/bold] {search_keyword}")
+    elif page_urls:
+        console.print(f"[bold]Páginas ({len(page_urls)}):[/bold]")
+        for u in page_urls:
+            console.print(f"  • {u}")
+    else:
+        console.print(f"[bold]Page ID:[/bold] {page_id}")
+    console.print(f"[bold]Target:[/bold] {args.max} posts por página")
+    console.print(f"[bold]Headless:[/bold] {'sí' if args.headless else 'no'}")
 
     from src.fb_scraper.deep_scraper import FacebookDeepScraper
 
     scraper = FacebookDeepScraper(
+        page_url=page_url or f"https://www.facebook.com/{page_id}",
+        page_name=page_name,
+        search_keyword=search_keyword,
+        page_urls=page_urls,
         cookies_file=args.cookies_file,
-        page_id=args.page_id,
-        page_name=args.page_name,
-        start_date=args.start,
+        email=cfg.FB_EMAIL,
+        password=cfg.FB_PASSWORD,
         headless=args.headless,
     )
 
@@ -165,10 +240,10 @@ def cmd_deep_scrape(args, cfg, storage):
 
     console.print(f"\n[bold green]Deep scraping completado[/bold green]")
     console.print(f"Posts: {stats['posts_scraped']}")
-    console.print(f"Comentarios: {stats['comments_scraped']}")
     console.print(f"Duplicados: {stats['posts_duplicated']}")
 
 
+@timer
 def cmd_scrape(args, cfg, storage):
     analyzer = SentimentAnalyzer()
 
@@ -233,8 +308,15 @@ def _export_dashboard_data(storage):
     net_sentiment = (rd["likes"] + rd["loves"] - rd["angrys"] - rd["sads"]) / n
     controversy = (rd["angrys"] + rd["sads"]) / n
     effectiveness = (rd["likes"] + rd["loves"]) / n
-    engagement = ((total_reactions + total_comments + total_shares) / max(total_views, 1)) * 100
+    if total_views > 0:
+        engagement = ((total_reactions + total_comments + total_shares) / total_views) * 100
+    else:
+        engagement = (total_reactions + total_comments + total_shares) / max(total, 1)
     risk = controversy * (total_views / max(total_reactions, 1))
+
+    positive_count = sum(1 for p in posts if p.get("sentiment") == "positive")
+    negative_count = sum(1 for p in posts if p.get("sentiment") == "negative")
+    nsi = ((positive_count - negative_count) / max(total, 1)) * 100
 
     indices = {
         "engagement": round(engagement, 2),
@@ -242,7 +324,10 @@ def _export_dashboard_data(storage):
         "controversy": round(controversy, 4),
         "effectiveness": round(effectiveness, 4),
         "riskReputacional": round(risk, 2),
+        "nsi": round(nsi, 1),
     }
+
+    intelligence = run_all_detectors(posts, SuppressionEngine())
 
     topic_names = ["uncategorized", "medio_ambiente", "educacion", "empleo", "movilidad",
                    "seguridad", "servicios_publicos", "obras_publicas", "salud", "corrupcion", "transparencia"]
@@ -356,7 +441,7 @@ def _export_dashboard_data(storage):
                   "to": max(dates) if dates else datetime.now().isoformat()}
 
     dash_data = {
-        "page": "Jose Chicas — San Salvador Este",
+        "page": "Alcaldía de Santa Ana — Gustavo Acevedo",
         "totalPosts": total,
         "totalReactions": total_reactions,
         "totalComments": total_comments,
@@ -364,6 +449,9 @@ def _export_dashboard_data(storage):
         "totalViews": total_views,
         "reactionDistribution": rd,
         "indices": indices,
+        "alerts": intelligence["alerts"],
+        "topicSensitivity": intelligence["topic_sensitivity"],
+        "alertSummary": intelligence["alert_summary"],
         "topics": topics,
         "zones": zones,
         "monthly": monthly,
@@ -383,11 +471,14 @@ def _export_dashboard_data(storage):
         f.write('const fmt = n => n.toLocaleString("es-SV");\n')
         f.write('const pct = n => (n*100).toFixed(2)+"%";\n')
         f.write('const short = n => n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(1)+"K":String(n);\n')
+        f.write('const alertColor = s => ({1:"#6b6b8a",2:"#ffb000",3:"#ff3355",4:"#ff0044"}[s]||"#6b6b8a");\n')
+        f.write('const tsColor = v => v>=1.4?"#ff3355":v>=1.2?"#ffb000":v>=1.0?"#00f0ff":"#00ff88";\n')
 
     logger.info(f"Dashboard data exported to {dash_path}")
     return len(posts)
 
 
+@timer
 def cmd_analyze(args, cfg, storage):
     console.print(Panel("[bold yellow]Generating analysis and insights...[/bold yellow]"))
 
@@ -405,9 +496,19 @@ def cmd_analyze(args, cfg, storage):
 
     exported = _export_dashboard_data(storage)
     console.print(f"[bold green]Dashboard data exported: {exported} posts → dashboard/data.js[/bold green]")
+
+    posts = storage.get_fb_posts(limit=10000)
+    intelligence = run_all_detectors(posts, SuppressionEngine())
+    alert_count = len(intelligence["alerts"])
+    if alert_count > 0:
+        console.print(f"[bold red]⚠ {alert_count} alertas generadas[/bold red]")
+        for a in intelligence["alerts"][:3]:
+            color = {4: "red", 3: "red", 2: "yellow", 1: "dim"}.get(a["severity"], "dim")
+            console.print(f"  [bold {color}]{a['title']}[/bold {color}]")
     console.print(f"[bold green]Análisis completado.[/bold green]")
 
 
+@timer
 def cmd_status(args, cfg, storage):
     summary = storage.get_executive_summary()
 
@@ -430,11 +531,19 @@ def cmd_status(args, cfg, storage):
 
 
 
+@timer
 def cmd_phase3(args, cfg, storage):
     console.print(Panel("[bold cyan]PHASE 3 RESUME — Complete Comment Extraction[/bold cyan]"))
+    page = _resolve_page(args, cfg)
+    page_id = page.get("id", "")
+    page_name = page.get("name", "?")
+    if not page.get("has_id"):
+        console.print("[yellow]Phase 3 solo funciona con Graph API (requiere page_id numérico)[/yellow]")
+        return
+    console.print(f"[bold]Página:[/bold] {page_name} ({page_id})")
     from src.fb_scraper.phase3_resume import Phase3Resumer
 
-    resumer = Phase3Resumer(access_token=cfg.FB_ACCESS_TOKEN, page_id=cfg.FB_PAGE_ID)
+    resumer = Phase3Resumer(access_token=cfg.FB_ACCESS_TOKEN, page_id=page_id)
     stats = resumer.run(
         get_replies=not getattr(args, "no_replies", False),
         checkpoint_every=getattr(args, "checkpoint_every", 50),
@@ -442,6 +551,7 @@ def cmd_phase3(args, cfg, storage):
     console.print(f"[green]Done: {stats['posts_processed']} posts, {stats['comments_scraped']} comments, {stats['replies_scraped']} replies, {stats['errors']} errors[/green]")
 
 
+@timer
 def cmd_reset(args, cfg, storage):
     console.print(Panel("[bold red]⚠ RESET — Purge all data[/bold red]"))
     console.print("[yellow]Deleting all data from: fb_posts, fb_comments, problematicas, insights, daily_metrics[/yellow]")
@@ -457,6 +567,42 @@ def cmd_reset(args, cfg, storage):
         console.print("[red]Error during purge.[/red]")
 
 
+@timer
+def cmd_export_dashboard(args, cfg, storage):
+    exported = _export_dashboard_data(storage)
+    console.print(f"[bold green]Dashboard exported: {exported} posts → dashboard/data.js[/bold green]")
+
+
+@timer
+def cmd_nlp(args, cfg, storage):
+    from src.analyzer.nlp_pipeline import process_pending, process_all_collocations, process_latent_topics
+    console.print(Panel("[bold magenta]NLP PIPELINE — Deep Text Analysis[/bold magenta]"))
+    batch = args.batch or 500
+    console.print(f"[bold]Batch size:[/bold] {batch}")
+    stats = process_pending(storage, batch_size=batch)
+    console.print(f"[green]Posts processed:[/green] {stats['posts']}")
+    console.print(f"[green]Comments processed:[/green] {stats['comments']}")
+    if stats['errors']:
+        console.print(f"[red]Errors:[/red] {stats['errors']}")
+    if args.collocations:
+        console.print("[yellow]Extracting collocations from corpus...[/yellow]")
+        coll = process_all_collocations(storage)
+        n = len(coll.get("bigrams", {}).get("ngrams", {}))
+        console.print(f"[green]{n} bigrams extracted[/green]")
+    if args.topics:
+        console.print(f"[yellow]Extracting {args.n_topics} latent topics (LDA)...[/yellow]")
+        topics = process_latent_topics(storage, n_topics=args.n_topics)
+        n_t = len(topics.get("topics", []))
+        console.print(f"[green]{n_t} topics extracted from {topics.get('n_docs', 0)} documents[/green]")
+    pending_posts = storage.count_nlp_pending("post")
+    pending_comments = storage.count_nlp_pending("comment")
+    if pending_posts + pending_comments > 0:
+        console.print(f"[dim]Pending: {pending_posts} posts, {pending_comments} comments[/dim]")
+    else:
+        console.print(f"[bold green]All items processed[/bold green]")
+
+
+@timer
 def cmd_estimate(args, cfg, storage):
     import importlib.util
     spec = importlib.util.spec_from_file_location("estimation", os.path.join(os.path.dirname(__file__), "analyzer", "estimation.py"))
@@ -466,6 +612,70 @@ def cmd_estimate(args, cfg, storage):
     results, total_min, total_hr, cpp, tc = mod.calc_metrics(target)
     console.print(Panel(f"[bold cyan]TIME ESTIMATION — {target:,} Posts[/bold cyan]"))
     console.print(mod.format_table(results, total_min, total_hr, cpp, tc, target))
+
+
+@timer
+def cmd_cambridge(args, cfg, storage):
+    from src.intelligence.cambridge_index import run_all_detectors, SuppressionEngine
+    import json
+
+    console.print(Panel("[bold magenta]Cambridge Index — Alertas Predictivas[/bold magenta]"))
+
+    posts = storage.get_fb_posts(limit=10000)
+    if not posts:
+        console.print("[yellow]No hay datos para analizar[/yellow]")
+        return
+
+    engine = SuppressionEngine()
+    result = run_all_detectors(posts, engine)
+    alerts = result.get("alerts", [])
+    ts = result.get("topic_sensitivity", {})
+
+    console.print(f"[bold]Posts analizados:[/bold] {len(posts)}")
+    console.print(f"[bold]Alertas activas:[/bold] {len(alerts)}")
+
+    if args.json:
+        console.print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        return
+
+    if alerts:
+        table = Table(title="Alertas Cambridge")
+        table.add_column("Severidad", style="bold")
+        table.add_column("Tipo", style="cyan")
+        table.add_column("Título", style="white")
+        table.add_column("Score", justify="right")
+        sev_colors = {1: "dim", 2: "yellow", 3: "red", 4: "bold red"}
+        for a in alerts:
+            color = sev_colors.get(a.get("severity", 1), "dim")
+            table.add_row(
+                f"[{color}]{'★' * a.get('severity', 1)}[/{color}]",
+                a.get("type", ""),
+                a.get("title", "")[:50],
+                str(round(a.get("score", 0), 2)),
+            )
+        console.print(table)
+
+    if ts:
+        base_vals = {k: v.get("adjusted", v.get("base", 1.0)) for k, v in ts.items()}
+        table2 = Table(title="Sensibilidad por Tópico")
+        table2.add_column("Tópico", style="cyan")
+        table2.add_column("TS", justify="right")
+        table2.add_column("Posts", justify="right")
+        ts_color = lambda v: "red" if v >= 1.4 else "yellow" if v >= 1.2 else "green"
+        for topic, val in sorted(base_vals.items(), key=lambda x: -x[1]):
+            info = ts.get(topic, {})
+            adj = info.get("adjusted", info.get("base", 1.0))
+            table2.add_row(
+                topic or "unknown",
+                f"[{ts_color(adj)}]{adj:.2f}[/{ts_color(adj)}]",
+                str(info.get("posts", 0)),
+            )
+        console.print(table2)
+
+    summary = result.get("alert_summary", {})
+    if summary:
+        suppressed = summary.get("suppressed", 0)
+        console.print(f"\n[bold]Resumen:[/bold] {summary.get('total', 0)} alertas, {suppressed} suprimidas")
 
 
 def main():
@@ -492,8 +702,9 @@ def main():
 
     graph_parser = subparsers.add_parser("graph-scrape", help="Scraping via Facebook Graph API (más estable)")
     graph_parser.add_argument("--token", default="", help="Page Access Token (o usa FB_ACCESS_TOKEN en .env)")
-    graph_parser.add_argument("--page-id", default="395582594151511", help="Facebook Page ID")
-    graph_parser.add_argument("--page-name", default="Jose Chicas", help="Nombre de la página")
+    graph_parser.add_argument("--page-id", default="", help="Facebook Page ID (usa FB_PAGES o FB_PAGE_ID de .env)")
+    graph_parser.add_argument("--page-name", default="", help="Nombre de la página")
+    graph_parser.add_argument("--page", type=int, default=None, help="Índice de página en FB_PAGES (0-based)")
     graph_parser.add_argument("--max", type=int, default=1000, help="Posts objetivo")
     graph_parser.add_argument("--comments", action="store_true", default=True, help="Extraer comentarios también")
     graph_parser.add_argument("--replies", action="store_true", default=True, help="Extraer replies también")
@@ -502,9 +713,11 @@ def main():
 
     deep_parser = subparsers.add_parser("deep-scrape", help="Deep scraping - extracción completa con NLP y anti-ban")
     deep_parser.add_argument("--max", type=int, default=10000, help="Posts objetivo")
-    deep_parser.add_argument("--start", default="2025-01-01", help="Fecha inicio (YYYY-MM-DD)")
-    deep_parser.add_argument("--page-id", default="395582594151511", help="Facebook Page ID")
-    deep_parser.add_argument("--page-name", default="Jose Chicas", help="Nombre de la página")
+    deep_parser.add_argument("--search", default="", help="Buscar posts por keyword (ej: 'Jose Chicas')")
+    deep_parser.add_argument("--page-id", default="", help="Facebook Page ID (usa FB_PAGES o FB_PAGE_ID de .env)")
+    deep_parser.add_argument("--page-name", default="", help="Nombre de la página")
+    deep_parser.add_argument("--page-url", default="", help="URL completa de la página (para páginas sin ID numérico)")
+    deep_parser.add_argument("--page", type=int, default=None, help="Índice de página en FB_PAGES (0-based)")
     deep_parser.add_argument("--headless", action="store_true", help="Modo headless")
     deep_parser.add_argument("--cookies-file", default="cookies.json", help="Archivo de cookies")
     deep_parser.add_argument("--checkpoint-every", type=int, default=50, help="Guardar checkpoint cada N posts")
@@ -520,11 +733,25 @@ def main():
     subparsers.add_parser("status", help="Show database status")
     subparsers.add_parser("reset", help="Purge all data from database")
     subparsers.add_parser("export-dashboard", help="Export SQLite data to dashboard/data.js")
+    nlp_parser = subparsers.add_parser("nlp", help="Run NLP pipeline (emotions, entities, collocations)")
+    nlp_parser.add_argument("--batch", type=int, default=500, help="Batch size to process")
+    nlp_parser.add_argument("--collocations", action="store_true", default=True, help="Extract collocations from corpus")
+    nlp_parser.add_argument("--no-collocations", dest="collocations", action="store_false", help="Skip collocation extraction")
+    nlp_parser.add_argument("--topics", action="store_true", default=True, help="Extract latent topics (LDA)")
+    nlp_parser.add_argument("--no-topics", dest="topics", action="store_false", help="Skip latent topic extraction")
+    nlp_parser.add_argument("--n-topics", type=int, default=8, help="Number of latent topics")
     estimate_parser = subparsers.add_parser("estimate", help="Estimate scrape time for target posts")
     estimate_parser.add_argument("--target", type=int, default=20000, help="Target number of posts")
     phase3_parser = subparsers.add_parser("phase3", help="Resume Phase 3 - complete comment extraction")
     phase3_parser.add_argument("--no-replies", action="store_true", help="Skip reply threads")
     phase3_parser.add_argument("--checkpoint-every", type=int, default=50, help="Checkpoint every N posts")
+    phase3_parser.add_argument("--page", type=int, default=None, help="Índice de página en FB_PAGES (0-based)")
+    phase3_parser.add_argument("--page-id", default="", help="Facebook Page ID")
+    phase3_parser.add_argument("--page-name", default="", help="Nombre de la página")
+
+    cambridge_parser = subparsers.add_parser("cambridge", help="Cambridge Index - alertas predictivas y sensibilidad por tópico")
+    cambridge_parser.add_argument("--days", type=int, default=30, help="Ventana de análisis en días")
+    cambridge_parser.add_argument("--json", action="store_true", help="Output JSON en lugar de tabla")
 
     args = parser.parse_args()
 
@@ -548,14 +775,17 @@ def main():
     elif args.command == "reset":
         cmd_reset(args, cfg, storage)
     elif args.command == "export-dashboard":
-        exported = _export_dashboard_data(storage)
-        console.print(f"[bold green]Dashboard exported: {exported} posts → dashboard/data.js[/bold green]")
+        cmd_export_dashboard(args, cfg, storage)
+    elif args.command == "nlp":
+        cmd_nlp(args, cfg, storage)
     elif args.command == "phase3":
         cmd_phase3(args, cfg, storage)
     elif args.command == "status":
         cmd_status(args, cfg, storage)
     elif args.command == "estimate":
         cmd_estimate(args, cfg, storage)
+    elif args.command == "cambridge":
+        cmd_cambridge(args, cfg, storage)
 
 
 if __name__ == "__main__":

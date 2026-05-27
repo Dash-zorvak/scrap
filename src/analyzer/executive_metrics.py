@@ -105,39 +105,34 @@ class ExecutiveMetrics:
 
         for topic, counts in topic_sentiment.items():
             total = sum(counts.values())
-            if total < 3:
+            if total < 2:
                 continue
 
             pos_pct = (counts["positive"] / total) * 100
             neg_pct = (counts["negative"] / total) * 100
 
-            if neg_pct > 40:
-                priority = 5
+            if neg_pct > 30:
+                priority = 4
                 insight_type = "crisis_alert"
                 title = f"Tema crítico: {topic.replace('_', ' ').title()}"
-                description = f"Este tema genera {neg_pct:.0f}% de sentiment negativo. Requiere atención inmediata."
-            elif neg_pct > 20:
-                priority = 3
-                insight_type = "concern"
-                title = f"Preocupación: {topic.replace('_', ' ').title()}"
-                description = f"Sentimiento negativo en {neg_pct:.0f}% de posts sobre este tema."
-            else:
-                continue
-
-            insights.append({
-                "insight_type": insight_type,
-                "title": title,
-                "description": description,
-                "topic": topic,
-                "sentiment": "negative" if neg_pct > 20 else "positive",
-                "priority": priority,
-                "metric_data": {
-                    "total_mentions": total,
-                    "positive_pct": round(pos_pct, 1),
-                    "negative_pct": round(neg_pct, 1),
-                    "neutral_pct": round(100 - pos_pct - neg_pct, 1)
-                }
-            })
+                description = f"Este tema genera {neg_pct:.0f}% de sentimiento negativo."
+                insights.append({
+                    "insight_type": insight_type, "title": title, "description": description,
+                    "topic": topic, "sentiment": "negative", "priority": priority,
+                    "metric_data": {"total_mentions": total, "positive_pct": round(pos_pct, 1),
+                                    "negative_pct": round(neg_pct, 1), "neutral_pct": round(100 - pos_pct - neg_pct, 1)}
+                })
+            elif pos_pct > 80:
+                priority = 2
+                insight_type = "positive_momentum"
+                title = f"Impulso positivo: {topic.replace('_', ' ').title()}"
+                description = f"Este tema tiene {pos_pct:.0f}% de sentimiento positivo."
+                insights.append({
+                    "insight_type": insight_type, "title": title, "description": description,
+                    "topic": topic, "sentiment": "positive", "priority": priority,
+                    "metric_data": {"total_mentions": total, "positive_pct": round(pos_pct, 1),
+                                    "negative_pct": round(neg_pct, 1), "neutral_pct": round(100 - pos_pct - neg_pct, 1)}
+                })
 
         zona_analysis = defaultdict(lambda: {"topics": Counter(), "sentiment": []})
 

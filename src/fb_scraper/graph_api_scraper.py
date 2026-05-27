@@ -107,10 +107,10 @@ class GraphAPIScraper:
         """Obtiene posts desde Graph API - solo IDs para pagination estable."""
         all_posts = []
         
-        # Solo campos básicos para evitar "too much data"
+        page_size = min(limit, 100)
         params = {
             "fields": "id,created_time",
-            "limit": 100,
+            "limit": page_size,
         }
 
         for page_num in range(max_pages):
@@ -216,14 +216,13 @@ class GraphAPIScraper:
         return counts
 
     def _get_post_views(self, post_id: str) -> Optional[int]:
-        """Obtiene número de visualizaciones del post usando read_insights.
-        No cuenta errores de insights como errores del scraper (es esperado que
-        muchas métricas no estén disponibles)."""
+        """Obtiene número de visualizaciones del post.
+        Timeout corto por intento — si no hay permiso read_insights falla rápido."""
         url = f"{FB_GRAPH_API}/{post_id}/insights"
-        metrics = ["post_impressions", "post_impressions_unique", "post_views", "post_views_unique"]
+        metrics = ["post_impressions", "post_impressions_unique", "post_video_views", "post_video_views_unique"]
         for metric in metrics:
             try:
-                resp = requests.get(url, params={"metric": metric, "access_token": self.access_token}, timeout=15)
+                resp = requests.get(url, params={"metric": metric, "access_token": self.access_token}, timeout=5)
                 data = resp.json()
                 if "error" not in data and "data" in data and len(data["data"]) > 0:
                     values = data["data"][0].get("values", [])
@@ -453,10 +452,10 @@ class GraphAPIScraper:
 
         # Step 1: Get post IDs (lightweight, good pagination)
         logger.info("Step 1: Fetching post IDs...")
-        post_ids = self.get_posts(limit=max_posts)
+        all_ids = self.get_posts(limit=max_posts)
+        post_ids = all_ids[:max_posts]
 
-        # Get ALL posts (no date filter - for full extraction)
-        logger.info(f"Posts retrieved (all): {len(post_ids)}")
+        logger.info(f"Posts retrieved: {len(post_ids)} (from {len(all_ids)} total available)")
 
         self.notifier.send(
             f"🚀 *Fase 1 — Graph API*\n"

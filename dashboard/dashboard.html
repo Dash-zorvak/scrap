@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Panel Ejecutivo — Jose Chicas · San Salvador Este</title>
+<title>Panel Ejecutivo — Alcaldía de Santa Ana · Gustavo Acevedo</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -98,7 +98,7 @@ body{
 <body>
 <div class="topbar">
   <div class="topbar-left">
-    <h1>PANEL EJECUTIVO <span>//</span> JOSE CHICAS <span>·</span> SAN SALVADOR ESTE</h1>
+    <h1>PANEL EJECUTIVO <span>//</span> ALCALDÍA DE SANTA ANA <span>·</span> GUSTAVO ACEVEDO</h1>
   </div>
   <div class="date" id="currentDate"></div>
 </div>
@@ -126,26 +126,26 @@ function init() {
     const v = m[k];
     return +((v.reactions+v.comments+v.shares)/Math.max(v.views,1)*100).toFixed(1);
   });
-  const engMax = Math.max(...engData);
+  const engMax = engData.length ? Math.max(...engData) : 1;
   const engLabels = last12.map(k => k.slice(5)+'/'+k.slice(2,4));
 
   const reactItems = [
-    {label:'Me gusta',val:rd.likes,pct:rd.likes/totalR*100,color:'var(--cyan)'},
-    {label:'Me encanta',val:rd.loves,pct:rd.loves/totalR*100,color:'var(--green)'},
-    {label:'Me divierte',val:rd.hahas,pct:rd.hahas/totalR*100,color:'var(--amber)'},
-    {label:'Me asombra',val:rd.wows,pct:rd.wows/totalR*100,color:'var(--purple)'},
-    {label:'Me entristece',val:rd.sads,pct:rd.sads/totalR*100,color:'#5599ff'},
-    {label:'Me enoja',val:rd.angrys,pct:rd.angrys/totalR*100,color:'var(--red)'},
+    {label:'Me gusta',val:rd.likes,pct:totalR?rd.likes/totalR*100:0,color:'var(--cyan)'},
+    {label:'Me encanta',val:rd.loves,pct:totalR?rd.loves/totalR*100:0,color:'var(--green)'},
+    {label:'Me divierte',val:rd.hahas,pct:totalR?rd.hahas/totalR*100:0,color:'var(--amber)'},
+    {label:'Me asombra',val:rd.wows,pct:totalR?rd.wows/totalR*100:0,color:'var(--purple)'},
+    {label:'Me entristece',val:rd.sads,pct:totalR?rd.sads/totalR*100:0,color:'#5599ff'},
+    {label:'Me enoja',val:rd.angrys,pct:totalR?rd.angrys/totalR*100:0,color:'var(--red)'},
   ].sort((a,b)=>b.val-a.val);
 
   const zones = Object.entries(d.zones).sort((a,b)=>b[1].count-a[1].count);
-  const maxZoneCount = zones[0][1].count;
+  const maxZoneCount = zones.length ? Math.max(...zones.map(z=>z[1].count), 1) : 1;
   const topics = Object.entries(d.topics).sort((a,b)=>b[1].total_reactions-a[1].total_reactions);
 
   const contTopics = topics.map(([k,v]) => ({
     name:k, controversy:v.controversy, reactions:v.total_reactions
   })).sort((a,b)=>b.controversy-a.controversy);
-  const maxControversy = contTopics[0].controversy;
+  const maxControversy = contTopics.length ? contTopics[0].controversy || 0.01 : 0.01;
 
   const html = `
     <div class="kpi-grid">
@@ -274,7 +274,7 @@ function init() {
 
     <div style="margin-top:16px;padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px">
       <span class="mono" style="font-size:10px;color:var(--muted)">DATOS: ${d.dateRange.from.slice(0,10)} → ${d.dateRange.to.slice(0,10)} · ${fmt(d.totalPosts)} pubs · ${fmt(d.totalReactions)} reacc · ${fmt(d.totalViews)} views</span>
-      <span class="mono" style="font-size:9px;color:var(--muted)">FUENTE: Facebook · Jose Chicas · San Salvador Este</span>
+      <span class="mono" style="font-size:9px;color:var(--muted)">FUENTE: Facebook · Alcaldía de Santa Ana · Gustavo Acevedo</span>
     </div>
   `;
   document.getElementById('app').innerHTML = html;

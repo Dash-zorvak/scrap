@@ -1,64 +1,69 @@
 #!/usr/bin/env python3
 """
-Deep Scraper - Modo Completo de Extracción
-============================================
-Objetivo: Extraer dataset completo desde 2025-01-01, sin muestreo parcial.
+Deep Scraper - Extracción desde feed vía Playwright
+=====================================================
+Usado para páginas SIN acceso a Graph API.
+Extrae posts scrolleando el feed, expandiendo comentarios inline
+(sin navegar a permalinks que disparan captcha).
 
-Features:
-- Extracción completa de posts y comentarios
-- Todas las reacciones por tipo
-- Metadata completa (multimedia, hashtags, menciones, etc.)
-- Análisis NLP obligatorio (key points, entidades, temas, polaridad)
-- Arquitectura anti-ban robusta
-- Persistencia con checkpoints
-- Control de duplicados
-
-Arquitectura Anti-Ban:
-- Scroll progresivo variable
-- Delays aleatorios humanos
-- Rotación user-agents y fingerprints
-- Rate limiting dinámico
-- Detección de soft-ban/captcha
-- Recovery automático
+Flujo:
+  1. Autenticación: cookies → email/password → guarda cookies frescas
+  2. Scroll del feed extrayendo posts del DOM
+  3. Por cada post: expande comentarios inline y extrae
+  4. Checkpoint por URL de post
 """
 
+import hashlib
 import json
 import logging
-import random
-import re
-import time
-import hashlib
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Optional, Union, Dict, Any, List, Set
 import os
+import random
+import subprocess
+from playwright_stealth import Stealth
+import re
+import signal
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, Dict, Any, List, Set
 
 from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
-from playwright_stealth import Stealth
 
-from src.fb_scraper.models import FBPostData, FBCommentData
 from src.storage.supabase_client import SupabaseStorage
 from src.analyzer.sentiment import SentimentAnalyzer
 from src.analyzer.topic_detection import get_main_topic, detect_zona
 from src.notifications.telegram import TelegramNotifier
+from src.config import Config
 
 logger = logging.getLogger(__name__)
 
 FB_BASE = "https://www.facebook.com"
 
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
-]
+REQUIRED_COOKIES = {"c_user", "xs"}
 
-CHECKPOINT_FILE = "data/scraper_checkpoint.json"
+
+class TimeoutGuard:
+    """Hard kill timer for hung Playwright processes."""
+    def __init__(self, seconds: int = 120):
+        self.seconds = seconds
+        self._old = None
+
+    def __enter__(self):
+        self._old = signal.signal(signal.SIGALRM, self._handler)
+        signal.alarm(self.seconds)
+        return self
+
+    def __exit__(self, *args):
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, self._old)
+
+    @staticmethod
+    def _handler(signum, frame):
+        raise TimeoutError(f"Scraper timed out after {signum}s — browser process likely dead")
 
 
 class DeepAnalyzer:
-    """Análisis NLP obligatorio para cada post."""
+    """Análisis NLP para cada post y comentario."""
 
     def __init__(self):
         self.sentiment = SentimentAnalyzer()
@@ -66,137 +71,32 @@ class DeepAnalyzer:
     def analyze(self, text: str) -> Dict[str, Any]:
         if not text or len(text.strip()) < 3:
             return self._empty_analysis()
-
         sentiment, score = self.sentiment.analyze(text)
-
         return {
             "sentiment": sentiment,
             "sentiment_score": score,
             "topic_category": get_main_topic(text),
             "zona": detect_zona(text),
-            "key_points": self._extract_key_points(text),
-            "entities": self._extract_entities(text),
-            "hashtags": self._extract_hashtags(text),
-            "mentions": self._extract_mentions(text),
-            "emotional_terms": self._extract_emotional_terms(text),
-            "polarity_score": self._calculate_polarity(sentiment, score),
-            "narrative_intent": self._detect_intent(text),
-            "political_context": self._detect_political_context(text),
-            "keywords": self._extract_keywords(text),
+            "hashtags": re.findall(r"#(\w+)", text.lower()),
+            "mentions": re.findall(r"@(\w+)", text),
             "word_count": len(text.split()),
             "char_count": len(text),
         }
 
     def _empty_analysis(self) -> Dict:
         return {
-            "sentiment": "neutral",
-            "sentiment_score": 0,
-            "topic_category": "",
-            "zona": "",
-            "key_points": [],
-            "entities": [],
-            "hashtags": [],
-            "mentions": [],
-            "emotional_terms": [],
-            "polarity_score": 0,
-            "narrative_intent": "",
-            "political_context": "",
-            "keywords": [],
-            "word_count": 0,
-            "char_count": 0,
+            "sentiment": "neutral", "sentiment_score": 0,
+            "topic_category": "", "zona": "",
+            "hashtags": [], "mentions": [],
+            "word_count": 0, "char_count": 0,
         }
-
-    def _extract_key_points(self, text: str) -> List[str]:
-        points = []
-        sentences = text.split(".")
-        for sent in sentences[:5]:
-            sent = sent.strip()
-            if len(sent) > 20:
-                points.append(sent[:200])
-        return points[:5]
-
-    def _extract_entities(self, text: str) -> List[str]:
-        entities = []
-        words = text.split()
-        for word in words:
-            if word.startswith("@"):
-                entities.append(word[1:])
-            if word.startswith("#"):
-                entities.append(word[1:])
-        return list(set(entities))[:10]
-
-    def _extract_hashtags(self, text: str) -> List[str]:
-        return re.findall(r"#(\w+)", text.lower())
-
-    def _extract_mentions(self, text: str) -> List[str]:
-        return re.findall(r"@(\w+)", text)
-
-    def _extract_emotional_terms(self, text: str) -> List[str]:
-        emotional_words = [
-            "excelente", "maravilloso", "increíble", "horrible", "pésimo",
-            "enfadado", "feliz", "triste", "decepcionado", "orgulloso",
-            "vergüenza", "justicia", "corrupción", "mentira", "verdad",
-            "ayuda", "apoyo", "lucha", "batalla", "victoria", "derrota"
-        ]
-        text_lower = text.lower()
-        found = [w for w in emotional_words if w in text_lower]
-        return found[:10]
-
-    def _calculate_polarity(self, sentiment: str, score: float) -> float:
-        if sentiment == "positive":
-            return min(1.0, score)
-        elif sentiment == "negative":
-            return max(-1.0, -score)
-        return 0.0
-
-    def _detect_intent(self, text: str) -> str:
-        text_lower = text.lower()
-        if any(w in text_lower for w in ["exijo", "demando", "no puede", "debería"]):
-            return "demanda"
-        if any(w in text_lower for w in ["gracias", "felicitaciones", "feliz", "orgulloso"]):
-            return "celebracion"
-        if any(w in text_lower for w in ["informo", "comunico", "anuncio"]):
-            return "informativo"
-        if any(w in text_lower for w in ["invito", "convoco", "participen"]):
-            return "llamada_accion"
-        if any(w in text_lower for w in ["problema", "queja", "denuncia", "no funciona"]):
-            return "queja"
-        return "general"
-
-    def _detect_political_context(self, text: str) -> str:
-        political_terms = {
-            "gobierno": ["gobierno", "presidente", "ministro", "alcalde", "diputado"],
-            "elecciones": ["votar", "elecciones", "voto", "candidato", "partido"],
-            "corrupcion": ["corrupción", "robo", "fraude", "desvío", "escándalo"],
-            "seguridad": ["seguridad", "policía", "delincuencia", "robos", "asesinatos"],
-            "economia": ["economía", "empleo", "trabajo", "inversión", "dinero"],
-            "servicios": ["agua", "luz", "carretera", "salud", "educación"],
-        }
-        text_lower = text.lower()
-        for context, terms in political_terms.items():
-            if any(t in text_lower for t in terms):
-                return context
-        return "general"
-
-    def _extract_keywords(self, text: str) -> List[str]:
-        words = re.findall(r'\b\w{4,}\b', text.lower())
-        stopwords = {"para", "como", "pero", "porque", "cuando", "donde", "desde", "hasta", "este", "esta", "estos", "estas", "todos", "todas"}
-        keywords = [w for w in words if w not in stopwords]
-        freq = {}
-        for w in keywords:
-            freq[w] = freq.get(w, 0) + 1
-        sorted_kw = sorted(freq.items(), key=lambda x: x[1], reverse=True)
-        return [k for k, v in sorted_kw[:15]]
 
 
 class CheckpointManager:
-    """Sistema de checkpoints para persistencia y recuperación."""
+    """Checkpoints para persistencia y recuperación."""
 
     def __init__(self, platform: str = "facebook"):
         self.checkpoint_file = f"data/{platform}_checkpoint.json"
-        self._ensure_data_dir()
-
-    def _ensure_data_dir(self):
         Path("data").mkdir(exist_ok=True)
 
     def save(self, state: Dict[str, Any]):
@@ -209,17 +109,9 @@ class CheckpointManager:
         if os.path.exists(self.checkpoint_file):
             try:
                 with open(self.checkpoint_file, "r", encoding="utf-8") as f:
-                    state = json.load(f)
-                logger.info(f"Checkpoint loaded: {self.checkpoint_file}")
-                return state
+                    return json.load(f)
             except Exception as e:
                 logger.error(f"Error loading checkpoint: {e}")
-        return None
-
-    def get_last_post_id(self) -> Optional[str]:
-        state = self.load()
-        if state:
-            return state.get("last_post_id")
         return None
 
     def get_scraped_post_ids(self) -> Set[str]:
@@ -230,115 +122,92 @@ class CheckpointManager:
 
 
 class AntiBan:
-    """Arquitectura anti-ban: simular comportamiento humano."""
+    """Anti-ban: delays humanos, detección, backoff."""
 
     def __init__(self):
         self.ban_detected = False
-        self.captcha_detected = False
-        self.request_count = 0
         self.last_request_time = 0
 
-    def random_delay(self, action: str = "general"):
-        delays = {
-            "scroll": (1.5, 3.5),
-            "click": (0.3, 1.2),
-            "hover": (0.5, 1.5),
-            "type": (0.1, 0.3),
-            "page_load": (2.0, 5.0),
-            "checkpoint": (5.0, 10.0),
-            "general": (1.0, 2.5),
-        }
-        min_s, max_s = delays.get(action, delays["general"])
+    def human_delay(self, min_s: float = 1.0, max_s: float = 3.0):
         time.sleep(min_s + (max_s - min_s) * random.random())
 
-    def progressive_scroll_delay(self, scroll_count: int) -> float:
-        base = 2.0
-        if scroll_count < 10:
-            return base + random.uniform(0, 1)
-        elif scroll_count < 50:
-            return base + random.uniform(1, 2.5)
-        elif scroll_count < 100:
-            return base + random.uniform(2, 4)
+    def progressive_delay(self, count: int):
+        base = 1.5
+        if count < 10:
+            return base + random.uniform(0.5, 1)
+        elif count < 30:
+            return base + random.uniform(1, 2)
         else:
-            return base + random.uniform(3, 6)
-
-    def check_rate_limit(self):
-        now = time.time()
-        elapsed = now - self.last_request_time
-        if elapsed < 2.0:
-            self.random_delay("checkpoint")
-        self.last_request_time = now
-        self.request_count += 1
+            return base + random.uniform(1.5, 3)
 
     def detect_ban(self, page: Page) -> bool:
         try:
-            page_text = page.content().lower()
-            ban_signs = [
-                "has been temporarily blocked",
-                "has been restricted",
-                "we've detected unusual activity",
-                "captcha",
-                "verifica tu identidad",
-                "bloqueado temporalmente",
-                "te we've limited how often",
+            url = page.url.lower()
+            if any(s in url for s in ["checkpoint", "captcha", "blocked", "challenge"]):
+                logger.warning(f"BAN DETECTED via URL: {url}")
+                self.ban_detected = True
+                return True
+
+            visible_challenge = page.locator(
+                '#captcha, '
+                'div[class*="checkpoint"], '
+                'div[aria-label*="captcha"], '
+                'form[action*="captcha"]'
+            ).first
+            if visible_challenge.count() > 0:
+                logger.warning("BAN DETECTED: visible challenge element")
+                self.ban_detected = True
+                return True
+
+            text = page.content().lower()
+            signs = [
+                "has been temporarily blocked", "has been restricted",
+                "verifica tu identidad", "bloqueado temporalmente",
             ]
-            for sign in ban_signs:
-                if sign in page_text:
+            for s in signs:
+                if s in text:
                     self.ban_detected = True
-                    logger.warning(f"BAN DETECTED: {sign}")
+                    logger.warning(f"BAN DETECTED: {s}")
                     return True
             return False
-        except:
+        except Exception as e:
+            logger.debug(f"Ban check error: {e}")
             return False
-
-    def get_random_user_agent(self) -> str:
-        return random.choice(USER_AGENTS)
-
-    def simulate_mouse_movement(self, page: Page):
-        try:
-            page.evaluate("""
-                () => {
-                    const x = Math.random() * window.innerWidth;
-                    const y = Math.random() * window.innerHeight;
-                    const event = new MouseEvent('mousemove', {
-                        clientX: x,
-                        clientY: y,
-                        bubbles: true
-                    });
-                    document.dispatchEvent(event);
-                }
-            """)
-        except:
-            pass
 
 
 class FacebookDeepScraper:
     """
-    Scraper completo de Facebook.
-    Objetivos:
-    - Extraer TODOS los posts desde fecha_inicio
-    - Obtener TODOS los comentarios (replies infinitos)
-    - Extraer TODAS las reacciones por tipo
-    - Análisis NLP completo
-    - Arquitectura anti-ban
-    - Persistencia con checkpoints
+    Scraper Facebook vía Playwright.
+    Dos modos:
+      - search_keyword: busca posts públicos por keyword (ej: "Jose Chicas")
+      - page_url: extrae posts de una página específica (si es accesible)
     """
 
     def __init__(
         self,
-        cookies: Optional[Union[list, dict, str]] = None,
+        page_url: str = "",
+        page_name: str = "",
+        search_keyword: str = "",
+        page_urls: Optional[list] = None,
         cookies_file: str = "",
-        page_id: str = "395582594151511",
-        page_name: str = "Jose Chicas",
-        start_date: str = "2025-01-01",
+        email: str = "",
+        password: str = "",
         headless: bool = False,
     ):
-        self.page_id = page_id
+        self.page_url = page_url
         self.page_name = page_name
-        self.start_date = datetime.fromisoformat(start_date)
+        self.search_keyword = search_keyword
+        self.cookies_file = cookies_file
+        self.email = email
+        self.password = password
         self.headless = headless
 
-        self._cookies = self._parse_cookies(cookies, cookies_file)
+        if page_urls is not None:
+            self.page_urls = page_urls
+        elif Config().deep_page_urls:
+            self.page_urls = Config().deep_page_urls
+        else:
+            self.page_urls = []
 
         self.storage = SupabaseStorage()
         self.analyzer = DeepAnalyzer()
@@ -350,25 +219,21 @@ class FacebookDeepScraper:
             "posts_scraped": 0,
             "posts_duplicated": 0,
             "comments_scraped": 0,
-            "comments_duplicated": 0,
             "errors": 0,
             "start_time": None,
             "checkpoints_saved": 0,
         }
+        self._pending_engagement = []  # (post_id, post_url)
 
-    def _parse_cookies(self, cookies, cookies_file) -> list:
-        from src.fb_scraper.playwright_scraper import FacebookPlaywright
-        return FacebookPlaywright._parse_cookies(cookies, cookies_file)
+    # ── Browser lifecycle ──────────────────────────────────────
 
     def _create_browser(self):
+        from playwright.sync_api import sync_playwright
         launch_opts = {
             "headless": self.headless,
             "args": [
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-web-security",
-                "--disable-features=IsolateOrigins,site-per-process",
                 "--window-size=1366,768",
             ],
         }
@@ -376,555 +241,805 @@ class FacebookDeepScraper:
         browser = p.chromium.launch(**launch_opts)
         return p, browser
 
-    def _setup_context(self, browser: Browser) -> BrowserContext:
-        context = browser.new_context(
-            viewport={"width": 1366, "height": 768},
-            user_agent=self.antiban.get_random_user_agent(),
-            locale="es_ES",
-            timezone_id="America/El_Salvador",
-        )
-        if self._cookies:
-            context.add_cookies(self._cookies)
-        return context
-
-    def _setup_page(self, context: BrowserContext) -> Page:
-        page = context.new_page()
-        Stealth().apply_stealth_sync(page)
-        return page
-
-    def _verify_session(self, page: Page) -> bool:
+    def _load_cookies(self, context: BrowserContext):
+        if not self.cookies_file:
+            return
+        path = Path(self.cookies_file)
+        if not path.exists():
+            logger.warning(f"Cookies file not found: {self.cookies_file}")
+            return
         try:
-            page.goto(FB_BASE, timeout=30000, wait_until="domcontentloaded")
-            self.antiban.random_delay("page_load")
-            return "c_user" in [c["name"] for c in page.context.cookies()]
-        except:
+            with open(path, encoding="utf-8") as f:
+                raw = json.load(f)
+            if isinstance(raw, dict):
+                raw = raw.get("facebook", raw.get("cookies", []))
+            if isinstance(raw, list):
+                mapped = []
+                for c in raw:
+                    ss = c.get("sameSite")
+                    if ss is None:
+                        c["sameSite"] = "None"
+                    elif isinstance(ss, str):
+                        s = ss.lower()
+                        if s == "no_restriction":
+                            c["sameSite"] = "None"
+                        elif s in ("strict", "lax"):
+                            c["sameSite"] = s.capitalize()
+                    mapped.append(c)
+                context.add_cookies(mapped)
+                logger.info(f"Loaded {len(mapped)} cookies from {self.cookies_file}")
+        except Exception as e:
+            logger.error(f"Error loading cookies: {e}")
+
+    def _save_cookies(self, context: BrowserContext):
+        if not self.cookies_file:
+            return
+        try:
+            cookies = context.cookies()
+            with open(self.cookies_file, "w", encoding="utf-8") as f:
+                json.dump(cookies, f, indent=2)
+            logger.info(f"Saved {len(cookies)} cookies to {self.cookies_file}")
+        except Exception as e:
+            logger.error(f"Error saving cookies: {e}")
+
+    def _authenticate(self, page: Page, context: BrowserContext) -> bool:
+        """Intenta autenticar: cookies primero, email/password como fallback."""
+        self._load_cookies(context)
+
+        page.goto(FB_BASE, timeout=30000, wait_until="domcontentloaded")
+        self.antiban.human_delay(2, 4)
+
+        cookies = context.cookies()
+        cookie_names = {c["name"] for c in cookies}
+        if REQUIRED_COOKIES.issubset(cookie_names):
+            logger.info("Session valid via cookies")
+            self._save_cookies(context)
+            return True
+
+        logger.warning("Cookies expired — trying email/password login")
+        if not self.email or not self.password:
+            logger.error("No credentials available for login")
             return False
 
-    def _filter_by_date(self, post: Dict) -> bool:
-        if post.get("created_time"):
-            try:
-                if isinstance(post["created_time"], str):
-                    post_date = datetime.fromisoformat(post["created_time"].replace("Z", "+00:00"))
-                else:
-                    post_date = post["created_time"]
-                return post_date >= self.start_date
-            except:
-                return True
-        return True
-
-    def _is_duplicate(self, post_id: str) -> bool:
-        scraped_ids = self.checkpoint.get_scraped_post_ids()
-        return post_id in scraped_ids or self.storage.post_exists(post_id)
-
-    def _save_checkpoint(self, post_id: str, post_ids: Set):
-        state = {
-            "last_post_id": post_id,
-            "scraped_post_ids": list(post_ids),
-            "stats": self.stats,
-            "page_id": self.page_id,
-        }
-        self.checkpoint.save(state)
-        self.stats["checkpoints_saved"] += 1
-
-    def _extract_post_metadata(self, page: Page, post_element) -> Dict[str, Any]:
-        """Extrae metadata completa del post."""
-        metadata = {}
-
         try:
-            metadata["post_id"] = post_element.get_attribute("id") or ""
-            if not metadata["post_id"]:
-                links = post_element.query_selector_all('a[href*="/posts/"]')
-                for link in links:
-                    href = link.get_attribute("href", "")
-                    match = re.search(r"/posts/(\d+)", href)
-                    if match:
-                        metadata["post_id"] = match.group(1)
-                        break
-            
-            if not metadata["post_id"]:
-                links = post_element.query_selector_all('a[href*="/photo"]')
-                for link in links:
-                    href = link.get_attribute("href", "")
-                    match = re.search(r"(/photo|fbid)=(\d+)", href)
-                    if match:
-                        metadata["post_id"] = match.group(2)
-                        break
-        except:
-            pass
+            page.goto(f"{FB_BASE}/login", timeout=30000)
+            self.antiban.human_delay(3, 5)
 
-        try:
-            message_el = post_element.query_selector(
-                'div[data-ad-preview="message"], '
-                'div[dir="auto"], '
-                'div[role="presentation"] span, '
-                'div[class*="x1n2onr6"] span, '
-                'div[class*="x1lliihq"]'
-            )
-            if message_el:
-                metadata["message"] = message_el.inner_text().strip()
-            else:
-                metadata["message"] = post_element.inner_text()[:500]
-        except:
-            metadata["message"] = ""
+            email_input = page.locator('input[name="email"], input[id="email"], input[autocomplete="username"]').first
+            email_input.fill(self.email)
+            self.antiban.human_delay(1, 2)
 
-        try:
-            time_el = post_element.query_selector('a[href*="/posts/"] time, abbr[data-utime], time[datetime]')
-            if time_el:
-                utime = time_el.get_attribute("data-utime")
-                if utime:
-                    metadata["created_time"] = datetime.fromtimestamp(int(utime))
-                else:
-                    dt = time_el.get_attribute("datetime")
-                    if dt:
-                        metadata["created_time"] = datetime.fromisoformat(dt.replace("Z", "+00:00"))
-        except:
-            pass
+            pass_input = page.locator('input[name="pass"], input[id="pass"], input[autocomplete="current-password"]').first
+            pass_input.fill(self.password)
+            self.antiban.human_delay(1, 2)
 
-        if not metadata.get("created_time"):
-            try:
-                text = post_element.inner_text()
-                date_match = re.search(r"(\d{1,2}\s+ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic[\w]*\s+\d{4}|\d{1,2}/\d{1,2}/\d{2,4})", text, re.I)
-                if date_match:
-                    pass
-            except:
-                pass
+            login_btn = page.locator(
+                'button[name="login"], '
+                'button[id="loginbutton"], '
+                'button[type="submit"]'
+            ).first
+            login_btn.click()
+            page.wait_for_load_state("networkidle", timeout=30000)
+            self.antiban.human_delay(3, 5)
 
-        metadata.update(self._extract_all_reactions(post_element))
-        metadata["comments_count"] = self._extract_count(post_element, ["comentario", "comment"])
-        metadata["shares_count"] = self._extract_count(post_element, ["vez", "share"])
+            if "checkpoint" in page.url or "login" in page.url:
+                logger.error("Login blocked / checkpoint required")
+                return False
 
-        metadata["hashtags"] = re.findall(r"#(\w+)", metadata.get("message", ""))
-        metadata["mentions"] = re.findall(r"@(\w+)", metadata.get("message", ""))
-        metadata["links"] = re.findall(r"https?://\S+", metadata.get("message", ""))
-        metadata["language"] = "es"
+            logger.info("Login successful")
+            self._save_cookies(context)
+            return True
+        except Exception as e:
+            logger.error(f"Login failed: {e}")
+            return False
 
-        return metadata
+    # ── Post extraction via JavaScript (robust against DOM changes) ──
 
-    def _extract_all_reactions(self, element) -> Dict[str, int]:
-        """Extrae TODAS las reacciones por tipo."""
-        counts = {
-            "likes_count": 0,
-            "loves_count": 0,
-            "hahas_count": 0,
-            "wows_count": 0,
-            "sads_count": 0,
-            "angrys_count": 0,
-            "care_count": 0,
-        }
-
-        try:
-            text = element.inner_text().lower()
-            patterns = {
-                "likes_count": r"(\d+[KM]?)\s*(me gusta|like|likes)",
-                "loves_count": r"(\d+[KM]?)\s*(amor|love)",
-                "hahas_count": r"(\d+[KM]?)\s*(jaja|haha|risas)",
-                "wows_count": r"(\d+[KM]?)\s*(wow|asombro|increíble)",
-                "sads_count": r"(\d+[KM]?)\s*(triste|sad|trist)",
-                "angrys_count": r"(\d+[KM]?)\s*(enojo|angry|rabia)",
-                "care_count": r"(\d+[KM]?)\s*(cuidado|care|preocup)",
+    def _scrape_search_results(self, page, seen_ids: set, max_posts: int) -> list:
+        """Extrae posts del feed via JS: busca enlaces /posts/ y sube al contenedor padre."""
+        js_extract = """
+        () => {
+            function postIdFromMessage(msg) {
+                let h1 = 0, h2 = 0;
+                const s = msg.substring(0, 500);
+                for (let i = 0; i < s.length; i++) {
+                    const c = s.charCodeAt(i);
+                    h1 = ((h1 << 5) - h1) + c; h1 |= 0;
+                    h2 = ((h2 << 7) - h2) + c; h2 |= 0;
+                }
+                return 'deep_' + ((h1 >>> 0).toString(16).padStart(8,'0') + (h2 >>> 0).toString(16).padStart(8,'0')).substring(0,16);
             }
 
-            for key, pattern in patterns.items():
-                match = re.search(pattern, text)
-                if match:
-                    counts[key] = self._parse_number(match.group(1))
-        except:
-            pass
+            function parseNum(s) {
+                if (!s) return 0;
+                s = s.trim();
+                let mult = 1;
+                if (/mil/i.test(s) || /K/i.test(s)) { mult = 1000; s = s.replace(/mil/i, '').replace(/K/i, '').trim(); }
+                if (/M/i.test(s)) { mult = 1000000; s = s.replace(/M/i, '').trim(); }
+                s = s.replace(/\\./g, '').replace(',', '.');
+                const n = parseFloat(s);
+                return isNaN(n) ? 0 : Math.round(n * mult);
+            }
 
-        return counts
+            // Find ALL unique post links on the page
+            const linkSet = new Set();
+            const linkEls = document.querySelectorAll('a[href*="/posts/"], a[href*="story.php"], a[href*="story_fbid"]');
+            for (const link of linkEls) {
+                const href = link.getAttribute('href') || link.href || '';
+                const m = href.match(/\\/posts\\/([a-zA-Z0-9_.-]+)/) || href.match(/story_fbid=([a-zA-Z0-9_-]+)/);
+                if (m) linkSet.add(m[1]);
+            }
 
-    def _extract_count(self, element, keywords: List[str]) -> int:
-        try:
-            text = element.inner_text().lower()
-            for kw in keywords:
-                pattern = rf"(\d+[KM]?)\s*{kw}"
-                match = re.search(pattern, text)
-                if match:
-                    return self._parse_number(match.group(1))
-        except:
-            pass
-        return 0
+            const posts = [];
+            const seenIds = new Set();
 
-    def _extract_posts_from_visible_content(self, page: Page) -> List[Dict]:
-        """Extrae posts del contenido visible de la página (nueva estructura FB 2026)."""
-        posts = []
-        
-        # Get all text from body
-        body_text = page.inner_text("body")
-        lines = [l.strip() for l in body_text.split('\n') if len(l.strip()) > 20]
-        
-        post_candidates = []
-        current_post = {"message": "", "timestamp": ""}
-        
-        for line in lines:
-            # Detect post boundaries
-            # Posts usually contain dates, reactions, or content keywords
-            date_indicators = ['hora', 'horas', 'día', 'días', 'min', 'semana', 
-                              'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
-            
-            is_post_content = False
-            
-            # Check if line looks like a post
-            post_keywords = ['obra', 'proyecto', 'denuncia', 'informamos', 'anunciamos', 
-                           'felicitaciones', 'trabajamos', 'alcaldía', 'municipal', 
-                           'seguridad', 'servicio', ' calle ', 'avenida', 'colonia',
-                           'emergencia', 'aviso', 'participa', 'invitamos']
-            
-            for kw in post_keywords:
-                if kw in line.lower():
-                    is_post_content = True
-                    break
-            
-            # If it's content and not already a separator
-            if is_post_content and len(line) > 30:
-                if not current_post["message"]:
-                    current_post["message"] = line
-                elif line != current_post["message"]:
-                    if current_post["message"]:
-                        post_candidates.append(current_post.copy())
-                    current_post = {"message": line, "timestamp": ""}
-        
-        if current_post["message"]:
-            post_candidates.append(current_post)
-        
-        # Process candidates into proper format
-        for i, cand in enumerate(post_candidates):
-            # Extract post ID based on position
-            post_id = f"post_{i}_{hash(cand['message']) % 100000}"
-            
-            # Extract metadata from text
-            message = cand["message"]
-            
-            # Look for reactions
-            likes = 0
-            comments = 0
-            shares = 0
-            
-            # Check for reaction patterns in the line
-            like_match = re.search(r"(\d+[KM]?)\s*(Me gusta|Like)", message)
-            if like_match:
-                likes = self._parse_number(like_match.group(1))
-            
-            comment_match = re.search(r"(\d+)\s*comentario", message, re.I)
-            if comment_match:
-                comments = int(comment_match.group(1))
-            
-            # Clean message - remove reaction counts
-            clean_message = re.sub(r"\d+\s*(Me gusta|comentarios?|compartir|positivo)", "", message, flags=re.I).strip()
-            
-            post_dict = {
+            for (const postId of linkSet) {
+                if (seenIds.has(postId)) continue;
+                seenIds.add(postId);
+
+                // Find the link element for this postId
+                const link = document.querySelector('a[href*="/posts/' + postId + '"], a[href*="story_fbid=' + postId + '"]');
+                if (!link) continue;
+
+                const href = link.getAttribute('href') || link.href || '';
+                const postUrl = href.startsWith('http') ? href : 'https://www.facebook.com' + href;
+
+                // Walk up to find the post container (max 15 levels)
+                let container = link.parentElement;
+                for (let i = 0; i < 15 && container; i++) {
+                    if (container.getAttribute('role') === 'article') break;
+                    container = container.parentElement;
+                }
+                if (!container) continue;
+
+                const innerText = container.innerText || '';
+
+                // --- Message ---
+                let message = '';
+                const msgEls = container.querySelectorAll('div[dir="auto"]');
+                for (const msgEl of msgEls) {
+                    const t = msgEl.innerText.trim();
+                    if (t.length > 15 && !t.startsWith('http')) { message = t; break; }
+                }
+                if (!message) message = (container.innerText || '').substring(0, 500).trim();
+                if (message.length < 5) continue;
+
+                // --- Author ---
+                let author = '';
+                const anchors = container.querySelectorAll('a');
+                for (const a of anchors) {
+                    const t = a.innerText.trim();
+                    if (t && t.length < 50 && t.length > 2 && !t.startsWith('http') && !/^\\d+$/.test(t)
+                        && t !== 'Seguir' && t !== 'Facebook') {
+                        author = t; break;
+                    }
+                }
+
+                // --- Timestamp (múltiples selectores de respaldo) ---
+                let created = null;
+                const tsSelectors = [
+                    'abbr[data-utime]',
+                    'span[data-utime]',
+                    'time[datetime]',
+                    'abbr[title]',
+                ];
+                for (const sel of tsSelectors) {
+                    const el = container.querySelector(sel);
+                    if (!el) continue;
+                    if (sel === 'time[datetime]') {
+                        const dt = el.getAttribute('datetime');
+                        if (dt) { const ms = Date.parse(dt); if (!isNaN(ms)) { created = ms; break; } }
+                    } else if (sel === 'abbr[title]') {
+                        const t = el.getAttribute('title');
+                        if (t) { const ms = Date.parse(t); if (!isNaN(ms)) { created = ms; break; } }
+                    } else {
+                        const u = el.getAttribute('data-utime') || el.getAttribute('utime');
+                        if (u) { created = parseInt(u) * 1000; break; }
+                    }
+                }
+
+                // --- Fallback: tiempo relativo en texto del contenedor ---
+                if (!created) {
+                    const lower = innerText.toLowerCase();
+                    const relTime = lower.match(/(\d+)\s*(min|minutos?|horas?|días?|día|semanas?|sem|mes|meses?|años?|año)\s*/);
+                    if (relTime) {
+                        const num = parseInt(relTime[1]);
+                        const unit = relTime[2];
+                        const now = Date.now();
+                        if (unit.startsWith('min')) created = now - num * 60 * 1000;
+                        else if (unit.startsWith('h')) created = now - num * 3600 * 1000;
+                        else if (unit.startsWith('d') || unit.startsWith('sem')) {
+                            const multiplier = unit.startsWith('sem') ? 7 : 1;
+                            created = now - num * multiplier * 86400 * 1000;
+                        }
+                        else if (unit.startsWith('mes')) created = now - num * 30 * 86400 * 1000;
+                        else if (unit.startsWith('a')) created = now - num * 365 * 86400 * 1000;
+                    }
+                }
+
+                // --- Engagement: aria-labels dentro del contenedor ---
+                let lk=0, lv=0, hh=0, wo=0, sd=0, ag=0, cc=0, sc=0, vw=0;
+                const ariaLabels = container.querySelectorAll('[aria-label]');
+                for (const al of ariaLabels) {
+                    const label = al.getAttribute('aria-label') || '';
+                    const ll = label.toLowerCase();
+                    const nM = label.match(/([\\d,.]+)\\s*(mil|k|m)?/i);
+                    if (!nM) continue;
+                    const val = parseNum(nM[1] + (nM[2] || ''));
+                    if (val === 0) continue;
+                    if (ll.includes('me gusta') || ll.includes('like')) lk = Math.max(lk, val);
+                    else if (ll.includes('me encanta') || ll.includes('love')) lv = Math.max(lv, val);
+                    else if (ll.includes('haha') || ll.includes('me divierte')) hh = Math.max(hh, val);
+                    else if (ll.includes('wow') || ll.includes('me sorprende')) wo = Math.max(wo, val);
+                    else if (ll.includes('triste') || ll.includes('me entristece')) sd = Math.max(sd, val);
+                    else if (ll.includes('enojo') || ll.includes('me enfada')) ag = Math.max(ag, val);
+                    else if (ll.includes('comentario') || ll.includes('comment')) cc = Math.max(cc, val);
+                    else if (ll.includes('compartido') || ll.includes('shares?')) sc = Math.max(sc, val);
+                    else if (ll.includes('vista') || ll.includes('views?')) vw = Math.max(vw, val);
+                }
+
+                // --- Fallback: texto del contenedor para comments/shares/views ---
+                const lower = innerText.toLowerCase();
+                if (!cc) {
+                    const m = lower.match(/([\\d,.]+(?:mil|k|m)?)\\s*(comentario|comment)/i);
+                    if (m) cc = parseNum(m[1]);
+                }
+                if (!sc) {
+                    const m = lower.match(/([\\d,.]+(?:mil|k|m)?)\\s*(compartido|shares?)/i);
+                    if (m) sc = parseNum(m[1]);
+                }
+                if (!vw) {
+                    const m = lower.match(/([\\d,.]+(?:mil|k|m)?)\\s*(vistas?|views?|reproducciones?|visualizaciones?|reprodujo|plays?)/i);
+                    if (m) vw = parseNum(m[1]);
+                }
+
+                posts.push({
+                    postId, postUrl, message, author, created,
+                    lk, lv, hh, wo, sd, ag, cc, sc, vw
+                });
+            }
+
+            return posts;
+        }
+        """
+        raw_posts = page.evaluate(js_extract)
+        logger.info(f"JS extraction found {len(raw_posts)} raw posts")
+        if raw_posts:
+            logger.info(f"  First raw msg: {(raw_posts[0].get('message') or '')[:80]}")
+        results = []
+        dup_counter = 0
+
+        for data in raw_posts:
+            post_id = data.get("postId", "")
+            msg_preview = (data.get("message") or "")[:80]
+            if not post_id:
+                logger.debug(f"  Skipping (no postId): {msg_preview}")
+                continue
+            if post_id in seen_ids:
+                dup_counter += 1
+                post_id = f"{post_id}_{dup_counter}"
+                if post_id in seen_ids:
+                    logger.debug(f"  Skipping (seen after rebase): {msg_preview}")
+                    continue
+            seen_ids.add(post_id)
+
+            message = (data.get("message") or "")[:10000]
+            author = data.get("author") or self.search_keyword or "Search Result"
+            created_ts = data.get("created")
+            created_time = datetime.fromtimestamp(created_ts / 1000) if created_ts else None
+
+            analysis = self.analyzer.analyze(message)
+
+            post_url = data.get("postUrl", "") or (f"{FB_BASE}/posts/{post_id}" if not post_id.startswith("deep_") else "")
+            page_id = data.get("postUrl", "").rstrip("/").split("/")[-2] if "/posts/" in post_url else f"page:{self.page_name or self.search_keyword}"
+
+            results.append({
                 "post_id": post_id,
-                "message": clean_message[:500],
-                "timestamp": "",
-                "likes_count": likes,
-                "comments_count": comments,
-                "shares_count": shares,
-                "text_source": "visible_content"
-            }
-            posts.append(post_dict)
-        
-        logger.info(f"Extracted {len(posts)} posts from visible content")
-        return posts
+                "page_id": page_id,
+                "page_name": author,
+                "message": message,
+                "created_time": created_time,
+                "likes_count": data.get("lk", 0) or 0,
+                "loves_count": data.get("lv", 0) or 0,
+                "hahas_count": data.get("hh", 0) or 0,
+                "wows_count": data.get("wo", 0) or 0,
+                "sads_count": data.get("sd", 0) or 0,
+                "angrys_count": data.get("ag", 0) or 0,
+                "comments_count": data.get("cc", 0) or 0,
+                "shares_count": data.get("sc", 0) or 0,
+                "views_count": data.get("vw", 0) or 0,
+                "post_url": post_url,
+                "source": "deep_scraper",
+                **analysis,
+            })
+
+        return results
 
     @staticmethod
     def _parse_number(text: str) -> int:
         text = text.strip().upper()
-        multiplier = 1
+        m = 1
         if "K" in text:
-            multiplier = 1000
+            m = 1000
             text = text.replace("K", "")
         elif "M" in text:
-            multiplier = 1_000_000
+            m = 1_000_000
             text = text.replace("M", "")
         try:
-            return int(float(text) * multiplier)
+            return int(float(text) * m)
         except ValueError:
             return 0
 
-    def _extract_comments_from_post(self, page: Page, post_id: str) -> List[Dict]:
-        """Extrae TODOS los comentarios, incluyendo replies infinitos."""
-        comments = []
-        seen_comment_ids = set()
+    # ── Inline comment extraction ──────────────────────────────
 
-        try:
-            comments_section = page.query_selector(f'div[data-pagelet*="{post_id}"]')
-            if not comments_section:
-                view_comments_btn = page.query_selector(
-                    f'a:has-text("Ver"), span:has-text("comentario")'
-                )
-                if view_comments_btn:
-                    view_comments_btn.click()
-                    self.antiban.random_delay("click")
-        except:
-            pass
-
-        max_comment_expansions = 20
-        for _ in range(max_comment_expansions):
-            self._expand_all_replies(page)
-
-            new_comments = self._extract_comments_batch(page, post_id, seen_comment_ids)
-            comments.extend(new_comments)
-
-            if not self._has_more_replies(page):
+    def _expand_comments_inline(self, page: Page):
+        """Expande comentarios en el feed sin navegar."""
+        patterns = [
+            "Ver más comentarios", "View more comments",
+            "Ver las respuestas", "View replies",
+            "Ver más respuestas", "View more replies",
+        ]
+        for _ in range(30):
+            clicked = False
+            for text in patterns:
+                try:
+                    btns = page.locator(
+                        f'button:has-text("{text}"), div[role="button"]:has-text("{text}"), a:has-text("{text}")'
+                    ).all()
+                    for btn in btns:
+                        try:
+                            if btn.is_visible():
+                                btn.click()
+                                self.antiban.human_delay(1, 2)
+                                clicked = True
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            if not clicked:
                 break
 
-            self.antiban.random_delay("scroll")
+    def _extract_all_comments(self, page: Page, post_id: str = "") -> List[Dict]:
+        """Expande y extrae TODOS los comentarios visibles en la página actual."""
+        comments = []
+        seen_sigs = set()
+
+        for _ in range(3):
+            self._expand_comments_inline(page)
+            self.antiban.human_delay(1, 2)
+
+        try:
+            containers = page.query_selector_all('[data-commentid]')
+
+            for el in containers:
+                try:
+                    raw = el.inner_text().strip()
+                    if not raw or len(raw) < 5:
+                        continue
+                    sig = hashlib.md5(raw.encode()).hexdigest()
+                    if sig in seen_sigs:
+                        continue
+                    seen_sigs.add(sig)
+
+                    comment_id = el.get_attribute("data-commentid") or f"df_{sig[:12]}"
+
+                    author = ""
+                    for sel in ['a[href*="/user/"]', 'a[href*="/profile/"]', 'strong', 'span[role="link"]']:
+                        sub = el.query_selector(sel)
+                        if sub:
+                            t = sub.inner_text().strip()
+                            if t and len(t) < 100:
+                                author = t
+                                break
+
+                    msg = raw
+                    for sel in ['div[dir="auto"]', 'span[dir="auto"]']:
+                        sub = el.query_selector(sel)
+                        if sub:
+                            t = sub.inner_text().strip()
+                            if len(t) > 5:
+                                msg = t
+                                break
+
+                    likes = 0
+                    spans = el.query_selector_all('span[aria-label*="me gusta"], span[aria-label*="like"]')
+                    for sp in spans:
+                        m = re.search(r"(\d+)", sp.inner_text())
+                        if m:
+                            likes = int(m.group(1))
+
+                    analysis = self.analyzer.analyze(msg)
+
+                    # Extract timestamp from comment container
+                    comment_created = None
+                    try:
+                        ts_el = el.query_selector('abbr[data-utime]')
+                        if ts_el:
+                            ut = ts_el.get_attribute('data-utime')
+                            if ut:
+                                comment_created = datetime.fromtimestamp(int(ut))
+                    except Exception:
+                        pass
+
+                    comments.append({
+                        "comment_id": comment_id,
+                        "post_id": post_id,
+                        "message": msg[:5000],
+                        "author_name": author or "Anonymous",
+                        "created_time": comment_created,
+                        "like_count": likes,
+                        **analysis,
+                    })
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(f"Error extracting comments: {e}")
 
         return comments
 
-    def _expand_all_replies(self, page: Page):
-        """Expande todos los replies disponibles."""
-        try:
-            reply_buttons = page.query_selector_all(
-                'div[role="button"]:has-text("Responder"), '
-                'span:has-text("respuesta")'
-            )
-            for btn in reply_buttons[:5]:
-                try:
-                    btn.click()
-                    self.antiban.random_delay("click")
-                except:
-                    pass
-        except:
-            pass
+    # ── Main scrape ────────────────────────────────────────────
 
-    def _has_more_replies(self, page: Page) -> bool:
-        try:
-            more_btn = page.query_selector('div[role="button"]:has-text("Ver más respuestas")')
-            return more_btn is not None
-        except:
-            return False
+    def _get_target_url(self) -> str:
+        if self.search_keyword:
+            return f"{FB_BASE}/search/posts?q={self.search_keyword.replace(' ', '%20')}"
+        if self.page_url.startswith("http"):
+            return self.page_url
+        return f"{FB_BASE}/{self.page_url}"
 
-    def _extract_comments_batch(self, page: Page, post_id: str, seen_ids: Set) -> List[Dict]:
-        """Extrae lote de comentarios."""
-        batch = []
-        try:
-            comment_elements = page.query_selector_all(
-                'div[data-pagelet*="Comment"], '
-                'ul[role="list"] li[aria-label]'
-            )
+    def scrape(self, max_posts: int = 500, checkpoint_every: int = 25):
+        from rich.console import Console
+        console = Console()
 
-            for el in comment_elements:
-                try:
-                    comment_id = el.get_attribute("id") or ""
-                    if not comment_id or comment_id in seen_ids:
-                        continue
-                    seen_ids.add(comment_id)
+        targets = self.page_urls if self.page_urls else ([self._get_target_url()] if self._get_target_url() else [])
+        if not targets:
+            logger.error("No target URLs configured — set DEEP_PAGE_URLS in .env or pass --page-url")
+            return self.stats
 
-                    message_el = el.query_selector('div[dir="auto"], span[dir="auto"]')
-                    message = message_el.inner_text().strip() if message_el else ""
-
-                    author_el = el.query_selector('a[href*="/user/"], span[role="link"]')
-                    author = author_el.inner_text().strip() if author_el else "Anonymous"
-
-                    time_el = el.query_selector('abbr[data-utime], span[data-prev-content]')
-                    created_time = None
-                    if time_el:
-                        utime = time_el.get_attribute("data-utime")
-                        if utime:
-                            created_time = datetime.fromtimestamp(int(utime))
-
-                    like_el = el.query_selector('span[aria-label*="me gusta"]')
-                    like_count = 0
-                    if like_el:
-                        match = re.search(r"(\d+)", like_el.inner_text())
-                        if match:
-                            like_count = int(match.group(1))
-
-                    analysis = self.analyzer.analyze(message)
-
-                    comment_data = {
-                        "comment_id": comment_id,
-                        "post_id": post_id,
-                        "message": message,
-                        "author_name": author,
-                        "created_time": created_time.isoformat() if created_time else None,
-                        "like_count": like_count,
-                        **analysis,
-                    }
-                    batch.append(comment_data)
-
-                except Exception as e:
-                    logger.debug(f"Error extracting comment: {e}")
-
-        except Exception as e:
-            logger.debug(f"Error in comment batch: {e}")
-
-        return batch
-
-    def scrape(self, max_posts: int = 10000, checkpoint_every: int = 50):
-        """
-        Ejecuta scraping completo con persistencia.
-        """
         self.notifier.send(f"""
 🕷️ *DEEP SCRAPER INICIADO*
-
-*Página:* {self.page_name}
-*Desde:* {self.start_date.date()}
-*Target:* {max_posts} posts
-*Checkpoint:* cada {checkpoint_every}
+*Páginas:* {len(targets)}
+*Posts c/u:* {max_posts}
         """)
 
         self.stats["start_time"] = time.time()
-        existing_post_ids = self.checkpoint.get_scraped_post_ids()
-        logger.info(f"Starting with {len(existing_post_ids)} existing post IDs")
+        processed = self.checkpoint.get_scraped_post_ids()
 
         p, browser = self._create_browser()
-        context = self._setup_context(browser)
-        page = self._setup_page(context)
+        context = browser.new_context(viewport={"width": 1366, "height": 768})
+        page = context.new_page()
+        Stealth().apply_stealth_sync(page)
 
         try:
-            if not self._verify_session(page):
-                logger.error("Session verification failed")
+            if not self._authenticate(page, context):
+                logger.error("Authentication failed")
                 return self.stats
 
-            page.goto(f"{FB_BASE}/{self.page_id}", timeout=60000)
-            self.antiban.random_delay("page_load")
+            eng_done = 0
 
-            post_ids_scraped = set(existing_post_ids)
-            scroll_count = 0
-            max_scrolls = 500
+            for idx, target in enumerate(targets):
+                page_label = target.rstrip("/").split("/")[-1]
+                console.print(f"\n[bold cyan]🌐 [{idx+1}/{len(targets)}] {page_label}[/bold cyan]")
+                console.print(f"[dim]{target}[/dim]")
 
-            while scroll_count < max_scrolls and self.stats["posts_scraped"] < max_posts:
-                if self.antiban.ban_detected:
-                    self._handle_ban(page)
+                page.goto(target, timeout=60000, wait_until="domcontentloaded")
+                self.antiban.human_delay(5, 8)
 
-                delay = self.antiban.progressive_scroll_delay(scroll_count)
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                time.sleep(delay)
-                self.antiban.simulate_mouse_movement(page)
+                state = {"scraped_post_ids": list(processed), "stats": self.stats, "target": target}
+                seen_ids = set(processed)
+                stale = 0
+                scrolled = 0
+                crashed = False
 
-                extracted_posts = self._extract_posts_from_visible_content(page)
+                # Initial batch
+                for post in self._scrape_search_results(page, seen_ids, max_posts):
+                    post_id = post["post_id"]
+                    if post_id in processed:
+                        self.stats["posts_duplicated"] += 1
+                        continue
+                    ok = self.storage.insert_fb_post(post)
+                    if ok:
+                        processed.add(post_id)
+                        self.stats["posts_scraped"] += 1
+                if self.stats["posts_scraped"] > 0:
+                    console.print(f"[green]  Initial batch: {self.stats['posts_scraped']} posts[/green]")
 
-                for post_dict in extracted_posts:
-                    if self.stats["posts_scraped"] >= max_posts:
-                        break
+                # Scroll loop
+                while self.stats["posts_scraped"] < max_posts:
+                    if self.antiban.detect_ban(page):
+                        self._handle_captcha(page, context, target)
+                        state["scraped_post_ids"] = list(processed)
+                        state["stats"] = self.stats
+                        self.checkpoint.save(state)
+                        self.antiban.human_delay(10, 20)
+                        continue
 
+                    delay = self.antiban.progressive_delay(scrolled)
                     try:
-                        post_id = post_dict.get("post_id", "")
-                        message = post_dict.get("message", "")
+                        page.keyboard.press("End")
+                    except Exception as e:
+                        logger.warning(f"Keyboard scroll failed: {e}")
+                        try:
+                            page.evaluate("window.scrollBy(0, 800)")
+                        except Exception as e2:
+                            state["stats"] = self.stats
+                            self.checkpoint.save(state)
+                            crashed = True
+                            logger.error(f"Browser/connection lost during scroll: {e2}")
+                            break
+                    page.wait_for_timeout(int(delay * 1000))
+                    scrolled += 1
 
-                        if not post_id or not message:
-                            continue
-
-                        post_id_key = f"{post_id}_{hash(message) % 10000}"
-                        
-                        if post_id_key in post_ids_scraped or self._is_duplicate(post_id_key):
+                    posts_on_page = 0
+                    for post in self._scrape_search_results(page, seen_ids, max_posts):
+                        post_id = post["post_id"]
+                        if post_id in processed:
                             self.stats["posts_duplicated"] += 1
                             continue
 
-                        analysis = self.analyzer.analyze(message)
-
-                        hashtags = re.findall(r"#(\w+)", message)
-                        mentions = re.findall(r"@(\w+)", message)
-                        links = re.findall(r"https?://\S+", message)
-
-                        post_data = {
-                            "post_id": post_id_key,
-                            "page_id": self.page_id,
-                            "page_name": self.page_name,
-                            "message": message,
-                            "created_time": None,
-                            "likes_count": post_dict.get("likes_count", 0),
-                            "comments_count": post_dict.get("comments_count", 0),
-                            "shares_count": post_dict.get("shares_count", 0),
-                            "post_url": f"{FB_BASE}/{post_id_key}",
-                            "hashtags": hashtags,
-                            "mentions": mentions,
-                            "links": links,
-                            "language": "es",
-                            **analysis,
-                        }
-
-                        success = self.storage.insert_fb_post(post_data)
-
-                        if success:
-                            post_ids_scraped.add(post_id_key)
+                        ok = self.storage.insert_fb_post(post)
+                        if ok:
+                            processed.add(post_id)
                             self.stats["posts_scraped"] += 1
-
-                            if post_dict.get("comments_count", 0) > 0:
-                                comments = self._extract_comments_from_post(page, post_id_key)
-                                for comment in comments:
-                                    self.storage.insert_fb_comment(comment)
-                                    self.stats["comments_scraped"] += 1
+                            posts_on_page += 1
+                            # Store full post dict for engagement phase update
+                            pu = post.get("post_url", "")
+                            if pu and pu.startswith("http"):
+                                self._pending_engagement.append(dict(post))
 
                             if self.stats["posts_scraped"] % checkpoint_every == 0:
-                                self._save_checkpoint(post_id_key, post_ids_scraped)
-                                elapsed = (time.time() - self.stats["start_time"]) / 60
-                                self.notifier.send(f"""
-📊 *PROGRESO*
+                                state["scraped_post_ids"] = list(processed)
+                                state["stats"] = self.stats
+                                self.checkpoint.save(state)
+                                self.stats["checkpoints_saved"] += 1
 
-*Posts:* {self.stats["posts_scraped"]}/{max_posts}
-*Comentarios:* {self.stats["comments_scraped"]}
-*Duplicados:* {self.stats["posts_duplicated"]}
-*Errores:* {self.stats["errors"]}
-*Tiempo:* {elapsed:.1f} min
-                                """)
+                    if posts_on_page == 0:
+                        stale += 1
+                    else:
+                        stale = 0
 
-                    except Exception as e:
-                        logger.error(f"Error processing post: {e}")
-                        self.stats["errors"] += 1
-                        continue
+                    if stale >= 15:
+                        logger.info(f"No new posts after {scrolled} scrolls — stopping {page_label}")
+                        break
 
-                scroll_count += 1
-                logger.info(f"Scroll {scroll_count}: {self.stats['posts_scraped']} posts")
+                    if scrolled % 10 == 0:
+                        console.print(f"[dim]  Scroll {scrolled}: {self.stats['posts_scraped']} posts[/dim]")
 
-            self._save_checkpoint("FINAL", post_ids_scraped)
+                console.print(f"[green]✓ {page_label}: {self.stats['posts_scraped']} posts acumulados[/green]")
 
         except Exception as e:
             logger.error(f"Scraping error: {e}", exc_info=True)
             self.notifier.notify_error("DEEP_SCRAPER_ERROR", str(e))
+            crashed = True
+
+        else:
+            # ── Phase 2: visit individual posts for engagement ──
+            eng_done = 0
+            if self._pending_engagement:
+                total_eng = len(self._pending_engagement)
+                console.print(f"\n[bold cyan]🔍 Visitando {total_eng} posts individuales para engagement...[/bold cyan]")
+                self.notifier.send(f"🔍 *Recolectando engagement:* {total_eng} posts")
+                for post_data in self._pending_engagement:
+                    try:
+                        eng = self._scrape_post_engagement(page, post_data["post_url"])
+                        if eng:
+                            post_data["likes_count"] = eng.get("lk", 0)
+                            post_data["loves_count"] = eng.get("lv", 0)
+                            post_data["hahas_count"] = eng.get("hh", 0)
+                            post_data["wows_count"] = eng.get("wo", 0)
+                            post_data["sads_count"] = eng.get("sd", 0)
+                            post_data["angrys_count"] = eng.get("ag", 0)
+                            post_data["comments_count"] = eng.get("cc", 0)
+                            post_data["shares_count"] = eng.get("sc", 0)
+                            post_data["views_count"] = eng.get("vw", 0)
+                            self.storage.insert_fb_post(post_data)
+                            eng_done += 1
+
+                        # Extract all comments from this post
+                        pid = post_data.get("post_id", "")
+                        comments = self._extract_all_comments(page, pid)
+                        for c in comments:
+                            self.storage.insert_fb_comment(c)
+                        self.stats["comments_scraped"] += len(comments)
+                        if comments:
+                            console.print(f"[dim]  → {len(comments)} comentarios extraídos[/dim]")
+
+                        if eng_done % 10 == 0:
+                            console.print(f"[dim]  Progreso: {eng_done}/{total_eng} posts, {self.stats['comments_scraped']} comentarios[/dim]")
+                        self.antiban.human_delay(1, 3)
+                    except Exception as e:
+                        logger.debug(f"Engagement/comments failed for {post_data.get('post_url','')}: {e}")
+                console.print(f"[green]✓ Engagement recolectado de {eng_done} posts[/green]")
 
         finally:
-            browser.close()
-            p.stop()
+            try:
+                browser.close()
+            except Exception:
+                pass
+            try:
+                p.stop()
+            except Exception:
+                pass
+
+        # ── Fetch final stats from DB ──
+        final_posts = self.storage.get_fb_posts(limit=10000)
+        total_lk = sum(p.get("likes_count", 0) or 0 for p in final_posts)
+        total_lv = sum(p.get("loves_count", 0) or 0 for p in final_posts)
+        total_hh = sum(p.get("hahas_count", 0) or 0 for p in final_posts)
+        total_cc = sum(p.get("comments_count", 0) or 0 for p in final_posts)
+        total_sc = sum(p.get("shares_count", 0) or 0 for p in final_posts)
+        total_vw = sum(p.get("views_count", 0) or 0 for p in final_posts)
 
         elapsed = (time.time() - self.stats["start_time"]) / 60
+        self.checkpoint.save({"scraped_post_ids": list(processed), "stats": self.stats, "target": "multi"})
 
-        self.notifier.send(f"""
-✅ *SCRAPING COMPLETADO*
-
-*Posts nuevos:* {self.stats["posts_scraped"]}
-*Comentarios:* {self.stats["comments_scraped"]}
-*Duplicados:* {self.stats["posts_duplicated"]}
-*Errores:* {self.stats["errors"]}
-*Checkpoints:* {self.stats["checkpoints_saved"]}
-*Tiempo total:* {elapsed:.1f} min
-        """)
+        if crashed:
+            self.notifier.send(f"""
+⚠️ *DEEP SCRAPER INTERRUMPIDO*
+*Posts:* {self.stats["posts_scraped"]} | *Comentarios:* {self.stats["comments_scraped"]}
+*Tiempo:* {elapsed:.1f} min
+            """)
+        else:
+            self.notifier.send(f"""
+✅ *DEEP SCRAPER COMPLETADO*
+*Posts:* {self.stats["posts_scraped"]} | *Comentarios:* {self.stats["comments_scraped"]}
+*Engagement:* {eng_done} posts | *LK:* {total_lk} | *LV:* {total_lv}
+*CC:* {total_cc} | *SC:* {total_sc} | *VW:* {total_vw}
+*Tiempo:* {elapsed:.1f} min
+            """)
 
         return self.stats
+
+    def _handle_captcha(self, page, context, target: str):
+        """Telegram + foreground + espera a que el usuario resuelva el captcha."""
+        from rich.console import Console
+        console = Console()
+        page_url = page.url
+        console.print(f"[bold red]🔴 CAPTCHA en {target}[/bold red]")
+
+        self.notifier.send(f"""
+⚠️ *CAPTCHA DETECTADO*
+*Página:* {target}
+*URL actual:* {page_url}
+Resuélvelo manualmente en el navegador.
+        """)
+
+        try:
+            subprocess.run([
+                "osascript", "-e",
+                'tell application "System Events" to set frontmost of every process whose name contains "Chrom" to true'
+            ], timeout=5)
+        except Exception:
+            pass
+
+        console.print("[yellow]⏳ Esperando que resuelvas el captcha...[/yellow]")
+        max_wait = 600
+        waited = 0
+        while waited < max_wait:
+            time.sleep(3)
+            waited += 3
+            try:
+                page.wait_for_load_state("domcontentloaded", timeout=5000)
+                if not self.antiban.detect_ban(page):
+                    console.print("[bold green]✅ Captcha resuelto[/bold green]")
+                    self.notifier.send("✅ *Captcha resuelto* — reanudando")
+                    return
+            except Exception:
+                pass
+            if waited % 30 == 0:
+                console.print(f"[yellow]⏳ {waited}s esperando captcha...[/yellow]")
+
+        logger.warning("Captcha wait timeout — stopping")
+        self.notifier.send("⏰ *Tiempo agotado* — captcha no resuelto en 10 min")
+
+    def _scrape_post_engagement(self, page, post_url: str) -> Optional[dict]:
+        """Visita un post individual y extrae reacciones, comments, shares, views."""
+        try:
+            page.goto(post_url, timeout=30000, wait_until="domcontentloaded")
+            self.antiban.human_delay(2, 4)
+
+            js = """
+            () => {
+                function parseNum(s) {
+                    if (!s) return 0;
+                    s = s.trim();
+                    let mult = 1;
+                    if (/mil/i.test(s) || /K/i.test(s)) { mult = 1000; s = s.replace(/mil/i, '').replace(/K/i, '').trim(); }
+                    if (/M/i.test(s)) { mult = 1000000; s = s.replace(/M/i, '').trim(); }
+                    s = s.replace(/\\./g, '').replace(',', '.');
+                    const n = parseFloat(s);
+                    return isNaN(n) ? 0 : Math.round(n * mult);
+                }
+
+                let lk=0, lv=0, hh=0, wo=0, sd=0, ag=0, cc=0, sc=0, vw=0;
+                const els = document.querySelectorAll('[aria-label]');
+                for (const el of els) {
+                    const label = el.getAttribute('aria-label') || '';
+                    const ll = label.toLowerCase();
+                    const m = label.match(/([\\d,.]+)\\s*(mil|k|m)?/i);
+                    if (!m) continue;
+                    const val = parseNum(m[1] + (m[2] || ''));
+                    if (val === 0) continue;
+                    if (ll.includes('me gusta') || ll.includes('like')) lk = Math.max(lk, val);
+                    else if (ll.includes('me encanta') || ll.includes('love')) lv = Math.max(lv, val);
+                    else if (ll.includes('haha') || ll.includes('me divierte')) hh = Math.max(hh, val);
+                    else if (ll.includes('wow') || ll.includes('me sorprende')) wo = Math.max(wo, val);
+                    else if (ll.includes('triste') || ll.includes('me entristece')) sd = Math.max(sd, val);
+                    else if (ll.includes('enojo') || ll.includes('me enfada')) ag = Math.max(ag, val);
+                    else if (ll.includes('comentario') || ll.includes('comment')) cc = Math.max(cc, val);
+                    else if (ll.includes('compartido') || ll.includes('shares?')) sc = Math.max(sc, val);
+                    else if (ll.includes('vista') || ll.includes('views?')) vw = Math.max(vw, val);
+                }
+
+                // Fallback por texto
+                const txt = document.body.innerText.toLowerCase();
+                if (!cc) { const m = txt.match(/([\\d,.]+(?:mil|k|m)?)\\s*(comentario|comment)/i); if (m) cc = parseNum(m[1]); }
+                if (!sc) { const m = txt.match(/([\\d,.]+(?:mil|k|m)?)\\s*(compartido|shares?)/i); if (m) sc = parseNum(m[1]); }
+                if (!vw) { const m = txt.match(/([\\d,.]+(?:mil|k|m)?)\\s*(vistas?|views?|reproducciones?|visualizaciones?|reprodujo|plays?)/i); if (m) vw = parseNum(m[1]); }
+
+                return { lk, lv, hh, wo, sd, ag, cc, sc, vw };
+            }
+            """
+            return page.evaluate(js)
+        except Exception as e:
+            logger.debug(f"Engagement scrape failed for {post_url}: {e}")
+            return None
 
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Deep Scraper - Extracción completa")
-    parser.add_argument("--max", type=int, default=10000, help="Posts objetivo")
-    parser.add_argument("--start", default="2025-01-01", help="Fecha inicio (YYYY-MM-DD)")
+    parser = argparse.ArgumentParser(description="Deep Scraper - Extracción desde feed")
+    parser.add_argument("--page-url", default="", help="URL completa de la página")
+    parser.add_argument("--page-name", default="", help="Nombre de la página")
+    parser.add_argument("--max", type=int, default=500, help="Posts objetivo")
     parser.add_argument("--headless", action="store_true", help="Modo headless")
     parser.add_argument("--cookies-file", default="cookies.json", help="Archivo de cookies")
-    parser.add_argument("--checkpoint-every", type=int, default=50, help="Guardar checkpoint cada N posts")
 
     args = parser.parse_args()
+    cfg = Config()
 
-    scraper = FacebookDeepScraper(
-        cookies_file=args.cookies_file,
-        start_date=args.start,
-        headless=args.headless,
-    )
+    deep_urls = cfg.deep_page_urls
 
-    stats = scraper.scrape(
-        max_posts=args.max,
-        checkpoint_every=args.checkpoint_every,
-    )
+    if args.page_url:
+        urls = [(args.page_url, args.page_name or args.page_url)]
+    elif deep_urls:
+        urls = [(u, u.rstrip("/").split("/")[-1]) for u in deep_urls]
+    else:
+        urls = [(cfg.FB_PAGE_URL, cfg.FB_PAGE_NAME or "Página")]
+
+    total_posts = 0
+    total_comments = 0
+
+    for page_url, page_name in urls:
+        print(f"\n{'='*50}")
+        print(f"Scrapeando: {page_name}")
+        print(f"{'='*50}")
+
+        scraper = FacebookDeepScraper(
+            page_url=page_url,
+            page_name=page_name,
+            cookies_file=args.cookies_file,
+            email=cfg.FB_EMAIL,
+            password=cfg.FB_PASSWORD,
+            headless=args.headless,
+        )
+
+        stats = scraper.scrape(max_posts=args.max)
+
+        print(f"\nResultados para {page_name}:")
+        print(f"  Posts extraídos: {stats['posts_scraped']}")
+        print(f"  Comentarios extraídos: {stats['comments_scraped']}")
+        print(f"  Duplicados: {stats['posts_duplicated']}")
+        print(f"  Errores: {stats['errors']}")
+
+        total_posts += stats["posts_scraped"]
+        total_comments += stats["comments_scraped"]
 
     print(f"\n{'='*50}")
-    print("RESUMEN FINAL")
+    print("RESUMEN GLOBAL")
     print(f"{'='*50}")
-    print(f"Posts extraídos: {stats['posts_scraped']}")
-    print(f"Comentarios extraídos: {stats['comments_scraped']}")
-    print(f"Duplicados: {stats['posts_duplicated']}")
-    print(f"Errores: {stats['errors']}")
-    print(f"Checkpoints guardados: {stats['checkpoints_saved']}")
+    print(f"Total páginas: {len(urls)}")
+    print(f"Total posts: {total_posts}")
+    print(f"Total comentarios: {total_comments}")
 
 
 if __name__ == "__main__":

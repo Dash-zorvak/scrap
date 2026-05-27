@@ -88,6 +88,18 @@ class Insight(Base):
     created_at = sa.Column(sa.DateTime, server_default=sa.func.now())
 
 
+class NLPResult(Base):
+    __tablename__ = "nlp_results"
+
+    id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
+    item_type = sa.Column(sa.Text, nullable=False, index=True)   # "post" | "comment"
+    item_id = sa.Column(sa.Text, nullable=False, index=True)      # post_id | comment_id
+    analysis_type = sa.Column(sa.Text, nullable=False, index=True) # "emotions" | "entities" | "collocations" | "latent_topic"
+    result_json = sa.Column(sa.Text, default="{}")
+    model_version = sa.Column(sa.Text, default="1.0")
+    created_at = sa.Column(sa.DateTime, server_default=sa.func.now())
+
+
 class DailyMetric(Base):
     __tablename__ = "daily_metrics"
 
@@ -298,6 +310,112 @@ class LocalStorage:
 
     # ── purge ────────────────────────────────────────────────
 
+    # ── nlp_results ──────────────────────────────────────────
+
+    def insert_nlp_result(self, data: Dict[str, Any]) -> bool:
+        try:
+            result_json = data.get("result_json", {})
+            if not isinstance(result_json, str):
+                result_json = json.dumps(result_json)
+            obj = NLPResult(
+                item_type=data.get("item_type", ""),
+                item_id=data.get("item_id", ""),
+                analysis_type=data.get("analysis_type", ""),
+                result_json=result_json,
+                model_version=data.get("model_version", "1.0"),
+            )
+            s = self._session()
+            s.merge(obj)
+            s.commit()
+            s.close()
+            return True
+        except Exception as e:
+            logger.error(f"Error inserting nlp_result: {e}")
+            return False
+
+    def get_nlp_results(self, item_type: str = None, analysis_type: str = None, limit: int = 5000) -> list:
+        try:
+            s = self._session()
+            q = s.query(NLPResult)
+            if item_type:
+                q = q.filter(NLPResult.item_type == item_type)
+            if analysis_type:
+                q = q.filter(NLPResult.analysis_type == analysis_type)
+            rows = q.order_by(NLPResult.created_at.desc()).limit(limit).all()
+            s.close()
+            result = []
+            for r in rows:
+                rj = r.result_json
+                if isinstance(rj, str):
+                    try:
+                        rj = json.loads(rj)
+                    except:
+                        rj = {}
+                result.append({
+                    "id": r.id,
+                    "item_type": r.item_type,
+                    "item_id": r.item_id,
+                    "analysis_type": r.analysis_type,
+                    "result_json": rj,
+                    "model_version": r.model_version,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                })
+            return result
+        except Exception as e:
+            logger.error(f"Error reading nlp_results: {e}")
+            return []
+
+    def get_nlp_result(self, item_type: str, item_id: str, analysis_type: str) -> Optional[dict]:
+        try:
+            s = self._session()
+            r = s.query(NLPResult).filter(
+                NLPResult.item_type == item_type,
+                NLPResult.item_id == item_id,
+                NLPResult.analysis_type == analysis_type,
+            ).first()
+            s.close()
+            if not r:
+                return None
+            rj = r.result_json
+            if isinstance(rj, str):
+                try:
+                    rj = json.loads(rj)
+                except:
+                    rj = {}
+            return {
+                "id": r.id,
+                "item_type": r.item_type,
+                "item_id": r.item_id,
+                "analysis_type": r.analysis_type,
+                "result_json": rj,
+                "model_version": r.model_version,
+            }
+        except Exception as e:
+            logger.error(f"Error reading nlp_result: {e}")
+            return None
+
+    def count_nlp_pending(self, item_type: str) -> int:
+        """Count items that haven't had emotions analysis yet."""
+        try:
+            s = self._session()
+            from sqlalchemy.orm import aliased
+            nr = aliased(NLPResult)
+            done_ids = s.query(nr.item_id).filter(
+                nr.item_type == item_type,
+                nr.analysis_type == "emotions",
+            ).subquery()
+            if item_type == "post":
+                pending = s.query(FBPost.post_id).filter(~FBPost.post_id.in_(done_ids)).count()
+            elif item_type == "comment":
+                pending = s.query(FBComment.comment_id).filter(~FBComment.comment_id.in_(done_ids)).count()
+            else:
+                pending = 0
+            s.close()
+            return pending
+        except Exception as e:
+            logger.error(f"Error counting nlp pending: {e}")
+            return 0
+
     def purge_table(self, table: str) -> bool:
         try:
             s = self._session()
@@ -307,6 +425,7 @@ class LocalStorage:
                 "problematicas": Problema,
                 "insights": Insight,
                 "daily_metrics": DailyMetric,
+                "nlp_results": NLPResult,
             }
             model = model_map.get(table)
             if model is None:
@@ -392,6 +511,7 @@ class LocalStorage:
                     "sentiment_score": r.sentiment_score,
                     "topic_category": r.topic_category,
                     "zona": r.zona,
+                    "source": r.source,
                 })
             return result
         except Exception as e:
@@ -425,6 +545,7 @@ class LocalStorage:
                 "sentiment_score": r.sentiment_score,
                 "topic_category": r.topic_category,
                 "zona": r.zona,
+                "source": r.source,
             }
         except Exception as e:
             logger.error(f"Error reading fb_post {post_id}: {e}")

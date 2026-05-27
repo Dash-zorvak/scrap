@@ -1,4 +1,6 @@
 import logging
+import signal
+import threading
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -8,33 +10,84 @@ _emotion_analyzer = None
 _fallback_analyzer = None
 HAS_PYSENTIMIENTO = False
 HAS_FALLBACK = False
+_PYSENTIMIENTO_TRIED = False
+_FALLBACK_TRIED = False
+
+_INIT_TIMEOUT = 60
+
+
+def _run_with_timeout(func, args=(), kwargs=None, timeout=_INIT_TIMEOUT):
+    kwargs = kwargs or {}
+    result = [None]
+    exception = [None]
+
+    def runner():
+        try:
+            result[0] = func(*args, **kwargs)
+        except Exception as e:
+            exception[0] = e
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        logger.warning(f"Initialization timed out ({timeout}s)")
+        return None
+    if exception[0]:
+        raise exception[0]
+    return result[0]
 
 
 def _init_pysentimiento():
-    global _sentiment_analyzer, _emotion_analyzer, HAS_PYSENTIMIENTO
+    global _sentiment_analyzer, _emotion_analyzer, HAS_PYSENTIMIENTO, _PYSENTIMIENTO_TRIED
+    if _PYSENTIMIENTO_TRIED:
+        return
+    _PYSENTIMIENTO_TRIED = True
     try:
         from pysentimiento import create_analyzer
-        _sentiment_analyzer = create_analyzer(task="sentiment", lang="es")
-        _emotion_analyzer = create_analyzer(task="emotion", lang="es")
-        HAS_PYSENTIMIENTO = True
-        logger.info("pysentimiento loaded successfully")
+
+        def _load():
+            sa = create_analyzer(task="sentiment", lang="es")
+            ea = create_analyzer(task="emotion", lang="es")
+            return sa, ea
+
+        loaded = _run_with_timeout(_load)
+        if loaded is not None:
+            _sentiment_analyzer, _emotion_analyzer = loaded
+            HAS_PYSENTIMIENTO = True
+            logger.info("pysentimiento loaded successfully")
+        else:
+            logger.warning("pysentimiento initialization timed out — using rule-based")
+            HAS_PYSENTIMIENTO = False
     except Exception as e:
         logger.debug(f"pysentimiento not available: {e}")
         HAS_PYSENTIMIENTO = False
 
 
 def _init_transformers_fallback():
-    global _fallback_analyzer, HAS_FALLBACK
+    global _fallback_analyzer, HAS_FALLBACK, _FALLBACK_TRIED
+    if _FALLBACK_TRIED:
+        return
+    _FALLBACK_TRIED = True
     try:
         from transformers import pipeline
         import torch
-        _fallback_analyzer = pipeline(
-            "sentiment-analysis",
-            model="cardiffnlp/twitter-xlm-roberta-base-sentiment",
-            device=0 if torch.cuda.is_available() else -1,
-        )
-        HAS_FALLBACK = True
-        logger.info("Transformers fallback loaded successfully")
+
+        def _load():
+            return pipeline(
+                "sentiment-analysis",
+                model="cardiffnlp/twitter-xlm-roberta-base-sentiment",
+                device=0 if torch.cuda.is_available() else -1,
+            )
+
+        loaded = _run_with_timeout(_load)
+        if loaded is not None:
+            _fallback_analyzer = loaded
+            HAS_FALLBACK = True
+            logger.info("Transformers fallback loaded successfully")
+        else:
+            logger.warning("Transformers fallback timed out — using rule-based")
+            HAS_FALLBACK = False
     except Exception as e:
         logger.debug(f"Transformers fallback not available: {e}")
         HAS_FALLBACK = False
@@ -50,13 +103,13 @@ class SentimentAnalyzer:
 
         text_clean = text.strip()[:512]
 
-        if not HAS_PYSENTIMIENTO and not HAS_FALLBACK:
+        if not _PYSENTIMIENTO_TRIED:
             _init_pysentimiento()
 
         if HAS_PYSENTIMIENTO and not self.use_fallback:
             return self._analyze_pysentimiento(text_clean)
 
-        if not HAS_FALLBACK:
+        if not _FALLBACK_TRIED:
             _init_transformers_fallback()
 
         if HAS_FALLBACK:
@@ -250,12 +303,39 @@ class SentimentAnalyzer:
             return ("neutral", round(positives / total, 4) if total > 0 else 0.0)
 
     def analyze_emotions(self, text: str) -> dict:
-        if not HAS_PYSENTIMIENTO or not text or not text.strip():
+        if not text or not text.strip():
             return {}
 
+        if HAS_PYSENTIMIENTO:
+            try:
+                result = _emotion_analyzer.predict(text[:512])
+                return dict(result.probas)
+            except Exception as e:
+                logger.warning(f"Emotion analysis failed: {e}")
+
+        return self._analyze_emotions_lexicon(text)
+
+    @staticmethod
+    def _analyze_emotions_lexicon(text: str) -> dict:
         try:
-            result = _emotion_analyzer.predict(text[:512])
-            return dict(result.probas)
+            from src.analyzer.emotion_lexicon import EMOTION_LEXICON
+            import re
+            from collections import defaultdict
+
+            text_lower = text.lower()
+            scores = defaultdict(float)
+            words = re.findall(r'\w+', text_lower)
+            for emotion, keywords in EMOTION_LEXICON.items():
+                score = 0
+                for kw in keywords:
+                    if kw in text_lower:
+                        score += text_lower.count(kw)
+                if score > 0:
+                    scores[emotion] = score
+            total = sum(scores.values()) or 1
+            if not scores:
+                return {"neutral": 1.0}
+            return {k: round(v / total, 4) for k, v in sorted(scores.items(), key=lambda x: -x[1])}
         except Exception as e:
-            logger.warning(f"Emotion analysis failed: {e}")
+            logger.warning(f"Lexicon emotion analysis failed: {e}")
             return {}

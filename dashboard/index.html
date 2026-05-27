@@ -129,9 +129,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font-mono);height:10
 
 <script src="data.js"></script>
 <script>
-function fmt(n){try{return Number(n).toLocaleString('es-SV')}catch{return String(n)}}
-function pct(n){return (Number(n)*100).toFixed(1)+'%'}
-function short(n){n=Number(n);return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':String(n)}
+// fmt, pct, short defined in data.js
 function sevClass(s){return s>=4?'crit':s>=3?'high':s>=2?'med':'low'}
 function sevColor(s){return s>=4?'var(--red)':s>=3?'#ff8866':s>=2?'var(--amber)':'var(--muted)'}
 
@@ -187,7 +185,7 @@ function buildAlerts(d){
     `<div class="alert-item ${sevClass(a.severity)}">
       <div class="a-type">${a.type.toUpperCase()} · ${a.severity_label.toUpperCase()} · score ${a.score}</div>
       <div class="a-title">${a.title}</div>
-      <div class="a-desc">${a.description}${a.topic?' · '+a.topic.replace(/_/g,' ').title():''}${a.zona?' · Zona: '+a.zona:''}</div>
+      <div class="a-desc">${a.description}${a.topic?' · '+a.topic.replace(/_/g,' '):''}${a.zona?' · Zona: '+a.zona:''}</div>
     </div>`
   ).join('');
 }

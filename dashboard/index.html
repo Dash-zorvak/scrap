@@ -164,7 +164,7 @@ function buildKPIs(d){
     {cls:'sentiment',lbl:'Sent. Neto',val:ix.netSentiment?pct(ix.netSentiment):'—',sub:`${rd.likes+rd.loves||0} pos · ${rd.angrys+rd.sads||0} neg`},
     {cls:'controversy',lbl:'Controversia',val:ix.controversy?pct(ix.controversy):'—',sub:`${fmt(rd.angrys+rd.sads)} negativas`},
     {cls:'effectiveness',lbl:'Efectividad',val:ix.effectiveness?pct(ix.effectiveness):'—',sub:`${fmt(rd.likes+rd.loves)} aprob`},
-    {cls:'risk',lbl:'Riesgo Rep.',val:ix.riskReputacional?ix.riskReputacional.toFixed(1)+'%':'—',sub:ix.controversy<0.03?'Bajo':ix.controversy<0.08?'Medio':'Alto'},
+    {cls:'risk',lbl:'Riesgo Rep.',val:ix.riskReputacional? (ix.riskReputacional*100).toFixed(0)+'%' :'—',sub:ix.riskReputacional<0.3?'Bajo':ix.riskReputacional<0.6?'Medio':'Alto'},
     {cls:'nsi',lbl:'NSI',val:ix.nsi?ix.nsi.toFixed(1):'—',sub:`Pob: ${d&&d.totalPosts?fmt(d.totalPosts):'—'} · Views: ${d&&d.totalViews?short(d.totalViews):'—'}`}
   ];
   document.getElementById('kpis').innerHTML=kpis.map(k=>

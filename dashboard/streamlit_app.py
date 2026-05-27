@@ -118,7 +118,7 @@ intelligence = run_all_detectors(posts_raw, SuppressionEngine()) if posts_raw el
 
 tabs = st.tabs([
     "⬥ Ejecutivo", "◈ Emociones", "◎ Entidades",
-    "⬡ Tópicos", "◈ Cambridge", "▣ Colocaciones", "⚠ Anomalías", "◉ Diagnóstico"
+    "⬡ Tópicos", "◈ Cambridge", "▣ Colocaciones", "⚠ Anomalías", "◉ Comentarios", "◉ Diagnóstico"
 ])
 
 with tabs[0]:
@@ -487,6 +487,25 @@ with tabs[6]:
                 st.plotly_chart(fig3, use_container_width=True)
 
 with tabs[7]:
+    st.markdown("## Explorador de Comentarios")
+    if comments_df.empty:
+        st.info("No hay comentarios extraídos aún. Usá `./scrapeo phase3` para extraerlos.")
+    else:
+        st.markdown(f"**{len(comments_df)}** comentarios extraídos de **{posts_df['post_id'].nunique()}** posts.")
+        post_filter = st.selectbox("Filtrar por post:", ["Todos"] + posts_df['post_id'].tolist())
+        if post_filter != "Todos":
+            filtered = comments_df[comments_df['post_id'] == post_filter]
+        else:
+            filtered = comments_df
+        st.dataframe(
+            filtered[['author_name', 'message', 'sentiment', 'topic_category', 'zona', 'like_count']]
+            .rename(columns={'author_name': 'Autor', 'message': 'Comentario', 'sentiment': 'Sentimiento',
+                             'topic_category': 'Tópico', 'zona': 'Zona', 'like_count': 'Likes'}),
+            use_container_width=True, height=500,
+            column_config={"Comentario": st.column_config.TextColumn(width="large")}
+        )
+
+with tabs[8]:
     st.markdown("## Diagnóstico para el Edil")
     st.markdown("### Accountability: ¿Dónde hemos fallado?")
 

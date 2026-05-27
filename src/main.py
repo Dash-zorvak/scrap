@@ -312,8 +312,6 @@ def _export_dashboard_data(storage):
         engagement = ((total_reactions + total_comments + total_shares) / total_views) * 100
     else:
         engagement = (total_reactions + total_comments + total_shares) / max(total, 1)
-    risk = controversy * (total_views / max(total_reactions, 1))
-
     positive_count = sum(1 for p in posts if p.get("sentiment") == "positive")
     negative_count = sum(1 for p in posts if p.get("sentiment") == "negative")
     nsi = ((positive_count - negative_count) / max(total, 1)) * 100
@@ -323,7 +321,7 @@ def _export_dashboard_data(storage):
         "netSentiment": round(net_sentiment, 4),
         "controversy": round(controversy, 4),
         "effectiveness": round(effectiveness, 4),
-        "riskReputacional": round(risk, 2),
+        "riskReputacional": 0.0,
         "nsi": round(nsi, 1),
     }
 
@@ -356,6 +354,30 @@ def _export_dashboard_data(storage):
             "controversy": round((angrys + sads) / max(tr, 1), 4),
             "effectiveness": round((likes + loves) / max(tr, 1), 4),
         }
+
+    comment_neg = sum(1 for c in comments if c.get("sentiment") == "negative")
+    comment_total = len(comments) or 1
+    comment_neg_ratio = comment_neg / comment_total
+
+    topic_controversies = []
+    for tn, td in topics.items():
+        tr = td.get("total_reactions", 0) or 1
+        t_neg = td.get("angrys", 0) + td.get("sads", 0)
+        tc = t_neg / tr
+        if td.get("count", 0) > 0:
+            topic_controversies.append((tc, td["count"]))
+    max_topic_controversy = max(tc for tc, _ in topic_controversies) if topic_controversies else controversy
+
+    sdi_alerts = [a for a in intelligence.get("alerts", []) if a.get("type") == "sdi"]
+    sdi_factor = min(0.3, abs(sum(a.get("score", 0) for a in sdi_alerts)) * 0.05) if sdi_alerts else 0
+
+    nsi_deviation = max(0, (50 - nsi) / 100)
+
+    vol_factor = min(2.0, 1.0 + total / 1000)
+
+    risk = (max_topic_controversy * 10 * 0.35 + comment_neg_ratio * 0.35 + nsi_deviation * 0.15 + sdi_factor * 0.15) * vol_factor
+    risk = max(0.0, min(1.0, risk))
+    indices["riskReputacional"] = round(risk, 2)
 
     zone_names = ["Este", "unknown", "Norte", "Centro", "Sur", "Oeste"]
     zones = {}

@@ -171,7 +171,7 @@ function init() {
       </div>
       <div class="kpi risk">
         <div class="kpi-label">Riesgo Reputacional</div>
-        <div class="kpi-value">${d.indices.riskReputacional.toFixed(1)}%</div>
+        <div class="kpi-value">${(d.indices.riskReputacional*100).toFixed(0)}%</div>
         <div class="kpi-sub">${d.indices.controversy<0.03?'Bajo':d.indices.controversy<0.08?'Medio':'Alto'}</div>
       </div>
     </div>

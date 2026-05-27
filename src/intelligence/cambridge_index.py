@@ -463,11 +463,29 @@ def _compute_indices(posts: List[Dict]) -> Dict:
     controversy = (angrys + sads) / n
     effectiveness = (likes + loves) / n
     engagement = ((total_reactions + total_comments + total_shares) / max(total_views, 1)) * 100
-    risk = controversy * (total_views / max(total_reactions, 1))
 
     positive_count = sum(1 for p in posts if p.get("sentiment") == "positive")
     negative_count = sum(1 for p in posts if p.get("sentiment") == "negative")
     nsi = ((positive_count - negative_count) / max(total, 1)) * 100
+
+    topic_groups = defaultdict(list)
+    for p in posts:
+        topic_groups[p.get("topic_category", "uncategorized")].append(p)
+    max_topic_controversy = controversy
+    for topic_posts in topic_groups.values():
+        t_reactions = sum(p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("hahas_count", 0)
+                         + p.get("wows_count", 0) + p.get("sads_count", 0) + p.get("angrys_count", 0) for p in topic_posts)
+        t_neg = sum(p.get("angrys_count", 0) + p.get("sads_count", 0) for p in topic_posts)
+        if t_reactions > 0:
+            tc = t_neg / t_reactions
+            if tc > max_topic_controversy:
+                max_topic_controversy = tc
+
+    nsi_deviation = max(0, (50 - nsi) / 100)
+    vol_factor = min(2.0, 1.0 + total / 1000)
+
+    risk = (max_topic_controversy * 10 * 0.50 + nsi_deviation * 0.50) * vol_factor
+    risk = max(0.0, min(1.0, risk))
 
     como_pct = (likes + loves) / max(total_reactions, 1) * 100
     no_gusta_pct = (angrys + sads) / max(total_reactions, 1) * 100

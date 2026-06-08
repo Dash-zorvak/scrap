@@ -59,6 +59,7 @@ class GraphAPIScraper:
             "posts_scraped": 0,
             "comments_scraped": 0,
             "replies_scraped": 0,
+            "anonymous_comments": 0,
             "views_total": 0,
             "errors": 0,
             "error_codes": {},
@@ -235,7 +236,7 @@ class GraphAPIScraper:
 
         # Get top-level comments
         params = {
-            "fields": "id,message,created_time,from,like_count,parent_id",
+            "fields": "id,message,created_time,from{id,name},like_count,parent_id",
             "limit": min(limit, 100),
             "filter": "stream",
         }
@@ -261,7 +262,7 @@ class GraphAPIScraper:
         """Obtiene replies (respuestas) de un comentario."""
         replies = []
         params = {
-            "fields": "id,message,created_time,from,like_count",
+            "fields": "id,message,created_time,from{id,name},like_count",
             "limit": min(limit, 100),
         }
 
@@ -270,6 +271,14 @@ class GraphAPIScraper:
             replies = data["data"]
 
         return replies
+
+    def _extract_author_name(self, item: dict) -> str:
+        """Devuelve el nombre del autor solo si la API lo entrega; si no, 'Anónimo'.
+        Meta restringe el campo 'from' por privacidad, así que la mayoría caerá a 'Anónimo'."""
+        frm = item.get("from")
+        if isinstance(frm, dict) and frm.get("name"):
+            return frm["name"]
+        return "Anónimo"
 
     def process_post(self, post_data: Dict) -> bool:
         """Procesa un post y lo guarda en Supabase."""
@@ -357,7 +366,7 @@ class GraphAPIScraper:
                     "comment_id": comment_id,
                     "post_id": post_id,
                     "message": message[:5000],
-                    "author_name": comment_data.get("from", {}).get("name", "Anónimo") if isinstance(comment_data.get("from"), dict) else "Anónimo",
+                    "author_name": self._extract_author_name(comment_data),
                     "created_time": comment_data.get("created_time"),
                     "like_count": comment_data.get("like_count", 0),
                     "parent_comment_id": None,
@@ -365,6 +374,8 @@ class GraphAPIScraper:
 
                 self.storage.insert_fb_comment(comment_record)
                 self.stats["comments_scraped"] += 1
+                if comment_record["author_name"] == "Anónimo":
+                    self.stats["anonymous_comments"] += 1
 
                 if get_replies and not parent_id:
                     replies = self.get_comment_replies(comment_id)
@@ -380,7 +391,7 @@ class GraphAPIScraper:
                                 "comment_id": reply_id,
                                 "post_id": post_id,
                                 "message": reply_message[:5000],
-                                "author_name": reply_data.get("from", {}).get("name", "Anónimo") if isinstance(reply_data.get("from"), dict) else "Anónimo",
+                                "author_name": self._extract_author_name(reply_data),
                                 "created_time": reply_data.get("created_time"),
                                 "like_count": reply_data.get("like_count", 0),
                                 "parent_comment_id": comment_id,
@@ -388,6 +399,8 @@ class GraphAPIScraper:
 
                             self.storage.insert_fb_comment(reply_record)
                             self.stats["replies_scraped"] += 1
+                            if reply_record["author_name"] == "Anónimo":
+                                self.stats["anonymous_comments"] += 1
                             self.stats["comments_scraped"] += 1
 
                         except Exception as e:

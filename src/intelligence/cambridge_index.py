@@ -442,6 +442,15 @@ def run_all_detectors(
     }
 
 
+def _engagement_metrics(total_reactions, total_comments, total_shares, total_views, total_posts):
+    """Engagement sin inflar la métrica cuando no hay views (sin read_insights).
+    Con views reales -> tasa por views. Sin views -> interacciones promedio por post (proxy)."""
+    interactions = total_reactions + total_comments + total_shares
+    if total_views > 0:
+        return round((interactions / total_views) * 100, 2), "views"
+    return round(interactions / max(total_posts, 1), 2), "per_post"
+
+
 def _compute_indices(posts: List[Dict]) -> Dict:
     total = len(posts)
     total_reactions = sum(
@@ -462,7 +471,9 @@ def _compute_indices(posts: List[Dict]) -> Dict:
     net_sentiment = (likes + loves - angrys - sads) / n
     controversy = (angrys + sads) / n
     effectiveness = (likes + loves) / n
-    engagement = ((total_reactions + total_comments + total_shares) / max(total_views, 1)) * 100
+    engagement, engagement_basis = _engagement_metrics(
+        total_reactions, total_comments, total_shares, total_views, total
+    )
 
     positive_count = sum(1 for p in posts if p.get("sentiment") == "positive")
     negative_count = sum(1 for p in posts if p.get("sentiment") == "negative")
@@ -492,6 +503,7 @@ def _compute_indices(posts: List[Dict]) -> Dict:
 
     return {
         "engagement": round(engagement, 2),
+        "engagementBasis": engagement_basis,
         "netSentiment": round(net_sentiment, 4),
         "controversy": round(controversy, 4),
         "effectiveness": round(effectiveness, 4),
@@ -531,7 +543,8 @@ def _build_monthly_series(posts: List[Dict]) -> Dict[str, Dict]:
     for k in monthly:
         tr = monthly[k]["reactions"] or 1
         monthly[k]["controversy"] = (monthly[k]["angrys"] + monthly[k]["sads"]) / tr
-        monthly[k]["engagement_rate"] = monthly[k]["reactions"] / max(monthly[k]["views"], 1)
+        denom = monthly[k]["views"] if monthly[k]["views"] > 0 else max(monthly[k]["posts"], 1)
+        monthly[k]["engagement_rate"] = monthly[k]["reactions"] / denom
     return monthly
 
 
@@ -574,7 +587,8 @@ def _compute_engagement_series(posts: List[Dict]) -> List[float]:
     series = []
     for k in sorted(monthly.keys()):
         v = monthly[k]
-        rate = v["reactions"] / max(v["views"], 1)
+        denom = v["views"] if v["views"] > 0 else max(v["posts"], 1)
+        rate = v["reactions"] / denom
         series.append(rate)
     return series
 

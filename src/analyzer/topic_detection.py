@@ -1,6 +1,7 @@
 import re
 import logging
 import unicodedata
+import functools
 from typing import Optional, List, Dict, Tuple
 from collections import defaultdict, Counter
 
@@ -289,6 +290,27 @@ EMERGENCY_KEYWORDS = [
 ]
 
 
+def _normalize(s: str) -> str:
+    return unicodedata.normalize('NFKD', s.lower()).encode('ascii', 'ignore').decode('ascii')
+
+@functools.lru_cache(maxsize=1)
+def _norm_topic_keywords():
+    return {t: [_normalize(k) for k in kws] for t, kws in TOPIC_KEYWORDS.items()}
+
+@functools.lru_cache(maxsize=1)
+def _norm_zona_keywords():
+    return {z: [_normalize(k) for k in kws] for z, kws in ZONA_KEYWORDS.items()}
+
+def _kw_match(kw_norm: str, text_norm: str) -> bool:
+    # límite de palabra + plural español opcional (escuela → escuelas, bache → baches)
+    return re.search(r'\b' + re.escape(kw_norm) + r'(?:es|s)?\b', text_norm) is not None
+
+APOYO_GENERICO = [
+    "bendiciones", "dios lo bendiga", "dios le bendiga", "felicidades",
+    "felicitaciones", "gracias alcalde", "adelante alcalde", "buen trabajo",
+    "excelente trabajo", "siga adelante", "lo apoyo", "apoyamos", "amen",
+]
+
 _has_spacy = False
 _nlp = None
 
@@ -310,20 +332,12 @@ def _init_spacy():
 def detect_topics(text: str) -> List[Tuple[str, float]]:
     if not text:
         return []
-
-    text_lower = unicodedata.normalize('NFKD', text.lower()).encode('ascii', 'ignore').decode('ascii')
+    text_norm = _normalize(text)
     topics_found = []
-
-    for topic, keywords in TOPIC_KEYWORDS.items():
-        matches = 0
-        for kw in keywords:
-            if kw in text_lower:
-                matches += 1
-
+    for topic, keywords in _norm_topic_keywords().items():
+        matches = sum(1 for kw in keywords if _kw_match(kw, text_norm))
         if matches > 0:
-            confidence = min(matches / 3, 1.0)
-            topics_found.append((topic, confidence))
-
+            topics_found.append((topic, min(matches / 3, 1.0)))
     topics_found.sort(key=lambda x: x[1], reverse=True)
     return topics_found[:3]
 
@@ -332,20 +346,19 @@ def get_main_topic(text: str) -> str:
     topics = detect_topics(text)
     if topics:
         return topics[0][0]
+    text_norm = _normalize(text or "")
+    if any(_kw_match(_normalize(g), text_norm) for g in APOYO_GENERICO):
+        return "apoyo_generico"
     return ""
 
 
 def detect_zona(text: str) -> str:
     if not text:
         return ""
-
-    text_lower = unicodedata.normalize('NFKD', text.lower()).encode('ascii', 'ignore').decode('ascii')
-
-    for zona, keywords in ZONA_KEYWORDS.items():
-        for kw in keywords:
-            if kw in text_lower:
-                return zona
-
+    text_norm = _normalize(text)
+    for zona, keywords in _norm_zona_keywords().items():
+        if any(_kw_match(kw, text_norm) for kw in keywords):
+            return zona
     return ""
 
 

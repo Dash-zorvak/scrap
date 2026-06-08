@@ -15,6 +15,7 @@ _PYSENTIMIENTO_TRIED = False
 _FALLBACK_TRIED = False
 
 _INIT_TIMEOUT = 10
+_MODEL_LOAD_TIMEOUT = 600  # la 1ª carga descarga el modelo (~500 MB); 10s no alcanza
 
 SENTIMENT_5LEVEL = {
     "muy_positivo": 2,
@@ -53,6 +54,12 @@ def _init_pysentimiento():
         return
     _PYSENTIMIENTO_TRIED = True
     try:
+        # Monkey‑patch: transformers ≥4.58 bloquea torch<2.6 incluso con safetensors;
+        # nuestros modelos (robertuito) usan safetensors, así que el chequeo es falso positivo.
+        import transformers.utils.import_utils as _tui
+        _tui.check_torch_load_is_safe = lambda: None
+        import transformers.utils as _tu
+        _tu.check_torch_load_is_safe = lambda: None
         from pysentimiento import create_analyzer
 
         def _load():
@@ -60,7 +67,7 @@ def _init_pysentimiento():
             ea = create_analyzer(task="emotion", lang="es")
             return sa, ea
 
-        loaded = _run_with_timeout(_load)
+        loaded = _run_with_timeout(_load, timeout=_MODEL_LOAD_TIMEOUT)
         if loaded is not None:
             _sentiment_analyzer, _emotion_analyzer = loaded
             HAS_PYSENTIMIENTO = True
@@ -89,7 +96,7 @@ def _init_transformers_fallback():
                 device=0 if torch.cuda.is_available() else -1,
             )
 
-        loaded = _run_with_timeout(_load)
+        loaded = _run_with_timeout(_load, timeout=_MODEL_LOAD_TIMEOUT)
         if loaded is not None:
             _fallback_analyzer = loaded
             HAS_FALLBACK = True
@@ -278,7 +285,6 @@ class SentimentAnalyzer:
             "pobreza", "pobre", "pobres",
             "abandono", "abandonado", "abandono",
             "incumplimiento", "incumplio", "incumplen",
-            "promesa", "promesas",
             "falso", "falsa", "falsos", "falsas",
             "ineficiente", "ineficientes", "ineficiencia",
             "inepto", "inepta", "ineptos",
@@ -287,16 +293,11 @@ class SentimentAnalyzer:
             "injusticia", "injusto", "injusta",
             "represion", "represivo",
             "autoritarismo", "autoritario", "autoritaria",
-            "dictadura", "oposicion",
+            "dictadura",
             "conflicto", "conflictos",
-            "problema", "problemas",
             "grave", "graves", "gravedad",
             "preocupante", "preocupantes",
-            "deuda", "deudas",
-            "impuesto", "impuestos",
-            "aumento", "aumentos", "aumento",
             "recorte", "recortes",
-            "gobierno", "gobiernos",
             "pesimo", "pesima",
             "detestable", "deplorable",
             "lamentable", "vergonzoso", "vergonzosa",

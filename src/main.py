@@ -185,6 +185,23 @@ def cmd_graph_scrape(args, cfg, storage):
 
 
 @timer
+def cmd_extract_comments(args, cfg, storage):
+    console.print(Panel("[bold yellow]EXTRACT COMMENTS — Fase 2 sobre posts existentes[/bold yellow]"))
+    posts = storage.get_fb_posts(limit=10000)
+    total = sum(1 for p in posts if p.get("post_url", "").startswith("http"))
+    console.print(f"[dim]Posts en DB: {len(posts)} · Con URL válida: {total}[/dim]")
+
+    from src.fb_scraper.deep_scraper import FacebookDeepScraper
+    scraper = FacebookDeepScraper(
+        cookies_file=args.cookies_file or cfg.FB_COOKIES_FILE or "cookies.json",
+        email=cfg.FB_EMAIL,
+        password=cfg.FB_PASSWORD,
+        headless=getattr(args, "headless", False),
+    )
+    stats = scraper.extract_comments_from_db(max_posts=args.max)
+    console.print(f"\n[bold green]✓ Hecho:[/bold green] {stats['posts_scraped']} posts, {stats['comments_scraped']} comentarios, {stats['errors']} errores")
+
+
 def cmd_deep_scrape(args, cfg, storage):
     console.print(Panel("[bold red]DEEP SCRAPER - Extracción Completa[/bold red]"))
     page = _resolve_page(args, cfg)
@@ -279,225 +296,7 @@ def cmd_scrape(args, cfg, storage):
         console.print(f"[bold green]Saved {saved} Facebook posts[/bold green]")
 
 
-def _export_dashboard_data(storage):
-    """Export SQLite data to dashboard/data.js."""
-    import json
-    from collections import defaultdict
-    from datetime import datetime
 
-    posts = storage.get_fb_posts(limit=10000)
-    comments = storage.get_fb_comments(limit=50000)
-
-    total = len(posts)
-    total_reactions = sum(p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("hahas_count", 0)
-                          + p.get("wows_count", 0) + p.get("sads_count", 0) + p.get("angrys_count", 0) for p in posts)
-    total_comments = sum(p.get("comments_count", 0) for p in posts)
-    total_shares = sum(p.get("shares_count", 0) for p in posts)
-    total_views = sum(p.get("views_count", 0) for p in posts)
-
-    rd = {
-        "likes": sum(p.get("likes_count", 0) for p in posts),
-        "loves": sum(p.get("loves_count", 0) for p in posts),
-        "hahas": sum(p.get("hahas_count", 0) for p in posts),
-        "wows": sum(p.get("wows_count", 0) for p in posts),
-        "sads": sum(p.get("sads_count", 0) for p in posts),
-        "angrys": sum(p.get("angrys_count", 0) for p in posts),
-    }
-
-    n = total_reactions or 1
-    net_sentiment = (rd["likes"] + rd["loves"] - rd["angrys"] - rd["sads"]) / n
-    controversy = (rd["angrys"] + rd["sads"]) / n
-    effectiveness = (rd["likes"] + rd["loves"]) / n
-    if total_views > 0:
-        engagement = ((total_reactions + total_comments + total_shares) / total_views) * 100
-    else:
-        engagement = (total_reactions + total_comments + total_shares) / max(total, 1)
-    positive_count = sum(1 for p in posts if p.get("sentiment") == "positive")
-    negative_count = sum(1 for p in posts if p.get("sentiment") == "negative")
-    nsi = ((positive_count - negative_count) / max(total, 1)) * 100
-
-    indices = {
-        "engagement": round(engagement, 2),
-        "netSentiment": round(net_sentiment, 4),
-        "controversy": round(controversy, 4),
-        "effectiveness": round(effectiveness, 4),
-        "riskReputacional": 0.0,
-        "nsi": round(nsi, 1),
-    }
-
-    intelligence = run_all_detectors(posts, SuppressionEngine())
-
-    topic_names = ["uncategorized", "medio_ambiente", "educacion", "empleo", "movilidad",
-                   "seguridad", "servicios_publicos", "obras_publicas", "salud", "corrupcion", "transparencia"]
-    topics = {}
-    for tn in topic_names:
-        tp = [p for p in posts if p.get("topic_category", "uncategorized") == tn]
-        likes = sum(p.get("likes_count", 0) for p in tp)
-        loves = sum(p.get("loves_count", 0) for p in tp)
-        hahas = sum(p.get("hahas_count", 0) for p in tp)
-        wows = sum(p.get("wows_count", 0) for p in tp)
-        sads = sum(p.get("sads_count", 0) for p in tp)
-        angrys = sum(p.get("angrys_count", 0) for p in tp)
-        tr = likes + loves + hahas + wows + sads + angrys
-        sent_pos = sum(1 for p in tp if p.get("sentiment") == "positive")
-        sent_neu = sum(1 for p in tp if p.get("sentiment") == "neutral")
-        sent_neg = sum(1 for p in tp if p.get("sentiment") == "negative")
-        topics[tn] = {
-            "count": len(tp), "likes": likes, "loves": loves, "hahas": hahas, "wows": wows,
-            "sads": sads, "angrys": angrys,
-            "comments": sum(p.get("comments_count", 0) for p in tp),
-            "shares": sum(p.get("shares_count", 0) for p in tp),
-            "views": sum(p.get("views_count", 0) for p in tp),
-            "sentiment_pos": sent_pos, "sentiment_neu": sent_neu, "sentiment_neg": sent_neg,
-            "total_reactions": tr,
-            "net_sentiment": round((likes + loves - angrys - sads) / max(tr, 1), 4),
-            "controversy": round((angrys + sads) / max(tr, 1), 4),
-            "effectiveness": round((likes + loves) / max(tr, 1), 4),
-        }
-
-    comment_neg = sum(1 for c in comments if c.get("sentiment") == "negative")
-    comment_total = len(comments) or 1
-    comment_neg_ratio = comment_neg / comment_total
-
-    topic_controversies = []
-    for tn, td in topics.items():
-        tr = td.get("total_reactions", 0) or 1
-        t_neg = td.get("angrys", 0) + td.get("sads", 0)
-        tc = t_neg / tr
-        if td.get("count", 0) > 0:
-            topic_controversies.append((tc, td["count"]))
-    max_topic_controversy = max(tc for tc, _ in topic_controversies) if topic_controversies else controversy
-
-    sdi_alerts = [a for a in intelligence.get("alerts", []) if a.get("type") == "sdi"]
-    sdi_factor = min(0.3, abs(sum(a.get("score", 0) for a in sdi_alerts)) * 0.05) if sdi_alerts else 0
-
-    nsi_deviation = max(0, (50 - nsi) / 100)
-
-    vol_factor = min(2.0, 1.0 + total / 1000)
-
-    risk = (max_topic_controversy * 10 * 0.35 + comment_neg_ratio * 0.35 + nsi_deviation * 0.15 + sdi_factor * 0.15) * vol_factor
-    risk = max(0.0, min(1.0, risk))
-    indices["riskReputacional"] = round(risk, 2)
-
-    zone_names = ["Este", "unknown", "Norte", "Centro", "Sur", "Oeste"]
-    zones = {}
-    for zn in zone_names:
-        zp = [p for p in posts if p.get("zona", "unknown") == zn]
-        zones[zn] = {
-            "count": len(zp),
-            "likes": sum(p.get("likes_count", 0) for p in zp),
-            "loves": sum(p.get("loves_count", 0) for p in zp),
-            "angrys": sum(p.get("angrys_count", 0) for p in zp),
-            "sads": sum(p.get("sads_count", 0) for p in zp),
-            "comments": sum(p.get("comments_count", 0) for p in zp),
-            "shares": sum(p.get("shares_count", 0) for p in zp),
-            "views": sum(p.get("views_count", 0) for p in zp),
-        }
-
-    monthly = {}
-    for p in posts:
-        ct = p.get("created_time")
-        if ct:
-            try:
-                dt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
-                key = dt.strftime("%Y-%m")
-                if key not in monthly:
-                    monthly[key] = {"posts": 0, "reactions": 0, "comments": 0, "shares": 0,
-                                    "views": 0, "likes": 0, "loves": 0, "angrys": 0, "sads": 0}
-                monthly[key]["posts"] += 1
-                monthly[key]["reactions"] += (p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("hahas_count", 0)
-                                              + p.get("wows_count", 0) + p.get("sads_count", 0) + p.get("angrys_count", 0))
-                monthly[key]["comments"] += p.get("comments_count", 0)
-                monthly[key]["shares"] += p.get("shares_count", 0)
-                monthly[key]["views"] += p.get("views_count", 0)
-                monthly[key]["likes"] += p.get("likes_count", 0)
-                monthly[key]["loves"] += p.get("loves_count", 0)
-                monthly[key]["angrys"] += p.get("angrys_count", 0)
-                monthly[key]["sads"] += p.get("sads_count", 0)
-            except (ValueError, TypeError):
-                pass
-
-    yearly = {}
-    for p in posts:
-        ct = p.get("created_time")
-        if ct:
-            try:
-                dt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
-                key = dt.strftime("%Y")
-                if key not in yearly:
-                    yearly[key] = {"pos": 0, "neu": 0, "neg": 0, "angrys": 0}
-                s = p.get("sentiment", "")
-                if s == "positive":
-                    yearly[key]["pos"] += 1
-                elif s == "negative":
-                    yearly[key]["neg"] += 1
-                else:
-                    yearly[key]["neu"] += 1
-                yearly[key]["angrys"] += p.get("angrys_count", 0)
-            except (ValueError, TypeError):
-                pass
-
-    top_posts = sorted(posts, key=lambda p: p.get("likes_count", 0) + p.get("comments_count", 0) * 2, reverse=True)[:50]
-    top_posts_data = []
-    for p in top_posts:
-        top_posts_data.append({
-            "id": p.get("post_id", ""),
-            "message": (p.get("message", "") or "")[:200],
-            "created": p.get("created_time", ""),
-            "topic": p.get("topic_category", ""),
-            "zona": p.get("zona", ""),
-            "sentiment": p.get("sentiment", ""),
-            "likes": p.get("likes_count", 0),
-            "loves": p.get("loves_count", 0),
-            "hahas": p.get("hahas_count", 0),
-            "wows": p.get("wows_count", 0),
-            "sads": p.get("sads_count", 0),
-            "angrys": p.get("angrys_count", 0),
-            "comments": p.get("comments_count", 0),
-            "shares": p.get("shares_count", 0),
-            "views": p.get("views_count", 0),
-        })
-
-    dates = [p.get("created_time") for p in posts if p.get("created_time")]
-    date_range = {"from": min(dates) if dates else datetime.now().isoformat(),
-                  "to": max(dates) if dates else datetime.now().isoformat()}
-
-    dash_data = {
-        "page": "Alcaldía de Santa Ana — Gustavo Acevedo",
-        "totalPosts": total,
-        "totalReactions": total_reactions,
-        "totalComments": total_comments,
-        "totalShares": total_shares,
-        "totalViews": total_views,
-        "reactionDistribution": rd,
-        "indices": indices,
-        "alerts": intelligence["alerts"],
-        "topicSensitivity": intelligence["topic_sensitivity"],
-        "alertSummary": intelligence["alert_summary"],
-        "topics": topics,
-        "zones": zones,
-        "monthly": monthly,
-        "yearly": yearly,
-        "topPosts": top_posts_data,
-        "keywordInsights": {},
-        "topKeywords": {},
-        "topBigrams": {},
-        "controversialPosts": [],
-        "dateRange": date_range,
-    }
-
-    dash_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard", "data.js")
-    with open(dash_path, "w", encoding="utf-8") as f:
-        f.write(f"const DASH_DATA = {json.dumps(dash_data, ensure_ascii=False)};\n")
-        f.write(f"const MONTHLY_DATA = {json.dumps(monthly, ensure_ascii=False)};\n")
-        f.write('const fmt = n => n.toLocaleString("es-SV");\n')
-        f.write('const pct = n => (n*100).toFixed(2)+"%";\n')
-        f.write('const short = n => n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(1)+"K":String(n);\n')
-        f.write('const alertColor = s => ({1:"#6b6b8a",2:"#ffb000",3:"#ff3355",4:"#ff0044"}[s]||"#6b6b8a");\n')
-        f.write('const tsColor = v => v>=1.4?"#ff3355":v>=1.2?"#ffb000":v>=1.0?"#00f0ff":"#00ff88";\n')
-
-    logger.info(f"Dashboard data exported to {dash_path}")
-    return len(posts)
 
 
 @timer
@@ -524,6 +323,25 @@ def cmd_analyze(args, cfg, storage):
         if updated:
             console.print(f"[green]Reclassified {updated} posts (topic/zona)[/green]")
 
+    from src.analyzer.topic_detection import extract_problematicas
+    all_posts = storage.get_fb_posts(limit=10000)
+    problematica_count = 0
+    for p in all_posts:
+        probs = extract_problematicas(p.get("message", ""), p.get("sentiment", ""))
+        for prob in probs:
+            storage.insert_problematica({
+                "platform": "facebook",
+                "post_id": p.get("post_id", ""),
+                "topic": prob.get("topic", ""),
+                "zona": prob.get("zona", ""),
+                "message": prob.get("text_preview", ""),
+                "sentiment": p.get("sentiment", ""),
+                "sentiment_score": p.get("sentiment_score", 0),
+            })
+            problematica_count += 1
+    if problematica_count:
+        console.print(f"[green]Extracted {problematica_count} problematicas[/green]")
+
     metrics_calc = ExecutiveMetrics(storage)
 
     fb_metrics = metrics_calc.generate_daily_metrics("facebook")
@@ -535,9 +353,6 @@ def cmd_analyze(args, cfg, storage):
     for insight in fb_insights[:5]:
         storage.insert_insight(insight)
     console.print(f"[green]Generated {len(fb_insights)} Facebook insights[/green]")
-
-    exported = _export_dashboard_data(storage)
-    console.print(f"[bold green]Dashboard data exported: {exported} posts → dashboard/data.js[/bold green]")
 
     posts = storage.get_fb_posts(limit=10000)
     intelligence = run_all_detectors(posts, SuppressionEngine())
@@ -607,12 +422,6 @@ def cmd_reset(args, cfg, storage):
         console.print("[bold green]All data purged successfully.[/bold green]")
     else:
         console.print("[red]Error during purge.[/red]")
-
-
-@timer
-def cmd_export_dashboard(args, cfg, storage):
-    exported = _export_dashboard_data(storage)
-    console.print(f"[bold green]Dashboard exported: {exported} posts → dashboard/data.js[/bold green]")
 
 
 @timer
@@ -776,7 +585,6 @@ def main():
 
     subparsers.add_parser("status", help="Show database status")
     subparsers.add_parser("reset", help="Purge all data from database")
-    subparsers.add_parser("export-dashboard", help="Export SQLite data to dashboard/data.js")
     nlp_parser = subparsers.add_parser("nlp", help="Run NLP pipeline (emotions, entities, collocations)")
     nlp_parser.add_argument("--batch", type=int, default=500, help="Batch size to process")
     nlp_parser.add_argument("--collocations", action="store_true", default=True, help="Extract collocations from corpus")
@@ -793,7 +601,12 @@ def main():
     phase3_parser.add_argument("--page-id", default="", help="Facebook Page ID")
     phase3_parser.add_argument("--page-name", default="", help="Nombre de la página")
 
-    cambridge_parser = subparsers.add_parser("cambridge", help="Cambridge Index - alertas predictivas y sensibilidad por tópico")
+    cambridge_parser =     extract_parser = subparsers.add_parser("extract-comments", help="Extraer comentarios de posts ya existentes en DB (Fase 2)")
+    extract_parser.add_argument("--max", type=int, default=500, help="Posts a procesar")
+    extract_parser.add_argument("--cookies-file", default="", help="Archivo de cookies")
+    extract_parser.add_argument("--headless", action="store_true", help="Modo headless")
+
+    subparsers.add_parser("cambridge", help="Cambridge Index - alertas predictivas y sensibilidad por tópico")
     cambridge_parser.add_argument("--days", type=int, default=30, help="Ventana de análisis en días")
     cambridge_parser.add_argument("--json", action="store_true", help="Output JSON en lugar de tabla")
 
@@ -812,14 +625,14 @@ def main():
         cmd_scrape(args, cfg, storage)
     elif args.command == "graph-scrape":
         cmd_graph_scrape(args, cfg, storage)
+    elif args.command == "extract-comments":
+        cmd_extract_comments(args, cfg, storage)
     elif args.command == "deep-scrape":
         cmd_deep_scrape(args, cfg, storage)
     elif args.command == "analyze":
         cmd_analyze(args, cfg, storage)
     elif args.command == "reset":
         cmd_reset(args, cfg, storage)
-    elif args.command == "export-dashboard":
-        cmd_export_dashboard(args, cfg, storage)
     elif args.command == "nlp":
         cmd_nlp(args, cfg, storage)
     elif args.command == "phase3":

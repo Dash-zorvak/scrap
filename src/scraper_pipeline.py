@@ -240,7 +240,7 @@ def main():
     pipeline.generate_metrics()
 
     print("\nScraping completado!")
-    print("Revisa el dashboard para ver los resultados.")
+    print("Pipeline completado.")
 
 
 if __name__ == '__main__':

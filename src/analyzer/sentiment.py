@@ -1,5 +1,6 @@
 import logging
-import signal
+import re
+import unicodedata
 import threading
 from typing import Optional
 
@@ -13,7 +14,15 @@ HAS_FALLBACK = False
 _PYSENTIMIENTO_TRIED = False
 _FALLBACK_TRIED = False
 
-_INIT_TIMEOUT = 60
+_INIT_TIMEOUT = 10
+
+SENTIMENT_5LEVEL = {
+    "muy_positivo": 2,
+    "positivo": 1,
+    "neutral": 0,
+    "negativo": -1,
+    "muy_negativo": -2,
+}
 
 
 def _run_with_timeout(func, args=(), kwargs=None, timeout=_INIT_TIMEOUT):
@@ -57,7 +66,7 @@ def _init_pysentimiento():
             HAS_PYSENTIMIENTO = True
             logger.info("pysentimiento loaded successfully")
         else:
-            logger.warning("pysentimiento initialization timed out — using rule-based")
+            logger.warning("pysentimiento initialization timed out -- using rule-based")
             HAS_PYSENTIMIENTO = False
     except Exception as e:
         logger.debug(f"pysentimiento not available: {e}")
@@ -86,11 +95,23 @@ def _init_transformers_fallback():
             HAS_FALLBACK = True
             logger.info("Transformers fallback loaded successfully")
         else:
-            logger.warning("Transformers fallback timed out — using rule-based")
+            logger.warning("Transformers fallback timed out -- using rule-based")
             HAS_FALLBACK = False
     except Exception as e:
         logger.debug(f"Transformers fallback not available: {e}")
         HAS_FALLBACK = False
+
+
+def _map_score_to_5level(label_3: str, score: float) -> tuple:
+    if label_3 == "positive":
+        if score >= 0.8:
+            return ("muy_positivo", score)
+        return ("positivo", score)
+    elif label_3 == "negative":
+        if score >= 0.8:
+            return ("muy_negativo", score)
+        return ("negativo", score)
+    return ("neutral", score)
 
 
 class SentimentAnalyzer:
@@ -121,18 +142,20 @@ class SentimentAnalyzer:
         try:
             result = _sentiment_analyzer.predict(text)
             probs = result.probas
+            pos = probs.get("POS", 0)
+            neg = probs.get("NEG", 0)
+            neu = probs.get("NEU", 0)
 
-            if probs.get("POS", 0) > probs.get("NEG", 0) and probs.get("POS", 0) > probs.get("NEU", 0):
+            if pos > neg and pos > neu:
                 label = "positive"
-                score = probs.get("POS", 0)
-            elif probs.get("NEG", 0) > probs.get("NEU", 0):
+                score = pos
+            elif neg > pos and neg > neu:
                 label = "negative"
-                score = probs.get("NEG", 0)
+                score = neg
             else:
-                label = "neutral"
-                score = probs.get("NEU", 0)
+                return ("neutral", round(neu, 4))
 
-            return (label, round(score, 4))
+            return _map_score_to_5level(label, round(score, 4))
         except Exception as e:
             logger.warning(f"pysentimiento analysis failed: {e}")
             return self._analyze_rule_based(text)
@@ -148,16 +171,21 @@ class SentimentAnalyzer:
             elif "positive" in label:
                 label = "positive"
             else:
-                label = "neutral"
+                return ("neutral", round(score, 4))
 
-            return (label, round(score, 4))
+            return _map_score_to_5level(label, round(score, 4))
         except Exception as e:
             logger.warning(f"Transformers analysis failed: {e}")
             return self._analyze_rule_based(text)
 
     @staticmethod
+    def _normalize(word: str) -> str:
+        return unicodedata.normalize('NFKD', word).encode('ascii', 'ignore').decode('ascii')
+
+    @staticmethod
     def _match_word(word: str, stems: set) -> bool:
-        word = word.strip(".,!?;:¡¿\"'()").lower()
+        word = word.strip(".,!?;:!\u00bf\"'()").lower()
+        word = SentimentAnalyzer._normalize(word)
         if not word or len(word) < 3:
             return False
         if word in stems:
@@ -166,8 +194,8 @@ class SentimentAnalyzer:
                    word.rstrip("os").rstrip("as")]:
             if len(s) >= 3 and s in stems:
                 return True
-        for suf in ("ado", "ado", "ido", "ada", "ida", "ando", "iendo",
-                     "ción", "sión", "miento", "mente", "ado", "ido"):
+        for suf in ("ado", "ido", "ada", "ida", "ando", "iendo",
+                     "cion", "sion", "miento", "mente", "ado", "ido"):
             if word.endswith(suf) and len(word) - len(suf) >= 3:
                 base = word[: -len(suf)]
                 if base in stems:
@@ -177,7 +205,7 @@ class SentimentAnalyzer:
         return False
 
     def _analyze_rule_based(self, text: str) -> tuple[str, float]:
-        text_lower = text.lower()
+        text_lower = self._normalize(text.lower())
 
         positive_words = {
             "buen", "buena", "bueno", "buenos", "buenas",
@@ -189,22 +217,22 @@ class SentimentAnalyzer:
             "perfecto", "perfecta", "perfectos", "perfectas",
             "hermoso", "hermosa", "hermosos", "hermosas",
             "maravilloso", "maravillosa", "maravillosas", "maravillosos",
-            "increíble", "increíbles",
-            "fantástico", "fantástica", "fantásticos", "fantásticas",
+            "increible", "increibles",
+            "fantastico", "fantastica", "fantasticos", "fantasticas",
             "apoyo", "apoyar", "apoyamos", "apoyan",
             "adelante", "avance", "avances", "avanzando", "avanzamos",
             "progreso", "progresando", "progresamos",
             "trabajo", "trabajando", "trabajamos", "trabajar",
             "logro", "logros", "logrado", "logramos",
-            "éxito", "exitosa", "exitoso", "exitosos",
+            "exito", "exitosa", "exitoso", "exitosos",
             "beneficio", "beneficios", "beneficiando",
             "orgullo", "orgulloso", "orgullosa",
             "bonito", "bonita", "bonitos", "bonitas",
             "contento", "contenta", "contentos", "contentas",
-            "alegría", "alegre", "alegres",
-            "gusta", "gustan", "gustó",
+            "alegria", "alegre", "alegres",
+            "gusta", "gustan", "gusto",
             "aprecio", "apreciamos",
-            "bendición", "bendiciones",
+            "bendicion", "bendiciones",
             "seguridad", "seguro", "segura",
             "desarrollo", "desarrollando", "desarrollamos",
             "crecimiento", "creciendo", "crecemos",
@@ -215,41 +243,41 @@ class SentimentAnalyzer:
             "eficaz", "victoria", "victorias",
             "triunfo", "triunfos",
             "esperanza", "esperanzas",
-            "unidos", "unidas", "unidad", "unión",
-            "liderazgo", "líder", "liderando",
-            "cumpliendo", "cumplimos", "cumplió",
-            "resultados", "resultado",
-            "proyecto", "proyectos",
-            "recuperación", "recuperando",
+            "unidos", "unidas", "unidad", "union",
+            "liderazgo", "lider", "liderando",
+            "recuperacion", "recuperando",
+            "magnifico", "magnifica", "estupendo", "estupenda",
+            "fenomenal", "espectacular", "brillante",
+            "impresionante", "formidable",
         }
 
         negative_words = {
             "malo", "mala", "malos", "malas", "mal", "males",
-            "pésimo", "pésima", "pésimos", "pésimas",
+            "pesimo", "pesima", "pesimos", "pesimas",
             "horrible", "horribles",
             "triste", "tristes", "tristeza",
             "corrupto", "corrupta", "corruptos", "corruptas",
-            "corrupción",
-            "fracaso", "fracasos", "fracasado", "fracasó",
+            "corrupcion",
+            "fracaso", "fracasos", "fracasado", "fracaso",
             "peor", "peores",
             "deficiente", "deficientes", "deficiencia",
             "incompetente", "incompetentes", "incompetencia",
             "mentira", "mentiras", "miente", "mienten",
-            "engaño", "engañando", "engañó",
-            "robo", "robos", "robó", "roban", "robar",
-            "ladrón", "ladrona", "ladrones",
+            "engano", "enganando", "engano",
+            "robo", "robos", "robo", "roban", "robar",
+            "ladron", "ladrona", "ladrones",
             "inseguridad", "inseguro", "insegura",
             "delincuencia", "delincuente", "delincuentes",
             "violencia", "violento", "violenta",
             "basura", "desastre", "desastres",
-            "vergüenza", "vergonzoso",
+            "verguenza", "vergonzoso",
             "asqueroso", "asquerosa",
             "odio", "odian", "odiado",
             "detesto", "detestable", "detestan",
             "desempleo", "desempleados",
             "pobreza", "pobre", "pobres",
-            "abandono", "abandonado", "abandonó",
-            "incumplimiento", "incumplió", "incumplen",
+            "abandono", "abandonado", "abandono",
+            "incumplimiento", "incumplio", "incumplen",
             "promesa", "promesas",
             "falso", "falsa", "falsos", "falsas",
             "ineficiente", "ineficientes", "ineficiencia",
@@ -257,30 +285,36 @@ class SentimentAnalyzer:
             "crisis", "emergencia", "emergencias",
             "caos", "abusos", "abuso",
             "injusticia", "injusto", "injusta",
-            "represión", "represivo",
+            "represion", "represivo",
             "autoritarismo", "autoritario", "autoritaria",
-            "dictadura", "oposición",
+            "dictadura", "oposicion",
             "conflicto", "conflictos",
             "problema", "problemas",
             "grave", "graves", "gravedad",
             "preocupante", "preocupantes",
             "deuda", "deudas",
             "impuesto", "impuestos",
-            "aumento", "aumentos", "aumentó",
+            "aumento", "aumentos", "aumento",
             "recorte", "recortes",
             "gobierno", "gobiernos",
+            "pesimo", "pesima",
+            "detestable", "deplorable",
+            "lamentable", "vergonzoso", "vergonzosa",
+            "desastroso", "desastrosa",
+            "intolerable", "insoportable",
+            "nefasto", "nefasta",
         }
 
         words = text_lower.split()
         positives = sum(1 for w in words if self._match_word(w, positive_words))
         negatives = sum(1 for w in words if self._match_word(w, negative_words))
 
-        negation_words = {"no", "nunca", "jamás", "tampoco", "ni"}
+        negation_words = {"no", "nunca", "jamas", "tampoco", "ni"}
         for i, word in enumerate(words):
-            word_clean = word.strip(".,!?;:¡¿\"'()")
+            word_clean = word.strip(".,!?;:!\u00bf\"'()")
             if word_clean in negation_words:
                 for j in range(i + 1, min(i + 4, len(words))):
-                    next_clean = words[j].strip(".,!?;:¡¿\"'()")
+                    next_clean = words[j].strip(".,!?;:!\u00bf\"'()")
                     if self._match_word(next_clean, positive_words):
                         negatives += 1
                         positives = max(0, positives - 1)
@@ -293,14 +327,27 @@ class SentimentAnalyzer:
         if total == 0:
             return ("neutral", 0.0)
 
-        if positives > negatives:
-            score = positives / total
-            return ("positive", round(score, 4))
-        elif negatives > positives:
-            score = negatives / total
-            return ("negative", round(score, 4))
-        else:
-            return ("neutral", round(positives / total, 4) if total > 0 else 0.0)
+        if positives > 0 and negatives == 0:
+            ratio = positives
+            if ratio >= 3:
+                return ("muy_positivo", round(min(ratio / 5, 0.95), 4))
+            return ("positivo", round(0.5 + ratio * 0.1, 4))
+        elif negatives > 0 and positives == 0:
+            ratio = negatives
+            if ratio >= 3:
+                return ("muy_negativo", round(min(ratio / 5, 0.95), 4))
+            return ("negativo", round(0.5 + ratio * 0.1, 4))
+
+        ratio = positives / total
+        if ratio >= 0.8:
+            return ("muy_positivo", round(ratio, 4))
+        elif ratio >= 0.6:
+            return ("positivo", round(ratio, 4))
+        elif ratio <= 0.2:
+            return ("muy_negativo", round(1 - ratio, 4))
+        elif ratio <= 0.4:
+            return ("negativo", round(1 - ratio, 4))
+        return ("neutral", round(ratio, 4))
 
     def analyze_emotions(self, text: str) -> dict:
         if not text or not text.strip():
@@ -322,14 +369,14 @@ class SentimentAnalyzer:
             import re
             from collections import defaultdict
 
-            text_lower = text.lower()
+            text_norm = unicodedata.normalize('NFKD', text.lower()).encode('ascii', 'ignore').decode('ascii')
             scores = defaultdict(float)
-            words = re.findall(r'\w+', text_lower)
+            words = re.findall(r'\w+', text_norm)
             for emotion, keywords in EMOTION_LEXICON.items():
                 score = 0
                 for kw in keywords:
-                    if kw in text_lower:
-                        score += text_lower.count(kw)
+                    kw_norm = unicodedata.normalize('NFKD', kw.lower()).encode('ascii', 'ignore').decode('ascii')
+                    score += len(re.findall(r'\b' + re.escape(kw_norm) + r'\b', text_norm))
                 if score > 0:
                     scores[emotion] = score
             total = sum(scores.values()) or 1
@@ -339,3 +386,9 @@ class SentimentAnalyzer:
         except Exception as e:
             logger.warning(f"Lexicon emotion analysis failed: {e}")
             return {}
+
+
+SENTIMENT_ORDER = {
+    "muy_positivo": 2, "positivo": 1, "neutral": 0,
+    "negativo": -1, "muy_negativo": -2,
+}

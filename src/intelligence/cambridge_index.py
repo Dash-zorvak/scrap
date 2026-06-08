@@ -377,7 +377,7 @@ def run_all_detectors(
     alerts: List[AlertResult] = []
 
     if not posts or len(posts) < 5:
-        return {"alerts": [], "indices": _compute_indices(posts or [])}
+        return {"alerts": [], "indices": _compute_indices(posts or []), "topic_sensitivity": {}, "alert_summary": ""}
 
     indices = _compute_indices(posts)
 

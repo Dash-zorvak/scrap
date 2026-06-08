@@ -17,8 +17,6 @@ import requests
 
 from src.fb_scraper.models import FBCommentData
 from src.storage.supabase_client import SupabaseStorage
-from src.analyzer.sentiment import SentimentAnalyzer
-from src.analyzer.topic_detection import get_main_topic, detect_zona
 from src.notifications.telegram import TelegramNotifier
 from src.config import Config
 
@@ -33,8 +31,8 @@ class Phase3Resumer:
         cfg = Config()
         self.access_token = access_token or cfg.FB_ACCESS_TOKEN
         self.page_id = page_id or cfg.FB_PAGE_ID or "395582594151511"
+        self.base_url = f"{FB_GRAPH_API}/{self.page_id}/feed"
         self.storage = SupabaseStorage()
-        self.analyzer = SentimentAnalyzer()
         self.notifier = TelegramNotifier()
 
         self.stats = {
@@ -103,21 +101,14 @@ class Phase3Resumer:
                 if not cid or not msg:
                     continue
                 parent_id = c.get("parent_id")
-                sentiment, score = self.analyzer.analyze(msg)
-                topic = get_main_topic(msg)
-                zona = detect_zona(msg)
 
                 record = {
                     "comment_id": cid,
                     "post_id": post_id,
                     "message": msg[:5000],
-                    "author_name": c.get("from", {}).get("name", "Unknown") if isinstance(c.get("from"), dict) else "Unknown",
+                    "author_name": c.get("from", {}).get("name", "Anónimo") if isinstance(c.get("from"), dict) else "Anónimo",
                     "created_time": c.get("created_time"),
                     "like_count": c.get("like_count", 0),
-                    "sentiment": sentiment,
-                    "sentiment_score": score,
-                    "topic_category": topic,
-                    "zona": zona,
                     "parent_comment_id": None,
                 }
                 self.storage.insert_fb_comment(record)
@@ -131,20 +122,13 @@ class Phase3Resumer:
                         rmsg = r.get("message") or ""
                         if not rid or not rmsg:
                             continue
-                        rs, rsc = self.analyzer.analyze(rmsg)
-                        rt = get_main_topic(rmsg)
-                        rz = detect_zona(rmsg)
                         rrec = {
                             "comment_id": rid,
                             "post_id": post_id,
                             "message": rmsg[:5000],
-                            "author_name": r.get("from", {}).get("name", "Unknown") if isinstance(r.get("from"), dict) else "Unknown",
+                            "author_name": r.get("from", {}).get("name", "Anónimo") if isinstance(r.get("from"), dict) else "Anónimo",
                             "created_time": r.get("created_time"),
                             "like_count": r.get("like_count", 0),
-                            "sentiment": rs,
-                            "sentiment_score": rsc,
-                            "topic_category": rt,
-                            "zona": rz,
                             "parent_comment_id": cid,
                         }
                         self.storage.insert_fb_comment(rrec)

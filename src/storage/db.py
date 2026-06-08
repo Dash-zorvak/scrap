@@ -122,7 +122,7 @@ class LocalStorage:
     def __init__(self, db_path: str = None):
         if db_path is None:
             cfg = Config()
-            db_path = os.path.join(cfg.DATA_DIR, "backup.db")
+            db_path = os.path.join(cfg.DATA_DIR, "facebook.db")
         os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
         self.db_path = db_path
         self.engine = sa.create_engine(f"sqlite:///{db_path}")

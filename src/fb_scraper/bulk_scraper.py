@@ -19,8 +19,6 @@ from datetime import datetime
 from src.fb_scraper.graph_api_scraper import GraphAPIScraper, FB_GRAPH_API
 from src.storage.supabase_client import SupabaseStorage
 from src.config import Config
-from src.analyzer.sentiment import SentimentAnalyzer
-from src.analyzer.topic_detection import get_main_topic, detect_zona
 from src.notifications.telegram import TelegramNotifier
 
 logger = logging.getLogger(__name__)
@@ -36,7 +34,6 @@ class BulkFacebookScraper:
         self.page_id = cfg.FB_PAGE_ID or "395582594151511"
         self.page_name = cfg.FB_PAGE_NAME or "Jose Chicas"
         self.storage = SupabaseStorage()
-        self.analyzer = SentimentAnalyzer()
         self.notifier = TelegramNotifier()
 
     def _request(self, endpoint: str, params: dict = None, retries: int = 2) -> Optional[dict]:
@@ -132,9 +129,6 @@ class BulkFacebookScraper:
         r = post_data.get("reactions_by_type", {})
         comments = post_data.get("comments", {})
         shares_data = post_data.get("shares", {})
-        sentiment, score = self.analyzer.analyze(message)
-        topic = get_main_topic(message)
-        zona = detect_zona(message)
         record = {
             "post_id": post_id,
             "page_id": self.page_id,
@@ -150,10 +144,6 @@ class BulkFacebookScraper:
             "comments_count": comments.get("summary", {}).get("total_count", 0) if isinstance(comments, dict) else 0,
             "shares_count": shares_data.get("count", 0) if isinstance(shares_data, dict) else 0,
             "post_url": f"https://www.facebook.com/{post_id}",
-            "sentiment": sentiment,
-            "sentiment_score": score,
-            "topic_category": topic,
-            "zona": zona,
         }
         return self.storage.insert_fb_post(record)
 
@@ -306,21 +296,14 @@ class BulkFacebookScraper:
                     msg = f"[{mtype}]"
             else:
                 msg = "[sin_texto]"
-        sentiment, score = self.analyzer.analyze(msg)
-        topic = get_main_topic(msg)
-        zona = detect_zona(msg)
         record = {
             "comment_id": cid,
             "post_id": post_id,
             "message": msg[:5000],
-            "author_name": comment.get("from", {}).get("name", "Unknown") if isinstance(comment.get("from"), dict) else "Unknown",
+            "author_name": comment.get("from", {}).get("name", "Anónimo") if isinstance(comment.get("from"), dict) else "Anónimo",
             "created_time": comment.get("created_time"),
             "like_count": comment.get("like_count", 0),
             "parent_comment_id": parent_id,
-            "sentiment": sentiment,
-            "sentiment_score": score,
-            "topic_category": topic,
-            "zona": zona,
         }
         return self.storage.insert_fb_comment(record)
 

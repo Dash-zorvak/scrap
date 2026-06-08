@@ -1,186 +1,329 @@
 import re
 import logging
+import unicodedata
 from typing import Optional, List, Dict, Tuple
+from collections import defaultdict, Counter
 
 logger = logging.getLogger(__name__)
 
 TOPIC_KEYWORDS = {
     "obras_publicas": [
         "bache", "baches", "calle", "calles", "carpeta", "asfalto", "puente",
-        "parque", "obra", "obras", "cordón", "summo", "vereda", "acera",
-        "drenaje", "alcantarillado", "construcción", "reparación", "pavimento",
-        "pavimentación", "adoquín", "adoquinado", "infraestructura", "callejón",
-        "bulevar", "carretera", "rotonda", "redondel", "pasarela", "andén",
-        "mejoramiento vial", "vialidad", "construyendo", "reconstrucción",
-        "remodelación", "embellecimiento", "jardín", "jardines", "área verde",
+        "parque", "obra", "obras", "cordon", "summo", "vereda", "acera",
+        "drenaje", "alcantarillado", "construccion", "reparacion", "pavimento",
+        "pavimentacion", "adoquin", "adoquinado", "infraestructura", "callejon",
+        "bulevar", "carretera", "rotonda", "redondel", "pasarela", "anden",
+        "mejoramiento vial", "vialidad", "construyendo", "reconstruccion",
+        "remodelacion", "embellecimiento", "jardin", "jardines", "area verde",
         "cancha", "canchas", "deportiva", "polideportivo", "pista", "estadio",
-        "gimnasio", "parque infantil", "juegos", "mirador", "turístico"
+        "gimnasio", "parque infantil", "juegos", "mirador", "turistico",
+        "maquinaria", "lotificacion", "terreno", "terrenos",
+        "calle principal", "rehabilitacion", "obra gris", "cimientos",
+        "colado", "colada", "loseta", "baldosa", "puente peatonal",
+        "paso a desnivel", "tunel", "derrumbe", "deslizamiento", "talud",
+        "contencion", "muro", "muros", "pavimentar", "via principal",
+        "construccion", "construyendo", "reconstruyendo",
     ],
     "seguridad": [
         "robo", "robos", "asalto", "asaltos", "delincuencia", "delincuente",
-        "seguridad", "policía", "policia", "crimen", "matar", "muerte", "asesinato",
-        "pandilla", "extorsión", "amenaza", "violencia", "asociación",
-        "cámaras", "videovigilancia", "patrullaje", "seguridad ciudadana",
-        "prevención", "iluminación", "alumbrado público", "denuncia",
-        "protección", "resguardo", "militares", "ejército", "pnc", "fgr"
+        "seguridad", "policia", "crimen", "matar", "muerte", "asesinato",
+        "pandilla", "extorsion", "amenaza", "violencia",
+        "camaras", "videovigilancia", "patrullaje", "seguridad ciudadana",
+        "prevencion", "alumbrado publico", "denuncia",
+        "proteccion", "resguardo", "militares", "ejercito", "pnc", "fgr",
+        "pandilleros", "maras", "marero", "mareros", "rondas", "vigilante",
+        "vigilancia", "motin", "intoxicacion", "intoxicado",
+        "balacera", "disparos", "arma blanca", "arma de fuego", "portacion",
+        "captura", "capturado", "detenido", "detencion", "orden de captura",
+        "seguridad publica", "prevencion del delito", "carcel", "prision",
+        "presidio", "reo", "reos", "ciudadano vigilante",
     ],
     "servicios_publicos": [
-        "agua", "luz", "electricidad", "basura", "recolección", "servicio",
-        "corte", "servicios", "tubería", "alcantarillado", "desague",
+        "agua", "luz", "electricidad", "basura", "recoleccion", "servicio",
+        "corte", "servicios", "tuberia", "alcantarillado", "desague",
         "potable", "cloro", "afectado", "sin agua", "sin luz",
-        "alumbrado", "alumbrado público", "fuga", "cañería", "tubería rota",
+        "alumbrado", "alumbrado publico", "fuga", "caneria", "tuberia rota",
         "mantenimiento", "limpieza", "aseo", "mercado", "cementerio",
-        "registro", "municipal", "tramite", "trámite", "permiso"
+        "registro", "municipal", "tramite", "permiso",
+        "enlace", "link", "pagina web", "digital", "virtual",
+        "ventanilla", "atencion al publico", "horario", "oficina",
+        "reclamo", "queja", "solicitud", "solicitar", "buzon", "caja",
+        "pago", "pagar", "recibo", "factura", "tarifa", "cobro",
+        "inundacion", "calle anegada", "anega", "desbordamiento",
+        "desborde", "aguas lluvias", "aguas negras", "aguas servidas",
+        "tuberia tapada", "fosa", "pozo", "septico",
+        "recolector", "camion de basura", "contenedor",
+        "alumbrado electrico", "poste", "cableado", "transformador",
+        "sin agua potable", "corte de luz", "apagon",
     ],
     "empleo": [
         "trabajo", "empleo", "desempleo", "desempleado", "negocio", "negocios",
-        "empresa", "empresas", "trabajador", "patrón", "formal", "informal",
+        "empresa", "empresas", "trabajador", "patron", "formal", "informal",
         "vacante", "contratar", "feria de empleo", "oportunidad laboral",
         "emprendedor", "emprendimiento", "microempresa", "mipyme",
-        "capacitación", "capacitacion", "taller", "curso", "formación",
-        "empleo joven", "bolsa de trabajo"
+        "capacitacion", "taller", "curso", "formacion",
+        "empleo joven", "bolsa de trabajo",
+        "sueldo", "salario", "ingreso", "ingresos", "puesto",
+        "contratacion", "contrataciones", "plaza",
+        "jornada laboral", "jubilacion", "pension",
+        "trabajadores", "trabajadora", "empleados", "empleada",
+        "despido", "despidieron", "cesante", "sin trabajo", "contratado",
+        "mano de obra", "oficio", "profesion",
+        "emprendedores", "emprendedora", "empleo temporal",
     ],
     "salud": [
-        "hospital", "clínica", "clinica", "doctor", "doctora", "salud",
-        "enfermedad", "enfermo", "consulta", "médico", "medico", "centro de salud",
+        "hospital", "clinica", "doctor", "doctora", "salud",
+        "enfermedad", "enfermo", "consulta", "medico", "centro de salud",
         "emergencia", "ambulancia", "vacuna", "farmacia", "medicina",
-        "campaña de salud", "jornada médica", "odontología", "optometría",
-        "donación de sangre", "papanicolaou", "ultrasonido", "rayos x",
-        "consulta externa", "atención médica", "bienestar", "nutrición"
+        "campana de salud", "jornada medica", "odontologia", "optometria",
+        "donacion de sangre", "papanicolaou", "ultrasonido", "rayos x",
+        "consulta externa", "atencion medica", "bienestar", "nutricion",
+        "operacion", "cirugia", "paciente",
+        "cita medica", "examenes", "analisis",
+        "analisis clinicos", "diagnostico",
+        "tratamiento", "terapia", "rehabilitacion fisica",
+        "covid", "covid-19", "pandemia", "virus", "sintomas",
+        "fiebre", "gripe", "resfriado", "tos", "dolor",
+        "jornada de salud", "feria de salud", "salud publica",
+        "ambulancia municipal", "centro de salud cercano",
     ],
     "educacion": [
-        "escuela", "colegio", "educación", "educacion", "maestro", "maestra",
+        "escuela", "colegio", "educacion", "maestro", "maestra",
         "estudiante", "alumno", "clase", "universidad", "becas",
         "material", "uniforme", "instituto", "paquete escolar", "entrega de",
         "kit escolar", "zapatos", "mochila", "cuaderno", "libros",
         "infraestructura educativa", "aula", "computadora", "laboratorio",
-        "biblioteca", "cursos", "talleres educativos", "niños", "jóvenes",
-        "estudiantes", "bachillerato", "educación básica", "inscripción"
+        "biblioteca", "cursos", "talleres educativos", "ninos", "jovenes",
+        "estudiantes", "bachillerato", "educacion basica", "inscripcion",
+        "matricula", "docente", "catedratico",
+        "profesor", "profesora", "director", "directora",
+        "jardin infantil", "kinder", "preescolar",
+        "primaria", "secundaria", "media", "tecnico",
+        "aprendizaje", "educativo", "educativa", "escolar",
+        "beca", "paseo escolar", "excursion",
+        "computadoras", "tablets", "clases virtuales",
     ],
     "movilidad": [
-        "tráfico", "trafico", "transito", "tránsito", "transporte",
-        "carro", "carros", "vehículo", "vehiculo", "bus", "buses", "ruta",
-        "parada", "semáforo", "semaforo", "embotellamiento", "congestión",
-        "congestion", "vía", "carretera", "taxi", "motocicleta", "bicicleta",
-        "ciclovía", "ciclovia", "estacionamiento", "parqueo", "peatonal",
-        "peatón", "peaton", "señalización", "señal de tránsito", "transporte público"
+        "trafico", "transito", "transporte",
+        "carro", "carros", "vehiculo", "bus", "buses", "ruta",
+        "parada", "semaforo", "embotellamiento", "congestion",
+        "via", "carretera", "taxi", "motocicleta", "bicicleta",
+        "ciclovia", "estacionamiento", "parqueo", "peatonal",
+        "peaton", "senalizacion", "senal de transito", "transporte publico",
+        "mototaxi", "moto", "cuadraciclo", "pickup", "camion",
+        "microbus", "colectivo", "furgon",
+        "terminal", "paradero", "desvio",
+        "cierre de calle", "calle cerrada", "paso cerrado",
+        "accidente de transito", "choque",
+        "atropellado", "vuelco", "incidente vial", "transito vehicular",
+        "trafico vehicular", "circulacion",
+        "transporte gratuito", "ruta escolar",
     ],
     "corrupcion": [
-        "corrupto", "corrupta", "corrupción", "corrupcion", "robo",
-        "ladrón", "ladrones", "ladrona", "mentira", "mentiras", "fraude",
-        "desvío", "malversación", "tráfico de influencias", "cohecho",
+        "corrupto", "corrupta", "corrupcion", "robo",
+        "ladron", "ladrones", "mentira", "mentiras", "fraude",
+        "desvio", "malversacion", "trafico de influencias", "cohecho",
         "soborno", "nepotismo", "impunidad", "encubrimiento", "desfalco",
-        "mal gobierno", "autoritarismo", "dictadura", "represión", "represivo",
-        "oposición", "tiranía", "abusos", "abuso de poder"
+        "mal gobierno", "autoritarismo", "dictadura", "represion",
+        "oposicion", "tirania", "abusos", "abuso de poder",
+        "favoritismo", "clientelismo", "prebenda", "prebendas",
+        "enriquecimiento", "ilicito", "ilegal", "ilegales",
+        "malversado", "malversar", "robar", "robado",
+        "politiqueria", "partidario", "partidarismo",
+        "compadrazgo", "amiguismo",
+        "negocio turbio", "dinero sucio", "lavado", "testaferro",
+        "sobrevalorado", "inflado", "cobro indebido",
+        "se robaron", "se robo", "dinero publico",
     ],
     "medio_ambiente": [
-        "contaminación", "contaminacion", "basura", "río", "rio",
-        "árbol", "arbol", "verde", "ambiente", "ecología", "ecologia",
+        "contaminacion", "basura", "rio", "arbol",
+        "verde", "ambiente", "ecologia",
         "reserva", "bosque", "playa", "contaminante", "reciclaje",
-        "reciclar", "cambio climático", "sostenible", "sostenibilidad",
-        "áreas verdes", "areas verdes", "parque nacional", "naturaleza",
+        "reciclar", "cambio climatico", "sostenible", "sostenibilidad",
+        "areas verdes", "parque nacional", "naturaleza",
         "fauna", "flora", "cuenca", "quebrada", "mangle", "ecosistema",
-        "reforestación", "reforestacion", "jornada de limpieza",
-        "desechos sólidos", "desechos solidos", "separación de basura",
-        "punto limpio", "vertedero", "relleno sanitario"
+        "reforestacion", "jornada de limpieza",
+        "desechos solidos", "separacion de basura",
+        "punto limpio", "vertedero", "relleno sanitario",
+        "calentamiento global", "huella ecologica",
+        "energia limpia", "energia solar", "paneles solares",
+        "renovable", "sustentable",
+        "parque ecologico", "jardin botanico", "jardin botánico",
+        "vivero", "aguas residuales", "tratamiento de aguas",
+        "humedal", "laguna", "lago", "volcan", "cerro",
+        "montana", "senderismo", "aves", "pajaro", "pajaros",
+        "arboles", "plantas", "plantar", "siembra",
     ],
     "transparencia": [
-        "información", "informacion", "transparente", "donde está",
-        "gasto", "gastos", "presupuesto", "informe", "rendición",
-        "rendicion", "cuenta pública", "transparencia", "acceso a la información",
-        "rendición de cuentas", "auditoría", "auditoria", "ley de acceso",
-        "datos abiertos", "portal de transparencia", "licitación",
-        "contratación", "contratacion", "obra pública", "inversión"
+        "informacion", "transparente", "donde esta",
+        "gasto", "gastos", "presupuesto", "informe", "rendicion",
+        "cuenta publica", "transparencia", "acceso a la informacion",
+        "rendicion de cuentas", "auditoria", "ley de acceso",
+        "datos abiertos", "portal de transparencia", "licitacion",
+        "contratacion", "obra publica", "inversion",
+        "inversiones", "ejecucion",
+        "presupuestado", "ejecutado", "partida", "asignacion",
+        "fondos", "financiamiento", "finanzas",
+        "declaracion", "patrimonio", "bienes",
+        "municipalidad", "concejo", "concejal", "concejales",
+        "sesion", "acta", "actas", "acuerdo", "acuerdos",
+        "reglamento", "ordenanza", "articulo", "normativa",
+        "gestion municipal", "plan de trabajo",
+        "plan operativo", "memoria de labores", "logros",
+        "cuanto costo", "cuanto gasto", "en que se gasto",
     ],
     "cultura": [
         "cultura", "evento", "festival", "desfile", "concierto",
-        "presentación", "artístico", "artistica", "música", "musica",
-        "baile", "tradición", "tradicion", "folclor", "folklore",
-        "fiestas patronales", "procesión", "feria", "exposición",
-        "exposicion", "museo", "teatro", "danza", "pintura", "artesanía",
-        "artesania", "patrimonio", "cultural", "turismo", "turística",
-        "turístico", "atractivo", "paseo", "convivencia", "familiar"
+        "presentacion", "artistico", "artistica", "musica",
+        "baile", "tradicion", "folclor", "folklore",
+        "fiestas patronales", "procesion", "feria", "exposicion",
+        "museo", "teatro", "danza", "pintura", "artesania",
+        "patrimonio", "cultural", "turismo", "turistica",
+        "turistico", "atractivo", "paseo", "convivencia", "familiar",
+        "celebracion", "aniversario", "conmemoracion",
+        "homenaje", "reconocimiento", "inauguracion",
+        "festividad", "festejo", "festejos",
+        "alborada", "polvora", "cohetes", "juegos pirotecnicos",
+        "pirotecnia", "comparsa", "carroza", "reinado", "reina",
+        "coronacion", "noche cultural", "velada", "recital", "muestra",
+        "gastronomia", "comida tipica",
+        "pupusas", "tamales", "atol", "yuca",
+        "feria patronal", "dia del municipio",
     ],
     "deportes": [
-        "deporte", "deportivo", "deportiva", "fútbol", "futbol",
-        "béisbol", "beisbol", "baloncesto", "basquetbol", "voleybol",
-        "voleibol", "natación", "natacion", "atletismo", "ciclismo",
-        "maratón", "maraton", "caminata", "competencia", "torneo",
+        "deporte", "deportivo", "deportiva", "futbol",
+        "beisbol", "baloncesto", "basquetbol", "voleibol",
+        "natacion", "atletismo", "ciclismo",
+        "maraton", "caminata", "competencia", "torneo",
         "campeonato", "entrenamiento", "entrenar", "ejercicio",
-        "actividad física", "actividad fisica", "saludable", "bienestar",
-        "jóvenes", "jovenes", "niños", "skate", "patinaje"
+        "actividad fisica", "saludable", "bienestar",
+        "jovenes", "ninos", "skate", "patinaje",
+        "fas", "equipo fas", "once lobos", "isidro metapan",
+        "liga", "partido", "ganar", "gano", "perder", "perdio",
+        "gol", "goleada", "victoria", "triunfo",
+        "trotar", "correr", "nadar", "montanismo", "campismo",
+        "ajedrez", "boxeo", "lucha", "karate", "taekwondo", "judo",
+        "academia deportiva", "escuela deportiva",
+        "polideportivo", "cancha sintetica",
+        "deportista", "medalla", "trofeo", "logro deportivo",
+        "olimpiadas", "juegos deportivos",
     ],
 }
 
 ZONA_KEYWORDS = {
     "Centro": [
-        "centro", "centro de santa ana", "casco urbano", "paracentral",
-        "calle principal", "avenida central", "mercado", "plaza",
-        "plaza mayor", "palacio municipal", "catedral", "parque libertad",
-        "parque colón", "colonia centro", "barrio el centro",
-        "calle libertad", "avenida independencia", "1ª calle poniente",
-        "2ª avenida sur", "zona 1"
+        "centro de santa ana", "santa ana centro", "casco urbano",
+        "calle principal centro", "parque libertad", "parque colon",
+        "parque colón", "plaza mayor", "palacio municipal",
+        "catedral", "mercado central", "mercado municipal",
+        "calle libertad", "avenida independencia",
+        "1ª calle poniente", "2ª avenida sur",
+        "barrio san lorenzo", "barrio santa cruz", "barrio el calvario",
+        "barrio concepcion", "barrio concepción",
+        "colonia las magnolias", "colonia san miguelito",
+        "colonia belen", "colonia belén",
+        "colonia centroamericana", "urbanizacion centro",
+        "residencial centro", "colonias del centro",
     ],
     "Norte": [
-        "norte", "norte de santa ana", "villa jardín", "villa jardin",
-        "urbanización norte", "barrio norte", "sector norte", "la china",
-        "san antonio", "san josé", "santa rosa", "el rodeo", "la rivera",
-        "colonia norte", "residencial norte", "las flores", "santa rosa",
-        "cantón norte", "caserío norte", "santa ana norte",
-        "san sebastián", "san rafael norte", "ciudad real", "villa sol",
-        "los pinos", "altos del norte"
+        "sector norte", "zona norte", "norte de santa ana",
+        "villa jardin", "urbanizacion norte",
+        "barrio norte", "la china",
+        "colonia san antonio", "colonia santa rosa",
+        "colonia las flores", "colonia ferrocarril",
+        "colonia san jose", "colonia san josé",
+        "colonia santa rosa de lima",
+        "colonia los andes", "colonia altos del norte",
+        "colonia santa elena",
+        "residencial los pinos", "residencial jardines",
+        "residencial villas del norte",
+        "urbanizacion jardines de santa ana",
+        "urbanizacion los pinos",
+        "caserio el rodeo", "cantón norte",
     ],
     "Sur": [
-        "sur", "sur de santa ana", "colonia sur", "sector sur", "la libertad",
-        "el mango", "san marcos", "concepción", "el sunzal",
-        "residencial sur", "colonia santa lucía", "colonia santa ana sur",
-        "cantón sur", "el porvenir", "san isidro", "san miguel",
-        "santa ana sur", "villa maría", "la playa", "playa", "costa",
-        "cantón el mango", "san antonio sur", "las palmeras"
+        "sector sur", "zona sur", "sur de santa ana",
+        "colonia sur", "colonia santa lucia",
+        "colonia las delicias", "colonia el progreso sur",
+        "colonia las palmeras sur", "colonia belen sur",
+        "colonia la libertad",
+        "residencial la fontana", "urbanizacion santa lucia",
+        "canton el mango", "canton las delicias",
+        "canton el porvenir", "canton santa lucia",
+        "caserio el sunzal",
     ],
     "Este": [
-        "este de santa ana", "sector este", "zona este", "al este",
-        "el palomar", "santa lucia", "san rafael", "las brisas",
-        "colonia este", "cantón este", "san josé este",
-        "residencial este", "villa del este", "santa ana este",
-        "los ángeles", "el progreso", "san luis", "la esperanza",
-        "san carlos", "lourdes", "santa rita", "buenos aires"
+        "sector este", "zona este", "este de santa ana",
+        "colonia santa rita", "colonia buenos aires",
+        "colonia san carlos", "colonia lourdes",
+        "colonia san luis", "colonia los angeles",
+        "colonia los angeles", "colonia el progreso",
+        "colonia las brisas", "colonia santa lucia este",
+        "colonia el palomar",
+        "urbanizacion la esperanza",
+        "residencial la esperanza",
+        "lotificacion la esperanza", "lotificacion el progreso",
+        "canton el progreso", "canton la esperanza",
     ],
     "Oeste": [
-        "oeste", "oeste de santa ana", "sector oeste", "zona oeste",
-        "la costa", "san juan", "los cobanos",
-        "colonia oeste", "cantón oeste", "residencial oeste",
-        "villa oeste", "santa ana oeste", "san cristóbal",
-        "santa marta", "el congo", "san jerónimo", "la montañona",
-        "metapán", "texistepeque", "candelaria", "coatepeque",
-        "el país", "san isidro oeste", "la joya"
+        "sector oeste", "zona oeste", "oeste de santa ana",
+        "colonia san juan", "colonia san cristobal",
+        "colonia san cristóbal", "colonia santa marta",
+        "colonia la joya", "colonia san jeronimo",
+        "colonia san jerónimo",
+        "colonia el pais", "colonia metapan",
+        "colonia texistepeque", "colonia candelaria",
+        "residencial san cristobal",
+        "urbanizacion oeste",
+        "caserio la montañona", "caserio la montanona",
+        "canton san cristobal", "canton san juan",
+        "canton el congo",
     ],
 }
 
 EMERGENCY_KEYWORDS = [
     "emergencia", "urgente", "muerte", "muerto", "asesinato", "accidente",
-    "desastre", "inundación", "tormenta", "ayuda", "socorro", "peligro",
-    "grave", "crítico", "alerta", "robo a mano armada", "balacera"
+    "desastre", "inundacion", "tormenta", "ayuda", "socorro", "peligro",
+    "grave", "critico", "alerta", "robo a mano armada", "balacera",
+    "derrumbe", "deslizamiento", "incendio",
 ]
+
+
+_has_spacy = False
+_nlp = None
+
+
+def _init_spacy():
+    global _has_spacy, _nlp
+    if _has_spacy or _nlp is not None:
+        return
+    try:
+        import spacy
+        _nlp = spacy.load("es_core_news_sm")
+        _has_spacy = True
+    except Exception:
+        logger.debug("spaCy es_core_news_sm not available")
+        _has_spacy = False
+        _nlp = None
 
 
 def detect_topics(text: str) -> List[Tuple[str, float]]:
     if not text:
         return []
-    
-    text_lower = text.lower()
+
+    text_lower = unicodedata.normalize('NFKD', text.lower()).encode('ascii', 'ignore').decode('ascii')
     topics_found = []
-    
+
     for topic, keywords in TOPIC_KEYWORDS.items():
         matches = 0
         for kw in keywords:
             if kw in text_lower:
                 matches += 1
-        
+
         if matches > 0:
             confidence = min(matches / 3, 1.0)
             topics_found.append((topic, confidence))
-    
+
     topics_found.sort(key=lambda x: x[1], reverse=True)
     return topics_found[:3]
 
@@ -195,24 +338,47 @@ def get_main_topic(text: str) -> str:
 def detect_zona(text: str) -> str:
     if not text:
         return ""
-    
-    text_lower = text.lower()
-    
+
+    text_lower = unicodedata.normalize('NFKD', text.lower()).encode('ascii', 'ignore').decode('ascii')
+
     for zona, keywords in ZONA_KEYWORDS.items():
         for kw in keywords:
             if kw in text_lower:
                 return zona
-    
+
     return ""
+
+
+def detect_zona_ner(text: str) -> List[str]:
+    _init_spacy()
+    if not _has_spacy or not text:
+        return []
+
+    try:
+        doc = _nlp(text[:2000])
+        gpes = [ent.text for ent in doc.ents if ent.label_ == "GPE" or ent.label_ == "LOC"]
+        return list(set(gpes))
+    except Exception:
+        return []
+
+
+def detect_emerging_topics(texts: List[str], n_topics: int = 6) -> Dict:
+    try:
+        from src.analyzer.latent_topics import extract_latent_topics
+        return extract_latent_topics(texts, n_topics=n_topics)
+    except Exception as e:
+        logger.warning(f"LDA extraction failed: {e}")
+        return {"topics": [], "error": str(e)}
 
 
 def is_emergency(text: str) -> bool:
     if not text:
         return False
-    
-    text_lower = text.lower()
+
+    text_norm = unicodedata.normalize('NFKD', text.lower()).encode('ascii', 'ignore').decode('ascii')
     for kw in EMERGENCY_KEYWORDS:
-        if kw in text_lower:
+        kw_norm = unicodedata.normalize('NFKD', kw.lower()).encode('ascii', 'ignore').decode('ascii')
+        if kw_norm in text_norm:
             return True
     return False
 
@@ -220,13 +386,13 @@ def is_emergency(text: str) -> bool:
 def extract_problematicas(text: str, sentiment: str) -> List[Dict]:
     if not text:
         return []
-    
+
     text_lower = text.lower()
     problematicas = []
-    
+
     topic = get_main_topic(text)
     zona = detect_zona(text)
-    
+
     if topic:
         problematicas.append({
             "topic": topic,
@@ -234,7 +400,7 @@ def extract_problematicas(text: str, sentiment: str) -> List[Dict]:
             "sentiment": sentiment,
             "text_preview": text[:100]
         })
-    
+
     for kw in EMERGENCY_KEYWORDS:
         if kw in text_lower:
             problematicas.append({
@@ -245,7 +411,7 @@ def extract_problematicas(text: str, sentiment: str) -> List[Dict]:
                 "text_preview": text[:100]
             })
             break
-    
+
     return problematicas
 
 
@@ -254,13 +420,13 @@ class TopicDetector:
         self.topic_keywords = TOPIC_KEYWORDS
         self.zona_keywords = ZONA_KEYWORDS
         self.emergency_keywords = EMERGENCY_KEYWORDS
-    
+
     def analyze(self, text: str) -> Dict:
         topics = detect_topics(text)
         zona = detect_zona(text)
         emergency = is_emergency(text)
         main_topic = get_main_topic(text)
-        
+
         return {
             "topics": topics,
             "main_topic": main_topic,
@@ -268,6 +434,6 @@ class TopicDetector:
             "is_emergency": emergency,
             "text_length": len(text) if text else 0
         }
-    
+
     def batch_analyze(self, texts: List[str]) -> List[Dict]:
         return [self.analyze(t) for t in texts]

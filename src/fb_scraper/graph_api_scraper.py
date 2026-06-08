@@ -20,8 +20,6 @@ from typing import List, Dict, Optional
 
 from src.fb_scraper.models import FBPostData, FBCommentData
 from src.storage.supabase_client import SupabaseStorage
-from src.analyzer.sentiment import SentimentAnalyzer
-from src.analyzer.topic_detection import get_main_topic, detect_zona
 from src.notifications.telegram import TelegramNotifier
 from src.config import Config
 
@@ -55,7 +53,6 @@ class GraphAPIScraper:
         self.page_name = page_name or cfg.FB_PAGE_NAME or "Santa Ana Alcaldía"
         self.base_url = f"{FB_GRAPH_API}/{self.page_id}"
         self.storage = SupabaseStorage()
-        self.analyzer = SentimentAnalyzer()
         self.notifier = TelegramNotifier()
 
         self.stats = {
@@ -311,11 +308,6 @@ class GraphAPIScraper:
             # Use actual permalink_url from API, fallback to constructed URL
             post_url = post_data.get("permalink_url", "") or f"https://www.facebook.com/{post_id}"
 
-            # Analyze sentiment
-            sentiment, score = self.analyzer.analyze(message)
-            topic = get_main_topic(message)
-            zona = detect_zona(message)
-
             post_record = {
                 "post_id": post_id,
                 "page_id": self.page_id,
@@ -332,10 +324,6 @@ class GraphAPIScraper:
                 "shares_count": shares_count,
                 "views_count": views_count,
                 "post_url": post_url,
-                "sentiment": sentiment,
-                "sentiment_score": score,
-                "topic_category": topic,
-                "zona": zona,
             }
 
             success = self.storage.insert_fb_post(post_record)
@@ -365,21 +353,13 @@ class GraphAPIScraper:
                 if not comment_id or not message:
                     continue
 
-                sentiment, score = self.analyzer.analyze(message)
-                topic = get_main_topic(message)
-                zona = detect_zona(message)
-
                 comment_record = {
                     "comment_id": comment_id,
                     "post_id": post_id,
                     "message": message[:5000],
-                    "author_name": comment_data.get("from", {}).get("name", "Unknown") if isinstance(comment_data.get("from"), dict) else "Unknown",
+                    "author_name": comment_data.get("from", {}).get("name", "Anónimo") if isinstance(comment_data.get("from"), dict) else "Anónimo",
                     "created_time": comment_data.get("created_time"),
                     "like_count": comment_data.get("like_count", 0),
-                    "sentiment": sentiment,
-                    "sentiment_score": score,
-                    "topic_category": topic,
-                    "zona": zona,
                     "parent_comment_id": None,
                 }
 
@@ -396,21 +376,13 @@ class GraphAPIScraper:
                             if not reply_id or not reply_message:
                                 continue
 
-                            reply_sentiment, reply_score = self.analyzer.analyze(reply_message)
-                            reply_topic = get_main_topic(reply_message)
-                            reply_zona = detect_zona(reply_message)
-
                             reply_record = {
                                 "comment_id": reply_id,
                                 "post_id": post_id,
                                 "message": reply_message[:5000],
-                                "author_name": reply_data.get("from", {}).get("name", "Unknown") if isinstance(reply_data.get("from"), dict) else "Unknown",
+                                "author_name": reply_data.get("from", {}).get("name", "Anónimo") if isinstance(reply_data.get("from"), dict) else "Anónimo",
                                 "created_time": reply_data.get("created_time"),
                                 "like_count": reply_data.get("like_count", 0),
-                                "sentiment": reply_sentiment,
-                                "sentiment_score": reply_score,
-                                "topic_category": reply_topic,
-                                "zona": reply_zona,
                                 "parent_comment_id": comment_id,
                             }
 

@@ -1,10 +1,13 @@
 import os
 
+# Rutas relativas al proyecto
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # Bases de datos
-FACEBOOK_DB = "/Users/pro/Downloads/scrapeo-social/data/facebook.db"
-TIKTOK_DB   = "/Users/pro/Downloads/scrapeo-social/data/tiktok.db"
-EXTERNOS_DB = "/Users/pro/Downloads/scrapeo-social/data/externos.db"
-OUTPUT_DIR  = "/Users/pro/Downloads/scrapeo-social/dashboard/outputs"
+FACEBOOK_DB = os.path.join(BASE_DIR, "data", "facebook.db")
+TIKTOK_DB   = os.path.join(BASE_DIR, "data", "tiktok.db")
+EXTERNOS_DB = os.path.join(BASE_DIR, "data", "externos.db")
+OUTPUT_DIR  = os.path.join(BASE_DIR, "dashboard", "outputs")
 
 # Páginas oficiales a incluir (filtro para fb_posts)
 FB_PAGES_OFICIALES = [
@@ -32,10 +35,10 @@ TK_ACCOUNTS = {
     3: "Gustavo Acevedo"
 }
 
-# Bases de datos de PRUEBA (datos inventados, alta tasa de rechazo)
-FACEBOOK_TEST_DB = "/Users/pro/Downloads/scrapeo-social/data/facebook_test.db"
-TIKTOK_TEST_DB   = "/Users/pro/Downloads/scrapeo-social/data/tiktok_test.db"
-EXTERNOS_TEST_DB = "/Users/pro/Downloads/scrapeo-social/data/externos_test.db"
+# Test DBs
+FACEBOOK_TEST_DB = os.path.join(BASE_DIR, "data", "facebook_test.db")
+TIKTOK_TEST_DB   = os.path.join(BASE_DIR, "data", "tiktok_test.db")
+EXTERNOS_TEST_DB = os.path.join(BASE_DIR, "data", "externos_test.db")
 
 # Crear carpeta outputs si no existe
 os.makedirs(OUTPUT_DIR, exist_ok=True)

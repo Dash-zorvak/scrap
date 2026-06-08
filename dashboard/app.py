@@ -96,34 +96,26 @@ def generar_interpretacion(tipo, datos):
     return ""
 
 def leyenda_grafica(elementos):
-    items_html = ""
-    for e in elementos:
-        items_html += f"""
-        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
-            <span style="font-size:16px;color:{e['color']};
-                  min-width:20px;font-weight:700;line-height:1.4">
-                {e['simbolo']}
-            </span>
-            <div>
-                <span style="font-size:12px;color:#e2e8f0;font-weight:600">
-                    {e['label']}
-                </span>
-                <span style="font-size:12px;color:#6b7280;margin-left:6px">
-                    — {e['descripcion']}
-                </span>
-            </div>
-        </div>
-        """
-    return f"""
-    <div style="background:#0f172a;border:1px solid #1f2937;
-         border-radius:6px;padding:14px 18px;margin-bottom:12px">
-        <p style="font-size:10px;color:#4b5563;margin:0 0 10px 0;
-           font-weight:700;letter-spacing:1.5px;text-transform:uppercase">
-            QUÉ ESTÁS VIENDO
-        </p>
-        {items_html}
-    </div>
-    """
+    items_html = "".join(
+        '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">'
+        '<span style="font-size:16px;color:{};min-width:20px;font-weight:700;line-height:1.4">'
+        '{}</span>'
+        '<div>'
+        '<span style="font-size:12px;color:#e2e8f0;font-weight:600">'
+        '{}</span>'
+        '<span style="font-size:12px;color:#6b7280;margin-left:6px">'
+        '— {}</span></div></div>'.format(
+            e['color'], e['simbolo'], e['label'], e['descripcion']
+        )
+        for e in elementos
+    )
+    return (
+        '<div style="background:#0f172a;border:1px solid #1f2937;'
+        'border-radius:6px;padding:14px 18px;margin-bottom:12px">'
+        '<p style="font-size:10px;color:#4b5563;margin:0 0 10px 0;'
+        'font-weight:700;letter-spacing:1.5px;text-transform:uppercase">'
+        'QUÉ ESTÁS VIENDO</p>{}</div>'
+    ).format(items_html)
 
 st.set_page_config(
     page_title="Panel de Inteligencia Ciudadana — Alcaldía Santa Ana",

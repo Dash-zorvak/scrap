@@ -1,0 +1,123 @@
+import sqlite3
+import pandas as pd
+import os
+import sys
+sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
+from config import *
+
+
+def procesar_facebook():
+    conn = sqlite3.connect(FACEBOOK_DB)
+
+    placeholders = ",".join(repr(p) for p in FB_PAGES_OFICIALES)
+    query = f"""
+        SELECT post_id, page_name, created_time, message,
+               likes_count, loves_count, hahas_count, sads_count,
+               comments_count
+        FROM fb_posts
+        WHERE page_name IN ({placeholders})
+        AND created_time IS NOT NULL
+        AND created_time != ''
+    """
+    df = pd.read_sql_query(query, conn)
+
+    df["total_reacciones"] = df["likes_count"] + df["loves_count"] + df["hahas_count"] + df["sads_count"]
+    df["indice_amor"] = (df["loves_count"] / df["total_reacciones"]).fillna(0).replace([float("inf")], 0)
+    df["indice_humor"] = (df["hahas_count"] / df["total_reacciones"]).fillna(0).replace([float("inf")], 0)
+    df["indice_tristeza"] = (df["sads_count"] / df["total_reacciones"]).fillna(0).replace([float("inf")], 0)
+    df["engagement_total"] = df["total_reacciones"] + df["comments_count"]
+    df["score_emocional"] = df["indice_amor"] - df["indice_tristeza"]
+    df["plataforma"] = "facebook"
+
+    df = df[df["total_reacciones"] >= 10].copy()
+
+    cols_salida = [
+        "post_id", "page_name", "created_time", "message",
+        "total_reacciones", "indice_amor", "indice_humor",
+        "indice_tristeza", "engagement_total", "score_emocional", "plataforma"
+    ]
+    df[cols_salida].to_sql("fb_engagement", conn, if_exists="replace", index=False)
+    conn.close()
+
+    print(f"  Facebook: {len(df)} posts procesados")
+    return df
+
+
+def procesar_tiktok():
+    conn = sqlite3.connect(TIKTOK_DB)
+
+    query = """
+        SELECT id, account_id, description, created_at,
+               views, likes, shares, favorites_count, comments_count
+        FROM videos
+    """
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+
+    df["engagement_total"] = df["likes"] + df["shares"] + df["comments_count"] + df["favorites_count"]
+    df["engagement_rate"] = (df["engagement_total"] / df["views"]).fillna(0).replace([float("inf")], 0)
+    df["indice_viralidad"] = (df["shares"] / df["views"]).fillna(0).replace([float("inf")], 0)
+    df["score_engagement"] = df["engagement_rate"]
+    df["page_name"] = df["account_id"].map(TK_ACCOUNTS).fillna("Desconocido")
+    df["plataforma"] = "tiktok"
+
+    df = df[df["views"] >= 100].copy()
+
+    cols_salida = [
+        "id", "account_id", "page_name", "description", "created_at",
+        "views", "likes", "shares", "favorites_count", "comments_count",
+        "engagement_total", "engagement_rate", "indice_viralidad",
+        "score_engagement", "plataforma"
+    ]
+
+    conn = sqlite3.connect(TIKTOK_DB)
+    df[cols_salida].to_sql("tiktok_engagement", conn, if_exists="replace", index=False)
+    conn.close()
+
+    print(f"  TikTok: {len(df)} videos procesados")
+    return df
+
+
+def imprimir_resultados(df_fb, df_tk):
+    print("\n=== FACEBOOK ===")
+    print(f"Total posts procesados: {len(df_fb)}")
+    if not df_fb.empty:
+        print(f"Rango de fechas: {df_fb['created_time'].min()[:10]} a {df_fb['created_time'].max()[:10]}")
+
+        print("Top 5 posts por score_emocional (amor):")
+        top_amor = df_fb.nlargest(5, "score_emocional")
+        for _, row in top_amor.iterrows():
+            msg = (row["message"] or "")[:80].replace("\n", " ")
+            print(f"  - [{row['created_time'][:10]}] [{row['page_name']}] {msg} → score: {row['score_emocional']:.2f}")
+
+        print("Top 5 posts por indice_humor:")
+        top_humor = df_fb.nlargest(5, "indice_humor")
+        for _, row in top_humor.iterrows():
+            msg = (row["message"] or "")[:80].replace("\n", " ")
+            print(f"  - [{row['created_time'][:10]}] [{row['page_name']}] {msg} → humor: {row['indice_humor']:.2f}")
+
+    print("\n=== TIKTOK ===")
+    print(f"Total videos procesados: {len(df_tk)}")
+    if not df_tk.empty:
+        print(f"Rango de fechas: {df_tk['created_at'].min()[:10]} a {df_tk['created_at'].max()[:10]}")
+
+        print("Top 5 videos por engagement_rate:")
+        top_er = df_tk.nlargest(5, "engagement_rate")
+        for _, row in top_er.iterrows():
+            desc = (row["description"] or "")[:80].replace("\n", " ")
+            print(f"  - [{row['created_at'][:10]}] [{row['page_name']}] {desc} → rate: {row['engagement_rate']*100:.2f}%")
+
+        print("Top 5 videos por indice_viralidad:")
+        top_vir = df_tk.nlargest(5, "indice_viralidad")
+        for _, row in top_vir.iterrows():
+            desc = (row["description"] or "")[:80].replace("\n", " ")
+            print(f"  - [{row['created_at'][:10]}] [{row['page_name']}] {desc} → viral: {row['indice_viralidad']*100:.2f}%")
+
+
+if __name__ == "__main__":
+    print("▶ Procesando Facebook...")
+    df_fb = procesar_facebook()
+    print("▶ Procesando TikTok...")
+    df_tk = procesar_tiktok()
+    imprimir_resultados(df_fb, df_tk)
+    print("✓ Módulo 3 completo. Tablas guardadas en SQLite.")

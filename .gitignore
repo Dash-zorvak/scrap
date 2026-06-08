@@ -31,3 +31,8 @@ src/tiktok_session_cookies.json
 
 # Checkpoints (generated)
 *_checkpoint.json
+
+# DBs huérfanas/efímeras (0 B)
+data/backup.db
+data/analytics_cache.db
+data/pipeline.db

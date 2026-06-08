@@ -7,6 +7,8 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import re
 from collections import Counter
+import logging
+import os
 import sys
 sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
 from config import (
@@ -21,13 +23,13 @@ if "modo_prueba" not in st.session_state:
     st.session_state.modo_prueba = False
 
 FACEBOOK_DB_ACTIVA = (
-    FACEBOOK_TEST_DB if st.session_state.modo_prueba else FACEBOOK_DB
+    FACEBOOK_TEST_DB if st.session_state.get("modo_prueba", False) else FACEBOOK_DB
 )
 TIKTOK_DB_ACTIVA = (
-    TIKTOK_TEST_DB if st.session_state.modo_prueba else TIKTOK_DB
+    TIKTOK_TEST_DB if st.session_state.get("modo_prueba", False) else TIKTOK_DB
 )
 EXTERNOS_DB_ACTIVA = (
-    EXTERNOS_TEST_DB if st.session_state.modo_prueba else EXTERNOS_DB
+    EXTERNOS_TEST_DB if st.session_state.get("modo_prueba", False) else EXTERNOS_DB
 )
 
 def generar_interpretacion(tipo, datos):
@@ -317,6 +319,34 @@ st.markdown("""
     margin: 6px 0;
     font-size: 13px;
 }
+
+/* ===== Responsive mobile (≤640px) ===== */
+@media (max-width: 640px) {
+    /* Apilar TODAS las filas de columnas verticalmente */
+    div[data-testid="stHorizontalBlock"] {
+        flex-direction: column !important;
+        gap: 0.5rem !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"],
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+    }
+    /* Métricas compactas para que no se corten los números */
+    div[data-testid="stMetricValue"] { font-size: 1.4rem !important; }
+    div[data-testid="stMetricLabel"] { font-size: 0.8rem !important; }
+    /* Menos padding lateral en móvil */
+    .block-container {
+        padding-left: 0.8rem !important;
+        padding-right: 0.8rem !important;
+        padding-top: 1rem !important;
+    }
+    /* Títulos proporcionales a pantalla chica */
+    h1 { font-size: 1.5rem !important; }
+    h2 { font-size: 1.25rem !important; }
+    h3 { font-size: 1.05rem !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -386,7 +416,8 @@ seccion = st.sidebar.radio("", [
     "🤝 Confianza Institucional",
     "📡 Narrativas Activas",
     "🌊 Contagio Emocional",
-    "🌐 Contexto Externo"
+    "🌐 Contexto Externo",
+    "📋 Notas Metodológicas"
 ])
 
 # ── HELPERS ──
@@ -409,50 +440,65 @@ def formato_fecha_espanol(fecha):
     except:
         return str(fecha)
 
+def safe_query(query: str, db_path: str, params=None) -> pd.DataFrame:
+    """Lee SQL devolviendo un DataFrame vacío si la DB/tabla no existe o la query falla."""
+    if not os.path.exists(db_path):
+        return pd.DataFrame()
+    try:
+        with sqlite3.connect(db_path) as conn:
+            return pd.read_sql_query(query, conn, params=params)
+    except Exception as e:
+        logging.warning(f"safe_query falló ({db_path}): {e}")
+        return pd.DataFrame()
+
+def hay_datos(df, mensaje: str = "Aún no hay datos suficientes para esta sección.") -> bool:
+    """Muestra un aviso elegante y devuelve False si el DataFrame está vacío."""
+    if df is None or len(df) == 0:
+        st.info(f"📭 {mensaje}")
+        return False
+    return True
+
 @st.cache_data(ttl=3600)
 def cargar_fb_engagement(db_path):
-    conn = sqlite3.connect(db_path)
-    df = pd.read_sql("""
+    df = safe_query("""
         SELECT fe.*, pc.categoria_nombre
         FROM fb_engagement fe
         LEFT JOIN post_categorias pc ON fe.post_id = pc.item_id
-    """, conn)
-    conn.close()
+    """, db_path)
+    if df.empty:
+        return df
     df['created_time'] = pd.to_datetime(df['created_time'], errors='coerce')
     df['categoria_nombre'] = df['categoria_nombre'].replace('Contenido promocional', 'Convocatorias y celebraciones')
     return df.dropna(subset=['created_time'])
 
 @st.cache_data(ttl=3600)
 def cargar_tk_engagement(tk_db_path, fb_db_path):
-    conn = sqlite3.connect(tk_db_path)
-    df = pd.read_sql("SELECT * FROM tiktok_engagement", conn)
-    conn.close()
-    conn2 = sqlite3.connect(fb_db_path)
-    cats = pd.read_sql("SELECT item_id, categoria_nombre FROM post_categorias", conn2)
-    conn2.close()
-    cats['item_id'] = cats['item_id'].astype(str)
-    df['id_str'] = df['id'].astype(str)
-    df = df.merge(cats, left_on='id_str', right_on='item_id', how='left')
-    df = df.drop(columns=['id_str','item_id'], errors='ignore')
+    df = safe_query("SELECT * FROM tiktok_engagement", tk_db_path)
+    if df.empty:
+        return df
+    cats = safe_query("SELECT item_id, categoria_nombre FROM post_categorias", fb_db_path)
+    if not cats.empty:
+        cats['item_id'] = cats['item_id'].astype(str)
+        df['id_str'] = df['id'].astype(str)
+        df = df.merge(cats, left_on='id_str', right_on='item_id', how='left')
+        df = df.drop(columns=['id_str','item_id'], errors='ignore')
+    df['categoria_nombre'] = df.get('categoria_nombre', pd.Series(dtype=str))
     df['categoria_nombre'] = df['categoria_nombre'].replace('Contenido promocional', 'Convocatorias y celebraciones')
     df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
     return df.dropna(subset=['created_at'])
 
 @st.cache_data(ttl=3600)
 def cargar_sentimiento_fb(db_path):
-    conn = sqlite3.connect(db_path)
-    df = pd.read_sql("""
+    df = safe_query("""
         SELECT fs.*, pc.categoria_nombre
         FROM fb_sentimiento fs
         LEFT JOIN post_categorias pc ON fs.post_id = pc.item_id
-    """, conn)
-    conn.close()
+    """, db_path)
     return df
 
 @st.cache_data(ttl=3600)
 def cargar_comentarios_fb(db_path):
-    conn = sqlite3.connect(db_path)
-    df = pd.read_sql("""
+    df = safe_query("""
         SELECT fc.message, fc.post_id,
                fs.score_sentimiento,
                fs.pct_positivo, fs.pct_negativo,
@@ -463,44 +509,45 @@ def cargar_comentarios_fb(db_path):
         WHERE fc.message IS NOT NULL
         AND fc.message != ''
         AND LENGTH(fc.message) > 10
-    """, conn)
-    conn.close()
+    """, db_path)
     return df
+
+def cargar_comentarios_negativos() -> pd.DataFrame:
+    return safe_query("""
+        SELECT comment_id, message, sentiment, sentiment_score, topic_category, zona
+        FROM fb_comments
+        WHERE sentiment IN ('negativo', 'muy_negativo')
+        AND message IS NOT NULL AND TRIM(message) <> ''
+    """, FACEBOOK_DB_ACTIVA)
 
 @st.cache_data(ttl=3600)
 def cargar_series(fb_db_path, tk_db_path):
-    conn_fb = sqlite3.connect(fb_db_path)
-    conn_tk = sqlite3.connect(tk_db_path)
-    df_fb = pd.read_sql("SELECT * FROM series_facebook", conn_fb)
-    df_tk = pd.read_sql("SELECT * FROM series_tiktok", conn_tk)
-    conn_fb.close()
-    conn_tk.close()
-    df_fb['semana'] = pd.to_datetime(df_fb['semana'])
-    df_tk['semana'] = pd.to_datetime(df_tk['semana'])
-    df_fb['engagement'] = df_fb['engagement_promedio'] * df_fb['total_posts']
-    df_fb['plataforma'] = 'Facebook'
-    df_tk['engagement'] = df_tk['views_suma']
-    df_tk['plataforma'] = 'TikTok'
+    df_fb = safe_query("SELECT * FROM series_facebook", fb_db_path)
+    df_tk = safe_query("SELECT * FROM series_tiktok", tk_db_path)
+    if df_fb.empty and df_tk.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    if not df_fb.empty:
+        df_fb['semana'] = pd.to_datetime(df_fb['semana'])
+        df_fb['engagement'] = df_fb['engagement_promedio'] * df_fb['total_posts']
+        df_fb['plataforma'] = 'Facebook'
+    if not df_tk.empty:
+        df_tk['semana'] = pd.to_datetime(df_tk['semana'])
+        df_tk['engagement'] = df_tk['views_suma']
+        df_tk['plataforma'] = 'TikTok'
     return df_fb, df_tk
 
 @st.cache_data(ttl=3600)
 def cargar_externos(db_path):
-    try:
-        conn = sqlite3.connect(db_path)
-        posts = pd.read_sql("SELECT * FROM external_posts", conn)
-        try:
-            sent = pd.read_sql("SELECT * FROM external_sentimiento", conn)
-            conn.close()
-            posts['created_time'] = pd.to_datetime(posts['created_time'], errors='coerce')
-            return posts.merge(sent, on='post_id', how='left')
-        except:
-            conn.close()
-            posts['created_time'] = pd.to_datetime(posts['created_time'], errors='coerce')
-            posts['score_sentimiento'] = 0.0
-            posts['comentario_mas_negativo'] = ''
-            return posts
-    except:
-        return pd.DataFrame()
+    posts = safe_query("SELECT * FROM external_posts", db_path)
+    if posts.empty:
+        return posts
+    posts['created_time'] = pd.to_datetime(posts['created_time'], errors='coerce')
+    sent = safe_query("SELECT * FROM external_sentimiento", db_path)
+    if not sent.empty:
+        return posts.merge(sent, on='post_id', how='left')
+    posts['score_sentimiento'] = 0.0
+    posts['comentario_mas_negativo'] = ''
+    return posts
 
 def filtrar_por_periodo_plataforma(df_fb, df_tk, periodo, plataforma):
     fecha_inicio = get_fecha_inicio(periodo)
@@ -617,8 +664,7 @@ def detectar_patrones_comentarios(df_comentarios):
 
 @st.cache_data(ttl=3600)
 def calcular_confianza_institucional():
-    conn = sqlite3.connect(FACEBOOK_DB_ACTIVA)
-    df = pd.read_sql("""
+    df = safe_query("""
         SELECT fc.message, fc.post_id,
                fs.score_sentimiento,
                pc.categoria_nombre
@@ -627,8 +673,9 @@ def calcular_confianza_institucional():
         LEFT JOIN post_categorias pc ON fc.post_id = pc.item_id
         WHERE fc.message IS NOT NULL
         AND LENGTH(fc.message) > 10
-    """, conn)
-    conn.close()
+    """, FACEBOOK_DB_ACTIVA)
+    if df.empty:
+        return {}, 0, ("", {"score": 0})
 
     dimensiones = {
         'honestidad': {
@@ -709,8 +756,7 @@ def calcular_confianza_institucional():
 
 @st.cache_data(ttl=3600)
 def calcular_narrativas_activas():
-    conn = sqlite3.connect(FACEBOOK_DB_ACTIVA)
-    df = pd.read_sql("""
+    df = safe_query("""
         SELECT fc.message, fc.post_id,
                fe.created_time,
                fs.score_sentimiento,
@@ -721,8 +767,9 @@ def calcular_narrativas_activas():
         LEFT JOIN post_categorias pc ON fc.post_id = pc.item_id
         WHERE fc.message IS NOT NULL
         AND LENGTH(fc.message) > 10
-    """, conn)
-    conn.close()
+    """, FACEBOOK_DB_ACTIVA)
+    if df.empty:
+        return {}
 
     df['created_time'] = pd.to_datetime(df['created_time'], errors='coerce')
     df['semana'] = df['created_time'].dt.to_period('W').dt.start_time
@@ -830,9 +877,7 @@ def calcular_narrativas_activas():
 
 @st.cache_data(ttl=3600)
 def calcular_contagio_emocional():
-    conn = sqlite3.connect(FACEBOOK_DB_ACTIVA)
-
-    df_posts = pd.read_sql("""
+    df_posts = safe_query("""
         SELECT fe.post_id,
                fe.created_time,
                fe.score_emocional,
@@ -849,8 +894,9 @@ def calcular_contagio_emocional():
         LEFT JOIN post_categorias pc ON fe.post_id = pc.item_id
         LEFT JOIN fb_sentimiento fs ON fe.post_id = fs.post_id
         WHERE fe.total_reacciones >= 10
-    """, conn)
-    conn.close()
+    """, FACEBOOK_DB_ACTIVA)
+    if df_posts.empty:
+        return pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame()
 
     df_posts['created_time'] = pd.to_datetime(
         df_posts['created_time'], errors='coerce'
@@ -910,9 +956,186 @@ def calcular_contagio_emocional():
 
     return df_posts, conteo_tipos, distorsion_alta, por_semana
 
+def calcular_score_emocional_neto(min_reacciones: int = 10) -> pd.DataFrame:
+    """Score emocional neto por post (Módulo 3 del blueprint).
+    Lee fb_posts (reacciones/shares/views reales) + fb_sentimiento (sentimiento por post)."""
+    posts = safe_query("""
+        SELECT post_id, page_name, message, created_time,
+               likes_count, loves_count, hahas_count, wows_count,
+               sads_count, angrys_count, shares_count, views_count,
+               comments_count, topic_category, zona
+        FROM fb_posts
+    """, FACEBOOK_DB_ACTIVA)
+    if posts.empty:
+        return pd.DataFrame()
+
+    num_cols = ["likes_count", "loves_count", "hahas_count", "wows_count",
+                "sads_count", "angrys_count", "shares_count", "views_count", "comments_count"]
+    for c in num_cols:
+        posts[c] = pd.to_numeric(posts[c], errors="coerce").fillna(0)
+
+    # engagement_total (blueprint): like + encanta + divierte + asombra + entristece + enoja + compartidos
+    posts["engagement_total"] = (
+        posts["likes_count"] + posts["loves_count"] + posts["hahas_count"]
+        + posts["wows_count"] + posts["sads_count"] + posts["angrys_count"]
+        + posts["shares_count"]
+    )
+    # total reacciones (sin shares) para la regla de exclusión <10
+    posts["total_reacciones"] = (
+        posts["likes_count"] + posts["loves_count"] + posts["hahas_count"]
+        + posts["wows_count"] + posts["sads_count"] + posts["angrys_count"]
+    )
+
+    base = posts["engagement_total"].replace(0, pd.NA)
+    # afecto positivo = encanta(loves) + asombra(wows) ; controversia = enoja(angrys) + entristece(sads)
+    posts["afecto_positivo"] = ((posts["loves_count"] + posts["wows_count"]) / base).fillna(0.0)
+    posts["controversia"]    = ((posts["angrys_count"] + posts["sads_count"]) / base).fillna(0.0)
+
+    # score_sentimiento por post desde fb_sentimiento, normalizado a [-1, 1]
+    sent = safe_query("""
+        SELECT post_id, pct_positivo, pct_negativo, total_comentarios
+        FROM fb_sentimiento
+    """, FACEBOOK_DB_ACTIVA)
+    if not sent.empty:
+        for c in ["pct_positivo", "pct_negativo", "total_comentarios"]:
+            sent[c] = pd.to_numeric(sent[c], errors="coerce").fillna(0)
+        # detecta si los pct vienen en 0-100 o ya en 0-1
+        denom = 100.0 if sent[["pct_positivo", "pct_negativo"]].max().max() > 1.5 else 1.0
+        sent["score_sent_norm"] = (sent["pct_positivo"] - sent["pct_negativo"]) / denom
+        posts = posts.merge(sent[["post_id", "score_sent_norm", "total_comentarios"]],
+                            on="post_id", how="left")
+    else:
+        posts["score_sent_norm"] = 0.0
+        posts["total_comentarios"] = 0
+    posts["score_sent_norm"] = posts["score_sent_norm"].fillna(0.0)
+    posts["total_comentarios"] = posts["total_comentarios"].fillna(0)
+
+    # SCORE EMOCIONAL NETO (blueprint M3)
+    posts["score_emocional_neto"] = (
+        posts["afecto_positivo"] - posts["controversia"] + (posts["score_sent_norm"] * 0.3)
+    )
+
+    # regla del blueprint: solo posts con >= min_reacciones cuentan para proporciones
+    posts["incluido_proporciones"] = posts["total_reacciones"] >= min_reacciones
+    return posts
+
+def calcular_viralidad_tiktok(min_views: int = 100) -> pd.DataFrame:
+    """Índice de viralidad de TikTok (Módulo 3, adaptado).
+    TikTok no tiene reacciones diferenciadas → medimos ALCANCE/propagación, no emoción."""
+    df = safe_query("SELECT * FROM videos", TIKTOK_DB_ACTIVA)
+    if df.empty:
+        return pd.DataFrame()
+    for c in ["views", "likes", "shares", "comments_count", "favorites_count"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0) if c in df.columns else 0
+    df = df[df["views"] >= min_views].copy()
+    if df.empty:
+        return df
+    v = df["views"].replace(0, pd.NA)
+    df["indice_viralidad"] = (df["shares"] / v).fillna(0.0)
+    df["engagement_rate"]  = ((df["likes"] + df["comments_count"] + df["shares"]) / v).fillna(0.0)
+    label_col = next((c for c in ["descripcion", "description", "caption", "desc",
+                                   "titulo", "title", "video_url", "url"] if c in df.columns), None)
+    if label_col:
+        df["video"] = df[label_col].astype(str).str.replace("\n", " ").str.slice(0, 80)
+    else:
+        df["video"] = "video " + df.index.astype(str)
+    return df.sort_values("indice_viralidad", ascending=False)
+
+def calcular_correlacion_noticias_picos(z_umbral: float = 1.0, ventana_dias: int = 3) -> dict:
+    """Cruza picos de engagement de FB (alcaldía) con noticias externas que coinciden en el tiempo.
+    Es correlación TEMPORAL, no causalidad."""
+    posts = safe_query("""
+        SELECT created_time, likes_count, loves_count, hahas_count, wows_count,
+               sads_count, angrys_count, shares_count, comments_count
+        FROM fb_posts
+        WHERE created_time IS NOT NULL AND TRIM(created_time) <> ''
+    """, FACEBOOK_DB_ACTIVA)
+    if posts.empty:
+        return {}
+    react = ["likes_count", "loves_count", "hahas_count", "wows_count",
+             "sads_count", "angrys_count", "shares_count", "comments_count"]
+    for c in react:
+        posts[c] = pd.to_numeric(posts[c], errors="coerce").fillna(0)
+    posts["engagement"] = posts[react].sum(axis=1)
+    posts["fecha"] = pd.to_datetime(posts["created_time"], errors="coerce", utc=True).dt.tz_localize(None)
+    posts = posts.dropna(subset=["fecha"])
+    if posts.empty:
+        return {}
+    posts["semana"] = posts["fecha"].dt.to_period("W-SUN").dt.start_time
+    serie = posts.groupby("semana", as_index=False)["engagement"].sum().sort_values("semana")
+    mu = serie["engagement"].mean()
+    sd = serie["engagement"].std(ddof=0)
+    serie["z"] = (serie["engagement"] - mu) / (sd if sd and sd > 0 else 1)
+    serie["es_pico"] = serie["z"] >= z_umbral
+    noticias = safe_query("""
+        SELECT created_time, source, message, total_reactions, comments_count, post_url
+        FROM external_posts
+        WHERE created_time IS NOT NULL AND TRIM(created_time) <> ''
+    """, EXTERNOS_DB_ACTIVA)
+    if not noticias.empty:
+        noticias["fecha"] = pd.to_datetime(noticias["created_time"], errors="coerce", utc=True).dt.tz_localize(None)
+        noticias = noticias.dropna(subset=["fecha"])
+    coincidencias = []
+    for _, pk in serie[serie["es_pico"]].iterrows():
+        wk = pk["semana"]
+        if noticias is not None and not noticias.empty:
+            mask = (noticias["fecha"] >= wk - pd.Timedelta(days=ventana_dias)) & \
+                   (noticias["fecha"] <= wk + pd.Timedelta(days=7 + ventana_dias))
+            for _, nt in noticias[mask].iterrows():
+                coincidencias.append({
+                    "semana_pico": wk.date().isoformat(),
+                    "engagement": int(pk["engagement"]),
+                    "z": round(float(pk["z"]), 2),
+                    "fuente": str(nt.get("source", "") or ""),
+                    "noticia": (str(nt.get("message", "") or ""))[:120],
+                    "fecha_noticia": nt["fecha"].date().isoformat(),
+                })
+    return {"serie": serie, "coincidencias": pd.DataFrame(coincidencias),
+            "n_picos": int(serie["es_pico"].sum())}
+
 # ═══════════════════════════════════════════
 # SECCIÓN 1 — ESTADO GENERAL
 # ═══════════════════════════════════════════
+
+def render_notas_metodologicas():
+    st.header("📋 Notas Metodológicas")
+    st.caption("Límites honestos del sistema — léelos antes de tomar decisiones con estos datos.")
+    st.markdown(
+        "Este panel analiza contenido público (posts, reacciones y comentarios) de las "
+        "páginas de la Alcaldía y el alcalde. Es una herramienta de lectura de percepción "
+        "colectiva, no un oráculo. Sus límites:"
+    )
+    st.warning(
+        "No predice votos individuales. Mide qué temas generan qué *emociones en "
+        "conjunto*, no el comportamiento de personas concretas."
+    )
+    st.info(
+        "Las reacciones son un proxy emocional, no un test psicológico validado. "
+        "Úsalas como señal de tono colectivo, no como diagnóstico."
+    )
+    st.info(
+        "El sentimiento de comentarios tiene ~85% de precisión en español. "
+        "Alrededor de 1 de cada 7 comentarios puede estar mal clasificado."
+    )
+    st.warning(
+        "Correlación ≠ causalidad. Que un pico de engagement coincida con una noticia "
+        "externa no prueba que una haya causado la otra; pueden influir terceros factores."
+    )
+    st.info(
+        "TikTok no tiene reacciones diferenciadas (solo 'me gusta'). Su lectura emocional "
+        "depende 100% de los comentarios."
+    )
+    st.info(
+        "En Facebook, las reacciones con datos sólidos son 'Me gusta', 'Me encanta', "
+        "'Me divierte' y 'Me enoja'. 'Me asombra' y 'Me entristece' aparecen en volúmenes "
+        "mínimos (decenas de casos), así que las métricas de afecto/controversia se apoyan "
+        "sobre todo en las primeras."
+    )
+    st.caption(
+        "Metodología inspirada en Kosinski et al. (2013), adaptada a datos agregados por "
+        "publicación (no a perfiles individuales) y con las limitaciones señaladas por "
+        "Farina et al. (2025)."
+    )
 
 if seccion == "📊 Estado General":
 
@@ -929,34 +1152,30 @@ if seccion == "📊 Estado General":
     df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
     df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
 
+    if df_fb.empty and df_tk.empty:
+        hay_datos(df_fb, "No hay datos de Facebook ni TikTok para este periodo.")
+        st.stop()
+
     color_sem, texto_sem = calcular_semaforo(df_fb)
 
     # Bullets
-    conn_cat = sqlite3.connect(FACEBOOK_DB_ACTIVA)
-    df_cat = pd.read_sql("SELECT item_id, categoria_nombre FROM post_categorias", conn_cat)
-    conn_cat.close()
+    df_cat = safe_query("SELECT item_id, categoria_nombre FROM post_categorias", FACEBOOK_DB_ACTIVA)
 
     df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
     pct_positivo = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
 
-    conn_tmp = sqlite3.connect(FACEBOOK_DB_ACTIVA)
-    try:
-        df_tema_neg = pd.read_sql("""
-            SELECT pc.categoria_nombre,
-                   AVG(fs.pct_negativo) as pct_neg
-            FROM fb_sentimiento fs
-            LEFT JOIN post_categorias pc ON fs.post_id = pc.item_id
-            WHERE pc.categoria_nombre IS NOT NULL
-            AND pc.categoria_nombre != ''
-            GROUP BY pc.categoria_nombre
-            ORDER BY pct_neg DESC
-            LIMIT 1
-        """, conn_tmp)
-        tema_top_neg = df_tema_neg.iloc[0]['categoria_nombre'] if len(df_tema_neg) > 0 else "Sin datos"
-    except:
-        tema_top_neg = "Sin datos"
-    finally:
-        conn_tmp.close()
+    df_tema_neg = safe_query("""
+        SELECT pc.categoria_nombre,
+               AVG(fs.pct_negativo) as pct_neg
+        FROM fb_sentimiento fs
+        LEFT JOIN post_categorias pc ON fs.post_id = pc.item_id
+        WHERE pc.categoria_nombre IS NOT NULL
+        AND pc.categoria_nombre != ''
+        GROUP BY pc.categoria_nombre
+        ORDER BY pct_neg DESC
+        LIMIT 1
+    """, FACEBOOK_DB_ACTIVA)
+    tema_top_neg = df_tema_neg.iloc[0]['categoria_nombre'] if not df_tema_neg.empty else "Sin datos"
 
     df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA)
     semana_anomalia = "sin anomalias recientes"
@@ -1036,12 +1255,9 @@ if seccion == "📊 Estado General":
         total_posts += len(df_tk)
 
     n_comments = 0
-    try:
-        conn = sqlite3.connect(FACEBOOK_DB_ACTIVA)
-        n_comments = pd.read_sql("SELECT COUNT(*) as n FROM fb_comments WHERE message != ''", conn).iloc[0]['n']
-        conn.close()
-    except:
-        pass
+    df_nc = safe_query("SELECT COUNT(*) as n FROM fb_comments WHERE message != ''", FACEBOOK_DB_ACTIVA)
+    if not df_nc.empty:
+        n_comments = int(df_nc.iloc[0]['n'])
 
     sent_fb = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
     score_sent = sent_fb['score_sentimiento'].mean() if not sent_fb.empty else 0
@@ -1230,6 +1446,10 @@ elif seccion == "🎯 Temas y Emociones":
     df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
     df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
 
+    if df_fb.empty and df_tk.empty:
+        hay_datos(df_fb, "No hay datos en este periodo para Temas y Emociones.")
+        st.stop()
+
     df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
 
     for df in [df_fb, df_tk, df_fb_raw, df_tk_raw]:
@@ -1271,8 +1491,7 @@ elif seccion == "🎯 Temas y Emociones":
             tristeza=('tristeza','mean')
         ).reset_index().sort_values('reacciones', ascending=False)
 
-        conn = sqlite3.connect(FACEBOOK_DB_ACTIVA)
-        df_sent_cat = pd.read_sql("""
+        df_sent_cat = safe_query("""
             SELECT pc.categoria_nombre,
                    AVG(fs.pct_positivo) as pct_pos,
                    AVG(fs.pct_negativo) as pct_neg,
@@ -1281,8 +1500,7 @@ elif seccion == "🎯 Temas y Emociones":
             LEFT JOIN post_categorias pc ON fs.post_id = pc.item_id
             WHERE pc.categoria_nombre IS NOT NULL
             GROUP BY pc.categoria_nombre
-        """, conn)
-        conn.close()
+        """, FACEBOOK_DB_ACTIVA)
         df_sent_cat['categoria_nombre'] = df_sent_cat['categoria_nombre'].replace(
             'Contenido promocional', 'Convocatorias y celebraciones'
         )
@@ -1501,6 +1719,82 @@ elif seccion == "🎯 Temas y Emociones":
             </div>
             """, unsafe_allow_html=True)
 
+    st.divider()
+    st.subheader("❤️‍🔥 Score Emocional Neto por post")
+    st.caption(
+        "Combina afecto vs. controversia (reacciones) y el sentimiento de los comentarios. "
+        "Rango ~[-1, 1]: positivo = post querido; negativo = post que genera rechazo."
+    )
+    df_sen = calcular_score_emocional_neto(min_reacciones=10)
+    if hay_datos(df_sen, "Aún no hay posts para el score emocional."):
+        df_val = df_sen[df_sen["incluido_proporciones"]].copy()
+        if hay_datos(df_val, "Ningún post supera el mínimo de 10 reacciones para el análisis de proporciones."):
+            df_val = df_val.sort_values("score_emocional_neto", ascending=False)
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Score neto promedio", f"{df_val['score_emocional_neto'].mean():+.2f}")
+            c2.metric("Post más querido", f"{df_val['score_emocional_neto'].max():+.2f}")
+            c3.metric("Post más controversial", f"{df_val['score_emocional_neto'].min():+.2f}")
+
+            def _resumen(m):
+                m = (str(m) if m is not None else "").replace("\n", " ").strip()
+                return (m[:90] + "…") if len(m) > 90 else (m or "(sin texto)")
+            df_val["post"] = df_val["message"].apply(_resumen)
+
+            cols_show = ["post", "score_emocional_neto", "afecto_positivo",
+                         "controversia", "score_sent_norm", "total_reacciones"]
+            ren = {"post": "Post", "score_emocional_neto": "Score neto",
+                   "afecto_positivo": "Afecto", "controversia": "Controversia",
+                   "score_sent_norm": "Sent. coment.", "total_reacciones": "Reacciones"}
+            fmt = {"Score neto": "{:+.2f}", "Afecto": "{:.2f}",
+                   "Controversia": "{:.2f}", "Sent. coment.": "{:+.2f}"}
+
+            st.markdown("**🟢 Top 10 — más queridos**")
+            st.dataframe(df_val.head(10)[cols_show].rename(columns=ren).style.format(fmt),
+                         use_container_width=True, hide_index=True)
+
+            st.markdown("**🔴 Bottom 10 — más controversiales**")
+            st.dataframe(df_val.tail(10).sort_values("score_emocional_neto")[cols_show].rename(columns=ren).style.format(fmt),
+                         use_container_width=True, hide_index=True)
+
+            fig_sen = px.bar(
+                df_val.head(15), x="score_emocional_neto", y="post", orientation="h",
+                color="score_emocional_neto", color_continuous_scale="RdYlGn",
+                labels={"score_emocional_neto": "Score emocional neto", "post": ""},
+            )
+            fig_sen.update_layout(height=520, yaxis={"categoryorder": "total ascending"})
+            st.plotly_chart(fig_sen, use_container_width=True)
+
+    st.divider()
+    st.subheader("🚀 Índice de Viralidad — TikTok")
+    st.caption(
+        "Viralidad = compartidos / views (qué tanto se propaga). TikTok no tiene reacciones "
+        "diferenciadas, así que esto mide ALCANCE, no emoción (esa vive en los comentarios)."
+    )
+    df_vir = calcular_viralidad_tiktok(min_views=100)
+    if hay_datos(df_vir, "Aún no hay videos de TikTok con views suficientes."):
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Viralidad promedio", f"{df_vir['indice_viralidad'].mean()*100:.2f}%")
+        c2.metric("Video más viral", f"{df_vir['indice_viralidad'].max()*100:.2f}%")
+        c3.metric("Engagement rate prom.", f"{df_vir['engagement_rate'].mean()*100:.2f}%")
+
+        top = df_vir.head(10)[["video", "indice_viralidad", "engagement_rate", "views", "shares", "likes"]].copy()
+        top["indice_viralidad"] = (top["indice_viralidad"] * 100).round(2)
+        top["engagement_rate"] = (top["engagement_rate"] * 100).round(2)
+        st.markdown("**🔥 Top 10 videos más virales**")
+        st.dataframe(top.rename(columns={
+            "video": "Video", "indice_viralidad": "Viralidad %", "engagement_rate": "Engagement %",
+            "views": "Views", "shares": "Shares", "likes": "Likes",
+        }), use_container_width=True, hide_index=True)
+
+        fig_vir = px.scatter(
+            df_vir, x="views", y="shares", size="likes", color="indice_viralidad",
+            color_continuous_scale="Plasma", hover_data=["video"],
+            labels={"views": "Views", "shares": "Compartidos", "indice_viralidad": "Viralidad"},
+        )
+        fig_vir.update_layout(height=480)
+        st.plotly_chart(fig_vir, use_container_width=True)
+
 # ═══════════════════════════════════════════
 # SECCIÓN 3 — LÍNEA DEL TIEMPO
 # ═══════════════════════════════════════════
@@ -1517,6 +1811,10 @@ elif seccion == "📅 Línea del Tiempo":
     """, unsafe_allow_html=True)
 
     df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA)
+
+    if df_fb_s.empty and df_tk_s.empty:
+        hay_datos(df_fb_s, "No hay datos de series temporales.")
+        st.stop()
 
     plat_sel = st.radio("Seleccionar plataforma:", ["Ambas","Facebook","TikTok"], horizontal=True)
 
@@ -1725,6 +2023,9 @@ elif seccion == "💬 Voz Ciudadana":
 
     df_comentarios = cargar_comentarios_fb(FACEBOOK_DB_ACTIVA)
 
+    if not hay_datos(df_comentarios, "Aún no hay comentarios procesados."):
+        st.stop()
+
     # Senal 1
     st.markdown("""
     <div style="background:#0d1117;border-left:3px solid #374151;
@@ -1743,8 +2044,7 @@ elif seccion == "💬 Voz Ciudadana":
         </div>
     """, unsafe_allow_html=True)
 
-    conn = sqlite3.connect(FACEBOOK_DB_ACTIVA)
-    df_s1 = pd.read_sql("""
+    df_s1 = safe_query("""
         SELECT pc.categoria_nombre,
                AVG(fe.indice_amor) as amor_promedio,
                AVG(fe.total_reacciones) as reacciones_promedio,
@@ -1756,8 +2056,7 @@ elif seccion == "💬 Voz Ciudadana":
         LEFT JOIN fb_sentimiento fs ON fe.post_id = fs.post_id
         WHERE pc.categoria_nombre IS NOT NULL
         GROUP BY pc.categoria_nombre
-    """, conn)
-    conn.close()
+    """, FACEBOOK_DB_ACTIVA)
 
     score_sent = df_s1['score_sent']
     genuino = df_s1.nlargest(3, 'score_sent')[
@@ -1958,8 +2257,7 @@ elif seccion == "💬 Voz Ciudadana":
     </div>
     """, unsafe_allow_html=True)
     st.markdown("### ¿Como reacciona la gente segun el tema?")
-    conn = sqlite3.connect(FACEBOOK_DB_ACTIVA)
-    df_sent_tema = pd.read_sql("""
+    df_sent_tema = safe_query("""
         SELECT pc.categoria_nombre,
                AVG(fs.pct_positivo) as positivo,
                AVG(fs.pct_negativo) as negativo,
@@ -1969,8 +2267,7 @@ elif seccion == "💬 Voz Ciudadana":
         WHERE pc.categoria_nombre IS NOT NULL AND pc.categoria_nombre != ''
         GROUP BY pc.categoria_nombre
         ORDER BY positivo DESC
-    """, conn)
-    conn.close()
+    """, FACEBOOK_DB_ACTIVA)
     df_sent_tema['categoria_nombre'] = df_sent_tema['categoria_nombre'].str.replace('\n',' ')
 
     if not df_sent_tema.empty:
@@ -2004,6 +2301,36 @@ elif seccion == "💬 Voz Ciudadana":
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
+    st.divider()
+    st.subheader("☁️ Nube de palabras — comentarios negativos")
+    st.caption("Términos más frecuentes en comentarios clasificados como negativos / muy negativos.")
+    df_neg = cargar_comentarios_negativos()
+    if hay_datos(df_neg, "Aún no hay comentarios negativos analizados. (Corré el re-análisis de sentimiento.)"):
+        import re
+        import matplotlib.pyplot as plt
+        from wordcloud import WordCloud, STOPWORDS
+        stop_es = set(STOPWORDS) | {
+            "que", "de", "la", "el", "los", "las", "un", "una", "y", "o", "a", "en", "es", "se",
+            "no", "con", "por", "para", "su", "sus", "lo", "le", "les", "mas", "más", "como",
+            "pero", "ya", "si", "sí", "del", "al", "me", "mi", "tu", "te", "yo", "muy", "esta",
+            "este", "eso", "esa", "ese", "son", "fue", "han", "hay", "ha", "va", "van", "ser",
+            "porque", "cuando", "donde", "quien", "cual", "nos", "sino", "tan", "todo", "toda",
+            "todos", "todas", "the", "https", "http", "com", "www", "ni", "ese", "esos", "esas",
+        }
+        texto = " ".join(df_neg["message"].astype(str).tolist()).lower()
+        texto = re.sub(r"http\S+|www\S+", " ", texto)
+        texto = re.sub(r"@\w+", " ", texto)
+        try:
+            wc = WordCloud(width=1000, height=500, background_color="white",
+                           stopwords=stop_es, colormap="Reds", collocations=False).generate(texto)
+            fig_wc, ax = plt.subplots(figsize=(10, 5))
+            ax.imshow(wc, interpolation="bilinear")
+            ax.axis("off")
+            st.pyplot(fig_wc)
+            st.caption(f"Basado en {len(df_neg):,} comentarios negativos.")
+        except ValueError:
+            st.info("No hay suficientes palabras para generar la nube.")
+
 # ═══════════════════════════════════════════
 # SECCIÓN 5 — MICROSEGMENTACIÓN
 # ═══════════════════════════════════════════
@@ -2022,6 +2349,10 @@ elif seccion == "🔬 Microsegmentación":
     df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
     df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
     df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
+
+    if df_fb.empty and df_tk.empty:
+        hay_datos(df_fb, "No hay datos en este periodo para Microsegmentación.")
+        st.stop()
 
     st.markdown("### Patrones de contenido detectados")
     st.markdown("*Cada fila es un tipo de contenido agrupado automaticamente por similitud semantica y patron de reaccion.*")
@@ -2360,6 +2691,32 @@ elif seccion == "🌐 Contexto Externo":
                     <p style="font-size:11px;color:#9ca3af;margin-top:6px">Pulso: <strong style="color:#ef4444">{score:.2f}</strong> &nbsp;·&nbsp; Comentario: "{coment}"</p>
                 </div>
                 """, unsafe_allow_html=True)
+
+    st.divider()
+    st.subheader("📈 Correlación: picos de engagement ↔ noticias externas")
+    st.warning("⚠️ La coincidencia temporal NO implica causalidad (ver Notas Metodológicas).")
+    corr = calcular_correlacion_noticias_picos(z_umbral=1.0, ventana_dias=3)
+    if not corr:
+        st.info("📭 No hay datos de FB suficientes para detectar picos.")
+    else:
+        serie = corr["serie"]
+        fig_c = px.line(serie, x="semana", y="engagement", markers=True,
+                        labels={"semana": "Semana", "engagement": "Engagement semanal"})
+        picos = serie[serie["es_pico"]]
+        if not picos.empty:
+            fig_c.add_scatter(x=picos["semana"], y=picos["engagement"], mode="markers",
+                              marker=dict(size=13, color="red", symbol="star"), name="Pico")
+        fig_c.update_layout(height=420)
+        st.plotly_chart(fig_c, use_container_width=True)
+        st.metric("Semanas con pico de engagement", corr["n_picos"])
+
+        coinc = corr["coincidencias"]
+        st.markdown("**Noticias externas que coinciden con semanas de pico**")
+        if hay_datos(coinc, "No se encontraron noticias externas en las semanas de pico."):
+            st.dataframe(coinc.rename(columns={
+                "semana_pico": "Semana pico", "engagement": "Engagement", "z": "z",
+                "fuente": "Fuente", "noticia": "Titular / Texto", "fecha_noticia": "Fecha noticia",
+            }), use_container_width=True, hide_index=True)
 
 elif seccion == "🤝 Confianza Institucional":
 
@@ -3075,3 +3432,6 @@ elif seccion == "🌊 Contagio Emocional":
             height=320
         )
         st.plotly_chart(fig_dist, use_container_width=True)
+
+elif seccion == "📋 Notas Metodológicas":
+    render_notas_metodologicas()

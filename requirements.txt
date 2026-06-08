@@ -33,6 +33,9 @@ huggingface_hub==0.36.2
 safetensors==0.7.0
 emoji==2.15.0
 
+# Wordcloud
+wordcloud==1.9.6
+
 # Utils
 python-dotenv>=1.0.0
 tqdm>=4.66.0

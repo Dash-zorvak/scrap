@@ -464,8 +464,11 @@ class FacebookDeepScraper:
 
             for (const [postId, postUrl] of urlSet) {
 
-                // Walk up to find the post container
-                let container = link.parentElement;
+                // Walk up to find the post container - find link element for this postId
+                const linkEl = document.querySelector(`a[href*="/posts/${postId}"]`) ||
+                               document.querySelector(`a[href*="story_fbid=${postId}"]`) ||
+                               document.querySelector(`a[href*="${postId}"]`);
+                let container = linkEl ? linkEl.parentElement : null;
                 for (let i = 0; i < 15 && container; i++) {
                     if (container.getAttribute('role') === 'article') break;
                     container = container.parentElement;

@@ -154,6 +154,34 @@ class TestCutoffTolerance:
                 break
         assert oor_streak >= cutoff, f"Streak {oor_streak} should reach {cutoff}"
 
+class TestJsExtractReferenceError:
+    """E15 regression: js_extract must not have undeclared 'link' variable."""
+
+    def test_js_extract_no_undeclared_link(self):
+        """The js_extract string must not reference 'link' outside its scope."""
+        import re
+        from src.fb_scraper.deep_scraper import FacebookDeepScraper
+        
+        # Get the js_extract source by inspecting _scrape_search_results
+        import inspect
+        source = inspect.getsource(FacebookDeepScraper._scrape_search_results)
+        
+        # Find the js_extract string content
+        match = re.search(r'js_extract\s*=\s*"""([\s\S]*?)"""', source)
+        assert match, "js_extract string not found in _scrape_search_results"
+        js_code = match.group(1)
+        
+        # Check that 'link' is not used outside the first for-loop scope
+        # The bug was: 'let container = link.parentElement' outside 'for (const link of linkEls)'
+        # After fix, it should use linkEl (found via querySelector) instead
+        assert 'link.parentElement' not in js_code, \
+            "Found 'link.parentElement' in js_extract - this was the E15 bug (link out of scope)"
+        
+        # Verify the fix uses linkEl instead
+        assert 'linkEl' in js_code, "Fix should use 'linkEl' variable instead of out-of-scope 'link'"
+        assert 'querySelector' in js_code, "Fix should find link element via querySelector"
+
+
 class TestDemoSeedSafety:
     """P1: Verify modulo5_externos.py seeder does NOT run without --demo or ENABLE_DEMO_SEED=1."""
 

@@ -2,8 +2,34 @@
 - Date parsing (SCRAPE_SINCE/SCRAPE_UNTIL)
 - Pagination cursor extraction
 - views_count None vs 0
+- stats initialization (E14 regression)
 """
 from src.fb_scraper.graph_api_scraper import GraphAPIScraper
+
+
+class TestStatsInitialization:
+    def test_stats_exists_with_8_keys(self):
+        """E14 regression: self.stats must be initialized in __init__ with 8 keys."""
+        scraper = GraphAPIScraper(access_token="test_token")
+        assert hasattr(scraper, "stats"), "stats attribute missing"
+        expected_keys = {
+            "posts_scraped", "comments_scraped", "replies_scraped",
+            "anonymous_comments", "views_total", "errors",
+            "error_codes", "start_time"
+        }
+        assert set(scraper.stats.keys()) == expected_keys
+        assert scraper.stats["start_time"] is None
+        # error_codes is a dict, others are 0
+        assert scraper.stats["error_codes"] == {}
+        for k, v in scraper.stats.items():
+            if k not in ("start_time", "error_codes"):
+                assert v == 0, f"Expected {k} == 0, got {v}"
+
+    def test_stats_initialized_before_staticmethod(self):
+        """Ensure stats init happens in __init__, not inside _parse_date."""
+        # Just instantiating should not raise AttributeError on stats
+        scraper = GraphAPIScraper(access_token="x")
+        _ = scraper.stats  # Must not raise
 
 
 class TestDateParsing:

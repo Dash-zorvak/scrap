@@ -59,16 +59,6 @@ class GraphAPIScraper:
         self.scrape_since = self._parse_date(cfg.SCRAPE_SINCE)
         self.scrape_until = self._parse_date(cfg.SCRAPE_UNTIL) if cfg.SCRAPE_UNTIL else int(datetime.now().timestamp())
 
-    @staticmethod
-    def _parse_date(date_str: str) -> int:
-        """Parse YYYY-MM-DD to epoch timestamp."""
-        try:
-            dt = datetime.strptime(date_str, "%Y-%m-%d")
-            return int(dt.timestamp())
-        except (ValueError, TypeError):
-            logger.warning(f"Invalid date '{date_str}', defaulting to 2025-01-01")
-            return int(datetime(2025, 1, 1).timestamp())
-
         self.stats = {
             "posts_scraped": 0,
             "comments_scraped": 0,
@@ -82,6 +72,16 @@ class GraphAPIScraper:
 
         if not self.access_token:
             raise ValueError("FB_ACCESS_TOKEN no encontrado en .env")
+
+    @staticmethod
+    def _parse_date(date_str: str) -> int:
+        """Parse YYYY-MM-DD to epoch timestamp."""
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+            return int(dt.timestamp())
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid date '{date_str}', defaulting to 2025-01-01")
+            return int(datetime(2025, 1, 1).timestamp())
 
     def _make_request(self, endpoint: str, params: dict = None, count_error: bool = True) -> Optional[dict]:
         """Hace request a Graph API con manejo de errores."""

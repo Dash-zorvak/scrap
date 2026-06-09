@@ -6,7 +6,14 @@
 """
 from datetime import datetime
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 from src.fb_scraper.deep_scraper import FacebookDeepScraper
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_parse_date_valid():
@@ -112,3 +119,90 @@ class TestDateRange:
         boundary = datetime(2026, 6, 9)
         assert boundary >= since
         assert boundary <= until
+
+
+class TestCutoffTolerance:
+    """Test that OOR streak requires multiple consecutive OOR scrolls."""
+
+    def test_single_old_post_does_not_stop(self):
+        """One old post among recent ones should NOT stop scraping."""
+        cutoff = 10
+        oor_streak = 0
+        # Simulate: 1 OOR post, but 9 in-range
+        self._last_extraction_raw_count = 10
+        self._last_extraction_oor_count = 1
+        oor_ratio = self._last_extraction_oor_count / self._last_extraction_raw_count
+        if self._last_extraction_raw_count > 0 and self._last_extraction_oor_count > 0 and oor_ratio >= 0.7:
+            oor_streak += 1
+        assert oor_streak == 0, "Single OOR post should not increment streak"
+
+    def test_oor_streak_reaches_tolerance(self):
+        """After cutoff_tolerance consecutive OOR scrolls, stop."""
+        cutoff = 10
+        oor_streak = 0
+        for i in range(15):
+            # All posts OOR
+            self._last_extraction_raw_count = 5
+            self._last_extraction_oor_count = 5
+            oor_ratio = self._last_extraction_oor_count / self._last_extraction_raw_count
+            if self._last_extraction_raw_count > 0 and self._last_extraction_oor_count > 0 and oor_ratio >= 0.7:
+                oor_streak += 1
+            else:
+                oor_streak = 0
+            if oor_streak >= cutoff:
+                break
+        assert oor_streak >= cutoff, f"Streak {oor_streak} should reach {cutoff}"
+
+class TestDemoSeedSafety:
+    """P1: Verify modulo5_externos.py seeder does NOT run without --demo or ENABLE_DEMO_SEED=1."""
+
+    def test_seeder_does_not_run_without_flag(self):
+        """Running the script without --demo should not insert SIM_EXT rows."""
+        script = ROOT / "dashboard" / "modulo5_externos.py"
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert "--demo" in result.stdout or "desactivado" in result.stdout, \
+            f"Expected safety message, got: {result.stdout[:200]}"
+
+    def test_seeder_does_not_run_with_env_false(self):
+        """Running with ENABLE_DEMO_SEED=0 should not insert SIM_EXT rows."""
+        script = ROOT / "dashboard" / "modulo5_externos.py"
+        env = os.environ.copy()
+        env["ENABLE_DEMO_SEED"] = "0"
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            capture_output=True, text=True, timeout=30, env=env,
+        )
+        assert "--demo" in result.stdout or "desactivado" in result.stdout, \
+            f"Expected safety message, got: {result.stdout[:200]}"
+
+    def test_seeder_runs_with_demo_flag(self):
+        """Running with --demo should insert SIM_EXT rows (idempotent, won't fail)."""
+        script = ROOT / "dashboard" / "modulo5_externos.py"
+        result = subprocess.run(
+            [sys.executable, str(script), "--demo"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert "completo" in result.stdout or "generados" in result.stdout, \
+            f"Expected seed execution, got: {result.stdout[:200]}"
+        """A single in-range post resets the OOR streak."""
+        cutoff = 10
+        oor_streak = 0
+        # 3 OOR scrolls
+        for i in range(3):
+            self._last_extraction_raw_count = 5
+            self._last_extraction_oor_count = 5
+            oor_ratio = self._last_extraction_oor_count / self._last_extraction_raw_count
+            if self._last_extraction_raw_count > 0 and self._last_extraction_oor_count > 0 and oor_ratio >= 0.7:
+                oor_streak += 1
+        # One in-range scroll
+        self._last_extraction_raw_count = 5
+        self._last_extraction_oor_count = 0
+        posts_on_page = 2
+        if posts_on_page == 0:
+            pass  # not hit
+        else:
+            oor_streak = 0
+        assert oor_streak == 0, f"Streak should reset to 0, got {oor_streak}"

@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import pandas as pd
 import random
@@ -5,6 +6,9 @@ from datetime import datetime, timedelta
 import sys
 sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
 from config import *
+
+# Allow test to redirect to a temp DB
+EXTERNOS_DB = os.getenv("EXTERNOS_DB", EXTERNOS_DB)
 
 # ── snippet de posts simulados ──────────────────────────────────────────────
 
@@ -117,10 +121,10 @@ def generar_datos_simulados():
     conn = sqlite3.connect(EXTERNOS_DB)
     cur = conn.cursor()
 
-    # limpiar datos previos simulados
-    cur.execute("DELETE FROM external_sentimiento")
-    cur.execute("DELETE FROM external_comments")
-    cur.execute("DELETE FROM external_posts")
+    # limpiar solo datos simulados previos (nunca borrar posts reales)
+    cur.execute("DELETE FROM external_sentimiento WHERE post_id LIKE 'SIM_EXT%'")
+    cur.execute("DELETE FROM external_comments WHERE post_id LIKE 'SIM_EXT%'")
+    cur.execute("DELETE FROM external_posts WHERE post_id LIKE 'SIM_EXT%'")
 
     start = datetime(2024, 12, 1)
     end   = datetime(2026, 5, 30)

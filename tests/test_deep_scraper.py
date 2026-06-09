@@ -9,6 +9,7 @@ from datetime import datetime
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from src.fb_scraper.deep_scraper import FacebookDeepScraper
@@ -179,14 +180,30 @@ class TestDemoSeedSafety:
             f"Expected safety message, got: {result.stdout[:200]}"
 
     def test_seeder_runs_with_demo_flag(self):
-        """Running with --demo should insert SIM_EXT rows (idempotent, won't fail)."""
+        """Running with --demo should insert SIM_EXT rows in a temp DB."""
         script = ROOT / "dashboard" / "modulo5_externos.py"
+        # Point to a temp DB so real externos.db is never touched
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        env = os.environ.copy()
+        env["EXTERNOS_DB"] = tmp.name
         result = subprocess.run(
             [sys.executable, str(script), "--demo"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=30, env=env,
         )
-        assert "completo" in result.stdout or "generados" in result.stdout, \
-            f"Expected seed execution, got: {result.stdout[:200]}"
+        # Clean up regardless of test outcome
+        try:
+            import sqlite3
+            conn = sqlite3.connect(tmp.name)
+            cnt = conn.execute("SELECT COUNT(*) FROM external_posts").fetchone()[0]
+            all_sim = conn.execute(
+                "SELECT COUNT(*) FROM external_posts WHERE post_id LIKE 'SIM_EXT%'"
+            ).fetchone()[0]
+            conn.close()
+            assert cnt == 50, f"Expected 50 SIM_EXT posts, got {cnt}"
+            assert all_sim == 50, "Not all posts have SIM_EXT prefix"
+        finally:
+            os.unlink(tmp.name)
         """A single in-range post resets the OOR streak."""
         cutoff = 10
         oor_streak = 0

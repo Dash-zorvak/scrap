@@ -204,6 +204,8 @@ class TestDemoSeedSafety:
             assert all_sim == 50, "Not all posts have SIM_EXT prefix"
         finally:
             os.unlink(tmp.name)
+
+    def test_oor_streak_resets_on_in_range_post(self):
         """A single in-range post resets the OOR streak."""
         cutoff = 10
         oor_streak = 0

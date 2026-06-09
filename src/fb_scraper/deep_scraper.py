@@ -41,7 +41,8 @@ logger = logging.getLogger(__name__)
 
 FB_BASE = "https://www.facebook.com"
 REQUIRED_COOKIES = {"c_user", "xs"}
-EXTERNAL_DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "externos.db"
+EXTERNAL_DB_PATH = Path(os.getenv("EXTERNAL_DB_PATH",
+    str(Path(__file__).resolve().parent.parent.parent / "data" / "externos.db")))
 
 
 class TimeoutGuard:

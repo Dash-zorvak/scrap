@@ -6,6 +6,7 @@ Usage:
     python scripts/verify_db.py --db facebook           # only facebook.db
 """
 import argparse
+import os
 import sqlite3
 import sys
 from datetime import datetime
@@ -15,8 +16,8 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 
 DB_PATHS = {
-    "externos": DATA / "externos.db",
-    "facebook": DATA / "facebook.db",
+    "externos": Path(os.getenv("EXTERNAL_DB", str(DATA / "externos.db"))),
+    "facebook": Path(os.getenv("FACEBOOK_DB", str(DATA / "facebook.db"))),
 }
 
 

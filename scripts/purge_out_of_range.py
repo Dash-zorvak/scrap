@@ -41,7 +41,7 @@ def _build_db_config(since: str):
     DB_CONFIG = [
         {
             "label": "externos",
-            "path": DATA / "externos.db",
+            "path": Path(os.getenv("EXTERNAL_DB", str(DATA / "externos.db"))),
             "posts_table": "external_posts",
             "comments_table": "external_comments",
             "extra_tables": ["external_sentimiento"],
@@ -50,7 +50,7 @@ def _build_db_config(since: str):
         },
         {
             "label": "facebook",
-            "path": DATA / "facebook.db",
+            "path": Path(os.getenv("FACEBOOK_DB", str(DATA / "facebook.db"))),
             "posts_table": "fb_posts",
             "comments_table": "fb_comments",
             "extra_tables": ["fb_engagement", "fb_sentimiento", "post_categorias", "problematicas", "insights", "nlp_results"],
@@ -114,7 +114,7 @@ def purge(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
         conn = sqlite3.connect(str(cfg["path"]))
         cur = conn.cursor()
 
-        entry = {"label": cfg["label"], "post_stats": {}, "comment_stats": {}, "extra_stats": {}}
+        entry = {"label": cfg["label"], "path": cfg["path"], "post_stats": {}, "comment_stats": {}, "extra_stats": {}}
 
         # Posts
         entry["post_stats"] = count_out_of_range(cur, cfg["posts_table"], cfg["date_col"], since, purge_null)
@@ -154,7 +154,7 @@ def purge(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
         cs = entry["comment_stats"]
         ex = entry["extra_stats"]
 
-        print(f"  {lbl}: {cfg['path']}")
+        print(f"  {lbl}: {entry['path']}")
         print(f"    Posts: {fmt(ps['total'])} total, "
               f"{fmt(ps['oor'])} pre-{since} to delete, "
               f"{fmt(ps['nulls'])} with NULL date (KEPT{' unless --purge-null' if not purge_null else ''})")

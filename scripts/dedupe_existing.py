@@ -13,13 +13,15 @@ Usage:
     python scripts/dedupe_existing.py --no-backup   # skip backup
 """
 import argparse
+import os
 import re
 import shutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-EXTERNAL_DB = Path(__file__).resolve().parent.parent / "data" / "externos.db"
+EXTERNAL_DB = Path(os.getenv("EXTERNAL_DB",
+    str(Path(__file__).resolve().parent.parent / "data" / "externos.db")))
 BACKUP_DIR = Path(__file__).resolve().parent.parent / "data"
 
 

@@ -174,12 +174,18 @@ class FacebookDeepScraper:
         self.password = password
         self.headless = headless
 
+        cfg = Config()
         if page_urls is not None:
             self.page_urls = page_urls
-        elif Config().deep_page_urls:
-            self.page_urls = Config().deep_page_urls
+        elif cfg.deep_page_urls:
+            self.page_urls = cfg.deep_page_urls
         else:
             self.page_urls = []
+
+        # Date range from config
+        self.scrape_since = self._parse_date(cfg.SCRAPE_SINCE)
+        scrape_until_str = cfg.SCRAPE_UNTIL
+        self.scrape_until = self._parse_date(scrape_until_str) if scrape_until_str else datetime.now()
 
         self.notifier = TelegramNotifier()
         self.checkpoint = CheckpointManager("externos")
@@ -196,6 +202,15 @@ class FacebookDeepScraper:
         }
 
         self._init_db()
+
+    @staticmethod
+    def _parse_date(date_str: str) -> datetime:
+        """Parse YYYY-MM-DD to datetime."""
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid date '{date_str}', defaulting to 2025-01-01")
+            return datetime(2025, 1, 1)
 
     # ── DB initialization ──────────────────────────────────────
 
@@ -220,7 +235,7 @@ class FacebookDeepScraper:
                 comment_id   TEXT PRIMARY KEY,
                 post_id      TEXT,
                 message      TEXT,
-                author_name  TEXT DEFAULT 'Anonymous',
+                author_name  TEXT DEFAULT 'Anónimo',
                 created_time DATETIME,
                 scraped_at   DATETIME DEFAULT CURRENT_TIMESTAMP
             );
@@ -266,7 +281,7 @@ class FacebookDeepScraper:
                 comment["comment_id"],
                 comment.get("post_id", ""),
                 comment.get("message", "")[:5000],
-                comment.get("author_name", "Anonymous"),
+                comment.get("author_name", "Anónimo"),
                 comment.get("created_time"),
             ))
             conn.commit()
@@ -422,28 +437,26 @@ class FacebookDeepScraper:
                 return isNaN(n) ? 0 : Math.round(n * mult);
             }
 
-            // Find ALL unique post links on the page
-            const linkSet = new Set();
-            const linkEls = document.querySelectorAll('a[href*=\"/posts/\"], a[href*=\"story.php\"], a[href*=\"story_fbid\"]');
+            // Find ALL unique post URLs on the page
+            const urlSet = new Map();
+            const linkEls = document.querySelectorAll('a[href*=\"/posts/\"], a[href*=\"story.php\"], a[href*=\"story_fbid\"], a[href*=\"photos/\"], a[href*=\"/videos/\"], a[href*=\"/reel/\"]');
             for (const link of linkEls) {
-                const href = link.getAttribute('href') || link.href || '';
+                const href = (link.getAttribute('href') || link.href || '').split('?')[0];
+                if (!href) continue;
+                // Extract canonical post ID from href
                 const m = href.match(/\\/posts\\/([a-zA-Z0-9_.-]+)/) || href.match(/story_fbid=([a-zA-Z0-9_-]+)/);
-                if (m) linkSet.add(m[1]);
+                if (m) {
+                    const canonical = m[1];
+                    if (!urlSet.has(canonical)) {
+                        urlSet.set(canonical, href.startsWith('http') ? href : 'https://www.facebook.com' + href);
+                    }
+                }
             }
 
             const posts = [];
-            const seenIds = new Set();
             const sharedCommentSigs = new Set();
 
-            for (const postId of linkSet) {
-                if (seenIds.has(postId)) continue;
-                seenIds.add(postId);
-
-                const link = document.querySelector('a[href*=\"/posts/' + postId + '\"], a[href*=\"story_fbid=' + postId + '\"]');
-                if (!link) continue;
-
-                const href = link.getAttribute('href') || link.href || '';
-                const postUrl = href.startsWith('http') ? href : 'https://www.facebook.com' + href;
+            for (const [postId, postUrl] of urlSet) {
 
                 // Walk up to find the post container
                 let container = link.parentElement;
@@ -469,11 +482,14 @@ class FacebookDeepScraper:
                 let author = '';
                 let authorUrl = '';
                 const anchors = container.querySelectorAll('a');
+                const junkNames = new Set(['seguir', 'facebook', 'compartir', 'indicador de estado online', 'activo', 'me gusta', 'seguido', 'siguiendo', 'responder', 'reaccionar', 'enviar', 'compartir en', 'opciones', 'más', 'menos', 'ver más', 'ver menos', 'ver todo', 'ocultar', 'eliminar', 'editar', 'denunciar', 'compartir ahora', 'copiar enlace']);
                 for (const a of anchors) {
-                    const t = a.innerText.trim();
+                    const raw = a.innerText;
+                    if (!raw) continue;
+                    const t = raw.replace(/\\n/g, ' ').replace(/\\s+/g, ' ').trim();
                     const ahref = a.getAttribute('href') || '';
                     if (t && t.length < 50 && t.length > 2 && !t.startsWith('http') && !/^\\d+$/.test(t)
-                        && t !== 'Seguir' && t !== 'Facebook' && t !== 'Compartir') {
+                        && !junkNames.has(t.toLowerCase())) {
                         author = t;
                         if (ahref && ahref.startsWith('http')) authorUrl = ahref;
                         else if (ahref && ahref.startsWith('/')) authorUrl = 'https://www.facebook.com' + ahref;
@@ -488,6 +504,8 @@ class FacebookDeepScraper:
                     'span[data-utime]',
                     'time[datetime]',
                     'abbr[title]',
+                    'span[data-tooltip-content]',
+                    '[data-utime]',
                 ];
                 for (const sel of tsSelectors) {
                     const el = container.querySelector(sel);
@@ -498,21 +516,25 @@ class FacebookDeepScraper:
                     } else if (sel === 'abbr[title]') {
                         const t = el.getAttribute('title');
                         if (t) { const ms = Date.parse(t); if (!isNaN(ms)) { created = ms; break; } }
+                    } else if (sel === 'span[data-tooltip-content]') {
+                        const t = el.getAttribute('data-tooltip-content');
+                        if (t) { const ms = Date.parse(t); if (!isNaN(ms)) { created = ms; break; } }
                     } else {
                         const u = el.getAttribute('data-utime') || el.getAttribute('utime');
                         if (u) { created = parseInt(u) * 1000; break; }
                     }
                 }
 
-                // Fallback: relative time
+                // Fallback: relative time (improved regex)
                 if (!created) {
                     const lower = innerText.toLowerCase();
-                    const relTime = lower.match(/(\\d+)\\s*(min|minutos?|horas?|días?|día|semanas?|sem|mes|meses?|años?|año)\\s*/);
+                    const relTime = lower.match(/(\\d+)\\s*(seg|segundos?|min|minutos?|horas?|días?|día|semanas?|sem|mes|meses?|años?|año)\\s*/);
                     if (relTime) {
                         const num = parseInt(relTime[1]);
                         const unit = relTime[2];
                         const now = Date.now();
-                        if (unit.startsWith('min')) created = now - num * 60 * 1000;
+                        if (unit.startsWith('seg')) created = now - num * 1000;
+                        else if (unit.startsWith('min')) created = now - num * 60 * 1000;
                         else if (unit.startsWith('h')) created = now - num * 3600 * 1000;
                         else if (unit.startsWith('d') || unit.startsWith('sem')) {
                             const multiplier = unit.startsWith('sem') ? 7 : 1;
@@ -520,6 +542,15 @@ class FacebookDeepScraper:
                         }
                         else if (unit.startsWith('mes')) created = now - num * 30 * 86400 * 1000;
                         else if (unit.startsWith('a')) created = now - num * 365 * 86400 * 1000;
+                    }
+                }
+
+                // Fallback: parse postUrl for date fragments (Facebook sometimes encodes dates)
+                if (!created) {
+                    const dateMatch = postUrl.match(/\\/(\\d{4})\\/(\\d{1,2})\\/(\\d{1,2})\\//);
+                    if (dateMatch) {
+                        created = new Date(parseInt(dateMatch[1]), parseInt(dateMatch[2]) - 1, parseInt(dateMatch[3])).getTime();
+                        if (isNaN(created)) created = null;
                     }
                 }
 
@@ -576,8 +607,9 @@ class FacebookDeepScraper:
                     let el = de.parentElement;
                     let commentAuthor = '';
                     for (let i = 0; i < 5 && el; i++) {
+                        // Try multiple selector strategies
                         const authorLink = el.querySelector(
-                            'a[href*=\"/user/\"], a[href*=\"/profile/\"], a[role=\"link\"]'
+                            'a[href*=\"/user/\"], a[href*=\"/profile/\"], a[role=\"link\"], a[href*=\"/groups/\"], strong a, h4 a'
                         );
                         if (authorLink) {
                             const at = authorLink.innerText.trim();
@@ -586,9 +618,20 @@ class FacebookDeepScraper:
                                 break;
                             }
                         }
+                        // Try span with author name
+                        const nameSpan = el.querySelector('span[dir=\"auto\"] strong, strong:only-child');
+                        if (nameSpan) {
+                            const at = nameSpan.innerText.trim();
+                            if (at.length > 0 && at.length < 50 && at !== author) {
+                                commentAuthor = at;
+                                break;
+                            }
+                        }
                         el = el.parentElement;
                     }
-                    if (!commentAuthor) continue;
+                    if (!commentAuthor) {
+                        commentAuthor = 'Anónimo';
+                    }
 
                     // Deduplicate by message + author
                     const sig = t.substring(0, 60) + '|' + commentAuthor;
@@ -630,7 +673,6 @@ class FacebookDeepScraper:
         logger.info(f"JS extraction: {len(raw_posts)} raw posts from feed")
 
         results = []
-        dup_counter = 0
 
         for data in raw_posts:
             post_id = data.get("postId", "")
@@ -638,16 +680,20 @@ class FacebookDeepScraper:
             if not post_id:
                 continue
             if post_id in seen_ids:
-                dup_counter += 1
-                post_id = f"{post_id}_{dup_counter}"
-                if post_id in seen_ids:
-                    continue
+                logger.debug(f"  Skipping duplicate post: {post_id}")
+                continue
             seen_ids.add(post_id)
 
             message = (data.get("message") or "")[:10000]
             author = data.get("pageName") or self.search_keyword or "Search Result"
             created_ts = data.get("created")
             created_time = datetime.fromtimestamp(created_ts / 1000) if created_ts else None
+
+            # Filter by date range [scrape_since, scrape_until]
+            if created_time:
+                if created_time < self.scrape_since or created_time > self.scrape_until:
+                    logger.debug(f"  Skipping post outside date range: {created_time}")
+                    continue
 
             post_url = data.get("postUrl", "") or (f"{FB_BASE}/posts/{post_id}" if not post_id.startswith("deep_") else "")
             page_url = data.get("pageUrl", "")
@@ -664,7 +710,7 @@ class FacebookDeepScraper:
             comments_out = []
             for rc in raw_comments:
                 c_msg = rc.get("message", "")
-                c_author = rc.get("author", "") or "Anonymous"
+                c_author = rc.get("author", "") or "Anónimo"
                 c_ts = rc.get("created")
                 c_created = datetime.fromtimestamp(c_ts / 1000) if c_ts else None
                 cid = hashlib.md5(f"{post_id}|{c_msg}|{c_author}".encode()).hexdigest()

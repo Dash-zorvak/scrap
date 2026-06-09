@@ -25,6 +25,10 @@ class Config:
     DAYS_BACK = int(os.getenv("DAYS_BACK", "730"))
     MAX_POSTS = int(os.getenv("MAX_POSTS", "20000"))
 
+    # Date range for scraping
+    SCRAPE_SINCE = os.getenv("SCRAPE_SINCE", "2025-01-01")
+    SCRAPE_UNTIL = os.getenv("SCRAPE_UNTIL", "")  # empty = today
+
     PROXY_URL = os.getenv("PROXY_URL", "")
 
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")

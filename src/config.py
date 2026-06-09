@@ -29,6 +29,10 @@ class Config:
     SCRAPE_SINCE = os.getenv("SCRAPE_SINCE", "2025-01-01")
     SCRAPE_UNTIL = os.getenv("SCRAPE_UNTIL", "")  # empty = today
 
+    # How many consecutive out-of-range posts before stopping scroll
+    # (Facebook feed is not strictly chronological, so tolerate some)
+    CUTOFF_TOLERANCE = int(os.getenv("CUTOFF_TOLERANCE", "10"))
+
     PROXY_URL = os.getenv("PROXY_URL", "")
 
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")

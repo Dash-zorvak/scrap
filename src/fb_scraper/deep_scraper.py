@@ -186,6 +186,7 @@ class FacebookDeepScraper:
         self.scrape_since = self._parse_date(cfg.SCRAPE_SINCE)
         scrape_until_str = cfg.SCRAPE_UNTIL
         self.scrape_until = self._parse_date(scrape_until_str) if scrape_until_str else datetime.now()
+        self.cutoff_tolerance = int(getattr(cfg, "CUTOFF_TOLERANCE", "10"))
 
         self.notifier = TelegramNotifier()
         self.checkpoint = CheckpointManager("externos")
@@ -202,6 +203,10 @@ class FacebookDeepScraper:
         }
 
         self._init_db()
+
+        # Tracking for tolerance-based cutoff
+        self._last_extraction_raw_count = 0
+        self._last_extraction_oor_count = 0
 
     @staticmethod
     def _parse_date(date_str: str) -> datetime:
@@ -673,6 +678,8 @@ class FacebookDeepScraper:
         logger.info(f"JS extraction: {len(raw_posts)} raw posts from feed")
 
         results = []
+        self._last_extraction_raw_count = len(raw_posts)
+        self._last_extraction_oor_count = 0
 
         for data in raw_posts:
             post_id = data.get("postId", "")
@@ -693,7 +700,11 @@ class FacebookDeepScraper:
             if created_time:
                 if created_time < self.scrape_since or created_time > self.scrape_until:
                     logger.debug(f"  Skipping post outside date range: {created_time}")
+                    self._last_extraction_oor_count += 1
                     continue
+            else:
+                # Posts without timestamp cannot be judged; count as in-range
+                pass
 
             post_url = data.get("postUrl", "") or (f"{FB_BASE}/posts/{post_id}" if not post_id.startswith("deep_") else "")
             page_url = data.get("pageUrl", "")
@@ -859,6 +870,7 @@ Resuélvelo manualmente en el navegador.
                 state = {"scraped_post_ids": list(processed), "stats": self.stats, "target": target}
                 seen_ids = set(processed)
                 stale = 0
+                oor_streak = 0
                 scrolled = 0
                 crashed = False
 
@@ -936,11 +948,26 @@ Resuélvelo manualmente en el navegador.
 
                     if posts_on_page == 0:
                         stale += 1
+                        # Track out-of-range streak: if most extracted posts are OOR
+                        if self._last_extraction_raw_count > 0 and self._last_extraction_oor_count > 0:
+                            oor_ratio = self._last_extraction_oor_count / self._last_extraction_raw_count
+                            if oor_ratio >= 0.7:
+                                oor_streak += 1
+                                logger.debug(f"  OOR streak: {oor_streak}/{self.cutoff_tolerance} ({self._last_extraction_oor_count}/{self._last_extraction_raw_count} posts OOR)")
+                            else:
+                                oor_streak = 0
+                        else:
+                            oor_streak = 0
                     else:
                         stale = 0
+                        oor_streak = 0
 
                     if stale >= 15:
                         logger.info(f"No new posts after {scrolled} scrolls — stopping {page_label}")
+                        break
+
+                    if oor_streak >= self.cutoff_tolerance:
+                        logger.info(f"All posts out of date range for {oor_streak} consecutive scrolls — stopping {page_label}")
                         break
 
                     if scrolled % 10 == 0:

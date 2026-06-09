@@ -38,12 +38,15 @@ def clean(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
     cur = conn.cursor()
 
     # Count rows to be affected
+    total_posts = cur.execute("SELECT COUNT(*) FROM external_posts").fetchone()[0]
+    total_comments = cur.execute("SELECT COUNT(*) FROM external_comments").fetchone()[0]
     sim_posts = cur.execute(
         "SELECT COUNT(*) FROM external_posts WHERE post_id LIKE 'SIM_EXT%'"
     ).fetchone()[0]
     sim_comments = cur.execute(
         "SELECT COUNT(*) FROM external_comments WHERE post_id LIKE 'SIM_EXT%'"
     ).fetchone()[0]
+    real_posts_pre = total_posts - sim_posts
     has_sentimiento = cur.execute(
         "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='external_sentimiento'"
     ).fetchone()[0] > 0
@@ -93,6 +96,18 @@ def clean(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
     cur.execute("DELETE FROM external_posts WHERE post_id LIKE 'SIM_EXT%'")
     deleted_posts = cur.rowcount
 
+    # Defensive: verify no real posts were harmed
+    remaining_real = cur.execute(
+        "SELECT COUNT(*) FROM external_posts WHERE post_id NOT LIKE 'SIM_EXT%'"
+    ).fetchone()[0]
+    if remaining_real != real_posts_pre:
+        conn.rollback()
+        conn.close()
+        print(f"\n  ❌ CRITICAL: Real posts changed from {real_posts_pre} to {remaining_real}!")
+        print(f"  Rolling back — no changes applied.")
+        print(f"  This should never happen. The DELETE filter may be wrong.")
+        return
+
     if has_sentimiento:
         cur.execute("DROP TABLE IF EXISTS external_sentimiento")
         print(f"  Dropped external_sentimiento table ({sent_rows} rows)")
@@ -101,6 +116,8 @@ def clean(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
     conn.close()
 
     print(f"  Done: removed {deleted_posts} simulated posts, {deleted_comments} comments")
+    if remaining_real > 0:
+        print(f"  Real posts preserved: {remaining_real}")
     if backup_path:
         print(f"  Backup: {backup_path}")
     print("  externos.db now contains only real deep-scraper data.")

@@ -1,0 +1,207 @@
+====================================================================
+ PLAN DE DESARROLLO — DASHBOARD DE REPUTACIÓN ALCALDÍA SANTA ANA
+====================================================================
+(Versión para personas no técnicas)
+
+¿QUÉ ESTAMOS HACIENDO?
+======================
+Un sistema que analiza automáticamente TODO lo que la alcaldía publica
+en Facebook y TikTok, y todo lo que la gente responde, para mostrar
+en una pantalla:
+
+  • Si la gente está contenta o enojada (y por qué)
+  • Qué temas generan más reacción
+  • Qué zonas de Santa Ana mencionan más
+  • Alertas cuando algo se está poniendo feo
+  • Qué publicaciones funcionan mejor
+
+========================================
+FASE 0 — LO QUE YA ESTÁ LISTO (HOY)
+========================================
+
+[✓] Base de datos con 182 publicaciones de Facebook
+[✓] Base de datos con 1,552 videos de TikTok
+[✓] Base de datos con 3,172 comentarios de TikTok
+[✓] Sistema que analiza sentimiento (positivo/neutral/negativo)
+[✓] Sistema que detecta de qué tema habla cada publicación
+[✓] Sistema que detecta qué zona de Santa Ana se menciona
+[✓] Sistema de puntuación IQ (7 dimensiones)
+[✓] Dashboard mostrando todo esto en http://localhost:8501
+[✓] Reporte imprimible en HTML
+
+TIEMPO INVERTIDO HASTA AHORA: ~2 semanas de desarrollo
+
+========================================
+FASE 1 — COMPLETAR DATOS CRUDOS
+========================================
+
+Extraer datos faltantes de las páginas.
+
+[ ] Extraer TODOS los posts de Facebook (faltan ~300+)
+    • Tiempo estimado: 30-60 minutos con Graph API
+    • Limitación: Facebook solo deja ver lo reciente
+
+[ ] Extraer comentarios de Facebook (hoy tenemos 0)
+    • Tiempo estimado: 2-4 horas
+    • Dato: hay que visitar cada post uno por uno
+
+[ ] Extraer comentarios de TikTok con texto real
+    • Problema actual: 3,172 comentarios, solo 163 tienen texto
+    • Tiempo estimado: depende del scraper, puede tomar horas
+
+[ ] Conseguir datos de vistas de Facebook
+    • Hoy todas las vistas aparecen en cero
+    • Sin esto no podemos medir bien el engagement
+
+TIEMPO TOTAL ESTIMADO FASE 1: 1-2 días hábiles
+
+========================================
+FASE 2 — REDUCCIÓN DE DATOS (PCA/TÓPICOS)
+========================================
+
+Acá aplicamos la lógica similar a Cambridge Analytica pero adaptada:
+ellos reducían millones de "Me gusta" de usuarios a componentes.
+Nosotros vamos a reducir los temas y patrones de las publicaciones
+a perfiles de contenido.
+
+[✓] LDA (Topic Modeling): ya funciona
+    • Agrupa publicaciones por temas ocultos automáticamente
+    • Ej: descubre que "calles, pavimento, asfalto" son un tema
+    sin que nadie se lo diga
+
+[ ] PCA sobre engagement: NUEVO
+    • Toma todas las métricas (likes, shares, comentarios, vistas)
+    y las reduce a 2-3 patrones principales
+    • Ej: detecta que "los posts con video los domingos a las 9am
+    tienen 3x más engagement"
+
+[ ] Vector de perfil por publicación: NUEVO
+    • Cada post se describe con un "vector" de 10-15 números:
+    [sentimiento, tema_1, tema_2, ..., engagement, zona]
+    • Esto sirve para agruparlos y predecir
+
+TIEMPO ESTIMADO FASE 2: 3-5 días
+
+========================================
+FASE 3 — CLUSTERING (K-MEANS) + PERFILES
+========================================
+
+Agrupar publicaciones en "tipos" que se comportan parecido.
+
+[ ] K-Means sobre los perfiles de publicación
+    • La máquina solita encuentra grupos como:
+      - Grupo A: "Obras públicas, tono positivo, alto engagement,
+        zona urbana" → público responde bien
+      - Grupo B: "Seguridad, tono neutro, bajo engagement,
+        sin zona" → a la gente no le interesa así
+      - Grupo C: "Servicios, tono negativo, muchas quejas,
+        zona rural" → hay un problema real
+
+[ ] Perfiles de "voz ciudadana" desde comentarios
+    • Agrupar comentarios por: sentimiento + tema + zona
+    • Ej: "La gente de la Colonia San Carlos está enojada
+    por el estado de las calles"
+    • Hoy limitado: solo 163 comentarios con texto en TikTok
+    y 0 en Facebook
+
+TIEMPO ESTIMADO FASE 3: 3-5 días
+
+========================================
+FASE 4 — PREDICTIVO + ALERTAS TEMPRANAS
+========================================
+
+Lo más parecido a Cambridge Analytica: predecir antes de que pase.
+
+[ ] Regresión: ¿este post va a tener buen engagement?
+    • Antes de publicar, el sistema dice:
+    "Si publicas esto, espera 1,200 reacciones"
+    "Si publicas esto otro, espera solo 150"
+
+[ ] Clasificación: ¿este post va a generar controversia?
+    • Alerta roja si el tono y el tema apuntan a polémica
+    • Ej: si combinas "desalojo" + "colonia popular" + "tono
+    defensivo", la probabilidad de controversia sube al 80%
+
+[ ] Series de tiempo: ¿el sentimiento general va mejorando
+    o empeorando?
+    • Tendencia de 7 días: "El malestar en seguridad subió 15%
+    esta semana, sigue así llegará a nivel crítico en 3 semanas"
+
+[ ] Alertas Cambridge visibles en el dashboard (hoy existen pero
+    no están conectadas a la pantalla principal)
+    • Controversia: detecta cuando un post específico explota
+    • Sentimiento: alerta si el ánimo general cambia drásticamente
+    • Engagement: alerta si la gente deja de reaccionar
+    • Tópico: alerta si un tema nuevo aparece de repente
+    • Zona: alerta si una colonia específica se queja coordinado
+
+TIEMPO ESTIMADO FASE 4: 5-7 días
+
+========================================
+FASE 5 — PULIR DASHBOARD + REPORTES
+========================================
+
+[ ] Alertas Cambridge visibles con colores y explicaciones
+[ ] Filtros más fáciles para el usuario
+[ ] Botón para exportar reporte en PDF
+[ ] Gráfico de tendencias en el tiempo
+[ ] Versión móvil / responsive
+[ ] Textos explicativos en lenguaje simple (no técnico)
+[ ] Corrección de falsos positivos en detección de zonas
+    (hoy confunde "KFC" y "Responder" con lugares)
+
+TIEMPO ESTIMADO FASE 5: 3-5 días
+
+========================================
+RESUMEN DE TIEMPOS TOTALES
+========================================
+
+  Fase 1 (Datos completos):     1-2 días
+  Fase 2 (Reducción/PCA):       3-5 días
+  Fase 3 (Clustering):          3-5 días
+  Fase 4 (Predictivo):          5-7 días
+  Fase 5 (Dashboard pulido):    3-5 días
+                                --------
+  TOTAL ESTIMADO:               3-4 semanas
+
+  * Nota: estos tiempos son en días laborales.
+  * Si los datos de Facebook están incompletos o el scraper
+    de TikTok no logra extraer más comentarios, puede alargarse.
+
+========================================
+QUÉ TENEMOS HOY vs QUÉ TENDREMOS
+========================================
+
+  HOY (Fase 0)                    |  META (Fase 5)
+  ---------------------------------|---------------------------------
+  IQ General 72/100              |  IQ + alertas + predicción
+  182 posts FB + 1,552 TT        |  Todos los posts históricos
+  0 comentarios FB               |  Comentarios de FB completos
+  163 comentarios TT con texto   |  Todos los comentarios TT
+  Detección de temas 47-84%      |  Detección + clusters automáticos
+  Zonas con falsos positivos     |  Zonas filtradas y precisas
+  7 tabs fijas                   |  Dashboard + reportes exportables
+  Alertas existen pero ocultas   |  Alertas visibles con explicación
+
+========================================
+RIESGOS Y PROBLEMAS CONOCIDOS
+========================================
+
+  [Alto] Facebook ya casi no deja extraer datos — su API
+         es cada vez más restrictiva. Podríamos quedarnos
+         con solo 200 posts.
+
+  [Medio] Comentarios de TikTok vienen vacíos (3,009 de 3,172
+         sin texto) — el sistema de extracción no logra
+         capturar el contenido real.
+
+  [Medio] Sin datos de vistas en Facebook — no podemos medir
+         engagement rate real. Usamos aproximaciones.
+
+  [Bajo] Detección de zonas a veces falla porque los modelos
+         de inteligencia artificial confunden palabras
+         comunes con nombres de lugares.
+
+  [Bajo] El dashboard se queda lento si se procesan muchos
+         datos a la vez (>2,000 publicaciones).
+====================================================================

@@ -1,0 +1,281 @@
+================================================================================
+ REPORTE DE ANÁLISIS: deep_scraper.py
+ Archivo: /Users/pro/Downloads/scrapeo-social/src/fb_scraper/deep_scraper.py
+ Líneas: 1,205
+================================================================================
+
+
+================================================================================
+ 1. ¿QUÉ DATOS EXTRAE ACTUALMENTE?
+================================================================================
+
+El scraper construye un diccionario por post con estos campos (líneas 529-548):
+
+  Campo            | Tipo   | Origen en DOM
+  -----------------|--------|---------------------------------------------
+  post_id          | str    | Extraído del href del enlace /posts/{id}
+  page_id          | str    | Último segmento de la URL antes de /posts/
+  page_name        | str    | Primer anchor (<a>) con texto de persona/página
+  message          | str    | Primer div[dir="auto"] con >15 chars
+  created_time     | dt     | Timestamp desde abbr[data-utime] o tiempo relativo
+  likes_count      | int    | aria-label que contenga "me gusta"/"like"
+  loves_count      | int    | aria-label que contenga "me encanta"/"love"
+  hahas_count      | int    | aria-label que contenga "haha"/"me divierte"
+  wows_count       | int    | aria-label que contenga "wow"/"me sorprende"
+  sads_count       | int    | aria-label que contenga "triste"/"me entristece"
+  angrys_count     | int    | aria-label que contenga "enojo"/"me enfada"
+  comments_count   | int    | aria-label que contenga "comentario"/"comment"
+  shares_count     | int    | aria-label que contenga "compartido"/"share"
+  views_count      | int    | aria-label que contenga "vista"/"view"
+  post_url         | str    | href completo del enlace
+  source           | str    | Siempre "deep_scraper"
+  hashtags         | list   | Regex #(\w+) sobre message
+  mentions         | list   | Regex @(\w+) sobre message
+
+Además, en la Fase 2 (visitar posts individuales, líneas 884-919), extrae:
+  - Comentarios: message, author_name, like_count, created_time
+    (vía _extract_all_comments, que expande botones "Ver más comentarios"
+     y luego extrae con JS los divs de comentarios)
+
+Y actualiza los mismos campos de engagement (lk, lv, hh, wo, sd, ag, cc, sc, vw)
+yendo a la URL individual del post (vía _scrape_post_engagement, líneas 1002-1063).
+
+
+================================================================================
+ 2. ¿QUÉ DATOS NO EXTRAE PERO EXISTEN EN FACEBOOK?
+================================================================================
+
+El scraper SÍ INTENTA extraer los 6 tipos de reacción, comentarios, shares y views.
+Sin embargo:
+
+  a) wows_count:  El código SÍ lo busca (línea 445 y 1043: "wow"/"me sorprende").
+                   Pero en los datos reales TODOS son 0. Facebook posiblemente no
+                   renderiza este aria-label en la página de Jose Chicas (poco común).
+
+  b) angrys_count: El código SÍ lo busca (línea 447 y 1045: "enojo"/"me enfada").
+                   Pero en los datos reales TODOS son 0. Misma razón: poca
+                   relevancia política para generar aria-label de "me enoja".
+
+  c) shares_count: El código SÍ lo busca (línea 449 y 1047: "compartido"/"share").
+                   Pero en los datos reales TODOS son 0.
+
+  d) views_count:  El código SÍ lo busca (línea 450 y 1048 y 1055: "vista"/"view").
+                   Pero en los datos reales TODOS son 0.
+
+  e) created_time de comentarios: El código intenta extraerlo de abbr[data-utime]
+                                   (línea 703-708), pero en facebook.db TODOS los
+                                   892 comentarios tienen created_time = NULL.
+
+Lo que NO intenta extraer (que exista en Facebook):
+  - Video views en posts de video
+  - Engagement de reacciones desglosado por tipo de usuario
+  - Metadata de shared posts (posts compartidos de otras páginas)
+  - URLs de imágenes/videos adjuntos
+  - Texto alternativo de imágenes
+  - Información de la página (page category, followers)
+  - Reacciones totales como suma (solo busca individualmente)
+
+RESUMEN: Shares y views SÍ se buscan activamente, pero el DOM de Facebook
+no los expone en los aria-labels cuando se scrollea el feed.
+
+
+================================================================================
+ 3. ¿POR QUÉ SHARES_COUNT Y VIEWS_COUNT LLEGAN TODOS EN 0?
+================================================================================
+
+El problema es del MÉTODO DE EXTRACCIÓN, no de la BD ni del guardado. Hay dos
+fases de extracción y ambas fallan:
+
+--- Fase 1: Extracción desde el feed (scroll) ---
+  Código: _scrape_search_results (líneas 310-550)
+  - Busca aria-labels en el contenedor del post (líneas 434-451)
+  - Si no encuentra por aria-label, usa regex sobre el texto del contenedor (líneas 453-466):
+      /([\d,.]+(?:mil|k|M)?)\s+(vistas?|visualizaciones?|reproducciones?)/i
+      /([\d,.]+(?:mil|k|M)?)\s+(compartido|shares?)/i
+
+  PROBLEMA: En el FEED scrolleado, Facebook NO renderiza los contadores de
+  "shares" ni "views" dentro del contenedor del post (el div[role="article"]).
+  Facebook solo muestra: reacciones (likes, loves, etc.) y comentarios.
+  Los shares y views aparecen solo en la página individual del post.
+
+--- Fase 2: Visitar post individual ---
+  Código: _scrape_post_engagement (líneas 1002-1063)
+  - Navega a la URL individual del post
+  - Busca los mismos aria-labels en toda la página (línea 1032)
+  - Fallback: regex sobre document.body.innerText (líneas 1053-1055)
+
+  PROBLEMA: Aunque ahora estamos en la página individual, Facebook NO SIEMPRE
+  renderiza aria-labels con los números de shares y views. En especial:
+  - "Shares" puede aparecer como texto plano "X shares" sin aria-label
+  - "Views" solo aparece si el post tiene un video y tiene >0 views
+  - Facebook usa etiquetas como "X people shared this" con estructuras
+    que pueden no coincidir con la regex usada
+
+  Además, la regex de parseNumEng (línea 1029) falla porque usa replaceAll que
+  elimina TODO excepto dígitos, comas y puntos:
+    s.replace(/[^\d,.]/g, '')
+  Si el string es "123 compartidos", cleaned = "123 " → cleaned.trim() = "123"
+  que NO es "M", entonces mult=1. Hasta ahí bien.
+  PERO si el string es "44mil compartidos" → s="44mil" → cleaned vacío → mult=1
+  y parseFloat("44") = 44... en realidad debe funcionar porque "44mil" se
+  reduce a "44" después de quitar "mil".
+
+  ----> LA CAUSA RAÍZ NO ES UN BUG DE PARSING sino que FACEBOOK NO EXPONE
+        shares ni views en el DOM de manera confiable desde un scraper
+        basado en Playwright.
+
+--- Posibles causas adicionales ---
+  1. Facebook requiere interacción (hover/click) para mostrar shares y views
+  2. Los posts de la página Jose Chicas tienen 0 shares porque la página
+     no es lo suficientemente popular como para generar compartidos visibles
+  3. Facebook solo muestra views si el post es un video (y la mayoría son
+     posts de texto/foto)
+  4. La sesión autenticada puede no tener permisos para ver ciertas métricas
+
+
+================================================================================
+ 4. ¿QUÉ LIBRERÍA O MÉTODO USA PARA CONECTARSE A FACEBOOK?
+================================================================================
+
+El scraper usa **Playwright** (línea 30):
+  from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
+
+Además usa **playwright_stealth** (línea 22):
+  from playwright_stealth import Stealth
+
+El flujo de conexión es:
+  1. Abre Chromium con `--disable-blink-features=AutomationControlled` (línea 203)
+  2. Aplica Stealth() para evadir detección de bots (línea 778)
+  3. Autentica con cookies guardadas, o email+password (líneas 253-306)
+  4. Navega a la URL de búsqueda/página de Facebook
+  5. Scrollea el feed y ejecuta JavaScript en el contexto de la página
+     para extraer datos del DOM (NO usa la API oficial de Facebook)
+
+NO usa:
+  - Facebook Graph API
+  - Selenium
+  - Requests/HTTP directo
+  - GraphQL de Facebook
+
+Es un scraper 100% DOM-based via Playwright + JS injection.
+
+
+================================================================================
+ 5. LIMITACIONES TÉCNICAS QUE IMPIDEN OBTENER VIEWS Y SHARES
+================================================================================
+
+Sí hay limitaciones técnicas evidentes:
+
+  A) Facebook no renderiza shares/views en el feed scrolleado:
+       El div[role="article"] de cada post en el feed solo contiene:
+         - Texto del post
+         - Fotos/videos (miniatura)
+         - Reacciones (likes, loves, etc.) como aria-labels
+         - Comentarios inline expandidos
+       NO contiene: shares_count ni views_count visibles en el DOM.
+
+  B) En la página individual del post, Facebook puede mostrar shares/views
+     como TEXTO PLANO (no aria-label), y la extracción vía regex falla si
+     el formato no coincide exactamente.
+
+  C) Facebook requiere sesión autenticada:
+       Aunque el scraper sí se autentica, las sesiones de Facebook pueden
+       tener restricciones según el tipo de cuenta y la configuración de
+       privacidad de la página objetivo.
+
+  D) Views solo aparecen en posts con video:
+       Facebook solo muestra "X views" o "X reproducciones" en posts que
+       contienen videos. Los posts de texto/foto NO tienen views visibles.
+       La página de Jose Chicias publica principalmente texto + fotos.
+
+  E) El método parseNum tiene un bug con "M" mayúscula (líneas 329-330):
+       En _scrape_search_results, parseNum (definido inline en JS, línea 325-333):
+         if (/^M$/.test(s.replace(/[\d,.\s]/g, '').trim())) { mult = 1000000; }
+       Esto chequea si DESPUÉS de quitar dígitos/comas/puntos/espacios, el
+       único carácter restante es "M". PERO en _scrape_post_engagement hay
+       una versión modificada parseNumEng (línea 1019-1029) que usa:
+         const cleaned = s.replace(/[^\d,.\s]/g, '').trim();
+         if (cleaned === 'M') { mult = 1000000; ... }
+       Nótese que aquí NO incluye \s en el conjunto negado [^\d,.], por lo que
+       los espacios NO se eliminan: cleaned puede ser " M" o "M " y fallen.
+       PERO esto solo afecta si hubiera números con "M", no es el caso actual.
+
+  F) Tabla de la BD con valores 0 por defecto:
+       En db.py (líneas 162-163), defaults:
+         shares_count=post.get("shares_count", 0)
+         views_count=post.get("views_count", 0)
+       Si el scraper devuelve 0 (por no encontrar los datos), la BD guarda 0.
+       No hay distinción entre "no extraído" vs "realmente 0".
+
+
+================================================================================
+ 6. LÍNEAS EXACTAS DONDE SE GUARDAN LOS DATOS EN SQLITE
+================================================================================
+
+Las llamadas a guardado en BD ocurren en deep_scraper.py en estos puntos:
+
+--- Guardado de posts ---
+  Línea 807 (Fase 1, batch inicial):
+      ok = self.storage.insert_fb_post(post)
+
+  Línea 847 (Fase 1, dentro del scroll loop):
+      ok = self.storage.insert_fb_post(post)
+
+  Línea 902 (Fase 2, engagement actualizado):
+      self.storage.insert_fb_post(post_data)
+
+  Línea 1115 (método extract_comments_from_db):
+      self.storage.insert_fb_post(post)
+
+--- Guardado de comentarios ---
+  Línea 909 (Fase 2, dentro del loop de pending_engagement):
+      self.storage.insert_fb_comment(c)
+
+  Línea 1120 (método extract_comments_from_db):
+      self.storage.insert_fb_comment(c)
+
+--- Cadena de llamadas ---
+  FacebookDeepScraper.scrape()
+    └─ self.storage.insert_fb_post(post)    → SupabaseStorage.insert_fb_post()
+                                                  └─ LocalStorage.insert_fb_post()  [db.py:147]
+                                                        └─ SQLAlchemy: s.merge(obj) + s.commit()
+
+  FacebookDeepScraper._extract_all_comments()
+    └─ self.storage.insert_fb_comment(c)    → SupabaseStorage.insert_fb_comment()
+                                                  └─ LocalStorage.insert_fb_comment()  [db.py:180]
+                                                        └─ SQLAlchemy: s.merge(obj) + s.commit()
+
+--- Los ORM models usados ---
+  db.py:147-175 → FBPost (objeto SQLAlchemy con 21 columnas)
+  db.py:180-202 → FBComment (objeto SQLAlchemy con 12 columnas)
+
+  Ambos usan s.merge() (UPSERT: inserta o actualiza si existe el mismo post_id/comment_id).
+
+
+================================================================================
+ 7. CONCLUSIÓN
+================================================================================
+
+El problema de shares_count=0 y views_count=0 NO es de la base de datos ni un
+bug de parsing aislado. Es una LIMITACIÓN DEL MÉTODO DE SCRAPING:
+
+  1. El feed scrolleado (Fase 1) nunca contiene shares/views en el DOM.
+  2. La visita individual (Fase 2) no encuentra los datos porque Facebook
+     no expone shares/views como aria-labels confiables; solo como texto
+     plano con formatos variables, o simplemente no los muestra si el post
+     no es video.
+  3. wows_count y angrys_count están en 0 porque esos tipos de reacción
+     son poco usados en esta página, y Facebook no genera aria-labels para
+     reacciones con valor 0.
+
+Para obtener views/shares reales, se necesitaría:
+  - Usar la Graph API oficial (con token pages_read_engagement), que SÍ
+    devuelve views_count y shares_count en sus metadatos.
+  - O un scraper más agresivo que inspeccione el DOM interno de Facebook
+    (ej: buscar en el texto "X people shared this" con selectores más
+    específicos).
+  - O usar la API de Insights de Facebook para métricas de video.
+
+================================================================================
+ FIN DEL REPORTE
+================================================================================

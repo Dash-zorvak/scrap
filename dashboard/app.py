@@ -458,6 +458,28 @@ def hay_datos(df, mensaje: str = "Aún no hay datos suficientes para esta secci�
         return False
     return True
 
+
+def card_explicativa(que_es: str, como_leerlo: str, ojo: str | None = None):
+    """Tarjeta en lenguaje sencillo para explicar un gráfico al alcalde."""
+    ojo_html = (
+        f'<div style="margin-top:8px;font-size:0.9rem;color:#8a6d00;">'
+        f'<b>Ojo:</b> {ojo}</div>'
+        if ojo else ""
+    )
+    st.markdown(
+        f"""
+        <div style="background:#f4f6f9;border-left:4px solid #3a6df0;
+                    border-radius:10px;padding:14px 18px;margin:6px 0 20px 0;">
+            <div style="font-size:0.95rem;line-height:1.55;color:#1c1c1c;">
+                <b>Qué muestra:</b> {que_es}<br>
+                <b>Cómo leerlo:</b> {como_leerlo}
+            </div>
+            {ojo_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 @st.cache_data(ttl=3600)
 def cargar_fb_engagement(db_path):
     df = safe_query("""
@@ -1328,13 +1350,23 @@ if seccion == "📊 Estado General":
     df_serie = df_serie[df_serie['semana'] >= fecha_inicio_plot]
 
     if not df_serie.empty:
+        df_serie = df_serie.copy()
+        df_serie['media_movil'] = df_serie['engagement'].rolling(4, min_periods=1).mean()
+        df_serie['ratio'] = np.where(df_serie['media_movil'] > 0, df_serie['engagement'] / df_serie['media_movil'], 1.0)
+
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=df_serie['semana'], y=df_serie['engagement'],
             mode='lines',
             line=dict(color='#3b82f6', width=2.5),
             name='Actividad ciudadana',
-            hovertemplate='<b>%{x|%d %b %Y}</b><br>%{y:,.0f} interacciones<extra></extra>'
+            customdata=df_serie[['ratio']].values,
+            hovertemplate=(
+                "<b>%{x|%d %b %Y}</b><br>"
+                "%{y:,.0f} interacciones<br>"
+                "→ así de involucrada estuvo la gente esa semana"
+                "<extra></extra>"
+            )
         ))
         anomalias = df_serie[df_serie['es_anomalia'] == True]
         if not anomalias.empty:
@@ -1343,7 +1375,13 @@ if seccion == "📊 Estado General":
                 mode='markers',
                 marker=dict(color='#ef4444', size=12, symbol='circle'),
                 name='Semana inusual',
-                hovertemplate='<b>Semana inusual</b><br>%{x|%d %b %Y}<br>%{y:,.0f} interacciones<extra></extra>'
+                customdata=anomalias[['ratio']].values,
+                hovertemplate=(
+                    "⚠ <b>Semana inusual</b><br>"
+                    "%{x|%d %b %Y} · %{y:,.0f} interacciones<br>"
+                    "→ %{customdata[0]:.1f}× el promedio normal: algo disparó la conversación esa semana"
+                    "<extra></extra>"
+                )
             ))
         fig.update_layout(
             plot_bgcolor='#111827', paper_bgcolor='#111827',
@@ -1352,6 +1390,11 @@ if seccion == "📊 Estado General":
             yaxis=dict(gridcolor='#1f2937', showgrid=True, tickformat=','),
             legend=dict(bgcolor='#111827', bordercolor='#1f2937'),
             margin=dict(l=0, r=0, t=10, b=0), height=280
+        )
+        card_explicativa(
+            que_es="Qué tanto la gente reacciona, comenta y comparte lo que publica la alcaldía.",
+            como_leerlo="Más alto: más gente se está involucrando. Más bajo: la gente lo ve pasar pero no responde.",
+            ojo="Facebook no siempre dice cuánta gente vio cada publicación; cuando falta ese dato, se mide por publicación."
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -1640,6 +1683,18 @@ elif seccion == "🎯 Temas y Emociones":
             coloraxis_showscale=False,
             margin=dict(l=0, r=0, t=10, b=0), height=300
         )
+        fig_heat.update_traces(
+            hovertemplate=(
+                "<b>%{y}</b> · emoción «%{x}»<br>"
+                "Fuerza: %{z:.2f} (más alto = más se repite)<br>"
+                "→ con esta emoción reacciona la gente cuando se habla de este tema"
+                "<extra></extra>"
+            )
+        )
+        card_explicativa(
+            que_es="Por cada tema, con qué emoción reacciona la gente.",
+            como_leerlo="Cada casilla cruza un tema con una emoción. Mientras más encendido el color, más se repite esa emoción en ese tema."
+        )
         st.plotly_chart(fig_heat, use_container_width=True)
 
     # Top 5 posts
@@ -1757,12 +1812,30 @@ elif seccion == "🎯 Temas y Emociones":
             st.dataframe(df_val.tail(10).sort_values("score_emocional_neto")[cols_show].rename(columns=ren).style.format(fmt),
                          use_container_width=True, hide_index=True)
 
+            df_plot = df_val.head(15).copy()
+            df_plot['lectura'] = np.where(
+                df_plot['score_emocional_neto'] >= 0.3, 'la gente lo recibió con cariño',
+                np.where(df_plot['score_emocional_neto'] <= -0.1, 'la gente lo rechazó', 'recepción dividida')
+            )
             fig_sen = px.bar(
-                df_val.head(15), x="score_emocional_neto", y="post", orientation="h",
+                df_plot, x="score_emocional_neto", y="post", orientation="h",
                 color="score_emocional_neto", color_continuous_scale="RdYlGn",
                 labels={"score_emocional_neto": "Score emocional neto", "post": ""},
             )
+            fig_sen.update_traces(
+                customdata=df_plot[['lectura']].values,
+                hovertemplate=(
+                    "%{y}<br>"
+                    "<b>Score:</b> %{x:+.2f} (de −1 a +1)<br>"
+                    "→ %{customdata[0]}"
+                    "<extra></extra>"
+                )
+            )
             fig_sen.update_layout(height=520, yaxis={"categoryorder": "total ascending"})
+            card_explicativa(
+                que_es="Por cada publicación, un solo número que resume si la gente reaccionó con cariño o con enojo y tristeza.",
+                como_leerlo="Arriba de cero: ganó el cariño. Abajo de cero: ganó el enojo y la tristeza. Mientras más lejos del cero, más fuerte fue la emoción."
+            )
             st.plotly_chart(fig_sen, use_container_width=True)
 
     st.divider()
@@ -1787,12 +1860,27 @@ elif seccion == "🎯 Temas y Emociones":
             "views": "Views", "shares": "Shares", "likes": "Likes",
         }), use_container_width=True, hide_index=True)
 
+        df_vir_plot = df_vir.copy()
+        df_vir_plot['pct_viral'] = (df_vir_plot['shares'] / df_vir_plot['views'] * 100).fillna(0)
         fig_vir = px.scatter(
-            df_vir, x="views", y="shares", size="likes", color="indice_viralidad",
-            color_continuous_scale="Plasma", hover_data=["video"],
+            df_vir_plot, x="views", y="shares", size="likes", color="indice_viralidad",
+            color_continuous_scale="Plasma",
+            custom_data=['video', 'shares', 'pct_viral'],
             labels={"views": "Views", "shares": "Compartidos", "indice_viralidad": "Viralidad"},
         )
+        fig_vir.update_traces(
+            hovertemplate=(
+                "%{customdata[0]}<br>"
+                "%{x:,.0f} vistas · %{customdata[1]:,.0f} compartidos<br>"
+                "→ de cada 100 que lo vieron, ~%{customdata[2]:.0f} lo reenviaron"
+                "<extra></extra>"
+            )
+        )
         fig_vir.update_layout(height=480)
+        card_explicativa(
+            que_es="Qué tanto se comparte un video comparado con cuánta gente lo vio.",
+            como_leerlo="Alto: la gente no solo lo vio, lo reenvió. Bajo: lo vieron pero no les interesó pasarlo."
+        )
         st.plotly_chart(fig_vir, use_container_width=True)
 
 # ═══════════════════════════════════════════
@@ -1848,6 +1936,7 @@ elif seccion == "📅 Línea del Tiempo":
     if not df_plot.empty:
         df_plot = df_plot.sort_values('semana')
         df_plot['media_movil'] = df_plot['engagement'].rolling(4, min_periods=1).mean()
+        df_plot['ratio'] = np.where(df_plot['media_movil'] > 0, df_plot['engagement'] / df_plot['media_movil'], 1.0)
 
         st.markdown(leyenda_grafica([
             {'simbolo': '—', 'color': '#3b82f6',
@@ -1867,13 +1956,19 @@ elif seccion == "📅 Línea del Tiempo":
             mode='lines', line=dict(color='#3b82f6', width=2),
             name='Actividad semanal',
             fill='tozeroy', fillcolor='rgba(59,130,246,0.08)',
-            hovertemplate='<b>Semana del %{x|%d %b %Y}</b><br>%{y:,.0f}<extra></extra>'
+            customdata=df_plot[['ratio']].values,
+            hovertemplate=(
+                "<b>Semana del %{x|%d %b %Y}</b><br>"
+                "%{y:,.0f} interacciones<br>"
+                "→ así de involucrada estuvo la gente esa semana"
+                "<extra></extra>"
+            )
         ))
         fig.add_trace(go.Scatter(
             x=df_plot['semana'], y=df_plot['media_movil'],
             mode='lines', line=dict(color='#f59e0b', width=1.5, dash='dot'),
             name='Promedio 4 semanas',
-            hovertemplate='Promedio: %{y:,.0f}<extra></extra>'
+            hovertemplate='Promedio móvil: %{y:,.0f}<extra></extra>'
         ))
         anom = df_plot[df_plot['es_anomalia'] == True]
         if not anom.empty:
@@ -1882,7 +1977,13 @@ elif seccion == "📅 Línea del Tiempo":
                 mode='markers',
                 marker=dict(color='#ef4444', size=14, symbol='circle', line=dict(color='#fca5a5', width=2)),
                 name='Semana inusual',
-                hovertemplate='<b>SEMANA INUSUAL</b><br>%{x|%d %b %Y}<br>%{y:,.0f}<extra></extra>'
+                customdata=anom[['ratio']].values,
+                hovertemplate=(
+                    "⚠ <b>Semana inusual</b><br>"
+                    "%{x|%d %b %Y} · %{y:,.0f} interacciones<br>"
+                    "→ %{customdata[0]:.1f}× el promedio normal: algo disparó la conversación esa semana"
+                    "<extra></extra>"
+                )
             ))
         fig.update_layout(
             plot_bgcolor='#111827', paper_bgcolor='#111827',
@@ -1891,6 +1992,10 @@ elif seccion == "📅 Línea del Tiempo":
             yaxis=dict(gridcolor='#1f2937', showgrid=True, tickformat=',', title=ylabel),
             legend=dict(bgcolor='rgba(17,24,39,0.8)', bordercolor='#1f2937', x=0, y=1),
             margin=dict(l=0, r=0, t=10, b=0), height=350
+        )
+        card_explicativa(
+            que_es="Semana a semana, cuánto se movió la gente con las publicaciones, marcando en rojo las semanas fuera de lo normal.",
+            como_leerlo="La línea sube cuando hay más actividad y baja cuando hay menos. Los puntos rojos son semanas que se salieron de lo común, para arriba o para abajo."
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -1966,7 +2071,7 @@ elif seccion == "📅 Línea del Tiempo":
            line-height:1.5">Cuándo reacciona más la gente según el día de la semana. Azul oscuro = más actividad. Útil para saber qué días publicar para maximizar el alcance.</p>
     </div>
     """, unsafe_allow_html=True)
-    st.markdown("### ¿Cuando reacciona mas la gente?")
+    st.markdown("### Cómo reacciona la gente según el día")
 
     df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
     df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
@@ -1990,13 +2095,21 @@ elif seccion == "📅 Línea del Tiempo":
         fig_dias = go.Figure(go.Bar(
             x=df_dias['nombre'], y=df_dias['valor'],
             marker=dict(color=df_dias['valor'], colorscale=[[0,'#1f2937'],[0.5,'#1d4ed8'],[1,'#60a5fa']]),
-            hovertemplate='%{x}: %{y:,} reacciones<extra></extra>'
+            hovertemplate=(
+                "%{x}: %{y:,} reacciones<br>"
+                "→ así de activa está la gente este día de la semana"
+                "<extra></extra>"
+            )
         ))
         fig_dias.update_layout(
             plot_bgcolor='#111827', paper_bgcolor='#111827',
             font=dict(color='#9ca3af', size=12),
             xaxis=dict(gridcolor='#1f2937'), yaxis=dict(gridcolor='#1f2937', tickformat=','),
             showlegend=False, margin=dict(l=0, r=0, t=10, b=0), height=200
+        )
+        card_explicativa(
+            que_es="En qué días de la semana la gente reacciona más a las publicaciones.",
+            como_leerlo="La barra más alta es el día en que la gente más reacciona; la más baja, el día en que menos reacciona."
         )
         st.plotly_chart(fig_dias, use_container_width=True)
         st.markdown(
@@ -2276,19 +2389,34 @@ elif seccion == "💬 Voz Ciudadana":
             name='Positivo', y=df_sent_tema['categoria_nombre'], x=df_sent_tema['positivo'],
             orientation='h', marker_color='#16a34a',
             text=df_sent_tema['positivo'].apply(lambda x: f'{x:.1f}%'),
-            textposition='inside', textfont=dict(size=10, color='white')
+            textposition='inside', textfont=dict(size=10, color='white'),
+            hovertemplate=(
+                "<b>%{y}</b> · A favor: %{x:.1f}%<br>"
+                "→ esta parte de lo que se dice del tema es a favor"
+                "<extra></extra>"
+            )
         ))
         fig_bar.add_trace(go.Bar(
             name='Neutral', y=df_sent_tema['categoria_nombre'], x=df_sent_tema['neutral'],
             orientation='h', marker_color='#374151',
             text=df_sent_tema['neutral'].apply(lambda x: f'{x:.1f}%'),
-            textposition='inside', textfont=dict(size=10, color='#9ca3af')
+            textposition='inside', textfont=dict(size=10, color='#9ca3af'),
+            hovertemplate=(
+                "<b>%{y}</b> · Neutral: %{x:.1f}%<br>"
+                "→ esta parte de lo que se dice del tema es neutral"
+                "<extra></extra>"
+            )
         ))
         fig_bar.add_trace(go.Bar(
             name='Negativo', y=df_sent_tema['categoria_nombre'], x=df_sent_tema['negativo'],
             orientation='h', marker_color='#dc2626',
             text=df_sent_tema['negativo'].apply(lambda x: f'{x:.1f}%'),
-            textposition='inside', textfont=dict(size=10, color='white')
+            textposition='inside', textfont=dict(size=10, color='white'),
+            hovertemplate=(
+                "<b>%{y}</b> · En contra: %{x:.1f}%<br>"
+                "→ esta parte de lo que se dice del tema es en contra"
+                "<extra></extra>"
+            )
         ))
         fig_bar.update_layout(
             barmode='stack',
@@ -2298,6 +2426,10 @@ elif seccion == "💬 Voz Ciudadana":
             yaxis=dict(gridcolor='#1f2937'),
             legend=dict(bgcolor='rgba(17,24,39,0.8)', bordercolor='#1f2937', orientation='h', y=1.05),
             margin=dict(l=0, r=0, t=30, b=0), height=320
+        )
+        card_explicativa(
+            que_es="Por cada tema, qué parte de los comentarios es a favor, en contra o neutral.",
+            como_leerlo="En cada barra, mientras más grande el pedazo de un color, más comentarios de ese tipo tiene ese tema. Verde a favor, rojo en contra, gris neutral."
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -2326,6 +2458,10 @@ elif seccion == "💬 Voz Ciudadana":
             fig_wc, ax = plt.subplots(figsize=(10, 5))
             ax.imshow(wc, interpolation="bilinear")
             ax.axis("off")
+            card_explicativa(
+                que_es="Las palabras que más repite la gente cuando comenta molesta o en contra.",
+                como_leerlo="Mientras más grande la palabra, más veces la escribieron. Son las quejas más comunes, con las palabras de la propia gente."
+            )
             st.pyplot(fig_wc)
             st.caption(f"Basado en {len(df_neg):,} comentarios negativos.")
         except ValueError:
@@ -2566,7 +2702,11 @@ elif seccion == "🔬 Microsegmentación":
                 color=df_dias['valor'],
                 colorscale=[[0,'#1f2937'],[0.5,'#1d4ed8'],[1,'#60a5fa']]
             ),
-            hovertemplate='%{x}: %{y:,} reacciones<extra></extra>'
+            hovertemplate=(
+                "%{x}: %{y:,} menciones de afuera<br>"
+                "→ así de fuerte habló la prensa/páginas externas ese día"
+                "<extra></extra>"
+            )
         ))
         fig_dias.update_layout(
             plot_bgcolor='#111827',
@@ -2577,6 +2717,10 @@ elif seccion == "🔬 Microsegmentación":
             showlegend=False,
             margin=dict(l=0, r=0, t=10, b=0),
             height=200
+        )
+        card_explicativa(
+            que_es="En qué días las páginas y medios de afuera hablaron más de la alcaldía.",
+            como_leerlo="La barra más alta es el día con más movimiento desde afuera."
         )
         st.plotly_chart(fig_dias, use_container_width=True)
         st.markdown(
@@ -2649,9 +2793,18 @@ elif seccion == "🌐 Contexto Externo":
             fuentes = df_ext.groupby('page_name').size().reset_index(name='menciones').sort_values('menciones', ascending=True)
             fig_f = go.Figure(go.Bar(
                 x=fuentes['menciones'], y=fuentes['page_name'], orientation='h',
-                marker_color='#3b82f6', hovertemplate='%{y}: %{x} menciones<extra></extra>'
+                marker_color='#3b82f6',
+                hovertemplate=(
+                    "%{y}: %{x} menciones<br>"
+                    "→ de los que más hablan de la alcaldía afuera"
+                    "<extra></extra>"
+                )
             ))
             fig_f.update_layout(plot_bgcolor='#111827', paper_bgcolor='#111827', font=dict(color='#9ca3af',size=10), xaxis=dict(gridcolor='#1f2937'), yaxis=dict(gridcolor='#1f2937'), margin=dict(l=0,r=0,t=10,b=0), height=300)
+            card_explicativa(
+                que_es="Qué páginas o medios de afuera son los que más mencionan a la alcaldía.",
+                como_leerlo="Mientras más larga la barra, más veces esa página habló de la alcaldía."
+            )
             st.plotly_chart(fig_f, use_container_width=True)
         with col_b2:
             st.markdown("**¿Como hablan de ti?**")
@@ -2659,8 +2812,24 @@ elif seccion == "🌐 Contexto Externo":
                 pos = (df_ext['score_sentimiento'] > 0.2).sum()
                 neg = (df_ext['score_sentimiento'] < -0.2).sum()
                 neu = len(df_ext) - pos - neg
-                fig_dona = go.Figure(go.Pie(labels=['Positivo','Negativo','Neutral'], values=[pos, neg, neu], hole=0.6, marker=dict(colors=['#16a34a','#dc2626','#374151'])))
+                labels = ['Positivo','Negativo','Neutral']
+                values = [pos, neg, neu]
+                fig_dona = go.Figure(go.Pie(
+                    labels=labels, values=values, hole=0.6,
+                    marker=dict(colors=['#16a34a','#dc2626','#374151']),
+                ))
+                fig_dona.update_traces(
+                    hovertemplate=(
+                        "%{label}: %{value} menciones (%{percent})<br>"
+                        "→ esta parte de la prensa habla %{label|lower}"
+                        "<extra></extra>"
+                    )
+                )
                 fig_dona.update_layout(plot_bgcolor='#111827', paper_bgcolor='#111827', font=dict(color='#9ca3af'), showlegend=True, legend=dict(bgcolor='rgba(0,0,0,0)'), margin=dict(l=0,r=0,t=10,b=0), height=300)
+                card_explicativa(
+                    que_es="De todo lo que dicen de la alcaldía las páginas de afuera, cuánto es a favor, en contra o neutral.",
+                    como_leerlo="Mientras más grande el pedazo de un color, más pesa ese tono. Verde a favor, rojo en contra, gris neutral."
+                )
                 st.plotly_chart(fig_dona, use_container_width=True)
 
         st.markdown("""
@@ -2700,13 +2869,46 @@ elif seccion == "🌐 Contexto Externo":
         st.info("📭 No hay datos de FB suficientes para detectar picos.")
     else:
         serie = corr["serie"]
+        coinc = corr["coincidencias"]
+        # Build headline map for pico weeks
+        headline_map = {}
+        if not coinc.empty:
+            for _, row in coinc.iterrows():
+                wk = row['semana_pico']
+                if wk not in headline_map:
+                    headline_map[wk] = row['noticia']
+        serie['headline'] = serie['semana'].apply(lambda s: headline_map.get(s.date().isoformat(), ""))
         fig_c = px.line(serie, x="semana", y="engagement", markers=True,
-                        labels={"semana": "Semana", "engagement": "Engagement semanal"})
+                        labels={"semana": "Semana", "engagement": "Engagement semanal"},
+                        custom_data=['headline'])
         picos = serie[serie["es_pico"]]
         if not picos.empty:
-            fig_c.add_scatter(x=picos["semana"], y=picos["engagement"], mode="markers",
-                              marker=dict(size=13, color="red", symbol="star"), name="Pico")
+            fig_c.add_scatter(
+                x=picos["semana"], y=picos["engagement"], mode="markers",
+                marker=dict(size=13, color="red", symbol="star"),
+                name="Pico",
+                customdata=picos[['headline']].values,
+                hovertemplate=(
+                    "⚠ <b>Pico de engagement</b><br>"
+                    "%{x|%d %b %Y} · %{y:,.0f} interacciones<br>"
+                    "→ coincide con: %{customdata[0]}. Coincidencia, no prueba de causa"
+                    "<extra></extra>"
+                )
+            )
+        fig_c.update_traces(
+            hovertemplate=(
+                "<b>%{x|%d %b %Y}</b><br>"
+                "%{y:,.0f} interacciones<br>"
+                "→ así de fuerte estuvo la conversación esa semana"
+                "<extra></extra>"
+            )
+        )
         fig_c.update_layout(height=420)
+        card_explicativa(
+            que_es="Si los días en que se dispara la conversación caen junto a alguna noticia.",
+            como_leerlo="Cuando un pico cae el mismo día que una noticia, lo más probable es que esa noticia movió la conversación.",
+            ojo="Que coincidan no prueba que una cosa causó la otra."
+        )
         st.plotly_chart(fig_c, use_container_width=True)
         st.metric("Semanas con pico de engagement", corr["n_picos"])
 
@@ -2874,6 +3076,7 @@ elif seccion == "🤝 Confianza Institucional":
     valores = [max(0, (v['score'] + 1) / 2) for v in resultados.values()]
     valores_norm = [v * 100 for v in valores]
 
+    lecturas = [f"entre más alto, más confía la gente en {n.lower()}" for n in categorias]
     fig_radar = go.Figure()
     fig_radar.add_trace(go.Scatterpolar(
         r=valores_norm + [valores_norm[0]],
@@ -2881,14 +3084,26 @@ elif seccion == "🤝 Confianza Institucional":
         fill='toself',
         fillcolor='rgba(59,130,246,0.15)',
         line=dict(color='#3b82f6', width=2),
-        name='Confianza actual'
+        name='Confianza actual',
+        customdata=lecturas + [lecturas[0]],
+        hovertemplate=(
+            "<b>%{theta}</b><br>"
+            "%{r:.0f}%<br>"
+            "→ %{customdata}"
+            "<extra></extra>"
+        )
     ))
     fig_radar.add_trace(go.Scatterpolar(
         r=[50,50,50,50,50],
         theta=categorias + [categorias[0]],
         mode='lines',
         line=dict(color='#374151', width=1, dash='dot'),
-        name='Referencia neutral'
+        name='Referencia neutral',
+        hovertemplate=(
+            "Referencia neutral: 50%<br>"
+            "→ punto de equilibrio"
+            "<extra></extra>"
+        )
     ))
     fig_radar.update_layout(
         polar=dict(
@@ -2913,6 +3128,11 @@ elif seccion == "🤝 Confianza Institucional":
         ),
         margin=dict(l=40,r=40,t=20,b=20),
         height=380
+    )
+    card_explicativa(
+        que_es="Qué tanto confía la gente en la alcaldía, separado en cuatro partes.",
+        como_leerlo="Mientras más estirada la figura hacia una punta, más confianza hay en esa parte. Mientras más encogida, ahí la gente desconfía.",
+        ojo="Mide lo que la gente dice en redes, no una encuesta cara a cara."
     )
     st.plotly_chart(fig_radar, use_container_width=True)
 
@@ -3065,17 +3285,20 @@ elif seccion == "📡 Narrativas Activas":
     fig_narr = go.Figure()
     for key, narr in narrativas_data.items():
         if not narr['por_semana'].empty:
+            df_n = narr['por_semana'].copy()
             fig_narr.add_trace(go.Scatter(
-                x=narr['por_semana']['semana'],
-                y=narr['por_semana']['count'],
+                x=df_n['semana'],
+                y=df_n['count'],
                 mode='lines+markers',
                 name=f"{narr['icono']} {narr['nombre']}",
                 line=dict(color=narr['color'], width=2),
                 marker=dict(size=5),
                 hovertemplate=(
-                    f"<b>{narr['nombre']}</b><br>"
+                    "<b>%{fullData.name}</b><br>"
                     "%{x|%d %b %Y}<br>"
-                    "%{y} menciones<extra></extra>"
+                    "%{y} menciones<br>"
+                    "→ así de fuerte estaba esta narrativa esa semana"
+                    "<extra></extra>"
                 )
             ))
 
@@ -3099,6 +3322,10 @@ elif seccion == "📡 Narrativas Activas":
         ),
         margin=dict(l=0,r=0,t=10,b=60),
         height=350
+    )
+    card_explicativa(
+        que_es="Los temas o historias que la gente está repitiendo ahora mismo sobre la alcaldía.",
+        como_leerlo="Mientras más grande o más arriba aparece una narrativa, más gente la está repitiendo. Salen las buenas y las malas."
     )
     st.plotly_chart(fig_narr, use_container_width=True)
 
@@ -3202,41 +3429,56 @@ elif seccion == "🌊 Contagio Emocional":
     ]), unsafe_allow_html=True)
 
     if not por_semana.empty:
+        df_c = por_semana.copy()
+        # Convert scores to emotion labels
+        def score_to_emo(score):
+            if score > 0.2:
+                return "positiva"
+            elif score < -0.2:
+                return "negativa"
+            return "neutral"
+        df_c['emo_post'] = df_c['score_post'].apply(score_to_emo)
+        df_c['emo_coment'] = df_c['score_comentarios'].apply(score_to_emo)
+
         fig_contagio = go.Figure()
 
         fig_contagio.add_trace(go.Scatter(
-            x=por_semana['semana'],
-            y=por_semana['score_post'],
+            x=df_c['semana'],
+            y=df_c['score_post'],
             mode='lines+markers',
             name='Tono de tus posts',
             line=dict(color='#3b82f6', width=2.5),
             marker=dict(size=6),
+            customdata=df_c[['emo_post', 'emo_coment']].values,
             hovertemplate=(
                 '<b>Tono publicado</b><br>'
                 '%{x|%d %b %Y}<br>'
-                'Score: %{y:.2f}<extra></extra>'
+                'Publicación: %{customdata[0]} / Comentarios: %{customdata[1]}<br>'
+                '→ cuando coinciden, el mensaje pegó; cuando no, la gente sintió distinto'
+                '<extra></extra>'
             )
         ))
 
         fig_contagio.add_trace(go.Scatter(
-            x=por_semana['semana'],
-            y=por_semana['score_comentarios'],
+            x=df_c['semana'],
+            y=df_c['score_comentarios'],
             mode='lines+markers',
             name='Tono de los comentarios',
             line=dict(color='#f59e0b', width=2.5),
             marker=dict(size=6),
+            customdata=df_c[['emo_post', 'emo_coment']].values,
             hovertemplate=(
                 '<b>Tono recibido</b><br>'
                 '%{x|%d %b %Y}<br>'
-                'Score: %{y:.2f}<extra></extra>'
+                'Publicación: %{customdata[0]} / Comentarios: %{customdata[1]}<br>'
+                '→ cuando coinciden, el mensaje pegó; cuando no, la gente sintió distinto'
+                '<extra></extra>'
             )
         ))
 
         fig_contagio.add_trace(go.Scatter(
-            x=pd.concat([por_semana['semana'],
-                         por_semana['semana'][::-1]]),
-            y=pd.concat([por_semana['score_post'],
-                         por_semana['score_comentarios'][::-1]]),
+            x=pd.concat([df_c['semana'], df_c['semana'][::-1]]),
+            y=pd.concat([df_c['score_post'], df_c['score_comentarios'][::-1]]),
             fill='toself',
             fillcolor='rgba(239,68,68,0.08)',
             line=dict(color='rgba(0,0,0,0)'),
@@ -3272,6 +3514,10 @@ elif seccion == "🌊 Contagio Emocional":
             ),
             margin=dict(l=0,r=0,t=10,b=0),
             height=320
+        )
+        card_explicativa(
+            que_es="Si la emoción de cada publicación se contagia a los comentarios, o si la gente responde con otra emoción.",
+            como_leerlo="Cuando coinciden, el mensaje generó lo que buscaba. Cuando no coinciden, la gente reaccionó distinto a lo que decía la publicación."
         )
         st.plotly_chart(fig_contagio, use_container_width=True)
 
@@ -3407,6 +3653,18 @@ elif seccion == "🌊 Contagio Emocional":
              'label': 'Respuesta neutral',
              'descripcion': 'Posts que no generaron reacción emocional clara en ninguna dirección.'},
         ]), unsafe_allow_html=True)
+
+        lecturas = []
+        for k in tipos_validos.keys():
+            if k in ('resonancia_positiva', 'resonancia_negativa'):
+                lecturas.append('en esta parte la gente reaccionó igual al mensaje')
+            elif k in ('rechazo_a_positivo', 'inversion_positiva', 'distorsion_alta'):
+                lecturas.append('en esta parte la gente reaccionó distinto al mensaje')
+            elif k == 'neutral':
+                lecturas.append('en esta parte la gente reaccionó neutral al mensaje')
+            else:
+                lecturas.append('en esta parte la gente reaccionó de forma mixta')
+
         fig_dist = go.Figure(go.Pie(
             labels=[labels_map.get(k, k) for k in tipos_validos.keys()],
             values=list(tipos_validos.values()),
@@ -3416,8 +3674,16 @@ elif seccion == "🌊 Contagio Emocional":
                 line=dict(color='#111827', width=2)
             ),
             textfont=dict(size=11, color='white'),
-            hovertemplate='%{label}<br>%{value} posts (%{percent})<extra></extra>'
+            customdata=[lecturas],
         ))
+        fig_dist.update_traces(
+            hovertemplate=(
+                "%{label}<br>"
+                "%{value} posts (%{percent})<br>"
+                "→ %{customdata[0][%{index}]}"
+                "<extra></extra>"
+            )
+        )
         fig_dist.update_layout(
             plot_bgcolor='#111827',
             paper_bgcolor='#111827',
@@ -3430,6 +3696,10 @@ elif seccion == "🌊 Contagio Emocional":
             ),
             margin=dict(l=0,r=0,t=10,b=0),
             height=320
+        )
+        card_explicativa(
+            que_es="De qué temas habla la gente, repartido en porciones.",
+            como_leerlo="Mientras más grande la porción, más se habla de ese tema."
         )
         st.plotly_chart(fig_dist, use_container_width=True)
 

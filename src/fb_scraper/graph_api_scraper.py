@@ -55,6 +55,20 @@ class GraphAPIScraper:
         self.storage = SupabaseStorage()
         self.notifier = TelegramNotifier()
 
+        # Date range from config
+        self.scrape_since = self._parse_date(cfg.SCRAPE_SINCE)
+        self.scrape_until = self._parse_date(cfg.SCRAPE_UNTIL) if cfg.SCRAPE_UNTIL else int(datetime.now().timestamp())
+
+    @staticmethod
+    def _parse_date(date_str: str) -> int:
+        """Parse YYYY-MM-DD to epoch timestamp."""
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+            return int(dt.timestamp())
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid date '{date_str}', defaulting to 2025-01-01")
+            return int(datetime(2025, 1, 1).timestamp())
+
         self.stats = {
             "posts_scraped": 0,
             "comments_scraped": 0,
@@ -102,13 +116,16 @@ class GraphAPIScraper:
             return None
 
     def get_posts(self, limit: int = 100, max_pages: int = 100) -> List[Dict]:
-        """Obtiene posts desde Graph API - solo IDs para pagination estable."""
+        """Obtiene posts desde Graph API - solo IDs para pagination estable.
+        Filtra por SCRAPE_SINCE/SCRAPE_UNTIL (config)."""
         all_posts = []
         
         page_size = min(limit, 100)
         params = {
             "fields": "id,created_time",
             "limit": page_size,
+            "since": self.scrape_since,
+            "until": self.scrape_until,
         }
 
         for page_num in range(max_pages):
@@ -127,6 +144,18 @@ class GraphAPIScraper:
             if not posts:
                 logger.warning(f"No more posts on page {page_num + 1}")
                 break
+
+            # Stop pagination if the last post is older than scrape_since
+            last_created = posts[-1].get("created_time")
+            if last_created:
+                try:
+                    last_ts = datetime.fromisoformat(last_created.replace("Z", "+00:00")).timestamp()
+                    if last_ts < self.scrape_since:
+                        logger.info(f"Reached posts older than SCRAPE_SINCE, stopping pagination")
+                        all_posts.extend(posts)
+                        break
+                except (ValueError, TypeError):
+                    pass
 
             all_posts.extend(posts)
             logger.info(f"  Got {len(posts)} posts (total: {len(all_posts)})")
@@ -165,7 +194,7 @@ class GraphAPIScraper:
         data["reactions_by_type"] = reactions_by_type
 
         views = self._get_post_views(post_id)
-        data["views_count"] = views or 0
+        data["views_count"] = views  # None = no permission / not available
 
         return data
 
@@ -247,9 +276,11 @@ class GraphAPIScraper:
             all_comments.extend(data["data"])
 
             # Pagination for more comments
-            while "paging" in data and "next" in data["paging"]:
-                after_match = data["paging"]["next"].split("after=")[1].split("&")[0]
-                params["after"] = after_match
+            while "paging" in data and "cursors" in data.get("paging", {}):
+                after_cursor = data["paging"]["cursors"].get("after")
+                if not after_cursor:
+                    break
+                params["after"] = after_cursor
                 data = self._make_request(f"{post_id}/comments", params)
                 if data and "data" in data:
                     all_comments.extend(data["data"])
@@ -298,10 +329,10 @@ class GraphAPIScraper:
             sads_count = reactions_by_type.get("sads_count", 0)
             angrys_count = reactions_by_type.get("angrys_count", 0)
 
-            # If no breakdown, use total
-            if likes_count == 0:
-                reactions = post_data.get("reactions", {})
-                likes_count = reactions.get("summary", {}).get("total_count", 0) if isinstance(reactions, dict) else 0
+            # Keep individual reaction counts separate from total.
+            # Each post always has `reactions.summary(true).total_count` from get_post_details,
+            # which is the sum of ALL reaction types (including likes).
+            # Do NOT override likes_count with total_count.
 
             # Extract comments count
             comments = post_data.get("comments", {})
@@ -311,8 +342,8 @@ class GraphAPIScraper:
             shares_data = post_data.get("shares", {})
             shares_count = shares_data.get("count", 0) if isinstance(shares_data, dict) else 0
 
-            # Extract views
-            views_count = post_data.get("views_count", 0)
+            # Extract views (None = no permission, not 0)
+            views_count = post_data.get("views_count")  # keep None if no permission
 
             # Use actual permalink_url from API, fallback to constructed URL
             post_url = post_data.get("permalink_url", "") or f"https://www.facebook.com/{post_id}"

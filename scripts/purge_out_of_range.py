@@ -11,6 +11,7 @@ Usage:
     python scripts/purge_out_of_range.py --purge-null  # also delete NULL-date posts
 """
 import argparse
+import os
 import shutil
 import sqlite3
 from datetime import datetime
@@ -132,7 +133,7 @@ def purge(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
             ).fetchone()[0]
             if not exists:
                 continue
-            has_pid = any(r[0] == "post_id" for r in cur.execute(f"PRAGMA table_info(\"{tbl}\")").fetchall())
+            has_pid = any(r[1] == "post_id" for r in cur.execute(f"PRAGMA table_info(\"{tbl}\")").fetchall())
             if not has_pid:
                 continue
             cnt = cur.execute(
@@ -161,8 +162,7 @@ def purge(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
         if cs:
             print(f"    Comments: {fmt(cs['total'])} total, {fmt(cs['oor'])} to delete")
         for tbl, cnt in ex.items():
-            if cnt:
-                print(f"    {tbl}: {fmt(cnt)} rows referencing out-of-range posts")
+            print(f"    {tbl}: {fmt(cnt)} rows referencing out-of-range posts")
         print()
 
     if dry_run:
@@ -219,19 +219,40 @@ def purge(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
             print(f"  {cfg['label']}: deleted {fmt(del_comments)} comments")
 
         # Delete extra table rows referencing OOR posts
+        pid_col = cfg["post_id_col"]
         for tbl, cnt in entry["extra_stats"].items():
             if cnt == 0:
+                print(f"  {cfg['label']}: skipped {tbl} (0 OOR rows)")
                 continue
-            cond = f"WHERE post_id IN (SELECT post_id FROM \"{cfg['posts_table']}\" WHERE {cfg['date_col']} IS NOT NULL AND {cfg['date_col']} < ?)"
+            cond = f"WHERE {pid_col} IN (SELECT {pid_col} FROM \"{cfg['posts_table']}\" WHERE {cfg['date_col']} IS NOT NULL AND {cfg['date_col']} < ?)"
             params = [since]
             if purge_null:
-                cond = f"WHERE post_id IN (SELECT post_id FROM \"{cfg['posts_table']}\" WHERE ({cfg['date_col']} IS NOT NULL AND {cfg['date_col']} < ?) OR {cfg['date_col']} IS NULL)"
+                cond = f"WHERE {pid_col} IN (SELECT {pid_col} FROM \"{cfg['posts_table']}\" WHERE ({cfg['date_col']} IS NOT NULL AND {cfg['date_col']} < ?) OR {cfg['date_col']} IS NULL)"
             cur.execute(f"DELETE FROM \"{tbl}\" {cond}", params)
             print(f"  {cfg['label']}: deleted {cur.rowcount} rows from {tbl}")
 
         # Delete OOR posts
         del_posts = delete_out_of_range(cur, cfg["posts_table"], cfg["date_col"], since, purge_null)
         print(f"  {cfg['label']}: deleted {fmt(del_posts)} posts")
+
+        # Clean orphans: rows in related tables whose post_id no longer exists in posts table
+        pid_col = cfg["post_id_col"]
+        for tbl in cfg.get("extra_tables", []):
+            exists = cur.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+                (tbl,),
+            ).fetchone()[0]
+            if not exists:
+                continue
+            has_pid = any(r[1] == pid_col for r in cur.execute(f"PRAGMA table_info(\"{tbl}\")").fetchall())
+            if not has_pid:
+                continue
+            cur.execute(
+                f"DELETE FROM \"{tbl}\" WHERE {pid_col} NOT IN (SELECT {pid_col} FROM \"{cfg['posts_table']}\")"
+            )
+            orphan_cnt = cur.rowcount
+            if orphan_cnt:
+                print(f"  {cfg['label']}: cleaned {orphan_cnt} orphans from {tbl}")
 
         conn.commit()
         conn.close()

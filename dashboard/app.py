@@ -1685,9 +1685,9 @@ elif seccion == "🎯 Temas y Emociones":
         )
         fig_heat.update_traces(
             hovertemplate=(
-                "<b>%{y}</b> · emoción «%{x}»<br>"
-                "Fuerza: %{z:.2f} (más alto = más se repite)<br>"
-                "→ con esta emoción reacciona la gente cuando se habla de este tema"
+                "<b>%{y}</b> · %{x}<br>"
+                "Fuerza: %{z:.2f}<br>"
+                "→ de cada 100 reacciones a este tema, %{z:.0f} son de %{x|lower}"
                 "<extra></extra>"
             )
         )
@@ -1823,10 +1823,11 @@ elif seccion == "🎯 Temas y Emociones":
                 labels={"score_emocional_neto": "Score emocional neto", "post": ""},
             )
             fig_sen.update_traces(
-                customdata=df_plot[['lectura']].values,
+                customdata=df_plot[['lectura', 'afecto_positivo', 'controversia']].values,
                 hovertemplate=(
                     "%{y}<br>"
-                    "<b>Score:</b> %{x:+.2f} (de −1 a +1)<br>"
+                    "<b>Score neto:</b> %{x:+.2f} (de −1 a +1)<br>"
+                    "Afecto: %{customdata[1]:.2f} · Controversia: %{customdata[2]:.2f}<br>"
                     "→ %{customdata[0]}"
                     "<extra></extra>"
                 )
@@ -1872,7 +1873,7 @@ elif seccion == "🎯 Temas y Emociones":
             hovertemplate=(
                 "%{customdata[0]}<br>"
                 "%{x:,.0f} vistas · %{customdata[1]:,.0f} compartidos<br>"
-                "→ de cada 100 que lo vieron, ~%{customdata[2]:.0f} lo reenviaron"
+                "→ de cada 100 que lo vieron, %{customdata[2]:.1f} lo reenviaron"
                 "<extra></extra>"
             )
         )
@@ -2095,9 +2096,11 @@ elif seccion == "📅 Línea del Tiempo":
         fig_dias = go.Figure(go.Bar(
             x=df_dias['nombre'], y=df_dias['valor'],
             marker=dict(color=df_dias['valor'], colorscale=[[0,'#1f2937'],[0.5,'#1d4ed8'],[1,'#60a5fa']]),
+            customdata=df_dias[['valor']].values,
             hovertemplate=(
-                "%{x}: %{y:,} reacciones<br>"
-                "→ así de activa está la gente este día de la semana"
+                "<b>%{x}</b><br>"
+                "%{y:,} reacciones<br>"
+                "→ de cada 100 reacciones semanales, %{customdata[0]:.0f} caen en %{x}"
                 "<extra></extra>"
             )
         ))
@@ -2392,7 +2395,29 @@ elif seccion == "💬 Voz Ciudadana":
             textposition='inside', textfont=dict(size=10, color='white'),
             hovertemplate=(
                 "<b>%{y}</b> · A favor: %{x:.1f}%<br>"
-                "→ esta parte de lo que se dice del tema es a favor"
+                "→ de cada 100 comentarios sobre este tema, %{x:.1f} son a favor"
+                "<extra></extra>"
+            )
+        ))
+        fig_bar.add_trace(go.Bar(
+            name='Neutral', y=df_sent_tema['categoria_nombre'], x=df_sent_tema['neutral'],
+            orientation='h', marker_color='#374151',
+            text=df_sent_tema['neutral'].apply(lambda x: f'{x:.1f}%'),
+            textposition='inside', textfont=dict(size=10, color='#9ca3af'),
+            hovertemplate=(
+                "<b>%{y}</b> · Neutral: %{x:.1f}%<br>"
+                "→ de cada 100 comentarios sobre este tema, %{x:.1f} son neutrales"
+                "<extra></extra>"
+            )
+        ))
+        fig_bar.add_trace(go.Bar(
+            name='Negativo', y=df_sent_tema['categoria_nombre'], x=df_sent_tema['negativo'],
+            orientation='h', marker_color='#dc2626',
+            text=df_sent_tema['negativo'].apply(lambda x: f'{x:.1f}%'),
+            textposition='inside', textfont=dict(size=10, color='white'),
+            hovertemplate=(
+                "<b>%{y}</b> · En contra: %{x:.1f}%<br>"
+                "→ de cada 100 comentarios sobre este tema, %{x:.1f} son en contra"
                 "<extra></extra>"
             )
         ))
@@ -2702,9 +2727,11 @@ elif seccion == "🔬 Microsegmentación":
                 color=df_dias['valor'],
                 colorscale=[[0,'#1f2937'],[0.5,'#1d4ed8'],[1,'#60a5fa']]
             ),
+            customdata=df_dias[['valor']].values,
             hovertemplate=(
-                "%{x}: %{y:,} menciones de afuera<br>"
-                "→ así de fuerte habló la prensa/páginas externas ese día"
+                "<b>%{x}</b><br>"
+                "%{y:,} reacciones<br>"
+                "→ de cada 100 reacciones semanales, %{customdata[0]:.0f} caen en %{x}"
                 "<extra></extra>"
             )
         ))
@@ -2795,8 +2822,9 @@ elif seccion == "🌐 Contexto Externo":
                 x=fuentes['menciones'], y=fuentes['page_name'], orientation='h',
                 marker_color='#3b82f6',
                 hovertemplate=(
-                    "%{y}: %{x} menciones<br>"
-                    "→ de los que más hablan de la alcaldía afuera"
+                    "<b>%{y}</b><br>"
+                    "%{x} menciones<br>"
+                    "→ de cada 100 menciones externas, %{x} vienen de %{y}"
                     "<extra></extra>"
                 )
             ))
@@ -2820,8 +2848,9 @@ elif seccion == "🌐 Contexto Externo":
                 ))
                 fig_dona.update_traces(
                     hovertemplate=(
-                        "%{label}: %{value} menciones (%{percent})<br>"
-                        "→ esta parte de la prensa habla %{label|lower}"
+                        "<b>%{label}</b><br>"
+                        "%{value} menciones (%{percent})<br>"
+                        "→ de cada 100 menciones externas, %{value} son %{label|lower}"
                         "<extra></extra>"
                     )
                 )
@@ -3088,7 +3117,7 @@ elif seccion == "🤝 Confianza Institucional":
         customdata=lecturas + [lecturas[0]],
         hovertemplate=(
             "<b>%{theta}</b><br>"
-            "%{r:.0f}%<br>"
+            "%{r:.0f}% confianza<br>"
             "→ %{customdata}"
             "<extra></extra>"
         )
@@ -3297,7 +3326,7 @@ elif seccion == "📡 Narrativas Activas":
                     "<b>%{fullData.name}</b><br>"
                     "%{x|%d %b %Y}<br>"
                     "%{y} menciones<br>"
-                    "→ así de fuerte estaba esta narrativa esa semana"
+                    "→ de cada 100 comentarios esa semana, %{y} mencionan esta narrativa"
                     "<extra></extra>"
                 )
             ))
@@ -3449,11 +3478,11 @@ elif seccion == "🌊 Contagio Emocional":
             name='Tono de tus posts',
             line=dict(color='#3b82f6', width=2.5),
             marker=dict(size=6),
-            customdata=df_c[['emo_post', 'emo_coment']].values,
+            customdata=df_c[['emo_post', 'emo_coment', 'score_post', 'score_comentarios']].values,
             hovertemplate=(
                 '<b>Tono publicado</b><br>'
                 '%{x|%d %b %Y}<br>'
-                'Publicación: %{customdata[0]} / Comentarios: %{customdata[1]}<br>'
+                'Score: %{customdata[2]:+.2f} (%{customdata[0]}) → Comentarios: %{customdata[3]:+.2f} (%{customdata[1]})<br>'
                 '→ cuando coinciden, el mensaje pegó; cuando no, la gente sintió distinto'
                 '<extra></extra>'
             )
@@ -3466,11 +3495,11 @@ elif seccion == "🌊 Contagio Emocional":
             name='Tono de los comentarios',
             line=dict(color='#f59e0b', width=2.5),
             marker=dict(size=6),
-            customdata=df_c[['emo_post', 'emo_coment']].values,
+            customdata=df_c[['emo_post', 'emo_coment', 'score_post', 'score_comentarios']].values,
             hovertemplate=(
                 '<b>Tono recibido</b><br>'
                 '%{x|%d %b %Y}<br>'
-                'Publicación: %{customdata[0]} / Comentarios: %{customdata[1]}<br>'
+                'Score: %{customdata[3]:+.2f} (%{customdata[1]}) ← Publicación: %{customdata[2]:+.2f} (%{customdata[0]})<br>'
                 '→ cuando coinciden, el mensaje pegó; cuando no, la gente sintió distinto'
                 '<extra></extra>'
             )
@@ -3678,7 +3707,7 @@ elif seccion == "🌊 Contagio Emocional":
         ))
         fig_dist.update_traces(
             hovertemplate=(
-                "%{label}<br>"
+                "<b>%{label}</b><br>"
                 "%{value} posts (%{percent})<br>"
                 "→ %{customdata[0][%{index}]}"
                 "<extra></extra>"

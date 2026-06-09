@@ -323,9 +323,30 @@ def imprimir_resumen():
 
 
 if __name__ == "__main__":
-    crear_externos_db()
-    generar_datos_simulados()
-    imprimir_resumen()
-    print()
-    print("✓ Módulo 5 completo.")
-    print("⚠ RECORDATORIO: Reemplazar datos simulados con URLs reales del deep scraper")
+    import argparse
+    import os
+
+    parser = argparse.ArgumentParser(description="Módulo 5 — datos simulados de contexto externo")
+    parser.add_argument("--demo", action="store_true", help="Ejecutar seed de datos simulados")
+    args = parser.parse_args()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # SAFETY LOCK: Este script genera 50 filas SIM_EXT_ en externos.db y
+    # crea la tabla external_sentimiento. NO debe ejecutarse en producción
+    # porque contamina la DB con datos ficticios que el dashboard muestra
+    # como reales (dashboard/app.py:567 lee external_sentimiento).
+    #
+    # Requiere flag explícito --demo o env var ENABLE_DEMO_SEED=1.
+    # ═══════════════════════════════════════════════════════════════════════
+
+    if args.demo or os.getenv("ENABLE_DEMO_SEED", "0") == "1":
+        crear_externos_db()
+        generar_datos_simulados()
+        imprimir_resumen()
+        print()
+        print("✓ Módulo 5 completo.")
+        print("⚠ RECORDATORIO: Reemplazar datos simulados con URLs reales del deep scraper")
+    else:
+        print("⚠ Demo seed desactivado. Para ejecutar:")
+        print("  python dashboard/modulo5_externos.py --demo")
+        print("  ENABLE_DEMO_SEED=1 python dashboard/modulo5_externos.py")

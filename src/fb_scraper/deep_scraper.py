@@ -443,6 +443,102 @@ class FacebookDeepScraper:
                 return isNaN(n) ? 0 : Math.round(n * mult);
             }
 
+            function parseSpanishDate(text) {
+                if (!text) return null;
+                const s = text.trim();
+                const now = Date.now();
+
+                // "ahora" / "justo ahora"
+                if (/^(ahora|justo ahora)$/i.test(s)) return now;
+
+                // "hace X segundos/minutos/horas/días/semanas/meses/años"
+                let m = s.match(/^hace\\s+(\\d+)\\s*(segundos?|minutos?|horas?|días?|semanas?|meses?|años?|seg|min|h|d)\\s*$/i);
+                if (m) {
+                    const num = parseInt(m[1]);
+                    const unit = m[2].toLowerCase();
+                    if (unit.startsWith('seg')) return now - num * 1000;
+                    if (unit.startsWith('min')) return now - num * 60000;
+                    if (unit.startsWith('h')) return now - num * 3600000;
+                    if (unit.startsWith('d')) return now - num * 86400000;
+                    if (unit.startsWith('sem')) return now - num * 7 * 86400000;
+                    if (unit.startsWith('mes')) return now - num * 30 * 86400000;
+                    if (unit.startsWith('a')) return now - num * 365 * 86400000;
+                }
+
+                // Short forms: "X min", "X h", "X d", "X sem"
+                m = s.match(/^(\\d+)\\s*(min|h|d|sem)\\s*$/i);
+                if (m) {
+                    const num = parseInt(m[1]);
+                    const unit = m[2].toLowerCase();
+                    if (unit === 'min') return now - num * 60000;
+                    if (unit === 'h') return now - num * 3600000;
+                    if (unit === 'd') return now - num * 86400000;
+                    if (unit === 'sem') return now - num * 7 * 86400000;
+                }
+
+                // "Ayer" → yesterday 12:00
+                if (/^ayer\\b/i.test(s)) {
+                    const d = new Date(now);
+                    d.setDate(d.getDate() - 1);
+                    d.setHours(12, 0, 0, 0);
+                    return d.getTime();
+                }
+
+                // "Hoy" → today 12:00
+                if (/^hoy\\b/i.test(s)) {
+                    const d = new Date(now);
+                    d.setHours(12, 0, 0, 0);
+                    return d.getTime();
+                }
+
+                // Days of week (Spanish)
+                const dias = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+                for (let i = 0; i < dias.length; i++) {
+                    if (s.toLowerCase().startsWith(dias[i])) {
+                        const d = new Date(now);
+                        let diff = i - d.getDay(); // 0=Sun..6=Sat
+                        if (diff > 0) diff -= 7;
+                        d.setDate(d.getDate() + diff);
+                        d.setHours(12, 0, 0, 0);
+                        return d.getTime();
+                    }
+                }
+
+                // "9 de junio de 2025 a las 14:59"
+                const meses = {enero:0,febrero:1,marzo:2,abril:3,mayo:4,junio:5,julio:6,agosto:7,septiembre:8,octubre:9,noviembre:10,diciembre:11};
+                m = s.match(/(\\d{1,2})\\s+de\\s+(\\w+)\\s+de\\s+(\\d{4})(?:\\s+a\\s+las\\s+(\\d{1,2}):(\\d{1,2}))?/i);
+                if (m) {
+                    const day = parseInt(m[1]);
+                    const monthName = m[2].toLowerCase();
+                    const year = parseInt(m[3]);
+                    const hour = m[4] ? parseInt(m[4]) : 12;
+                    const min = m[5] ? parseInt(m[5]) : 0;
+                    if (meses[monthName] !== undefined) {
+                        const d = new Date(year, meses[monthName], day, hour, min, 0, 0);
+                        if (!isNaN(d.getTime())) return d.getTime();
+                    }
+                }
+
+                // "9 de junio" (no year → assume current or last year if future)
+                m = s.match(/(\\d{1,2})\\s+de\\s+(\\w+)\\s*$/i);
+                if (m) {
+                    const day = parseInt(m[1]);
+                    const monthName = m[2].toLowerCase();
+                    if (meses[monthName] !== undefined) {
+                        const year = new Date(now).getFullYear();
+                        let d = new Date(year, meses[monthName], day, 12, 0, 0, 0);
+                        if (d.getTime() > now) d = new Date(year - 1, meses[monthName], day, 12, 0, 0, 0);
+                        if (!isNaN(d.getTime())) return d.getTime();
+                    }
+                }
+
+                // Final fallback: native Date.parse
+                const ms = Date.parse(s);
+                if (!isNaN(ms)) return ms;
+
+                return null;
+            }
+
             // Find ALL unique post URLs on the page
             const urlSet = new Map();
             const linkEls = document.querySelectorAll('a[href*=\"/posts/\"], a[href*=\"story.php\"], a[href*=\"story_fbid\"], a[href*=\"photos/\"], a[href*=\"/videos/\"], a[href*=\"/reel/\"]');
@@ -534,24 +630,39 @@ class FacebookDeepScraper:
                     }
                 }
 
-                // Fallback: relative time (improved regex)
+                // NEW: Extract from permalink time link (aria-label or text)
                 if (!created) {
-                    const lower = innerText.toLowerCase();
-                    const relTime = lower.match(/(\\d+)\\s*(seg|segundos?|min|minutos?|horas?|días?|día|semanas?|sem|mes|meses?|años?|año)\\s*/);
-                    if (relTime) {
-                        const num = parseInt(relTime[1]);
-                        const unit = relTime[2];
-                        const now = Date.now();
-                        if (unit.startsWith('seg')) created = now - num * 1000;
-                        else if (unit.startsWith('min')) created = now - num * 60 * 1000;
-                        else if (unit.startsWith('h')) created = now - num * 3600 * 1000;
-                        else if (unit.startsWith('d') || unit.startsWith('sem')) {
-                            const multiplier = unit.startsWith('sem') ? 7 : 1;
-                            created = now - num * multiplier * 86400 * 1000;
+                    const timeLinks = container.querySelectorAll('a[href*="/posts/"], a[href*="story_fbid"], a[href*="story.php"], a[href*="/photo/"]');
+                    for (const link of timeLinks) {
+                        const ariaLabel = link.getAttribute('aria-label');
+                        if (ariaLabel) {
+                            const ts = parseSpanishDate(ariaLabel);
+                            if (ts) { created = ts; break; }
                         }
-                        else if (unit.startsWith('mes')) created = now - num * 30 * 86400 * 1000;
-                        else if (unit.startsWith('a')) created = now - num * 365 * 86400 * 1000;
+                        const linkText = link.innerText || '';
+                        if (linkText) {
+                            const ts = parseSpanishDate(linkText);
+                            if (ts) { created = ts; break; }
+                        }
                     }
+                }
+
+                // NEW: Look for any element with time-like aria-label
+                if (!created) {
+                    const ariaEls = container.querySelectorAll('[aria-label]');
+                    for (const el of ariaEls) {
+                        const label = el.getAttribute('aria-label') || '';
+                        if (!label) continue;
+                        if (label.match(/\\d{1,2}\\s+de\\s+\\w+/i) || label.match(/\\d{1,2}\\/\\d{1,2}\\/\\d{4}/) || /ayer|hoy|hace\\s+\\d+/i.test(label)) {
+                            const ts = parseSpanishDate(label);
+                            if (ts) { created = ts; break; }
+                        }
+                    }
+                }
+
+                // Robust fallback: parseSpanishDate on innerText (handles relative, "Ayer", etc.)
+                if (!created) {
+                    created = parseSpanishDate(innerText);
                 }
 
                 // Fallback: parse postUrl for date fragments (Facebook sometimes encodes dates)
@@ -647,12 +758,50 @@ class FacebookDeepScraper:
                     if (seenCommentSigs.has(sig)) continue;
                     seenCommentSigs.add(sig);
 
-                    // Find timestamp
+                    // Find timestamp (improved: multi-level walk)
                     let commentTs = null;
-                    const tsEl = de.parentElement.querySelector('abbr[data-utime], span[data-utime]');
+                    // Walk up from de to find the comment container (up to 8 levels)
+                    let commentContainer = de.parentElement;
+                    for (let i = 0; i < 6 && commentContainer; i++) {
+                        if (commentContainer.getAttribute('role') === 'article') break;
+                        commentContainer = commentContainer.parentElement;
+                    }
+                    if (!commentContainer) commentContainer = de.parentElement;
+                    
+                    // 1. Standard data-utime selectors in comment container
+                    const tsEl = commentContainer.querySelector('abbr[data-utime], span[data-utime], time[datetime], [data-utime]');
                     if (tsEl) {
-                        const ut = tsEl.getAttribute('data-utime');
-                        if (ut) commentTs = parseInt(ut) * 1000;
+                        const ut = tsEl.getAttribute('data-utime') || tsEl.getAttribute('utime');
+                        if (ut) { commentTs = parseInt(ut) * 1000; }
+                        if (!commentTs && tsEl.getAttribute('datetime')) {
+                            const ms = Date.parse(tsEl.getAttribute('datetime'));
+                            if (!isNaN(ms)) commentTs = ms;
+                        }
+                    }
+                    // 2. Look for any link whose text/aria-label is a time string
+                    if (!commentTs) {
+                        const allLinks = commentContainer.querySelectorAll('a');
+                        for (const cl of allLinks) {
+                            const ariaLabel = cl.getAttribute('aria-label');
+                            if (ariaLabel) {
+                                // Skip very long aria-labels (not time)
+                                if (ariaLabel.length > 60) continue;
+                                commentTs = parseSpanishDate(ariaLabel);
+                                if (commentTs) break;
+                            }
+                            const inner = cl.innerText || '';
+                            const trimmed = inner.trim();
+                            // Only consider short text (relative times are short)
+                            if (trimmed.length > 2 && trimmed.length < 30) {
+                                commentTs = parseSpanishDate(trimmed);
+                                if (commentTs) break;
+                            }
+                        }
+                    }
+                    // 3. Parse innerText of the broader comment container
+                    if (!commentTs) {
+                        const allText = commentContainer.innerText || '';
+                        commentTs = parseSpanishDate(allText);
                     }
 
                     comments.push({
@@ -684,6 +833,8 @@ class FacebookDeepScraper:
         results = []
         self._last_extraction_raw_count = len(raw_posts)
         self._last_extraction_oor_count = 0
+        null_ts_count = 0
+        null_comment_ts_count = 0
 
         for data in raw_posts:
             post_id = data.get("postId", "")
@@ -708,7 +859,7 @@ class FacebookDeepScraper:
                     continue
             else:
                 # Posts without timestamp cannot be judged; count as in-range
-                pass
+                null_ts_count += 1
 
             post_url = data.get("postUrl", "") or (f"{FB_BASE}/posts/{post_id}" if not post_id.startswith("deep_") else "")
             page_url = data.get("pageUrl", "")
@@ -728,6 +879,8 @@ class FacebookDeepScraper:
                 c_author = rc.get("author", "") or "Anónimo"
                 c_ts = rc.get("created")
                 c_created = datetime.fromtimestamp(c_ts / 1000) if c_ts else None
+                if not c_created:
+                    null_comment_ts_count += 1
                 cid = hashlib.md5(f"{post_id}|{c_msg}|{c_author}".encode()).hexdigest()
                 comments_out.append({
                     "comment_id": cid,
@@ -749,6 +902,14 @@ class FacebookDeepScraper:
                 "comments": comments_out,
             })
 
+        total_comments_in_batch = sum(len(d.get("comments", [])) for d in raw_posts)
+        if null_ts_count > 0 or null_comment_ts_count > 0:
+            logger.info(f"  NULL timestamps: {null_ts_count}/{len(results)} posts ({null_ts_count/len(results)*100:.1f}%)"
+                        f", {null_comment_ts_count}/{total_comments_in_batch} comments"
+                        if total_comments_in_batch > 0
+                        else f"  NULL timestamps: {null_ts_count}/{len(results)} posts")
+        else:
+            logger.info(f"  All {len(results)} posts have timestamps")
         return results
 
     # ── Inline comment expansion ───────────────────────────────

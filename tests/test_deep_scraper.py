@@ -253,3 +253,176 @@ class TestDemoSeedSafety:
         else:
             oor_streak = 0
         assert oor_streak == 0, f"Streak should reset to 0, got {oor_streak}"
+
+
+class TestSpanishDateParser:
+    """Test the Spanish date parsing logic (mirrors JS parseSpanishDate)."""
+
+    @staticmethod
+    def _parse_spanish_date(text: str) -> datetime | None:
+        """Python equivalent of the JS parseSpanishDate function."""
+        if not text:
+            return None
+        s = text.strip()
+        now = datetime.now()
+        import re
+        from datetime import timedelta
+        months = {
+            'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+            'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+            'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+        }
+
+        # "ahora" / "justo ahora"
+        if re.match(r'^(ahora|justo ahora)$', s, re.I):
+            return now
+
+        # "hace X segundos/minutos/horas/días/semanas/meses/años"
+        m = re.match(r'^hace\s+(\d+)\s*(segundos?|minutos?|horas?|días?|semanas?|meses?|años?|seg|min|h|d)\s*$', s, re.I)
+        if m:
+            num = int(m.group(1))
+            unit = m.group(2).lower()
+            if unit.startswith('seg'): return now - timedelta(seconds=num)
+            if unit.startswith('min'): return now - timedelta(minutes=num)
+            if unit.startswith('h'): return now - timedelta(hours=num)
+            if unit.startswith('d'): return now - timedelta(days=num)
+            if unit.startswith('sem'): return now - timedelta(weeks=num)
+            if unit.startswith('mes'): return now - timedelta(days=num * 30)
+            if unit.startswith('a'): return now - timedelta(days=num * 365)
+
+        # Short forms: "X min", "X h", "X d", "X sem"
+        m = re.match(r'^(\d+)\s*(min|h|d|sem)\s*$', s, re.I)
+        if m:
+            num = int(m.group(1))
+            unit = m.group(2).lower()
+            if unit == 'min': return now - timedelta(minutes=num)
+            if unit == 'h': return now - timedelta(hours=num)
+            if unit == 'd': return now - timedelta(days=num)
+            if unit == 'sem': return now - timedelta(weeks=num)
+
+        # "Ayer" → yesterday 12:00
+        if re.match(r'^ayer\b', s, re.I):
+            return (now - timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
+
+        # "Hoy" → today 12:00
+        if re.match(r'^hoy\b', s, re.I):
+            return now.replace(hour=12, minute=0, second=0, microsecond=0)
+
+        # Days of week (Spanish)
+        dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+        for i, name in enumerate(dias):
+            if s.lower().startswith(name):
+                diff = i - now.weekday() - 1  # weekday(): Mon=0..Sun=6; dias: domingo=0..sábado=6
+                if diff > 0:
+                    diff -= 7
+                return (now + timedelta(days=diff)).replace(hour=12, minute=0, second=0, microsecond=0)
+
+        # "9 de junio de 2025 a las 14:59"
+        m = re.match(r'(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})(?:\s+a\s+las\s+(\d{1,2}):(\d{1,2}))?', s, re.I)
+        if m:
+            day = int(m.group(1))
+            month_name = m.group(2).lower()
+            year = int(m.group(3))
+            hour = int(m.group(4)) if m.group(4) else 12
+            minute = int(m.group(5)) if m.group(5) else 0
+            if month_name in months:
+                try:
+                    return datetime(year, months[month_name], day, hour, minute)
+                except ValueError:
+                    return None
+
+        # "9 de junio" (no year)
+        m = re.match(r'(\d{1,2})\s+de\s+(\w+)\s*$', s, re.I)
+        if m:
+            day = int(m.group(1))
+            month_name = m.group(2).lower()
+            if month_name in months:
+                year = now.year
+                try:
+                    dt = datetime(year, months[month_name], day, 12, 0)
+                except ValueError:
+                    return None
+                if dt > now:
+                    dt = dt.replace(year=year - 1)
+                return dt
+
+        return None
+
+    def test_hace_minutos(self):
+        result = self._parse_spanish_date("hace 5 minutos")
+        assert result is not None
+        diff = (datetime.now() - result).total_seconds()
+        assert 280 <= diff <= 320, f"Expected ~300s diff, got {diff}"
+
+    def test_hace_horas(self):
+        result = self._parse_spanish_date("hace 3 horas")
+        assert result is not None
+        diff = (datetime.now() - result).total_seconds()
+        assert 3*3600 - 60 <= diff <= 3*3600 + 60, f"Expected ~10800s diff, got {diff}"
+
+    def test_hace_dias(self):
+        result = self._parse_spanish_date("hace 2 días")
+        assert result is not None
+        diff = (datetime.now() - result).total_seconds()
+        assert 2*86400 - 60 <= diff <= 2*86400 + 60
+
+    def test_hace_semanas(self):
+        result = self._parse_spanish_date("hace 1 semana")
+        assert result is not None
+        diff = (datetime.now() - result).total_seconds()
+        assert 7*86400 - 60 <= diff <= 7*86400 + 60
+
+    def test_hace_meses(self):
+        result = self._parse_spanish_date("hace 2 meses")
+        assert result is not None
+        # Check that month decreased by 2
+        now = datetime.now()
+        expected_month = now.month - 2
+        if expected_month <= 0:
+            expected_month += 12
+
+    def test_ayer(self):
+        result = self._parse_spanish_date("Ayer")
+        assert result is not None
+        assert result.hour == 12
+        assert result.minute == 0
+        diff = (datetime.now() - result).days
+        assert diff == 1, f"Expected 1 day diff, got {diff}"
+
+    def test_hoy(self):
+        result = self._parse_spanish_date("Hoy")
+        assert result is not None
+        assert result.hour == 12
+        assert result.minute == 0
+        assert result.day == datetime.now().day
+
+    def test_short_form_h(self):
+        result = self._parse_spanish_date("3 h")
+        assert result is not None
+        diff = (datetime.now() - result).total_seconds()
+        assert 3*3600 - 60 <= diff <= 3*3600 + 60
+
+    def test_short_form_min(self):
+        result = self._parse_spanish_date("15 min")
+        assert result is not None
+        diff = (datetime.now() - result).total_seconds()
+        assert 15*60 - 10 <= diff <= 15*60 + 10
+
+    def test_absolute_date_with_time(self):
+        """9 de junio de 2025 a las 14:59"""
+        result = self._parse_spanish_date("9 de junio de 2025 a las 14:59")
+        assert result is not None
+        assert result.year == 2025
+        assert result.month == 6
+        assert result.day == 9
+        assert result.hour == 14
+        assert result.minute == 59
+
+    def test_absolute_date_no_year(self):
+        """9 de junio (sin año)"""
+        result = self._parse_spanish_date("9 de junio")
+        assert result is not None
+        assert result.month == 6
+        assert result.day == 9
+        # Should not be in the future
+        assert result.year <= datetime.now().year

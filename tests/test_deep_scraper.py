@@ -255,6 +255,74 @@ class TestDemoSeedSafety:
         assert oor_streak == 0, f"Streak should reset to 0, got {oor_streak}"
 
 
+class TestE17NoParseSpanishDateOnInnerText:
+    """E17 regression: parseSpanishDate must NOT be applied to message body text (innerText)."""
+
+    def test_js_extract_no_innertext_fallback(self):
+        """js_extract must not contain the fallback parseSpanishDate(innerText) for posts."""
+        import inspect, re
+        source = inspect.getsource(FacebookDeepScraper._scrape_search_results)
+        match = re.search(r'js_extract\s*=\s*"""([\s\S]*?)"""', source)
+        assert match, "js_extract string not found in _scrape_search_results"
+        js_code = match.group(1)
+        assert 'created = parseSpanishDate(innerText)' not in js_code, \
+            "E17 not fixed: parseSpanishDate(innerText) still present for posts"
+
+    def test_js_extract_no_comment_innertext_fallback(self):
+        """js_extract must not contain parseSpanishDate(allText) fallback for comments."""
+        import inspect, re
+        source = inspect.getsource(FacebookDeepScraper._scrape_search_results)
+        match = re.search(r'js_extract\s*=\s*"""([\s\S]*?)"""', source)
+        assert match, "js_extract string not found in _scrape_search_results"
+        js_code = match.group(1)
+        assert 'parseSpanishDate(allText)' not in js_code, \
+            "E17 not fixed: parseSpanishDate(allText) still present for comments"
+        assert 'parseSpanishDate(commentContainer' not in js_code, \
+            "Alternative form of innerText fallback still present"
+
+
+class TestE22SharedPlaywright:
+    """E22 regression: _enrich_post_dates must reuse self._playwright, not call sync_playwright().start()."""
+
+    def test_launch_browser_and_context_reuses_playwright(self):
+        """_launch_browser_and_context must use self._playwright if it exists."""
+        scraper = FacebookDeepScraper()
+        assert scraper._playwright is None
+
+        import unittest.mock as mock
+        mock_pw = mock.MagicMock()
+        scraper._playwright = mock_pw
+
+        with mock.patch('src.fb_scraper.deep_scraper.sync_playwright') as mock_sync_pw:
+            mock_sync_pw.return_value.start.return_value = mock.MagicMock()
+            p, browser, context, page, own_pw = scraper._launch_browser_and_context()
+            assert own_pw is False, \
+                "own_pw should be False when self._playwright already exists"
+            mock_sync_pw.return_value.start.assert_not_called()
+
+    def test_launch_browser_and_context_creates_new_when_none(self):
+        """_launch_browser_and_context must start a new playwright if self._playwright is None."""
+        scraper = FacebookDeepScraper()
+        assert scraper._playwright is None
+
+        import unittest.mock as mock
+        with mock.patch('src.fb_scraper.deep_scraper.sync_playwright') as mock_sync_pw:
+            mock_pw = mock.MagicMock()
+            mock_chromium = mock.MagicMock()
+            mock_browser = mock.MagicMock()
+            mock_context = mock.MagicMock()
+            mock_page = mock.MagicMock()
+            mock_pw.chromium = mock_chromium
+            mock_chromium.launch.return_value = mock_browser
+            mock_browser.new_context.return_value = mock_context
+            mock_context.new_page.return_value = mock_page
+            mock_sync_pw.return_value.start.return_value = mock_pw
+            p, browser, context, page, own_pw = scraper._launch_browser_and_context()
+            assert own_pw is True, \
+                "own_pw should be True when creating new playwright driver"
+            mock_sync_pw.return_value.start.assert_called_once()
+
+
 class TestSpanishDateParser:
     """Test the Spanish date parsing logic (mirrors JS parseSpanishDate)."""
 

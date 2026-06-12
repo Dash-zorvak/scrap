@@ -192,6 +192,7 @@ class FacebookDeepScraper:
         self.notifier = TelegramNotifier()
         self.checkpoint = CheckpointManager("externos")
         self.antiban = AntiBan()
+        self._playwright = None
 
         self.stats = {
             "posts_scraped": 0,
@@ -300,7 +301,6 @@ class FacebookDeepScraper:
     # ── Browser lifecycle ──────────────────────────────────────
 
     def _create_browser(self):
-        from playwright.sync_api import sync_playwright
         launch_opts = {
             "headless": self.headless,
             "args": [
@@ -311,7 +311,54 @@ class FacebookDeepScraper:
         }
         p = sync_playwright().start()
         browser = p.chromium.launch(**launch_opts)
+        self._playwright = p
         return p, browser
+
+    def _launch_browser_and_context(self):
+        """Launch browser reusing shared playwright driver if available.
+        Returns (playwright, browser, context, page, own_pw) where own_pw=True only if created new driver.
+        """
+        launch_opts = {
+            "headless": self.headless,
+            "args": [
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--window-size=1366,768",
+            ],
+        }
+        own_pw = False
+        if self._playwright is None:
+            self._playwright = sync_playwright().start()
+            own_pw = True
+        p = self._playwright
+        browser = p.chromium.launch(**launch_opts)
+        context = browser.new_context(viewport={"width": 1366, "height": 768})
+        page = context.new_page()
+        Stealth().apply_stealth_sync(page)
+        return p, browser, context, page, own_pw
+
+    def _is_browser_error(self, exc: Exception) -> bool:
+        """Detect browser crash / disconnection errors."""
+        msg = str(exc).lower()
+        return any(s in msg for s in [
+            "targetclosederror", "target closed", "crashed", "disconnected",
+            "execution context destroyed", "browser has been closed",
+            "connection closed", "protocol error", "session closed"
+        ])
+
+    def _safe_close_browser(self, browser, own_pw: bool = False):
+        """Close browser; stop playwright only if own_pw=True (never stop shared driver)."""
+        try:
+            if browser:
+                browser.close()
+        except Exception:
+            pass
+        if own_pw and self._playwright:
+            try:
+                self._playwright.stop()
+            except Exception:
+                pass
+            self._playwright = None
 
     def _load_cookies(self, context: BrowserContext):
         if not self.cookies_file:
@@ -653,16 +700,11 @@ class FacebookDeepScraper:
                     for (const el of ariaEls) {
                         const label = el.getAttribute('aria-label') || '';
                         if (!label) continue;
-                        if (label.match(/\\d{1,2}\\s+de\\s+\\w+/i) || label.match(/\\d{1,2}\\/\\d{1,2}\\/\\d{4}/) || /ayer|hoy|hace\\s+\\d+/i.test(label)) {
+                        if (label.match(/\d{1,2}\s+de\s+\w+/i) || label.match(/\d{1,2}\/\d{1,2}\/\d{4}/) || /ayer|hoy|hace\s+\d+/i.test(label)) {
                             const ts = parseSpanishDate(label);
                             if (ts) { created = ts; break; }
                         }
                     }
-                }
-
-                // Robust fallback: parseSpanishDate on innerText (handles relative, "Ayer", etc.)
-                if (!created) {
-                    created = parseSpanishDate(innerText);
                 }
 
                 // Fallback: parse postUrl for date fragments (Facebook sometimes encodes dates)
@@ -797,11 +839,6 @@ class FacebookDeepScraper:
                                 if (commentTs) break;
                             }
                         }
-                    }
-                    // 3. Parse innerText of the broader comment container
-                    if (!commentTs) {
-                        const allText = commentContainer.innerText || '';
-                        commentTs = parseSpanishDate(allText);
                     }
 
                     comments.push({
@@ -994,6 +1031,97 @@ Resuélvelo manualmente en el navegador.
             return self.page_url
         return f"{FB_BASE}/{self.page_url}"
 
+    # ── Post date enrichment ────────────────────────────────────
+
+    def _enrich_post_dates(self, seen_ids: set):
+        """Visit individual post URLs to extract absolute dates for NULL-timestamped posts."""
+        logger.info("Starting post date enrichment...")
+        try:
+            conn = sqlite3.connect(str(EXTERNAL_DB_PATH))
+            cur = conn.cursor()
+            cur.execute("SELECT post_id, post_url FROM external_posts WHERE created_time IS NULL AND post_url != ''")
+            null_posts = cur.fetchall()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error querying NULL-date posts: {e}")
+            return
+
+        if not null_posts:
+            logger.info("  No NULL-date posts to enrich")
+            return
+
+        logger.info(f"  Enriching {len(null_posts)} posts with missing dates...")
+
+        backoffs = [5, 15, 45]
+        for i, (post_id, post_url) in enumerate(null_posts):
+            if post_id in seen_ids:
+                seen_ids.discard(post_id)
+            browser_enr = None
+            own_pw = False
+            for attempt in range(MAX_BROWSER_RETRIES):
+                try:
+                    _, browser_enr, context_enr, page_enr, own_pw = self._launch_browser_and_context()
+                    try:
+                        self._load_cookies(context_enr)
+                        page_enr.goto(post_url, timeout=60000, wait_until="domcontentloaded")
+                        self.antiban.human_delay(3, 5)
+
+                        try:
+                            ts_el = page_enr.evaluate("""() => {
+                                const el = document.querySelector('abbr[data-utime], span[data-utime], time[datetime], [data-utime]');
+                                if (el) {
+                                    const ut = el.getAttribute('data-utime') || el.getAttribute('utime');
+                                    if (ut) return parseInt(ut) * 1000;
+                                    const dt = el.getAttribute('datetime');
+                                    if (dt) { const ms = Date.parse(dt); if (!isNaN(ms)) return ms; }
+                                }
+                                const links = document.querySelectorAll('a[href*=\\\"/posts/\\\"]');
+                                for (const link of links) {
+                                    const ariaLabel = link.getAttribute('aria-label');
+                                    if (ariaLabel) {
+                                        const m = ariaLabel.match(/(\\d{1,2})\\s+de\\s+(\\w+)\\s+de\\s+(\\d{4})/i);
+                                        if (m) {
+                                            const meses = {enero:0,febrero:1,marzo:2,abril:3,mayo:4,junio:5,julio:6,agosto:7,septiembre:8,octubre:9,noviembre:10,diciembre:11};
+                                            const d = new Date(parseInt(m[3]), meses[m[2].toLowerCase()], parseInt(m[1]), 12, 0, 0, 0);
+                                            if (!isNaN(d.getTime())) return d.getTime();
+                                        }
+                                    }
+                                }
+                                return null;
+                            }""")
+                        except Exception:
+                            ts_el = None
+
+                        if ts_el:
+                            created_time = datetime.fromtimestamp(ts_el / 1000)
+                            conn2 = sqlite3.connect(str(EXTERNAL_DB_PATH))
+                            conn2.execute("UPDATE external_posts SET created_time = ? WHERE post_id = ?",
+                                         (created_time, post_id))
+                            conn2.commit()
+                            conn2.close()
+                            logger.info(f"  [{i+1}/{len(null_posts)}] Enriched {post_id}: {created_time}")
+                        else:
+                            logger.debug(f"  [{i+1}/{len(null_posts)}] Could not extract date for {post_id}")
+                    finally:
+                        self._safe_close_browser(browser_enr, own_pw=own_pw)
+                    break
+                except Exception as e:
+                    if self._is_browser_error(e):
+                        logger.warning(f"  Browser error enriching {post_id} (attempt {attempt+1}): {e}")
+                        self._safe_close_browser(browser_enr, own_pw=own_pw)
+                    else:
+                        logger.error(f"  Error enriching {post_id} (attempt {attempt+1}): {e}")
+                    if attempt < MAX_BROWSER_RETRIES - 1:
+                        backoff = backoffs[min(attempt, len(backoffs) - 1)]
+                        logger.info(f"  Backoff {backoff}s before retry...")
+                        time.sleep(backoff)
+                    else:
+                        logger.warning(f"  Failed to enrich {post_id} after {MAX_BROWSER_RETRIES} attempts — skipping")
+
+            time.sleep(8)  # Throttle AntiBan
+
+        logger.info(f"Post date enrichment completed ({len(null_posts)} processed)")
+
     # ── Main scrape ────────────────────────────────────────────
 
     def scrape(self, max_posts: int = 500, checkpoint_every: int = 25):
@@ -1013,6 +1141,7 @@ Resuélvelo manualmente en el navegador.
 
         self.stats["start_time"] = time.time()
         processed = self.checkpoint.get_scraped_post_ids()
+        crashed = False
 
         p, browser = self._create_browser()
         context = browser.new_context(viewport={"width": 1366, "height": 768})
@@ -1038,6 +1167,7 @@ Resuélvelo manualmente en el navegador.
                 oor_streak = 0
                 scrolled = 0
                 crashed = False
+                browser_retries = 0
 
                 # Initial batch
                 for post in self._scrape_search_results(page, seen_ids, max_posts):
@@ -1049,7 +1179,6 @@ Resuélvelo manualmente en el navegador.
                     if ok:
                         processed.add(post_id)
                         self.stats["posts_scraped"] += 1
-                        # Save inline comments
                         for c in post.get("comments", []):
                             self._save_comment(c)
                             self.stats["comments_scraped"] += 1
@@ -1057,87 +1186,127 @@ Resuélvelo manualmente en el navegador.
                 if self.stats["posts_scraped"] > 0:
                     console.print(f"[green]  Initial batch: {self.stats['posts_scraped']} posts, {self.stats['comments_scraped']} comments[/green]")
 
-                # Scroll loop
+                # Scroll loop (wrapped in crash recovery)
                 while self.stats["posts_scraped"] < max_posts:
-                    if self.antiban.detect_ban(page):
-                        self._handle_captcha(page, context, target)
-                        state["scraped_post_ids"] = list(processed)
-                        state["stats"] = self.stats
-                        self.checkpoint.save(state)
-                        self.antiban.human_delay(10, 20)
-                        continue
-
-                    delay = self.antiban.progressive_delay(scrolled)
                     try:
-                        page.keyboard.press("End")
-                    except Exception as e:
-                        logger.warning(f"Keyboard scroll failed: {e}")
-                        try:
-                            page.evaluate("window.scrollBy(0, 800)")
-                        except Exception as e2:
+                        if self.antiban.detect_ban(page):
+                            self._handle_captcha(page, context, target)
+                            state["scraped_post_ids"] = list(processed)
                             state["stats"] = self.stats
                             self.checkpoint.save(state)
-                            crashed = True
-                            logger.error(f"Browser/connection lost during scroll: {e2}")
-                            break
-                    page.wait_for_timeout(int(delay * 1000))
-                    scrolled += 1
-
-                    # Expand comments inline before extraction
-                    self._expand_comments_inline(page)
-                    page.wait_for_timeout(1500)
-
-                    posts_on_page = 0
-                    for post in self._scrape_search_results(page, seen_ids, max_posts):
-                        post_id = post["post_id"]
-                        if post_id in processed:
-                            self.stats["posts_duplicated"] += 1
+                            self.antiban.human_delay(10, 20)
                             continue
 
-                        ok = self._save_post(post)
-                        if ok:
-                            processed.add(post_id)
-                            self.stats["posts_scraped"] += 1
-                            posts_on_page += 1
-
-                            # Save inline comments
-                            for c in post.get("comments", []):
-                                self._save_comment(c)
-                                self.stats["comments_scraped"] += 1
-
-                            if self.stats["posts_scraped"] % checkpoint_every == 0:
-                                state["scraped_post_ids"] = list(processed)
+                        delay = self.antiban.progressive_delay(scrolled)
+                        try:
+                            page.keyboard.press("End")
+                        except Exception as e:
+                            logger.warning(f"Keyboard scroll failed: {e}")
+                            try:
+                                page.evaluate("window.scrollBy(0, 800)")
+                            except Exception as e2:
+                                if self._is_browser_error(e2):
+                                    raise e2
                                 state["stats"] = self.stats
                                 self.checkpoint.save(state)
-                                self.stats["checkpoints_saved"] += 1
+                                crashed = True
+                                logger.error(f"Connection lost during scroll: {e2}")
+                                break
+                        page.wait_for_timeout(int(delay * 1000))
+                        scrolled += 1
 
-                    if posts_on_page == 0:
-                        stale += 1
-                        # Track out-of-range streak: if most extracted posts are OOR
-                        if self._last_extraction_raw_count > 0 and self._last_extraction_oor_count > 0:
-                            oor_ratio = self._last_extraction_oor_count / self._last_extraction_raw_count
-                            if oor_ratio >= 0.7:
-                                oor_streak += 1
-                                logger.debug(f"  OOR streak: {oor_streak}/{self.cutoff_tolerance} ({self._last_extraction_oor_count}/{self._last_extraction_raw_count} posts OOR)")
+                        self._expand_comments_inline(page)
+                        page.wait_for_timeout(1500)
+
+                        posts_on_page = 0
+                        for post in self._scrape_search_results(page, seen_ids, max_posts):
+                            post_id = post["post_id"]
+                            if post_id in processed:
+                                self.stats["posts_duplicated"] += 1
+                                continue
+
+                            ok = self._save_post(post)
+                            if ok:
+                                processed.add(post_id)
+                                self.stats["posts_scraped"] += 1
+                                posts_on_page += 1
+
+                                for c in post.get("comments", []):
+                                    self._save_comment(c)
+                                    self.stats["comments_scraped"] += 1
+
+                                if self.stats["posts_scraped"] % checkpoint_every == 0:
+                                    state["scraped_post_ids"] = list(processed)
+                                    state["stats"] = self.stats
+                                    self.checkpoint.save(state)
+                                    self.stats["checkpoints_saved"] += 1
+
+                        if posts_on_page == 0:
+                            stale += 1
+                            if self._last_extraction_raw_count > 0 and self._last_extraction_oor_count >= 0:
+                                known_date_count = self._last_extraction_raw_count - self._last_extraction_oor_count
+                                if known_date_count > 0:
+                                    oor_ratio = self._last_extraction_oor_count / (self._last_extraction_oor_count + known_date_count)
+                                    if oor_ratio >= 0.7:
+                                        oor_streak += 1
+                                        logger.debug(f"  OOR streak: {oor_streak}/{self.cutoff_tolerance} (oor={self._last_extraction_oor_count}, known={known_date_count})")
+                                    else:
+                                        oor_streak = 0
+                                else:
+                                    oor_streak = 0
                             else:
                                 oor_streak = 0
                         else:
+                            stale = 0
                             oor_streak = 0
-                    else:
-                        stale = 0
-                        oor_streak = 0
 
-                    if stale >= 15:
-                        logger.info(f"No new posts after {scrolled} scrolls — stopping {page_label}")
-                        break
+                        if stale >= 15:
+                            logger.info(f"No new posts after {scrolled} scrolls — stopping {page_label}")
+                            break
 
-                    if oor_streak >= self.cutoff_tolerance:
-                        logger.info(f"All posts out of date range for {oor_streak} consecutive scrolls — stopping {page_label}")
-                        break
+                        if oor_streak >= self.cutoff_tolerance:
+                            logger.info(f"All posts out of date range for {oor_streak} consecutive scrolls — stopping {page_label}")
+                            break
 
-                    if scrolled % 10 == 0:
-                        console.print(f"[dim]  Scroll {scrolled}: {self.stats['posts_scraped']} posts, {self.stats['comments_scraped']} comments[/dim]")
+                        if scrolled % 10 == 0:
+                            console.print(f"[dim]  Scroll {scrolled}: {self.stats['posts_scraped']} posts, {self.stats['comments_scraped']} comments[/dim]")
 
+                    except Exception as scroll_err:
+                        if self._is_browser_error(scroll_err) and browser_retries < MAX_BROWSER_RETRIES:
+                            browser_retries += 1
+                            backoff = [5, 15, 45][min(browser_retries - 1, 2)]
+                            logger.warning(f"Browser error (retry {browser_retries}/{MAX_BROWSER_RETRIES}): {scroll_err}")
+                            state["scraped_post_ids"] = list(processed)
+                            state["stats"] = self.stats
+                            self.checkpoint.save(state)
+                            self._safe_close_browser(browser, own_pw=False)
+                            try:
+                                p.stop()
+                            except Exception:
+                                pass
+                            self._playwright = None
+                            time.sleep(backoff)
+                            p, browser = self._create_browser()
+                            context = browser.new_context(viewport={"width": 1366, "height": 768})
+                            page = context.new_page()
+                            Stealth().apply_stealth_sync(page)
+                            if not self._authenticate(page, context):
+                                logger.error("Re-authentication failed after browser crash")
+                                crashed = True
+                                break
+                            page.goto(target, timeout=60000, wait_until="domcontentloaded")
+                            self.antiban.human_delay(5, 8)
+                            console.print(f"[yellow]↻ Recovered from crash, resuming {page_label}[/yellow]")
+                            continue
+                        else:
+                            state["stats"] = self.stats
+                            self.checkpoint.save(state)
+                            crashed = True
+                            logger.error(f"Fatal scroll error: {scroll_err}")
+                            break
+
+                # Enrich NULL-date posts after finishing this page
+                self._enrich_post_dates(seen_ids)
                 console.print(f"[green]✓ {page_label}: {self.stats['posts_scraped']} posts, {self.stats['comments_scraped']} comments[/green]")
 
         except Exception as e:
@@ -1158,7 +1327,6 @@ Resuélvelo manualmente en el navegador.
         # ── Final stats ──
         elapsed = (time.time() - self.stats["start_time"]) / 60
 
-        # Get date range from DB
         date_range = "N/A"
         try:
             conn = sqlite3.connect(str(EXTERNAL_DB_PATH))

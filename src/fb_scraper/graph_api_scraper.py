@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
 from src.fb_scraper.models import FBPostData, FBCommentData
-from src.storage.supabase_client import SupabaseStorage
+from src.storage.db import LocalStorage
 from src.notifications.telegram import TelegramNotifier
 from src.config import Config
 
@@ -52,7 +52,7 @@ class GraphAPIScraper:
 
         self.page_name = page_name or cfg.FB_PAGE_NAME or "Santa Ana Alcaldía"
         self.base_url = f"{FB_GRAPH_API}/{self.page_id}"
-        self.storage = SupabaseStorage()
+        self.storage = LocalStorage()
         self.notifier = TelegramNotifier()
 
         # Date range from config

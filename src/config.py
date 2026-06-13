@@ -32,6 +32,7 @@ class Config:
     # How many consecutive out-of-range posts before stopping scroll
     # (Facebook feed is not strictly chronological, so tolerate some)
     CUTOFF_TOLERANCE = int(os.getenv("CUTOFF_TOLERANCE", "10"))
+    CAPTCHA_TIMEOUT = int(os.getenv("CAPTCHA_TIMEOUT", "600"))
 
     PROXY_URL = os.getenv("PROXY_URL", "")
 

@@ -99,264 +99,497 @@ def generar_interpretacion(tipo, datos):
 
 def leyenda_grafica(elementos):
     items_html = "".join(
-        '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">'
-        '<span style="font-size:16px;color:{};min-width:20px;font-weight:700;line-height:1.4">'
+        '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">'
+        '<span style="font-size:14px;color:{};min-width:18px;font-weight:600;line-height:1.4;font-family:\'IBM Plex Mono\',monospace">'
         '{}</span>'
         '<div>'
-        '<span style="font-size:12px;color:#e2e8f0;font-weight:600">'
+        '<span style="font-size:11px;color:var(--fg-primary);font-weight:600;font-family:\'Inter\',sans-serif">'
         '{}</span>'
-        '<span style="font-size:12px;color:#6b7280;margin-left:6px">'
+        '<span style="font-size:11px;color:var(--fg-muted);margin-left:4px;font-family:\'Inter\',sans-serif">'
         '— {}</span></div></div>'.format(
             e['color'], e['simbolo'], e['label'], e['descripcion']
         )
         for e in elementos
     )
     return (
-        '<div style="background:#0f172a;border:1px solid #1f2937;'
-        'border-radius:6px;padding:14px 18px;margin-bottom:12px">'
-        '<p style="font-size:10px;color:#4b5563;margin:0 0 10px 0;'
-        'font-weight:700;letter-spacing:1.5px;text-transform:uppercase">'
-        'QUÉ ESTÁS VIENDO</p>{}</div>'
+        '<div style="background:var(--bg-card);border:1px solid var(--border);'
+        'padding:12px 16px;margin-bottom:10px">'
+        '<p style="font-size:9px;color:var(--fg-muted);margin:0 0 8px 0;'
+        'font-weight:600;letter-spacing:1.5px;text-transform:uppercase;font-family:\'IBM Plex Mono\',monospace">'
+        '◈ QUÉ ESTÁS VIENDO</p>{}</div>'
     ).format(items_html)
 
 st.set_page_config(
-    page_title="Panel de Inteligencia Ciudadana — Alcaldía Santa Ana",
-    page_icon=":material/apartment:",
+    page_title="PANEL·SANTA ANA — Inteligencia Ciudadana",
+    page_icon="\u2696",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 st.markdown("""
 <style>
-.stApp { background-color: #0a0e1a; color: #e2e8f0; }
-.stSidebar { background-color: #0d1117; border-right: 1px solid #21262d; }
-.stSelectbox > div > div { background-color: #1f2937; color: #e2e8f0; border-color: #374151; }
-.stRadio > div { color: #e2e8f0; }
-.card {
-    background: #111827;
-    border: 1px solid #1f2937;
-    border-radius: 6px;
-    padding: 20px 24px;
-    margin-bottom: 12px;
+/* ═══════════════════════════════════════════
+   BLOOMBERG-TERMINAL THEME
+   Paleta ejecutiva oscura · tipografía mono
+   Animaciones suaves · semáforo intuitivo
+   ═══════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+/* ── Tokens ── */
+:root {
+  --bg-base:      #0a0e17;
+  --bg-surface:   #10141e;
+  --bg-card:      #141822;
+  --bg-elevated:  #1a1f2e;
+  --fg-primary:   #e8e6e3;
+  --fg-secondary: #9a9892;
+  --fg-muted:     #5c5a55;
+  --border:       #1e2332;
+  --border-light: #2a2f3e;
+  --accent:       #f0b34b;
+  --accent-dim:   #a67c2e;
+  --green:        #34d399;
+  --green-dim:    #065f46;
+  --red:          #f87171;
+  --red-dim:      #7f1d1d;
+  --amber:        #fbbf24;
+  --amber-dim:    #713f12;
+  --blue:         #60a5fa;
+  --purple:       #a78bfa;
 }
-.card-title {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: #6b7280;
-    margin-bottom: 8px;
+
+.stApp { background-color: var(--bg-base); color: var(--fg-primary); }
+.stSidebar { background-color: var(--bg-surface); border-right: 1px solid var(--border); }
+section[data-testid="stSidebar"] { background-color: var(--bg-surface); }
+
+.stSelectbox > div > div {
+  background-color: var(--bg-card);
+  color: var(--fg-primary);
+  border-color: var(--border-light);
+  border-radius: 2px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
 }
-.card-value {
-    font-size: 32px;
-    font-weight: 700;
-    color: #f9fafb;
-    font-family: 'Courier New', monospace;
+.stSelectbox > div > div:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-dim); }
+
+.stRadio > div { color: var(--fg-primary); font-size: 12px; font-family: 'Inter', sans-serif; }
+div[data-testid="stRadio"] label { font-size: 12px; }
+
+/* ── Botón toggle ── */
+div[data-testid="stToggle"] label { font-size: 12px; color: var(--fg-secondary); }
+div[data-testid="stToggle"] > div[aria-checked="true"] {
+  background-color: var(--accent-dim) !important;
 }
-.card-sub {
-    font-size: 12px;
-    color: #9ca3af;
-    margin-top: 4px;
+div[data-testid="stMetric"] { background: var(--bg-card); border: 1px solid var(--border); border-radius: 2px; padding: 8px 12px; margin-bottom: 8px; }
+div[data-testid="stMetricValue"] { font-family: 'IBM Plex Mono', monospace; font-size: 1.6rem !important; color: var(--fg-primary); }
+div[data-testid="stMetricLabel"] { font-family: 'Inter', sans-serif; font-size: 0.7rem !important; color: var(--fg-muted); letter-spacing: 0.5px; text-transform: uppercase; }
+
+/* ── Cards Bloomberg ── */
+.bloom-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 16px 20px;
+  margin-bottom: 10px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
+.bloom-card:hover {
+  border-color: var(--accent-dim);
+  box-shadow: none;
+}
+.bloom-card-title {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 6px;
+  font-family: 'Inter', sans-serif;
+}
+.bloom-card-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--fg-primary);
+  font-family: 'IBM Plex Mono', monospace;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+.bloom-card-sub {
+  font-size: 11px;
+  color: var(--fg-secondary);
+  margin-top: 3px;
+  font-family: 'Inter', sans-serif;
+}
+.bloom-border-accent { border-left: 3px solid var(--accent); }
+
+/* ── Semáforo ejecutivo ── */
 .semaforo-verde {
-    background: linear-gradient(135deg, #052e16, #14532d);
-    border: 1px solid #16a34a;
-    border-left: 6px solid #22c55e;
-    border-radius: 8px;
-    padding: 28px 32px;
-    text-align: center;
-    margin-bottom: 20px;
+  background: linear-gradient(135deg, #052e16 0%, #0a3d1f 100%);
+  border: 1px solid var(--green-dim);
+  border-left: 4px solid var(--green);
+  border-radius: 2px;
+  padding: 20px 28px;
+  text-align: center;
+  margin-bottom: 18px;
+  transition: opacity 0.3s ease;
 }
 .semaforo-amarillo {
-    background: linear-gradient(135deg, #1c1407, #2d1f07);
-    border: 1px solid #ca8a04;
-    border-left: 6px solid #eab308;
-    border-radius: 8px;
-    padding: 28px 32px;
-    text-align: center;
-    margin-bottom: 20px;
+  background: linear-gradient(135deg, #1c1407 0%, #2d1f07 100%);
+  border: 1px solid var(--amber-dim);
+  border-left: 4px solid var(--amber);
+  border-radius: 2px;
+  padding: 20px 28px;
+  text-align: center;
+  margin-bottom: 18px;
+  transition: opacity 0.3s ease;
 }
 .semaforo-rojo {
-    background: linear-gradient(135deg, #1a0505, #2d0a0a);
-    border: 1px solid #dc2626;
-    border-left: 6px solid #ef4444;
-    border-radius: 8px;
-    padding: 28px 32px;
-    text-align: center;
-    margin-bottom: 20px;
+  background: linear-gradient(135deg, #1a0505 0%, #2d0a0a 100%);
+  border: 1px solid var(--red-dim);
+  border-left: 4px solid var(--red);
+  border-radius: 2px;
+  padding: 20px 28px;
+  text-align: center;
+  margin-bottom: 18px;
+  transition: opacity 0.3s ease;
 }
 .semaforo-texto {
-    font-size: 22px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin: 0;
+  font-family: 'Inter', sans-serif;
 }
-.bullet-oro {
-    font-size: 14px;
-    color: #d1d5db;
-    margin: 6px 0;
-    padding-left: 8px;
+.semaforo-icono {
+  font-size: 28px;
+  display: block;
+  margin-bottom: 6px;
 }
-.patron-rechazo {
-    background: #1a0808;
-    border: 1px solid #7f1d1d;
-    border-left: 5px solid #ef4444;
-    border-radius: 6px;
-    padding: 24px 28px;
-    margin-bottom: 16px;
+
+/* ── Interpretación ── */
+.interpretacion-box {
+  background: var(--bg-card);
+  border-left: 3px solid var(--accent);
+  padding: 14px 18px;
+  margin-bottom: 14px;
 }
-.patron-respaldo {
-    background: #071a0f;
-    border: 1px solid #14532d;
-    border-left: 5px solid #22c55e;
-    border-radius: 6px;
-    padding: 24px 28px;
-    margin-bottom: 16px;
+.interpretacion-label {
+  font-size: 9px;
+  color: var(--fg-muted);
+  margin: 0 0 4px 0;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-family: 'Inter', sans-serif;
 }
-.patron-titulo {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
+.interpretacion-texto {
+  font-size: 13px;
+  color: var(--fg-primary);
+  margin: 0;
+  line-height: 1.7;
+  font-family: 'Inter', sans-serif;
 }
-.patron-meta {
-    font-size: 13px;
-    color: #9ca3af;
-    margin-bottom: 12px;
-}
-.patron-count {
-    font-size: 28px;
-    font-weight: 700;
-    font-family: 'Courier New', monospace;
-}
-.comentario-rep {
-    background: #0f172a;
-    border-left: 3px solid #374151;
-    padding: 14px 18px;
-    border-radius: 4px;
-    font-size: 14px;
-    font-style: italic;
-    color: #d1d5db;
-    margin: 8px 0;
-    line-height: 1.5;
-}
-.comentario-lista {
-    font-size: 12px;
-    color: #9ca3af;
-    margin: 4px 0;
-    padding-left: 12px;
-}
-.badge-positivo {
-    background: #14532d;
-    color: #4ade80;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-}
-.badge-mixto {
-    background: #1c1407;
-    color: #fbbf24;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-}
-.badge-critico {
-    background: #1a0505;
-    color: #f87171;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-}
-.riesgo-alto { color: #ef4444; font-weight: 700; font-size: 12px; }
-.riesgo-medio { color: #f59e0b; font-weight: 700; font-size: 12px; }
-.riesgo-bajo { color: #22c55e; font-weight: 700; font-size: 12px; }
-.senal-card {
-    background: #111827;
-    border: 1px solid #1f2937;
-    border-radius: 6px;
-    padding: 20px 24px;
-    margin-bottom: 16px;
-    font-size: 14px;
-}
-.senal-numero {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    color: #4b5563;
-    text-transform: uppercase;
-}
-.senal-titulo {
-    font-size: 15px;
-    font-weight: 700;
-    color: #f9fafb;
-    margin: 4px 0 12px 0;
-}
+
+/* ── Section headers ── */
 .seccion-header {
-    border-bottom: 2px solid #1f2937;
-    padding-bottom: 12px;
-    margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  margin-bottom: 20px;
 }
 .seccion-titulo {
-    font-size: 20px;
-    font-weight: 700;
-    color: #f9fafb;
-    letter-spacing: 0.3px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg-primary);
+  letter-spacing: 0.5px;
+  font-family: 'Inter', sans-serif;
 }
 .seccion-subtitulo {
-    font-size: 12px;
-    color: #6b7280;
-    margin-top: 4px;
-    font-style: italic;
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+  font-family: 'Inter', sans-serif;
 }
+
+/* ── Patrones ── */
+.patron-rechazo {
+  background: #120808;
+  border: 1px solid #3f1a1a;
+  border-left: 4px solid var(--red);
+  border-radius: 2px;
+  padding: 18px 22px;
+  margin-bottom: 14px;
+}
+.patron-respaldo {
+  background: #071a0f;
+  border: 1px solid #0a3d1f;
+  border-left: 4px solid var(--green);
+  border-radius: 2px;
+  padding: 18px 22px;
+  margin-bottom: 14px;
+}
+.patron-titulo { font-size: 12px; font-weight: 700; letter-spacing: 0.3px; margin-bottom: 4px; font-family: 'Inter', sans-serif; }
+.patron-meta { font-size: 12px; color: var(--fg-secondary); margin-bottom: 10px; font-family: 'Inter', sans-serif; }
+.patron-count { font-size: 24px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; }
+
+.comentario-rep {
+  background: var(--bg-surface);
+  border-left: 2px solid var(--border-light);
+  padding: 10px 14px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--fg-primary);
+  margin: 6px 0;
+  line-height: 1.5;
+  font-family: 'Inter', sans-serif;
+}
+.comentario-lista { font-size: 11px; color: var(--fg-secondary); margin: 3px 0; padding-left: 10px; font-family: 'Inter', sans-serif; }
+
+/* ── Badges ── */
+.badge-positivo { background: var(--green-dim); color: var(--green); padding: 2px 7px; font-size: 10px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.5px; }
+.badge-mixto { background: var(--amber-dim); color: var(--amber); padding: 2px 7px; font-size: 10px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.5px; }
+.badge-critico { background: var(--red-dim); color: var(--red); padding: 2px 7px; font-size: 10px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.5px; }
+
+.riesgo-alto { color: var(--red); font-weight: 700; font-size: 11px; font-family: 'IBM Plex Mono', monospace; }
+.riesgo-medio { color: var(--amber); font-weight: 700; font-size: 11px; font-family: 'IBM Plex Mono', monospace; }
+.riesgo-bajo { color: var(--green); font-weight: 700; font-size: 11px; font-family: 'IBM Plex Mono', monospace; }
+
+/* ── Señales ── */
+.senal-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 18px 22px;
+  margin-bottom: 14px;
+}
+.senal-numero {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.senal-titulo {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg-primary);
+  margin: 4px 0 10px 0;
+  font-family: 'Inter', sans-serif;
+}
+
+/* ── Anomalía ── */
 .anomalia-item {
-    background: #1a0808;
-    border: 1px solid #7f1d1d;
-    border-radius: 4px;
-    padding: 10px 14px;
-    margin: 6px 0;
-    font-size: 13px;
+  background: #120808;
+  border: 1px solid #3f1a1a;
+  border-radius: 2px;
+  padding: 10px 14px;
+  margin: 6px 0;
+  font-size: 12px;
+}
+
+/* ── "Qué estás viendo" box ── */
+.que-ves-box {
+  background: var(--bg-surface);
+  border-left: 2px solid var(--border-light);
+  padding: 8px 12px;
+  margin-bottom: 10px;
+}
+.que-ves-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.que-ves-texto {
+  font-size: 11px;
+  color: var(--fg-secondary);
+  margin: 3px 0 0 0;
+  line-height: 1.5;
+  font-family: 'Inter', sans-serif;
+}
+
+/* ── Tabla grid ── */
+.tabla-grid {
+  display: grid;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  align-items: center;
+}
+.tabla-header {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.tabla-numero {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--blue);
+  font-weight: 700;
+}
+
+/* ── Animaciones ── */
+@keyframes blinkFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(240, 179, 75, 0); }
+  50% { box-shadow: 0 0 6px rgba(240, 179, 75, 0.15); }
+}
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@keyframes countUp {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.card-animate {
+  animation: blinkFadeIn 0.4s ease both;
+}
+.semaforo-verde, .semaforo-amarillo, .semaforo-rojo {
+  animation: blinkFadeIn 0.5s ease both;
+}
+.bloom-card {
+  animation: blinkFadeIn 0.35s ease both;
+}
+.bloom-card:nth-child(2) { animation-delay: 0.05s; }
+.bloom-card:nth-child(3) { animation-delay: 0.1s; }
+.bloom-card:nth-child(4) { animation-delay: 0.15s; }
+.bloom-card:nth-child(5) { animation-delay: 0.2s; }
+
+/* ── Separador sutil ── */
+/* ── Headings ── */
+h1, h2, h3, h4 { font-family: 'Inter', sans-serif !important; color: var(--fg-primary) !important; letter-spacing: -0.02em; }
+h1 { font-size: 1.4rem !important; font-weight: 700 !important; }
+h2 { font-size: 1.15rem !important; font-weight: 600 !important; }
+h3 { font-size: 1rem !important; font-weight: 600 !important; }
+.stMarkdown { font-family: 'Inter', sans-serif; color: var(--fg-primary); }
+
+/* ── Streamlit info/warning/error ── */
+div[data-testid="stAlert"] { background: var(--bg-card) !important; border: 1px solid var(--border) !important; border-left: 3px solid var(--accent) !important; color: var(--fg-primary) !important; font-family: 'Inter', sans-serif; font-size: 12px !important; border-radius: 2px !important; }
+div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] p { font-size: 12px !important; color: var(--fg-primary) !important; }
+.st-bd { background-color: transparent !important; }
+
+/* ── Divider ── */
+hr.stDivider { border-color: var(--border) !important; margin-top: 20px !important; margin-bottom: 20px !important; }
+
+/* ── Caption ── */
+.stCaption { color: var(--fg-muted) !important; font-family: 'IBM Plex Mono', monospace !important; font-size: 10px !important; }
+
+/* ── Dataframes ── */
+div[data-testid="stDataFrame"] { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+div[data-testid="stDataFrame"] td { background: var(--bg-surface) !important; color: var(--fg-primary) !important; border-color: var(--border) !important; }
+div[data-testid="stDataFrame"] th { background: var(--bg-elevated) !important; color: var(--fg-muted) !important; border-color: var(--border) !important; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--fg-muted); }
+
+/* ── Grid tables unificadas ── */
+.grid-header {
+  display: grid; padding: 10px 16px; border-bottom: 2px solid var(--border-light);
+  font-size: 11px; font-weight: 600; letter-spacing: 1px;
+  color: var(--fg-muted); text-transform: uppercase;
+}
+.grid-row {
+  display: grid; padding: 14px 16px; border-bottom: 1px solid var(--border);
+  font-size: 13px; align-items: center;
+}
+.grid-num {
+  font-family: 'IBM Plex Mono', monospace; color: var(--blue); font-weight: 700;
+}
+.grid-label { font-weight: 600; color: var(--fg-primary); }
+.grid-muted { color: var(--fg-secondary); }
+
+/* ── Status boxes (reemplazo de st.info/st.warning) ── */
+.bloom-status-info {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-left: 3px solid var(--blue); border-radius: 2px;
+  padding: 12px 16px; margin-bottom: 14px;
+  font-size: 12px; color: var(--fg-primary); font-family: 'Inter', sans-serif;
+}
+.bloom-status-warning {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-left: 3px solid var(--amber); border-radius: 2px;
+  padding: 12px 16px; margin-bottom: 14px;
+  font-size: 12px; color: var(--fg-primary); font-family: 'Inter', sans-serif;
+}
+.bloom-status-label {
+  color: var(--amber); font-size: 10px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ── Subheader/caption Bloomberg ── */
+.bloom-subheader {
+  font-size: 15px; font-weight: 600; color: var(--fg-primary);
+  font-family: 'Inter', sans-serif; letter-spacing: -0.02em; margin-bottom: 6px;
+}
+.bloom-caption {
+  font-size: 10px; color: var(--fg-muted);
+  font-family: 'IBM Plex Mono', monospace; margin-bottom: 14px;
+}
+
+/* ── Platform badge ── */
+.plat-badge-fb {
+  background: #1877f2; color: white; padding: 2px 8px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.plat-badge-tk {
+  background: #ff0050; color: white; padding: 2px 8px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.cat-tag {
+  background: var(--bg-elevated); color: var(--fg-muted);
+  padding: 2px 8px; font-size: 10px;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 /* ===== Responsive mobile (≤640px) ===== */
 @media (max-width: 640px) {
-    /* Apilar TODAS las filas de columnas verticalmente */
-    div[data-testid="stHorizontalBlock"] {
-        flex-direction: column !important;
-        gap: 0.5rem !important;
-    }
-    div[data-testid="stHorizontalBlock"] > div[data-testid="column"],
-    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
-        width: 100% !important;
-        flex: 1 1 100% !important;
-        min-width: 100% !important;
-    }
-    /* Métricas compactas para que no se corten los números */
-    div[data-testid="stMetricValue"] { font-size: 1.4rem !important; }
-    div[data-testid="stMetricLabel"] { font-size: 0.8rem !important; }
-    /* Menos padding lateral en móvil */
-    .block-container {
-        padding-left: 0.8rem !important;
-        padding-right: 0.8rem !important;
-        padding-top: 1rem !important;
-    }
-    /* Títulos proporcionales a pantalla chica */
-    h1 { font-size: 1.5rem !important; }
-    h2 { font-size: 1.25rem !important; }
-    h3 { font-size: 1.05rem !important; }
+  div[data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 0.4rem !important;
+  }
+  div[data-testid="stHorizontalBlock"] > div[data-testid="column"],
+  div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+  }
+  div[data-testid="stMetricValue"] { font-size: 1.3rem !important; }
+  div[data-testid="stMetricLabel"] { font-size: 0.7rem !important; }
+  .block-container { padding-left: 0.6rem !important; padding-right: 0.6rem !important; padding-top: 0.8rem !important; }
+  h1 { font-size: 1.4rem !important; }
+  h2 { font-size: 1.15rem !important; }
+  h3 { font-size: 1rem !important; }
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ── SIDEBAR ──
 
-st.sidebar.markdown("## 🏛 Alcaldía Santa Ana")
-st.sidebar.markdown("*Panel de Inteligencia Ciudadana*")
-st.sidebar.markdown("---")
+st.sidebar.markdown("""
+<div style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px">
+  <div style="font-size:9px;letter-spacing:2px;color:var(--accent);font-weight:600;font-family:'IBM Plex Mono',monospace;text-transform:uppercase">PANEL·SANTA ANA</div>
+  <div style="font-size:11px;color:var(--fg-muted);margin-top:2px;font-family:'Inter',sans-serif">Inteligencia Ciudadana</div>
+</div>
+""", unsafe_allow_html=True)
 
-periodo = st.sidebar.selectbox("📅 Período", [
+periodo = st.sidebar.selectbox("PERÍODO", [
     "Esta semana",
     "Últimos 15 días",
     "Último mes",
@@ -364,13 +597,13 @@ periodo = st.sidebar.selectbox("📅 Período", [
     "Todo el período"
 ])
 
-plataforma = st.sidebar.selectbox("📱 Plataforma", [
+plataforma = st.sidebar.selectbox("PLATAFORMA", [
     "Ambas", "Facebook", "TikTok"
 ])
 
 st.sidebar.markdown("---")
 modo_prueba = st.sidebar.toggle(
-    "🧪 Modo prueba",
+    "MODO PRUEBA",
     value=st.session_state.modo_prueba,
     help="Activa datos de prueba con alta negatividad para testear el semáforo rojo"
 )
@@ -381,8 +614,8 @@ if modo_prueba != st.session_state.modo_prueba:
 
 if st.session_state.modo_prueba:
     st.sidebar.markdown(
-        '<p style="color:#f59e0b;font-size:11px">'
-        '⚠️ Datos de prueba activos</p>',
+        '<p style="color:var(--amber);font-size:10px;font-family:\'IBM Plex Mono\',monospace;letter-spacing:0.5px">'
+        'TEST MODE</p>',
         unsafe_allow_html=True
     )
 
@@ -403,21 +636,25 @@ try:
 except:
     fecha_str = "No disponible"
 
-st.sidebar.caption(f"Última actualización: {fecha_str}")
+st.sidebar.markdown(
+    f'<p style="font-size:9px;color:var(--fg-muted);font-family:\'IBM Plex Mono\',monospace;letter-spacing:0.5px">'
+    f'UPD: {fecha_str}</p>',
+    unsafe_allow_html=True
+)
 
 st.sidebar.markdown("---")
 
-seccion = st.sidebar.radio("", [
-    "📊 Estado General",
-    "🎯 Temas y Emociones",
-    "📅 Línea del Tiempo",
-    "💬 Voz Ciudadana",
-    "🔬 Microsegmentación",
-    "🤝 Confianza Institucional",
-    "📡 Narrativas Activas",
-    "🌊 Contagio Emocional",
-    "🌐 Contexto Externo",
-    "📋 Notas Metodológicas"
+seccion = st.sidebar.radio("SECCIÓN", [
+    "ESTADO GENERAL",
+    "TEMAS Y EMOCIONES",
+    "LÍNEA DEL TIEMPO",
+    "VOZ CIUDADANA",
+    "MICROSEGMENTACIÓN",
+    "CONFIANZA INSTITUCIONAL",
+    "NARRATIVAS ACTIVAS",
+    "CONTAGIO EMOCIONAL",
+    "CONTEXTO EXTERNO",
+    "NOTAS METODOLÓGICAS"
 ])
 
 # ── HELPERS ──
@@ -454,31 +691,78 @@ def safe_query(query: str, db_path: str, params=None) -> pd.DataFrame:
 def hay_datos(df, mensaje: str = "Aún no hay datos suficientes para esta sección.") -> bool:
     """Muestra un aviso elegante y devuelve False si el DataFrame está vacío."""
     if df is None or len(df) == 0:
-        st.info(f"📭 {mensaje}")
+        st.markdown(
+            f'<div class="bloom-status-info"><span class="bloom-status-marker">●</span> {mensaje}</div>',
+            unsafe_allow_html=True
+        )
         return False
     return True
 
 
 def card_explicativa(que_es: str, como_leerlo: str, ojo: str | None = None):
-    """Tarjeta en lenguaje sencillo para explicar un gráfico al alcalde."""
+    """Tarjeta en lenguaje sencillo para explicar un gráfico al edil."""
     ojo_html = (
-        f'<div style="margin-top:8px;font-size:0.9rem;color:#8a6d00;">'
-        f'<b>Ojo:</b> {ojo}</div>'
+        f'<div style="margin-top:8px;font-size:11px;color:var(--amber);font-family:\'Inter\',sans-serif;border-top:1px solid var(--border);padding-top:6px">'
+        f'<span style="font-weight:600">◈</span> {ojo}</div>'
         if ojo else ""
     )
     st.markdown(
         f"""
-        <div style="background:#f4f6f9;border-left:4px solid #3a6df0;
-                    border-radius:10px;padding:14px 18px;margin:6px 0 20px 0;">
-            <div style="font-size:0.95rem;line-height:1.55;color:#1c1c1c;">
-                <b>Qué muestra:</b> {que_es}<br>
-                <b>Cómo leerlo:</b> {como_leerlo}
+        <div class="interpretacion-box" style="margin:4px 0 16px 0">
+            <div class="interpretacion-label">◈ CÓMO LEER ESTO</div>
+            <div class="interpretacion-texto">
+                <strong style="color:var(--accent)">Qué muestra:</strong> {que_es}<br>
+                <strong style="color:var(--accent)">Cómo leerlo:</strong> {como_leerlo}
             </div>
             {ojo_html}
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def que_ves_box(texto: str):
+    """Caja QUÉ ESTÁS VIENDO en lenguaje ciudadano."""
+    st.markdown(
+        f'<div class="que-ves-box"><span class="que-ves-label">◈ QUÉ ESTÁS VIENDO</span>'
+        f'<p class="que-ves-texto">{texto}</p></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def bloom_subheader(texto: str):
+    """Reemplazo de st.subheader con estilo Bloomberg."""
+    st.markdown(f'<p class="bloom-subheader">{texto}</p>', unsafe_allow_html=True)
+
+
+def bloom_caption(texto: str):
+    """Reemplazo de st.caption con estilo Bloomberg."""
+    st.markdown(f'<p class="bloom-caption">{texto}</p>', unsafe_allow_html=True)
+
+
+def bloom_metric(label: str, value: str, delta: str | None = None, color: str | None = None):
+    """Tarjeta métrica compacta estilo Bloomberg."""
+    val_color = f'color:{color};' if color else ''
+    delta_html = f'<div class="bloom-card-sub">{delta}</div>' if delta else ''
+    st.markdown(
+        f'<div class="bloom-card { "bloom-border-accent" if color else "" }">'
+        f'<div class="bloom-card-title">{label}</div>'
+        f'<div class="bloom-card-value" style="{val_color}font-size:28px">{value}</div>'
+        f'{delta_html}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def plotly_bloom_theme(bg: str = "var(--bg-card)", fg: str = "var(--fg-secondary)"):
+    """Tema oscuro Bloomberg para gráficas Plotly."""
+    return dict(
+        plot_bgcolor=bg, paper_bgcolor=bg,
+        font=dict(color=fg, size=10, family='IBM Plex Mono, monospace'),
+        xaxis=dict(gridcolor='var(--border)', showgrid=True, tickfont=dict(size=9)),
+        yaxis=dict(gridcolor='var(--border)', showgrid=True, tickfont=dict(size=9)),
+        margin=dict(l=0, r=0, t=10, b=0),
+    )
+
 
 @st.cache_data(ttl=3600)
 def cargar_fb_engagement(db_path):
@@ -580,11 +864,11 @@ def filtrar_por_periodo_plataforma(df_fb, df_tk, periodo, plataforma):
     return fb, tk
 
 def calcular_semaforo(df_fb):
-    if df_fb.empty: return "amarillo", "🟡 Sin datos suficientes esta semana"
+    if df_fb.empty: return "amarillo", "SIN DATOS — No hay suficientes datos esta semana"
     score = df_fb['score_emocional'].mean()
-    if score >= 0.25: return "verde", "🟢 La ciudadanía te respalda esta semana"
-    elif score >= 0.10: return "amarillo", "🟡 Hay señales mixtas esta semana"
-    else: return "rojo", "🔴 La ciudadanía está inquieta esta semana"
+    if score >= 0.25: return "verde", "RESPALDO — La ciudadanía te respalda esta semana"
+    elif score >= 0.10: return "amarillo", "MIXTO — Hay señales mixtas esta semana"
+    else: return "rojo", "ALERTA — La ciudadanía está inquieta esta semana"
 
 def detectar_patrones_comentarios(df_comentarios):
     patrones_rechazo = {
@@ -805,7 +1089,7 @@ def calcular_narrativas_activas():
                         'abandon','olvidado','nunca vienen','no llegan',
                         'esperando','años esperando'],
             'color': '#ef4444',
-            'icono': '🏚️'
+            'icono': '[ABANDONO]'
         },
         'promesas_incumplidas': {
             'nombre': 'Promesas incumplidas',
@@ -815,7 +1099,7 @@ def calcular_narrativas_activas():
                         'para cuando','cuando van','siguen igual',
                         'nunca','años prometiendo','todavia'],
             'color': '#f59e0b',
-            'icono': '📋'
+            'icono': '[PROMESA]'
         },
         'narrativa_electoral': {
             'nombre': 'Narrativa electoral',
@@ -825,7 +1109,7 @@ def calcular_narrativas_activas():
                         'boto','votar','candidato','proximas',
                         'solo cuando hay','interesa el voto'],
             'color': '#8b5cf6',
-            'icono': '🗳️'
+            'icono': '[ELECTORAL]'
         },
         'corrupcion': {
             'nombre': 'Narrativa de corrupción',
@@ -835,7 +1119,7 @@ def calcular_narrativas_activas():
                         'recursos','licitacion','contrato','empleados',
                         'enchufado','nepotismo','millones'],
             'color': '#dc2626',
-            'icono': '⚠️'
+            'icono': '[CORRUPCIÓN]'
         },
         'reconocimiento': {
             'nombre': 'Reconocimiento ciudadano',
@@ -845,7 +1129,7 @@ def calcular_narrativas_activas():
                         'sigan adelante','lo apoyamos','felicitaciones',
                         'bien hecho','orgullo','progreso','cambio'],
             'color': '#22c55e',
-            'icono': '👏'
+            'icono': '[RECONOCIMIENTO]'
         }
     }
 
@@ -1120,50 +1404,58 @@ def calcular_correlacion_noticias_picos(z_umbral: float = 1.0, ventana_dias: int
 # ═══════════════════════════════════════════
 
 def render_notas_metodologicas():
-    st.header("📋 Notas Metodológicas")
-    st.caption("Límites honestos del sistema — léelos antes de tomar decisiones con estos datos.")
+    st.header("NOTAS METODOLÓGICAS")
+    bloom_caption("Límites honestos del sistema — léelos antes de tomar decisiones con estos datos.")
     st.markdown(
         "Este panel analiza contenido público (posts, reacciones y comentarios) de las "
         "páginas de la Alcaldía y el alcalde. Es una herramienta de lectura de percepción "
         "colectiva, no un oráculo. Sus límites:"
     )
-    st.warning(
-        "No predice votos individuales. Mide qué temas generan qué *emociones en "
-        "conjunto*, no el comportamiento de personas concretas."
+    st.markdown(
+        '<div class="bloom-status-warning"><span class="bloom-status-label">LIMITACIÓN</span> '
+        'No predice votos individuales. Mide qué temas generan qué emociones en '
+        'conjunto, no el comportamiento de personas concretas.</div>',
+        unsafe_allow_html=True
     )
-    st.info(
-        "Las reacciones son un proxy emocional, no un test psicológico validado. "
-        "Úsalas como señal de tono colectivo, no como diagnóstico."
+    st.markdown(
+        '<div class="bloom-status-info">Las reacciones son un proxy emocional, no un test psicológico validado. '
+        'Úsalas como señal de tono colectivo, no como diagnóstico.</div>',
+        unsafe_allow_html=True
     )
-    st.info(
-        "El sentimiento de comentarios tiene ~85% de precisión en español. "
-        "Alrededor de 1 de cada 7 comentarios puede estar mal clasificado."
+    st.markdown(
+        '<div class="bloom-status-info">El sentimiento de comentarios tiene ~85% de precisión en español. '
+        'Alrededor de 1 de cada 7 comentarios puede estar mal clasificado.</div>',
+        unsafe_allow_html=True
     )
-    st.warning(
-        "Correlación ≠ causalidad. Que un pico de engagement coincida con una noticia "
-        "externa no prueba que una haya causado la otra; pueden influir terceros factores."
+    st.markdown(
+        '<div class="bloom-status-warning"><span class="bloom-status-label">LIMITACIÓN</span> '
+        'Correlación ≠ causalidad. Que un pico de engagement coincida con una noticia '
+        'externa no prueba que una haya causado la otra; pueden influir terceros factores.</div>',
+        unsafe_allow_html=True
     )
-    st.info(
-        "TikTok no tiene reacciones diferenciadas (solo 'me gusta'). Su lectura emocional "
-        "depende 100% de los comentarios."
+    st.markdown(
+        '<div class="bloom-status-info">TikTok no tiene reacciones diferenciadas (solo "me gusta"). Su lectura emocional '
+        'depende 100% de los comentarios.</div>',
+        unsafe_allow_html=True
     )
-    st.info(
-        "En Facebook, las reacciones con datos sólidos son 'Me gusta', 'Me encanta', "
-        "'Me divierte' y 'Me enoja'. 'Me asombra' y 'Me entristece' aparecen en volúmenes "
-        "mínimos (decenas de casos), así que las métricas de afecto/controversia se apoyan "
-        "sobre todo en las primeras."
+    st.markdown(
+        '<div class="bloom-status-info">En Facebook, las reacciones con datos sólidos son "Me gusta", "Me encanta", '
+        '"Me divierte" y "Me enoja". "Me asombra" y "Me entristece" aparecen en volúmenes '
+        'mínimos (decenas de casos), así que las métricas de afecto/controversia se apoyan '
+        'sobre todo en las primeras.</div>',
+        unsafe_allow_html=True
     )
-    st.caption(
+    bloom_caption(
         "Metodología inspirada en Kosinski et al. (2013), adaptada a datos agregados por "
         "publicación (no a perfiles individuales) y con las limitaciones señaladas por "
         "Farina et al. (2025)."
     )
 
-if seccion == "📊 Estado General":
+if seccion == "ESTADO GENERAL":
 
     st.markdown("""
     <div class="seccion-header">
-        <div class="seccion-titulo">📊 Estado General</div>
+        <div class="seccion-titulo">ESTADO GENERAL</div>
         <div class="seccion-subtitulo">
             Un vistazo — panorama completo en 30 segundos
         </div>
@@ -1226,15 +1518,11 @@ if seccion == "📊 Estado General":
     })
 
     st.markdown(f"""
-    <div style="background:#0f172a;border-left:4px solid #3b82f6;
-         padding:16px 20px;border-radius:4px;margin-bottom:16px">
-        <p style="font-size:13px;color:#6b7280;margin:0 0 4px 0;
-           font-weight:600;letter-spacing:1px;text-transform:uppercase">
-            LO QUE ESTO SIGNIFICA
-        </p>
-        <p style="font-size:15px;color:#e2e8f0;margin:0;line-height:1.7">
+    <div class="interpretacion-box">
+        <div class="interpretacion-label">◈ LO QUE ESTO SIGNIFICA</div>
+        <div class="interpretacion-texto">
             {interpretacion_sem}
-        </p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1245,23 +1533,23 @@ if seccion == "📊 Estado General":
         total_reacciones += df_tk['likes'].sum()
 
     st.markdown(f"""
-    <div class="card">
-        <p class="bullet-oro">
-            📊 En este período recibiste
-            <strong>{total_reacciones:,.0f}</strong>
+    <div class="bloom-card">
+        <p style="font-size:13px;color:var(--fg-secondary);margin:5px 0;padding-left:6px;font-family:'Inter',sans-serif">
+            En este período recibiste
+            <strong style="color:var(--accent)">{total_reacciones:,.0f}</strong>
             reacciones en total
         </p>
-        <p class="bullet-oro">
-            🎯 El tema con mayor rechazo ciudadano:
-            <strong>{tema_top_neg}</strong>
+        <p style="font-size:13px;color:var(--fg-secondary);margin:5px 0;padding-left:6px;font-family:'Inter',sans-serif">
+            El tema con mayor rechazo ciudadano:
+            <strong style="color:var(--red)">{tema_top_neg}</strong>
         </p>
-        <p class="bullet-oro">
-            💬 El <strong>{pct_positivo:.1f}%</strong>
+        <p style="font-size:13px;color:var(--fg-secondary);margin:5px 0;padding-left:6px;font-family:'Inter',sans-serif">
+            El <strong style="color:var(--green)">{pct_positivo:.1f}%</strong>
             de los comentarios son de apoyo
         </p>
-        <p class="bullet-oro">
-            ⚡ Semana con actividad inusual más reciente:
-            <strong>{semana_anomalia}</strong>
+        <p style="font-size:13px;color:var(--fg-secondary);margin:5px 0;padding-left:6px;font-family:'Inter',sans-serif">
+            Semana con actividad inusual más reciente:
+            <strong style="color:var(--blue)">{semana_anomalia}</strong>
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -1293,43 +1581,35 @@ if seccion == "📊 Estado General":
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"""
-        <div class="card">
-            <div class="card-title">Personas que reaccionaron</div>
-            <div class="card-value">{total_eng:,}</div>
-            <div class="card-sub">reacciones totales</div>
+        <div class="bloom-card">
+            <div class="bloom-card-title">Personas que reaccionaron</div>
+            <div class="bloom-card-value" style="font-size:28px">{total_eng:,}</div>
+            <div class="bloom-card-sub">reacciones totales</div>
         </div>""", unsafe_allow_html=True)
     with col2:
         st.markdown(f"""
-        <div class="card">
-            <div class="card-title">Comentarios recibidos</div>
-            <div class="card-value">{int(n_comments):,}</div>
-            <div class="card-sub">con texto analizable</div>
+        <div class="bloom-card">
+            <div class="bloom-card-title">Comentarios recibidos</div>
+            <div class="bloom-card-value" style="font-size:28px">{int(n_comments):,}</div>
+            <div class="bloom-card-sub">con texto analizable</div>
         </div>""", unsafe_allow_html=True)
     with col3:
         st.markdown(f"""
-        <div class="card">
-            <div class="card-title">Contenido publicado</div>
-            <div class="card-value">{total_posts:,}</div>
-            <div class="card-sub">posts y videos</div>
+        <div class="bloom-card">
+            <div class="bloom-card-title">Contenido publicado</div>
+            <div class="bloom-card-value" style="font-size:28px">{total_posts:,}</div>
+            <div class="bloom-card-sub">posts y videos</div>
         </div>""", unsafe_allow_html=True)
     with col4:
         st.markdown(f"""
-        <div class="card">
-            <div class="card-title">Tono ciudadano</div>
-            <div class="card-value" style="color:{tono_color};font-size:24px">{tono_txt}</div>
-            <div class="card-sub">basado en comentarios</div>
+        <div class="bloom-card">
+            <div class="bloom-card-title">Tono ciudadano</div>
+            <div class="bloom-card-value" style="color:{tono_color};font-size:24px">{tono_txt}</div>
+            <div class="bloom-card-sub">basado en comentarios</div>
         </div>""", unsafe_allow_html=True)
 
     # Grafico tendencia
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Cada punto en esta línea es una semana. Cuando la línea sube, más gente interactuó con tu contenido. Los puntos rojos son semanas donde la actividad fue inusualmente alta o baja — algo ocurrió esa semana que movilizó a la ciudadanía.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Cada punto en esta línea es una semana. Cuando la línea sube, más gente interactuó con tu contenido. Los puntos rojos son semanas donde la actividad fue inusualmente alta o baja — algo ocurrió esa semana que movilizó a la ciudadanía.")
     st.markdown("### ¿Cuanto esta hablando la gente de ti?")
 
     if plataforma == "Facebook":
@@ -1377,18 +1657,18 @@ if seccion == "📊 Estado General":
                 name='Semana inusual',
                 customdata=anomalias[['ratio']].values,
                 hovertemplate=(
-                    "⚠ <b>Semana inusual</b><br>"
+                    "<b>Semana inusual</b><br>"
                     "%{x|%d %b %Y} · %{y:,.0f} interacciones<br>"
                     "→ %{customdata[0]:.1f}× el promedio normal: algo disparó la conversación esa semana"
                     "<extra></extra>"
                 )
             ))
         fig.update_layout(
-            plot_bgcolor='#111827', paper_bgcolor='#111827',
-            font=dict(color='#9ca3af', size=11),
-            xaxis=dict(gridcolor='#1f2937', showgrid=True, tickformat='%d %b\n%Y'),
-            yaxis=dict(gridcolor='#1f2937', showgrid=True, tickformat=','),
-            legend=dict(bgcolor='#111827', bordercolor='#1f2937'),
+            plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)',
+            font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
+            xaxis=dict(gridcolor='var(--border)', showgrid=True, tickformat='%d %b\n%Y', tickfont=dict(size=9)),
+            yaxis=dict(gridcolor='var(--border)', showgrid=True, tickformat=',', tickfont=dict(size=9)),
+            legend=dict(bgcolor='var(--bg-surface)', bordercolor='var(--border)'),
             margin=dict(l=0, r=0, t=10, b=0), height=280
         )
         card_explicativa(
@@ -1399,15 +1679,7 @@ if seccion == "📊 Estado General":
         st.plotly_chart(fig, use_container_width=True)
 
     # Comparativa FB vs TK
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Comparación directa entre tus dos plataformas principales. Facebook mide reacciones y comentarios. TikTok mide visualizaciones y engagement — cuántas personas no solo vieron sino interactuaron.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Comparación directa entre tus dos plataformas principales. Facebook mide reacciones y comentarios. TikTok mide visualizaciones y engagement — cuántas personas no solo vieron sino interactuaron.")
     st.markdown("### ¿Como se compara cada plataforma?")
     col_fb, col_tk = st.columns(2)
 
@@ -1421,14 +1693,14 @@ if seccion == "📊 Estado General":
             tristeza = df_fb['indice_tristeza'].mean()
             enojo = df_fb['indice_enojo'].mean() if 'indice_enojo' in df_fb.columns else 0
             reac_max = max([
-                (amor,    '❤️ Amor'),
-                (humor,   '😆 Humor'),
-                (tristeza,'😢 Tristeza'),
-                (enojo,   '😡 Enojo')
+                (amor,    'Amor'),
+                (humor,   'Humor'),
+                (tristeza,'Tristeza'),
+                (enojo,   'Enojo')
             ], key=lambda x: x[0] if not pd.isna(x[0]) else 0)[1]
             st.markdown(f"""
-            <div class="card">
-                <div class="card-title">FACEBOOK</div>
+            <div class="bloom-card">
+                <div class="bloom-card-title">FACEBOOK</div>
                 <p style="font-size:13px;margin:6px 0">
                     <strong>Reacciones totales:</strong> {reac_fb:,}
                 </p>
@@ -1443,7 +1715,7 @@ if seccion == "📊 Estado General":
                 </p>
             </div>""", unsafe_allow_html=True)
         else:
-            st.markdown('<div class="card"><p>Sin datos de Facebook para este periodo</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="bloom-card"><p>Sin datos de Facebook para este periodo</p></div>', unsafe_allow_html=True)
 
     with col_tk:
         if not df_tk.empty:
@@ -1452,8 +1724,8 @@ if seccion == "📊 Estado General":
             shares_prom = df_tk['shares'].mean() if not df_tk.empty else 0
             eng_rate = df_tk['engagement_rate'].mean() * 100
             st.markdown(f"""
-            <div class="card">
-                <div class="card-title">TIKTOK</div>
+            <div class="bloom-card">
+                <div class="bloom-card-title">TIKTOK</div>
                 <p style="font-size:13px;margin:6px 0">
                     <strong>Views totales:</strong> {views_tk:,}
                 </p>
@@ -1468,17 +1740,17 @@ if seccion == "📊 Estado General":
                 </p>
             </div>""", unsafe_allow_html=True)
         else:
-            st.markdown('<div class="card"><p>Sin datos de TikTok para este periodo</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="bloom-card"><p>Sin datos de TikTok para este periodo</p></div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════
 # SECCIÓN 2 — TEMAS Y EMOCIONES
 # ═══════════════════════════════════════════
 
-elif seccion == "🎯 Temas y Emociones":
+elif seccion == "TEMAS Y EMOCIONES":
 
     st.markdown("""
     <div class="seccion-header">
-        <div class="seccion-titulo">🎯 Temas y Emociones</div>
+        <div class="seccion-titulo">TEMAS Y EMOCIONES</div>
         <div class="seccion-subtitulo">
             ¿De que habla la gente y como se siente segun el tema?
         </div>
@@ -1584,32 +1856,21 @@ elif seccion == "🎯 Temas y Emociones":
 
             st.markdown(f"""
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
-                <div style="background:#1a0808;border-left:4px solid #ef4444;padding:16px 20px;border-radius:4px">
-                    <p style="font-size:11px;color:#ef4444;margin:0 0 6px 0;font-weight:600;letter-spacing:1px;text-transform:uppercase">⚠️ TEMA EN ZONA DE RIESGO</p>
-                    <p style="font-size:14px;color:#e2e8f0;margin:0;line-height:1.6">{texto_critico}</p>
+                <div class="patron-rechazo" style="padding:14px 18px">
+                    <div class="interpretacion-label" style="color:#ef4444">TEMA EN ZONA DE RIESGO</div>
+                    <div class="interpretacion-texto" style="margin-top:6px">{texto_critico}</div>
                 </div>
-                <div style="background:#071a0f;border-left:4px solid #22c55e;padding:16px 20px;border-radius:4px">
-                    <p style="font-size:11px;color:#22c55e;margin:0 0 6px 0;font-weight:600;letter-spacing:1px;text-transform:uppercase">✅ TEMA MÁS SÓLIDO</p>
-                    <p style="font-size:14px;color:#e2e8f0;margin:0;line-height:1.6">{texto_positivo}</p>
+                <div class="patron-respaldo" style="padding:14px 18px">
+                    <div class="interpretacion-label" style="color:#22c55e">TEMA MÁS SÓLIDO</div>
+                    <p style="font-size:14px;color:var(--fg-primary);margin:0;line-height:1.6">{texto_positivo}</p>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-        st.markdown("""
-        <div style="background:#0d1117;border-left:3px solid #374151;
-             padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-            <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-                  color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-            <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-               line-height:1.5">Cada fila es un tema de tu contenido. TONO indica si los comentarios sobre ese tema son positivos, mixtos o críticos. EMOCIÓN es la reacción predominante. RIESGO señala los temas donde la ciudadanía está más molesta.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        que_ves_box("Cada fila es un tema de tu contenido. TONO indica si los comentarios sobre ese tema son positivos, mixtos o críticos. EMOCIÓN es la reacción predominante. RIESGO señala los temas donde la ciudadanía está más molesta.")
 
         st.markdown("""
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr;
-             padding:10px 16px;border-bottom:2px solid #374151;
-             font-size:11px;font-weight:600;letter-spacing:1px;
-             color:#6b7280;text-transform:uppercase;">
+        <div class="grid-header" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr">
             <span>TEMA</span>
             <span style="text-align:right">REACCIONES</span>
             <span style="text-align:center">TONO</span>
@@ -1628,15 +1889,12 @@ elif seccion == "🎯 Temas y Emociones":
             riesgo = get_riesgo(row.get('pct_neg'), row['reacciones'])
 
             st.markdown(f"""
-            <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr;
-                 padding:14px 16px;border-bottom:1px solid #1f2937;
-                 font-size:13px;align-items:center;">
-                <span style="font-weight:600;color:#f9fafb">{nombre}</span>
-                <span style="text-align:right;font-family:'Courier New';
-                      color:#60a5fa;font-weight:700">{reac}</span>
+            <div class="grid-row" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr;">
+                <span class="grid-label">{nombre}</span>
+                <span class="grid-num" style="color:#60a5fa">{reac}</span>
                 <span style="text-align:center">{tono}</span>
                 <span style="text-align:center">{emocion}</span>
-                <span style="text-align:right;color:#9ca3af">{comentarios}</span>
+                <span class="grid-muted" style="text-align:right">{comentarios}</span>
                 <span style="text-align:center">{riesgo}</span>
             </div>
             """, unsafe_allow_html=True)
@@ -1644,15 +1902,7 @@ elif seccion == "🎯 Temas y Emociones":
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Mapa de calor
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Cuanto más azul e intenso el color, más fuerte es esa emoción en ese tema. Blanco o gris = poca emoción. Azul brillante = tema que genera reacción emocional fuerte.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Cuanto más azul e intenso el color, más fuerte es esa emoción en ese tema. Blanco o gris = poca emoción. Azul brillante = tema que genera reacción emocional fuerte.")
     st.markdown("### ¿Que emocion genera cada tema?")
 
     if dfs and not df_temas.empty:
@@ -1678,8 +1928,8 @@ elif seccion == "🎯 Temas y Emociones":
             labels={'intensidad':'Intensidad','emocion':'Emocion','categoria_nombre':'Tema'}
         )
         fig_heat.update_layout(
-            plot_bgcolor='#111827', paper_bgcolor='#111827',
-            font=dict(color='#9ca3af', size=11),
+            plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)',
+            font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
             coloraxis_showscale=False,
             margin=dict(l=0, r=0, t=10, b=0), height=300
         )
@@ -1698,15 +1948,7 @@ elif seccion == "🎯 Temas y Emociones":
         st.plotly_chart(fig_heat, use_container_width=True)
 
     # Top 5 posts
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Los 5 contenidos que más movieron a la ciudadanía en el período seleccionado, medidos por interacciones totales (reacciones + comentarios + compartidos).</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Los 5 contenidos que más movieron a la ciudadanía en el período seleccionado, medidos por interacciones totales (reacciones + comentarios + compartidos).")
     st.markdown("### El contenido que mas movio a la ciudadania")
 
     dfs_top = []
@@ -1754,20 +1996,20 @@ elif seccion == "🎯 Temas y Emociones":
             trist_n = int(it_val * reac_val) if pd.notna(reac_val) else 0
 
             st.markdown(f"""
-            <div class="card" style="border-left:4px solid #3b82f6">
+            <div class="bloom-card bloom-border-accent">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                    <span style="font-size:11px;color:#6b7280">{fecha}</span>
+                    <span style="font-size:11px;color:var(--fg-muted)">{fecha}</span>
                     <div style="display:flex;gap:8px;align-items:center">
                         {plat_badge}
-                        <span style="font-size:11px;color:#4b5563;background:#1f2937;padding:2px 8px;border-radius:4px">{categoria}</span>
+                        <span style="font-size:11px;color:var(--fg-muted);background:var(--border-light);padding:2px 8px;border-radius:4px">{categoria}</span>
                     </div>
                 </div>
-                <p style="font-size:14px;color:#e2e8f0;margin:8px 0;line-height:1.5">{texto}</p>
+                <p style="font-size:14px;color:var(--fg-primary);margin:8px 0;line-height:1.5">{texto}</p>
                 <div style="display:flex;gap:16px;margin-top:10px;align-items:center">
-                    <span style="font-size:12px;color:#9ca3af">
+                    <span style="font-size:12px;color:var(--fg-secondary)">
                         Amor {amor_n:,} &nbsp;·&nbsp; Humor {humor_n:,} &nbsp;·&nbsp; Tristeza {trist_n:,}
                     </span>
-                    <span style="margin-left:auto;font-size:18px;font-weight:700;color:#60a5fa;font-family:'Courier New'">
+                    <span style="margin-left:auto;font-size:18px;font-weight:700;color:#60a5fa;font-family:'IBM Plex Mono',monospace">
                         {total:,} interacciones
                     </span>
                 </div>
@@ -1775,8 +2017,8 @@ elif seccion == "🎯 Temas y Emociones":
             """, unsafe_allow_html=True)
 
     st.divider()
-    st.subheader("❤️‍🔥 Score Emocional Neto por post")
-    st.caption(
+    bloom_subheader("Score Emocional Neto por post")
+    bloom_caption(
         "Combina afecto vs. controversia (reacciones) y el sentimiento de los comentarios. "
         "Rango ~[-1, 1]: positivo = post querido; negativo = post que genera rechazo."
     )
@@ -1804,11 +2046,11 @@ elif seccion == "🎯 Temas y Emociones":
             fmt = {"Score neto": "{:+.2f}", "Afecto": "{:.2f}",
                    "Controversia": "{:.2f}", "Sent. coment.": "{:+.2f}"}
 
-            st.markdown("**🟢 Top 10 — más queridos**")
+            st.markdown("**TOP 10 — MÁS QUERIDOS**")
             st.dataframe(df_val.head(10)[cols_show].rename(columns=ren).style.format(fmt),
                          use_container_width=True, hide_index=True)
 
-            st.markdown("**🔴 Bottom 10 — más controversiales**")
+            st.markdown("**BOTTOM 10 — MÁS POLÉMICOS**")
             st.dataframe(df_val.tail(10).sort_values("score_emocional_neto")[cols_show].rename(columns=ren).style.format(fmt),
                          use_container_width=True, hide_index=True)
 
@@ -1840,8 +2082,8 @@ elif seccion == "🎯 Temas y Emociones":
             st.plotly_chart(fig_sen, use_container_width=True)
 
     st.divider()
-    st.subheader("🚀 Índice de Viralidad — TikTok")
-    st.caption(
+    bloom_subheader("Índice de Viralidad — TikTok")
+    bloom_caption(
         "Viralidad = compartidos / views (qué tanto se propaga). TikTok no tiene reacciones "
         "diferenciadas, así que esto mide ALCANCE, no emoción (esa vive en los comentarios)."
     )
@@ -1855,7 +2097,7 @@ elif seccion == "🎯 Temas y Emociones":
         top = df_vir.head(10)[["video", "indice_viralidad", "engagement_rate", "views", "shares", "likes"]].copy()
         top["indice_viralidad"] = (top["indice_viralidad"] * 100).round(2)
         top["engagement_rate"] = (top["engagement_rate"] * 100).round(2)
-        st.markdown("**🔥 Top 10 videos más virales**")
+        st.markdown("**TOP 10 — VIDEOS MÁS VIRALES**")
         st.dataframe(top.rename(columns={
             "video": "Video", "indice_viralidad": "Viralidad %", "engagement_rate": "Engagement %",
             "views": "Views", "shares": "Shares", "likes": "Likes",
@@ -1888,11 +2130,11 @@ elif seccion == "🎯 Temas y Emociones":
 # SECCIÓN 3 — LÍNEA DEL TIEMPO
 # ═══════════════════════════════════════════
 
-elif seccion == "📅 Línea del Tiempo":
+elif seccion == "LÍNEA DEL TIEMPO":
 
     st.markdown("""
     <div class="seccion-header">
-        <div class="seccion-titulo">📅 Linea del Tiempo</div>
+        <div class="seccion-titulo">LÍNEA DEL TIEMPO</div>
         <div class="seccion-subtitulo">
             ¿Cuando explota la conversacion y que la causo?
         </div>
@@ -1980,18 +2222,18 @@ elif seccion == "📅 Línea del Tiempo":
                 name='Semana inusual',
                 customdata=anom[['ratio']].values,
                 hovertemplate=(
-                    "⚠ <b>Semana inusual</b><br>"
+                    "<b>Semana inusual</b><br>"
                     "%{x|%d %b %Y} · %{y:,.0f} interacciones<br>"
                     "→ %{customdata[0]:.1f}× el promedio normal: algo disparó la conversación esa semana"
                     "<extra></extra>"
                 )
             ))
         fig.update_layout(
-            plot_bgcolor='#111827', paper_bgcolor='#111827',
-            font=dict(color='#9ca3af', size=11),
-            xaxis=dict(gridcolor='#1f2937', tickformat='%d %b\n%Y', showgrid=True),
-            yaxis=dict(gridcolor='#1f2937', showgrid=True, tickformat=',', title=ylabel),
-            legend=dict(bgcolor='rgba(17,24,39,0.8)', bordercolor='#1f2937', x=0, y=1),
+            plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)',
+            font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
+            xaxis=dict(gridcolor='var(--border)', tickformat='%d %b\n%Y', showgrid=True, tickfont=dict(size=9)),
+            yaxis=dict(gridcolor='var(--border)', showgrid=True, tickformat=',', title=ylabel),
+            legend=dict(bgcolor='var(--bg-surface)', bordercolor='var(--border)', x=0, y=1),
             margin=dict(l=0, r=0, t=10, b=0), height=350
         )
         card_explicativa(
@@ -2001,15 +2243,7 @@ elif seccion == "📅 Línea del Tiempo":
         st.plotly_chart(fig, use_container_width=True)
 
     # Anomalias
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Estas son las semanas donde la conversación ciudadana explotó. No significa que fue bueno o malo — significa que algo captó masivamente la atención. Identifica qué pasó esa semana para entender por qué.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Estas son las semanas donde la conversación ciudadana explotó. No significa que fue bueno o malo — significa que algo captó masivamente la atención. Identifica qué pasó esa semana para entender por qué.")
     st.markdown("### Semanas con actividad inusual")
     st.markdown("*Estas semanas tuvieron una actividad significativamente mayor a lo normal — algo ocurrio que movilizo a la ciudadania.*")
 
@@ -2020,7 +2254,7 @@ elif seccion == "📅 Línea del Tiempo":
     with col_a1:
         st.markdown("**Facebook**")
         if anom_fb.empty:
-            st.markdown('<div class="card"><p style="color:#6b7280">Sin anomalias detectadas</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="bloom-card"><p style="color:var(--fg-muted)">Sin anomalias detectadas</p></div>', unsafe_allow_html=True)
         else:
             for _, row in anom_fb.head(5).iterrows():
                 fecha = formato_fecha_espanol(row['semana'])
@@ -2033,16 +2267,16 @@ elif seccion == "📅 Línea del Tiempo":
                 st.markdown(f"""
                 <div class="anomalia-item">
                     <strong style="color:#f87171"> {fecha}</strong><br>
-                    <span style="font-size:12px;color:#9ca3af">
+                    <span style="font-size:12px;color:var(--fg-secondary)">
                         Engagement: <strong style="color:#60a5fa">{eng:,}</strong>
                     </span>
-                    <p style="font-size:12px;color:#d1d5db;margin:6px 0 0 0;line-height:1.5;font-style:italic">{interp_anom}</p>
+                    <p style="font-size:12px;color:var(--fg-primary);margin:6px 0 0 0;line-height:1.5;font-style:italic">{interp_anom}</p>
                 </div>
                 """, unsafe_allow_html=True)
     with col_a2:
         st.markdown("**TikTok**")
         if anom_tk.empty:
-            st.markdown('<div class="card"><p style="color:#6b7280">Sin anomalias detectadas</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="bloom-card"><p style="color:var(--fg-muted)">Sin anomalias detectadas</p></div>', unsafe_allow_html=True)
         else:
             for _, row in anom_tk.head(5).iterrows():
                 fecha = formato_fecha_espanol(row['semana'])
@@ -2054,24 +2288,16 @@ elif seccion == "📅 Línea del Tiempo":
                 st.markdown(f"""
                 <div class="anomalia-item">
                     <strong style="color:#f87171"> {fecha}</strong><br>
-                    <span style="font-size:12px;color:#9ca3af">
+                    <span style="font-size:12px;color:var(--fg-secondary)">
                         Views: <strong style="color:#60a5fa">{views:,}</strong>
                         &nbsp;·&nbsp; Engagement: {rate:.2f}%
                     </span>
-                    <p style="font-size:12px;color:#d1d5db;margin:6px 0 0 0;line-height:1.5;font-style:italic">{interp_anom}</p>
+                    <p style="font-size:12px;color:var(--fg-primary);margin:6px 0 0 0;line-height:1.5;font-style:italic">{interp_anom}</p>
                 </div>
                 """, unsafe_allow_html=True)
 
     # Heatmap dia de semana
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Cuándo reacciona más la gente según el día de la semana. Azul oscuro = más actividad. Útil para saber qué días publicar para maximizar el alcance.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Cuándo reacciona más la gente según el día de la semana. Azul oscuro = más actividad. Útil para saber qué días publicar para maximizar el alcance.")
     st.markdown("### Cómo reacciona la gente según el día")
 
     df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
@@ -2107,7 +2333,7 @@ elif seccion == "📅 Línea del Tiempo":
         fig_dias.update_layout(
             plot_bgcolor='#111827', paper_bgcolor='#111827',
             font=dict(color='#9ca3af', size=12),
-            xaxis=dict(gridcolor='#1f2937'), yaxis=dict(gridcolor='#1f2937', tickformat=','),
+            xaxis=dict(gridcolor='var(--border)'), yaxis=dict(gridcolor='var(--border)', tickformat=','),
             showlegend=False, margin=dict(l=0, r=0, t=10, b=0), height=200
         )
         card_explicativa(
@@ -2116,8 +2342,8 @@ elif seccion == "📅 Línea del Tiempo":
         )
         st.plotly_chart(fig_dias, use_container_width=True)
         st.markdown(
-            f'<p style="font-size:13px;color:#9ca3af">📌 El dia que mas reacciona '
-            f'la gente en promedio: <strong style="color:#f9fafb">{dia_pico["nombre"]}</strong> '
+            f'<p style="font-size:13px;color:var(--fg-secondary)">El dia que mas reacciona '
+            f'la gente en promedio: <strong style="color:var(--fg-primary)">{dia_pico["nombre"]}</strong> '
             f'({int(dia_pico["valor"]):,} reacciones totales)</p>',
             unsafe_allow_html=True
         )
@@ -2126,11 +2352,11 @@ elif seccion == "📅 Línea del Tiempo":
 # SECCIÓN 4 — VOZ CIUDADANA
 # ═══════════════════════════════════════════
 
-elif seccion == "💬 Voz Ciudadana":
+elif seccion == "VOZ CIUDADANA":
 
     st.markdown("""
     <div class="seccion-header">
-        <div class="seccion-titulo">💬 Voz Ciudadana</div>
+        <div class="seccion-titulo">VOZ CIUDADANA</div>
         <div class="seccion-subtitulo">
             Señales de comportamiento colectivo — metodologia Kosinski adaptada
         </div>
@@ -2143,15 +2369,7 @@ elif seccion == "💬 Voz Ciudadana":
         st.stop()
 
     # Senal 1
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Diferencia entre los likes que la gente da por inercia (apoyo vacío) y los temas donde los comentarios confirman que el apoyo es real (apoyo genuino). Basado en metodología Kosinski 2013: el comportamiento real revela más que las reacciones superficiales.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Diferencia entre los likes que la gente da por inercia (apoyo vacío) y los temas donde los comentarios confirman que el apoyo es real (apoyo genuino). Basado en metodología Kosinski 2013: el comportamiento real revela más que las reacciones superficiales.")
     st.markdown("""
     <div class="senal-card">
         <div class="senal-numero">SEÑAL 01</div>
@@ -2185,36 +2403,28 @@ elif seccion == "💬 Voz Ciudadana":
 
     col_g, col_v = st.columns(2)
     with col_g:
-        st.markdown('<p style="color:#22c55e;font-weight:600;font-size:12px;letter-spacing:1px">Temas con menor rechazo (relativo)</p>', unsafe_allow_html=True)
-        st.markdown('<p style="color:#6b7280;font-size:11px">Mejor balance comentarios vs. reacciones</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color:#22c55e;font-weight:600;font-size:12px;letter-spacing:1px">TEMAS CON MENOR RECHAZO</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color:var(--fg-muted);font-size:11px">Mejor balance comentarios vs. reacciones</p>', unsafe_allow_html=True)
         for _, r in genuino.iterrows():
             nombre = str(r['categoria_nombre']).replace('\n',' ')[:35]
-            st.markdown(f'<p style="font-size:13px;color:#d1d5db;padding:4px 0">→ <strong>{nombre}</strong>: {r["pct_positivo"]:.1f}% comentarios positivos</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="font-size:13px;color:var(--fg-primary);padding:4px 0">→ <strong>{nombre}</strong>: {r["pct_positivo"]:.1f}% comentarios positivos</p>', unsafe_allow_html=True)
     with col_v:
-        st.markdown('<p style="color:#f59e0b;font-weight:600;font-size:12px;letter-spacing:1px">APOYO VACIO</p>', unsafe_allow_html=True)
-        st.markdown('<p style="color:#6b7280;font-size:11px">Reacciones altas pero comentarios criticos</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color:var(--amber);font-weight:600;font-size:12px;letter-spacing:1px">APOYO VACÍO</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color:var(--fg-muted);font-size:11px">Reacciones altas pero comentarios críticos</p>', unsafe_allow_html=True)
         for _, r in vacio.iterrows():
             nombre = str(r['categoria_nombre']).replace('\n',' ')[:35]
-            st.markdown(f'<p style="font-size:13px;color:#d1d5db;padding:4px 0">→ <strong>{nombre}</strong>: {r["pct_negativo"]:.1f}% comentarios negativos</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="font-size:13px;color:var(--fg-primary);padding:4px 0">→ <strong>{nombre}</strong>: {r["pct_negativo"]:.1f}% comentarios negativos</p>', unsafe_allow_html=True)
 
-    nota = "📌 Todos los temas tienen rechazo predominante. Estos son los menos críticos." if score_sent.max() < 0 else "📌 La gente da 'me gusta' por inercia en eventos pero en comentarios dice lo que realmente piensa."
+    nota = "NOTA: Todos los temas tienen rechazo predominante. Estos son los menos críticos." if score_sent.max() < 0 else "NOTA: La gente da \'me gusta\' por inercia en eventos pero en comentarios dice lo que realmente piensa."
     st.markdown(f"""
-        <p style="font-size:12px;color:#6b7280;margin-top:12px;border-top:1px solid #1f2937;padding-top:10px">
+        <p style="font-size:12px;color:var(--fg-muted);margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
             {nota}
         </p>
     </div>
     """, unsafe_allow_html=True)
 
     # Senal 2
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Intensidad emocional por tema. Alta intensidad positiva = temas que movilizan al ciudadano a favor. Alta intensidad negativa = temas que generan indignación. Baja intensidad = temas que la gente ignora emocionalmente.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Intensidad emocional por tema. Alta intensidad positiva = temas que movilizan al ciudadano a favor. Alta intensidad negativa = temas que generan indignación. Baja intensidad = temas que la gente ignora emocionalmente.")
     st.markdown("""
     <div class="senal-card">
         <div class="senal-numero">SEÑAL 02</div>
@@ -2236,26 +2446,26 @@ elif seccion == "💬 Voz Ciudadana":
         with col1:
             st.markdown('<p style="color:#22c55e;font-weight:600;font-size:11px;letter-spacing:1px">ALTA INTENSIDAD POSITIVA</p>', unsafe_allow_html=True)
             if alta_pos.empty:
-                st.markdown('<p style="font-size:12px;color:#6b7280">Sin datos positivos significativos</p>', unsafe_allow_html=True)
+                st.markdown('<p style="font-size:12px;color:var(--fg-muted)">Sin datos positivos significativos</p>', unsafe_allow_html=True)
             for _, r in alta_pos.iterrows():
                 nombre = str(r['categoria_nombre']).replace('\n',' ')[:30]
-                st.markdown(f'<p style="font-size:13px;color:#d1d5db;padding:4px 0">🏆 <strong>{nombre}</strong><br><span style="font-size:11px;color:#6b7280">La ciudadania comparte espontaneamente</span></p>', unsafe_allow_html=True)
+                st.markdown(f'<p style="font-size:13px;color:var(--fg-primary);padding:4px 0">● <strong>{nombre}</strong><br><span style="font-size:11px;color:var(--fg-muted)">La ciudadanía comparte espontáneamente</span></p>', unsafe_allow_html=True)
         with col2:
             st.markdown('<p style="color:#ef4444;font-weight:600;font-size:11px;letter-spacing:1px">ALTA INTENSIDAD NEGATIVA</p>', unsafe_allow_html=True)
             if alta_neg.empty:
-                st.markdown('<p style="font-size:12px;color:#6b7280">Sin datos negativos significativos</p>', unsafe_allow_html=True)
+                st.markdown('<p style="font-size:12px;color:var(--fg-muted)">Sin datos negativos significativos</p>', unsafe_allow_html=True)
             for _, r in alta_neg.iterrows():
                 nombre = str(r['categoria_nombre']).replace('\n',' ')[:30]
-                st.markdown(f'<p style="font-size:13px;color:#d1d5db;padding:4px 0">🚧 <strong>{nombre}</strong><br><span style="font-size:11px;color:#6b7280">Comentarios de denuncia y queja</span></p>', unsafe_allow_html=True)
+                st.markdown(f'<p style="font-size:13px;color:var(--fg-primary);padding:4px 0">● <strong>{nombre}</strong><br><span style="font-size:11px;color:var(--fg-muted)">Comentarios de denuncia y queja</span></p>', unsafe_allow_html=True)
         with col3:
-            st.markdown('<p style="color:#6b7280;font-weight:600;font-size:11px;letter-spacing:1px">BAJA INTENSIDAD</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color:var(--fg-muted);font-weight:600;font-size:11px;letter-spacing:1px">BAJA INTENSIDAD</p>', unsafe_allow_html=True)
             if baja.empty:
-                st.markdown('<p style="font-size:12px;color:#6b7280">Sin datos de baja intensidad</p>', unsafe_allow_html=True)
+                st.markdown('<p style="font-size:12px;color:var(--fg-muted)">Sin datos de baja intensidad</p>', unsafe_allow_html=True)
             for _, r in baja.iterrows():
                 nombre = str(r['categoria_nombre']).replace('\n',' ')[:30]
-                st.markdown(f'<p style="font-size:13px;color:#d1d5db;padding:4px 0">📋 <strong>{nombre}</strong><br><span style="font-size:11px;color:#6b7280">No conecta emocionalmente</span></p>', unsafe_allow_html=True)
+                st.markdown(f'<p style="font-size:13px;color:var(--fg-primary);padding:4px 0">● <strong>{nombre}</strong><br><span style="font-size:11px;color:var(--fg-muted)">No conecta emocionalmente</span></p>', unsafe_allow_html=True)
     else:
-        st.markdown('<p style="color:#6b7280;padding:16px">Sin datos suficientes para analizar intensidad emocional</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color:var(--fg-muted);padding:16px">Sin datos suficientes para analizar intensidad emocional</p>', unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -2269,15 +2479,7 @@ elif seccion == "💬 Voz Ciudadana":
     if len(df_electoral) > 0 and 'score_sentimiento' in df_electoral.columns:
         pct_neg_electoral = (df_electoral['score_sentimiento'] < -0.1).mean() * 100
 
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Comentarios donde la ciudadanía interpreta tus acciones en clave electoral. Cuántos son, qué tono tienen, y si están creciendo. Este patrón predice percepción electoral antes de que aparezca en encuestas.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Comentarios donde la ciudadanía interpreta tus acciones en clave electoral. Cuántos son, qué tono tienen, y si están creciendo. Este patrón predice percepción electoral antes de que aparezca en encuestas.")
     st.markdown(f"""
     <div class="senal-card">
         <div class="senal-numero">SEÑAL 03</div>
@@ -2286,7 +2488,7 @@ elif seccion == "💬 Voz Ciudadana":
         </div>
         <p style="font-size:13px;color:#9ca3af;margin-bottom:16px">
             Comentarios donde la ciudadania lee las acciones en clave electoral:
-            <strong style="color:#f9fafb">{len(df_electoral)}</strong> comentarios detectados
+            <strong style="color:var(--fg-primary)">{len(df_electoral)}</strong> comentarios detectados
             &nbsp;·&nbsp;
             <strong style="color:#ef4444">{pct_neg_electoral:.0f}%</strong> negativos
         </p>
@@ -2302,15 +2504,7 @@ elif seccion == "💬 Voz Ciudadana":
     st.markdown("</div>", unsafe_allow_html=True)
 
     # Patrones de comportamiento
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Cada bloque representa un patrón compartido por múltiples ciudadanos que expresaron lo mismo con palabras distintas. El número grande es cuántas personas expresaron ese patrón. La flecha indica si ese patrón está creciendo o estable.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Cada bloque representa un patrón compartido por múltiples ciudadanos que expresaron lo mismo con palabras distintas. El número grande es cuántas personas expresaron ese patrón. La flecha indica si ese patrón está creciendo o estable.")
     st.markdown("### Lo que dice la ciudadania — cada comentario es un patron")
     st.markdown("*Cada comentario mostrado aqui representa un patron compartido por multiples ciudadanos que expresaron lo mismo con palabras distintas.*")
 
@@ -2321,7 +2515,7 @@ elif seccion == "💬 Voz Ciudadana":
     with col_rec:
         st.markdown('<p style="color:#ef4444;font-weight:700;font-size:13px;letter-spacing:1px;margin-bottom:12px">PATRONES DE RECHAZO</p>', unsafe_allow_html=True)
         if not patrones_rechazo:
-            st.markdown('<p style="color:#6b7280;font-size:12px">Sin patrones de rechazo detectados</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color:var(--fg-muted);font-size:12px">Sin patrones de rechazo detectados</p>', unsafe_allow_html=True)
         for p in patrones_rechazo:
             otros_html = ''.join([f'<p class="comentario-lista">• "{c[:80]}..."</p>' for c in p['otros']])
             tend_class = "tendencia-subiendo" if "Creciendo" in p['tendencia'] else "tendencia-estable"
@@ -2343,7 +2537,7 @@ elif seccion == "💬 Voz Ciudadana":
     with col_res:
         st.markdown('<p style="color:#22c55e;font-weight:700;font-size:13px;letter-spacing:1px;margin-bottom:12px">PATRONES DE RESPALDO</p>', unsafe_allow_html=True)
         if not patrones_respaldo:
-            st.markdown('<p style="color:#6b7280;font-size:12px">Sin patrones de respaldo detectados</p>', unsafe_allow_html=True)
+            st.markdown('<p style="color:var(--fg-muted);font-size:12px">Sin patrones de respaldo detectados</p>', unsafe_allow_html=True)
         for p in patrones_respaldo:
             otros_html = ''.join([f'<p class="comentario-lista">• "{c[:80]}..."</p>' for c in p['otros']])
             tend_class = "tendencia-subiendo" if "Creciendo" in p['tendencia'] else "tendencia-estable"
@@ -2363,15 +2557,7 @@ elif seccion == "💬 Voz Ciudadana":
             """, unsafe_allow_html=True)
 
     # Sentimiento por tema
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Para cada tema, cómo se distribuye la opinión ciudadana entre positivo (verde), neutral (gris) y negativo (rojo). Una barra mayormente verde = tema bien recibido. Mucho rojo = tema que genera rechazo activo.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Para cada tema, cómo se distribuye la opinión ciudadana entre positivo (verde), neutral (gris) y negativo (rojo). Una barra mayormente verde = tema bien recibido. Mucho rojo = tema que genera rechazo activo.")
     st.markdown("### ¿Como reacciona la gente segun el tema?")
     df_sent_tema = safe_query("""
         SELECT pc.categoria_nombre,
@@ -2445,11 +2631,11 @@ elif seccion == "💬 Voz Ciudadana":
         ))
         fig_bar.update_layout(
             barmode='stack',
-            plot_bgcolor='#111827', paper_bgcolor='#111827',
-            font=dict(color='#9ca3af', size=11),
-            xaxis=dict(gridcolor='#1f2937', ticksuffix='%', range=[0,100]),
-            yaxis=dict(gridcolor='#1f2937'),
-            legend=dict(bgcolor='rgba(17,24,39,0.8)', bordercolor='#1f2937', orientation='h', y=1.05),
+            plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)',
+            font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
+            xaxis=dict(gridcolor='var(--border)', ticksuffix='%', range=[0,100], tickfont=dict(size=9)),
+            yaxis=dict(gridcolor='var(--border)'),
+            legend=dict(bgcolor='var(--bg-surface)', bordercolor='var(--border)', orientation='h', y=1.05),
             margin=dict(l=0, r=0, t=30, b=0), height=320
         )
         card_explicativa(
@@ -2459,8 +2645,8 @@ elif seccion == "💬 Voz Ciudadana":
         st.plotly_chart(fig_bar, use_container_width=True)
 
     st.divider()
-    st.subheader("☁️ Nube de palabras — comentarios negativos")
-    st.caption("Términos más frecuentes en comentarios clasificados como negativos / muy negativos.")
+    bloom_subheader("Nube de palabras — comentarios negativos")
+    bloom_caption("Términos más frecuentes en comentarios clasificados como negativos / muy negativos.")
     df_neg = cargar_comentarios_negativos()
     if hay_datos(df_neg, "Aún no hay comentarios negativos analizados. (Corré el re-análisis de sentimiento.)"):
         import re
@@ -2478,7 +2664,7 @@ elif seccion == "💬 Voz Ciudadana":
         texto = re.sub(r"http\S+|www\S+", " ", texto)
         texto = re.sub(r"@\w+", " ", texto)
         try:
-            wc = WordCloud(width=1000, height=500, background_color="white",
+            wc = WordCloud(width=1000, height=500, background_color="#0a0e17",
                            stopwords=stop_es, colormap="Reds", collocations=False).generate(texto)
             fig_wc, ax = plt.subplots(figsize=(10, 5))
             ax.imshow(wc, interpolation="bilinear")
@@ -2488,19 +2674,19 @@ elif seccion == "💬 Voz Ciudadana":
                 como_leerlo="Mientras más grande la palabra, más veces la escribieron. Son las quejas más comunes, con las palabras de la propia gente."
             )
             st.pyplot(fig_wc)
-            st.caption(f"Basado en {len(df_neg):,} comentarios negativos.")
+            bloom_caption(f"Basado en {len(df_neg):,} comentarios negativos.")
         except ValueError:
-            st.info("No hay suficientes palabras para generar la nube.")
+            st.markdown('<div class="bloom-status-info">No hay suficientes palabras para generar la nube.</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════
 # SECCIÓN 5 — MICROSEGMENTACIÓN
 # ═══════════════════════════════════════════
 
-elif seccion == "🔬 Microsegmentación":
+elif seccion == "MICROSEGMENTACIÓN":
 
     st.markdown("""
     <div class="seccion-header">
-        <div class="seccion-titulo">🔬 Microsegmentacion de Contenido</div>
+        <div class="seccion-titulo">MICROSEGMENTACIÓN</div>
         <div class="seccion-subtitulo">
             ¿Que tipo de contenido funciona, cual no, y que patron emocional genera cada uno?
         </div>
@@ -2562,21 +2748,10 @@ elif seccion == "🔬 Microsegmentación":
         df_micro['categoria_nombre'] = df_micro['categoria_nombre'].str.replace('\n',' ')
         df_micro['viral'] = df_micro['viral'].fillna(0)
 
-        st.markdown("""
-        <div style="background:#0d1117;border-left:3px solid #374151;
-             padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-            <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-                  color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-            <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-               line-height:1.5">Cada fila es un tipo de contenido agrupado automáticamente por similitud. ENG. PROM. es el promedio de interacciones por post. VIRALIDAD es cuánto comparte la gente ese tipo de contenido vs cuánto lo ve. PATRÓN indica si ese tipo de contenido tiene alto, medio o bajo impacto comparado con el resto.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        que_ves_box("Cada fila es un tipo de contenido agrupado automáticamente por similitud. ENG. PROM. es el promedio de interacciones por post. VIRALIDAD es cuánto comparte la gente ese tipo de contenido vs cuánto lo ve. PATRÓN indica si ese tipo de contenido tiene alto, medio o bajo impacto comparado con el resto.")
 
         st.markdown("""
-        <div style="display:grid;grid-template-columns:2fr 0.7fr 1fr 1fr 1fr 1.2fr;
-             padding:10px 16px;border-bottom:2px solid #374151;
-             font-size:11px;font-weight:600;letter-spacing:1px;
-             color:#6b7280;text-transform:uppercase;">
+        <div class="grid-header" style="grid-template-columns:2fr 0.7fr 1fr 1fr 1fr 1.2fr">
             <span>TIPO DE CONTENIDO</span>
             <span style="text-align:center">POSTS</span>
             <span style="text-align:right">ENG. PROM.</span>
@@ -2615,29 +2790,19 @@ elif seccion == "🔬 Microsegmentación":
             })
 
             st.markdown(f"""
-            <div style="display:grid;grid-template-columns:2fr 0.7fr 1fr 1fr 1fr 1.2fr;
-                 padding:14px 16px;border-bottom:1px solid #1f2937;
-                 font-size:13px;align-items:center;">
-                <span style="font-weight:600;color:#f9fafb;display:block;line-height:1.3">{nombre}<br><span style="font-size:10px;color:#6b7280;font-weight:400">{interp_micro[:80]}...</span></span>
-                <span style="text-align:center;color:#9ca3af">{posts}</span>
-                <span style="text-align:right;font-family:'Courier New';color:#60a5fa;font-weight:700">{eng}</span>
-                <span style="text-align:right;color:#9ca3af">{viral}</span>
-                <span style="text-align:center">{emo_max}</span>
+            <div class="grid-row" style="grid-template-columns:2fr 0.7fr 1fr 1fr 1fr 1.2fr">
+                <span><strong>{nombre}</strong><br><span class="grid-muted" style="font-size:10px">{interp_micro[:80]}...</span></span>
+                <span style="text-align:center;color:var(--fg-secondary)">{posts}</span>
+                <span class="grid-num" style="text-align:right">{eng}</span>
+                <span style="text-align:right;color:var(--fg-secondary)">{viral}</span>
+                <span style="text-align:center;color:var(--fg-secondary)">{emo_max}</span>
                 <span style="text-align:center">{patron}</span>
             </div>
             """, unsafe_allow_html=True)
 
     # Top 5
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">Los 5 posts y videos más impactantes del período. El número grande a la derecha son las interacciones totales. Las cifras pequeñas abajo son el desglose por tipo de reacción.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Los 5 posts y videos más impactantes del período. El número grande a la derecha son las interacciones totales. Las cifras pequeñas abajo son el desglose por tipo de reacción.")
     st.markdown("### Los 5 contenidos mas impactantes")
 
     dfs_top5 = []
@@ -2678,21 +2843,21 @@ elif seccion == "🔬 Microsegmentación":
             trist_n = int(trist_v * reac_v) if pd.notna(trist_v) and pd.notna(reac_v) else 0
 
             st.markdown(f"""
-            <div class="card" style="border-left:4px solid #3b82f6">
+            <div class="bloom-card bloom-border-accent">
                 <div style="display:flex;justify-content:space-between;margin-bottom:8px;align-items:center">
-                    <span style="font-size:22px;font-weight:800;color:#1f2937;font-family:'Courier New'">#{i}</span>
+                    <span style="font-size:22px;font-weight:800;color:var(--fg-muted);font-family:'IBM Plex Mono',monospace">#{i}</span>
                     <div style="display:flex;gap:8px">
                         <span style="background:{plat_color};color:white;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700">{plat.upper()}</span>
-                        <span style="background:#1f2937;color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:10px">{cat}</span>
+                        <span style="background:var(--border);color:var(--fg-secondary);padding:2px 8px;border-radius:4px;font-size:10px">{cat}</span>
                     </div>
                 </div>
-                <p style="font-size:11px;color:#6b7280;margin:4px 0">{fecha}</p>
-                <p style="font-size:14px;color:#e2e8f0;margin:8px 0;line-height:1.5">{texto}...</p>
+                <p style="font-size:11px;color:var(--fg-muted);margin:4px 0">{fecha}</p>
+                <p style="font-size:14px;color:var(--fg-primary);margin:8px 0;line-height:1.5">{texto}...</p>
                 <div style="display:flex;justify-content:space-between;margin-top:10px;align-items:center">
-                    <span style="font-size:12px;color:#9ca3af">
-                        Amor {amor_n:,} &nbsp;·&nbsp; Humor {humor_n:,} &nbsp;·&nbsp; Tristeza {trist_n:,}
+                    <span style="font-size:12px;color:var(--fg-secondary)">
+                        Amor {amor_n:,} · Humor {humor_n:,} · Tristeza {trist_n:,}
                     </span>
-                    <span style="font-size:20px;font-weight:700;color:#60a5fa;font-family:'Courier New'">{total:,}</span>
+                    <span style="font-size:20px;font-weight:700;color:#60a5fa;font-family:'IBM Plex Mono',monospace">{total:,}</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -2739,8 +2904,8 @@ elif seccion == "🔬 Microsegmentación":
             plot_bgcolor='#111827',
             paper_bgcolor='#111827',
             font=dict(color='#9ca3af', size=12),
-            xaxis=dict(gridcolor='#1f2937'),
-            yaxis=dict(gridcolor='#1f2937', tickformat=','),
+            xaxis=dict(gridcolor='var(--border)'),
+            yaxis=dict(gridcolor='var(--border)', tickformat=','),
             showlegend=False,
             margin=dict(l=0, r=0, t=10, b=0),
             height=200
@@ -2751,9 +2916,9 @@ elif seccion == "🔬 Microsegmentación":
         )
         st.plotly_chart(fig_dias, use_container_width=True)
         st.markdown(
-            f'<p style="font-size:13px;color:#9ca3af">'
-            f'📌 El día que más reacciona la gente en promedio: '
-            f'<strong style="color:#f9fafb">{dia_pico["nombre"]}</strong> '
+            f'<p style="font-size:13px;color:var(--fg-secondary)">'
+            f'El día que más reacciona la gente en promedio: '
+            f'<strong style="color:var(--fg-primary)">{dia_pico["nombre"]}</strong> '
             f'({int(dia_pico["valor"]):,} reacciones totales)</p>',
             unsafe_allow_html=True
         )
@@ -2762,11 +2927,11 @@ elif seccion == "🔬 Microsegmentación":
 # SECCIÓN 6 — CONTEXTO EXTERNO
 # ═══════════════════════════════════════════
 
-elif seccion == "🌐 Contexto Externo":
+elif seccion == "CONTEXTO EXTERNO":
 
     st.markdown("""
     <div class="seccion-header">
-        <div class="seccion-titulo">🌐 Contexto Externo</div>
+        <div class="seccion-titulo">CONTEXTO EXTERNO</div>
         <div class="seccion-subtitulo">
             ¿Que dicen de ti fuera de tus redes oficiales?
         </div>
@@ -2774,8 +2939,8 @@ elif seccion == "🌐 Contexto Externo":
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div style="background:#1c1407;border:1px solid #ca8a04;border-left:5px solid #eab308;border-radius:6px;padding:12px 16px;margin-bottom:20px">
-        <span style="color:#fbbf24;font-size:12px;font-weight:600">DATOS SIMULADOS</span>
+    <div style="background:var(--amber-dim);border:1px solid var(--amber);border-left:4px solid var(--amber);padding:10px 14px;margin-bottom:18px">
+        <span style="color:var(--amber);font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:1px">DATOS SIMULADOS</span>
         <span style="color:#9ca3af;font-size:12px"> &nbsp;— Esta seccion se activara automaticamente cuando lleguen las URLs de paginas externas reales a monitorear.</span>
     </div>
     """, unsafe_allow_html=True)
@@ -2783,7 +2948,7 @@ elif seccion == "🌐 Contexto Externo":
     df_ext = cargar_externos(EXTERNOS_DB_ACTIVA)
 
     if df_ext.empty:
-        st.markdown('<div class="card"><p style="color:#6b7280;text-align:center">Sin datos externos disponibles</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="bloom-card"><p style="color:var(--fg-muted);text-align:center">Sin datos externos disponibles</p></div>', unsafe_allow_html=True)
     else:
         n_fuentes = df_ext['page_name'].nunique()
         n_menciones = len(df_ext)
@@ -2796,23 +2961,23 @@ elif seccion == "🌐 Contexto Externo":
         })
         st.markdown(f"""
         <div style="background:#111827;border-left:4px solid #eab308;padding:16px 20px;border-radius:4px;margin-bottom:24px">
-            <p style="font-size:11px;color:#eab308;margin:0 0 6px 0;font-weight:600;letter-spacing:1px;text-transform:uppercase">🔍 LO QUE DICEN FUERA DE TUS REDES</p>
-            <p style="font-size:14px;color:#e2e8f0;margin:0;line-height:1.6">{ctx}</p>
+            <p style="font-size:11px;color:#eab308;margin:0 0 6px 0;font-weight:600;letter-spacing:1px;text-transform:uppercase">LO QUE DICEN FUERA DE TUS REDES</p>
+            <p style="font-size:14px;color:var(--fg-primary);margin:0;line-height:1.6">{ctx}</p>
         </div>
         """, unsafe_allow_html=True)
 
         col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown(f"""
-            <div class="card"><div class="card-title">Fuentes monitoreadas</div><div class="card-value">{n_fuentes}</div><div class="card-sub">paginas externas</div></div>""", unsafe_allow_html=True)
+            <div class="bloom-card"><div class="bloom-card-title">Fuentes monitoreadas</div><div class="bloom-card-value" style="font-size:28px">{n_fuentes}</div><div class="bloom-card-sub">paginas externas</div></div>""", unsafe_allow_html=True)
         with col2:
             st.markdown(f"""
-            <div class="card"><div class="card-title">Menciones externas</div><div class="card-value">{n_menciones}</div><div class="card-sub">publicaciones sobre el alcalde</div></div>""", unsafe_allow_html=True)
+            <div class="bloom-card"><div class="bloom-card-title">Menciones externas</div><div class="bloom-card-value" style="font-size:28px">{n_menciones}</div><div class="bloom-card-sub">publicaciones sobre el alcalde</div></div>""", unsafe_allow_html=True)
         with col3:
             tono_ext = "POSITIVO" if score_ext > 0.1 else "MIXTO" if score_ext > -0.1 else "CRITICO"
             color_ext = "#22c55e" if score_ext > 0.1 else "#eab308" if score_ext > -0.1 else "#ef4444"
             st.markdown(f"""
-            <div class="card"><div class="card-title">Tono externo</div><div class="card-value" style="color:{color_ext};font-size:22px">{tono_ext}</div><div class="card-sub">percepcion fuera de tus redes</div></div>""", unsafe_allow_html=True)
+            <div class="bloom-card"><div class="bloom-card-title">Tono externo</div><div class="bloom-card-value" style="color:{color_ext};font-size:22px">{tono_ext}</div><div class="bloom-card-sub">percepcion fuera de tus redes</div></div>""", unsafe_allow_html=True)
 
         col_b1, col_b2 = st.columns(2)
         with col_b1:
@@ -2828,7 +2993,7 @@ elif seccion == "🌐 Contexto Externo":
                     "<extra></extra>"
                 )
             ))
-            fig_f.update_layout(plot_bgcolor='#111827', paper_bgcolor='#111827', font=dict(color='#9ca3af',size=10), xaxis=dict(gridcolor='#1f2937'), yaxis=dict(gridcolor='#1f2937'), margin=dict(l=0,r=0,t=10,b=0), height=300)
+            fig_f.update_layout(plot_bgcolor='#111827', paper_bgcolor='#111827', font=dict(color='#9ca3af',size=10), xaxis=dict(gridcolor='var(--border)'), yaxis=dict(gridcolor='var(--border)'), margin=dict(l=0,r=0,t=10,b=0), height=300)
             card_explicativa(
                 que_es="Qué páginas o medios de afuera son los que más mencionan a la alcaldía.",
                 como_leerlo="Mientras más larga la barra, más veces esa página habló de la alcaldía."
@@ -2854,22 +3019,14 @@ elif seccion == "🌐 Contexto Externo":
                         "<extra></extra>"
                     )
                 )
-                fig_dona.update_layout(plot_bgcolor='#111827', paper_bgcolor='#111827', font=dict(color='#9ca3af'), showlegend=True, legend=dict(bgcolor='rgba(0,0,0,0)'), margin=dict(l=0,r=0,t=10,b=0), height=300)
+                fig_dona.update_layout(plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)', font=dict(color='var(--fg-secondary)', size=10), showlegend=True, legend=dict(bgcolor='rgba(0,0,0,0)'), margin=dict(l=0,r=0,t=10,b=0), height=300)
                 card_explicativa(
                     que_es="De todo lo que dicen de la alcaldía las páginas de afuera, cuánto es a favor, en contra o neutral.",
                     como_leerlo="Mientras más grande el pedazo de un color, más pesa ese tono. Verde a favor, rojo en contra, gris neutral."
                 )
                 st.plotly_chart(fig_dona, use_container_width=True)
 
-        st.markdown("""
-        <div style="background:#0d1117;border-left:3px solid #374151;
-             padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-            <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-                  color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-            <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-               line-height:1.5">Publicaciones de fuentes externas que hablan del alcalde con tono negativo. El número es el pulso — más negativo significa mayor rechazo en esa publicación externa.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        que_ves_box("Publicaciones de fuentes externas que hablan del alcalde con tono negativo. El número es el pulso — más negativo significa mayor rechazo en esa publicación externa.")
         st.markdown("### Alertas — menciones mas criticas")
         if 'score_sentimiento' in df_ext.columns:
             df_criticas = df_ext.nsmallest(10, 'score_sentimiento')[['created_time','page_name','message','score_sentimiento','comentario_mas_negativo']]
@@ -2882,7 +3039,7 @@ elif seccion == "🌐 Contexto Externo":
                 st.markdown(f"""
                 <div class="patron-rechazo">
                     <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                        <span style="font-size:11px;color:#6b7280">{fecha}</span>
+                        <span style="font-size:11px;color:var(--fg-muted)">{fecha}</span>
                         <span style="font-size:11px;color:#f87171;font-weight:600">{fuente}</span>
                     </div>
                     <p style="font-size:13px;color:#d1d5db;margin:4px 0">{msg}...</p>
@@ -2891,11 +3048,11 @@ elif seccion == "🌐 Contexto Externo":
                 """, unsafe_allow_html=True)
 
     st.divider()
-    st.subheader("📈 Correlación: picos de engagement ↔ noticias externas")
-    st.warning("⚠️ La coincidencia temporal NO implica causalidad (ver Notas Metodológicas).")
+    bloom_subheader("Correlación: picos de engagement ↔ noticias externas")
+    st.markdown('<div class="bloom-status-warning"><span class="bloom-status-label">AVISO</span> La coincidencia temporal NO implica causalidad.</div>', unsafe_allow_html=True)
     corr = calcular_correlacion_noticias_picos(z_umbral=1.0, ventana_dias=3)
     if not corr:
-        st.info("📭 No hay datos de FB suficientes para detectar picos.")
+        st.markdown('<div class="bloom-status-info"><span class="bloom-status-marker">●</span> No hay datos de FB suficientes para detectar picos.</div>', unsafe_allow_html=True)
     else:
         serie = corr["serie"]
         coinc = corr["coincidencias"]
@@ -2918,7 +3075,7 @@ elif seccion == "🌐 Contexto Externo":
                 name="Pico",
                 customdata=picos[['headline']].values,
                 hovertemplate=(
-                    "⚠ <b>Pico de engagement</b><br>"
+                    "<b>Pico de engagement</b><br>"
                     "%{x|%d %b %Y} · %{y:,.0f} interacciones<br>"
                     "→ coincide con: %{customdata[0]}. Coincidencia, no prueba de causa"
                     "<extra></extra>"
@@ -2939,7 +3096,7 @@ elif seccion == "🌐 Contexto Externo":
             ojo="Que coincidan no prueba que una cosa causó la otra."
         )
         st.plotly_chart(fig_c, use_container_width=True)
-        st.metric("Semanas con pico de engagement", corr["n_picos"])
+        bloom_metric("Semanas con pico de engagement", f'{corr["n_picos"]}', delta="picos detectados")
 
         coinc = corr["coincidencias"]
         st.markdown("**Noticias externas que coinciden con semanas de pico**")
@@ -2949,11 +3106,11 @@ elif seccion == "🌐 Contexto Externo":
                 "fuente": "Fuente", "noticia": "Titular / Texto", "fecha_noticia": "Fecha noticia",
             }), use_container_width=True, hide_index=True)
 
-elif seccion == "🤝 Confianza Institucional":
+elif seccion == "CONFIANZA INSTITUCIONAL":
 
     st.markdown("""
     <div class="seccion-header">
-        <div class="seccion-titulo">🤝 Confianza Institucional</div>
+        <div class="seccion-titulo">CONFIANZA INSTITUCIONAL</div>
         <div class="seccion-subtitulo">
             ¿La ciudadanía confía en el alcalde como persona e institución?
             Basado en Trust Analytics — Budzynska 2025
@@ -2961,21 +3118,7 @@ elif seccion == "🤝 Confianza Institucional":
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:20px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;line-height:1.5">
-            Esta sección mide algo diferente al sentimiento general.
-            No es si la gente está contenta o enojada con un servicio —
-            es si la ciudadanía confía en el alcalde como persona:
-            si lo percibe honesto, competente, presente y justo.
-            Estas son las 4 dimensiones que determinan si alguien
-            merece reelección según la ciudadanía.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Esta sección mide algo diferente al sentimiento general. No es si la gente está contenta o enojada con un servicio — es si la ciudadanía confía en el alcalde como persona: si lo percibe honesto, competente, presente y justo. Estas son las 4 dimensiones que determinan si alguien merece reelección según la ciudadanía.")
 
     resultados, score_global, dim_riesgo = calcular_confianza_institucional()
 
@@ -2993,10 +3136,10 @@ elif seccion == "🤝 Confianza Institucional":
         desc_conf = "La ciudadanía cuestiona el carácter del alcalde en múltiples dimensiones"
 
     st.markdown(f"""
-    <div class="card" style="border-left:5px solid {color_conf};
+    <div class="bloom-card" style="border-left:4px solid {color_conf};
          text-align:center;padding:24px">
         <div style="font-size:28px;font-weight:800;color:{color_conf};
-             font-family:'Courier New';letter-spacing:2px">
+             font-family:'IBM Plex Mono',monospace;letter-spacing:2px">
             {texto_conf}
         </div>
         <div style="font-size:13px;color:#9ca3af;margin-top:8px">
@@ -3039,13 +3182,13 @@ elif seccion == "🤝 Confianza Institucional":
 
         if score > 0.3:
             color_d = "#22c55e"
-            estado = "✅ CONFIABLE"
+            estado = "CONFIABLE"
         elif score > 0:
             color_d = "#eab308"
-            estado = "⚠️ EN RIESGO"
+            estado = "EN RIESGO"
         else:
             color_d = "#ef4444"
-            estado = "🔴 EROSIONADA"
+            estado = "EROSIONADA"
 
         barra_trust = int(pct_trust)
         barra_distrust = int(pct_distrust)
@@ -3056,15 +3199,15 @@ elif seccion == "🤝 Confianza Institucional":
 
         with cols[i]:
             st.markdown(f"""
-            <div class="card" style="border-top:3px solid {color_d}">
+            <div class="bloom-card" style="border-left:4px solid {color_d};padding:14px 18px">
                 <div style="display:flex;justify-content:space-between;
                      align-items:center;margin-bottom:6px">
                     <span style="font-weight:700;font-size:14px;
-                          color:#f9fafb">{nombre}</span>
+                          color:var(--fg-primary)">{nombre}</span>
                     <span style="font-size:11px;font-weight:600;
                           color:{color_d}">{estado}</span>
                 </div>
-                <p style="font-size:11px;color:#6b7280;margin-bottom:12px">
+                <p style="font-size:11px;color:var(--fg-muted);margin-bottom:12px">
                     {descripcion}
                 </p>
                 <div style="display:flex;margin-bottom:8px;
@@ -3075,10 +3218,10 @@ elif seccion == "🤝 Confianza Institucional":
                 <div style="display:flex;justify-content:space-between;
                      font-size:11px;margin-bottom:12px">
                     <span style="color:#22c55e">
-                        ✓ {trust} menciones de confianza
+                        + {trust} menciones de confianza
                     </span>
                     <span style="color:#ef4444">
-                        ✗ {distrust} menciones de desconfianza
+                        - {distrust} menciones de desconfianza
                     </span>
                 </div>
                 {comentarios_html}
@@ -3169,7 +3312,7 @@ elif seccion == "🤝 Confianza Institucional":
         (d, v) for d, v in resultados.items() if v['score'] < 0
     ]
     if dims_en_riesgo:
-        st.markdown("### ⚠️ Dimensiones con erosión de confianza")
+        st.markdown("### DIMENSIONES CON EROSIÓN DE CONFIANZA")
         for dim, datos in dims_en_riesgo:
             nombre = nombres[dim][0]
             for comentario in datos['comentarios_distrust'][:3]:
@@ -3182,11 +3325,11 @@ elif seccion == "🤝 Confianza Institucional":
                 </div>
                 """, unsafe_allow_html=True)
 
-elif seccion == "📡 Narrativas Activas":
+elif seccion == "NARRATIVAS ACTIVAS":
 
     st.markdown("""
     <div class="seccion-header">
-        <div class="seccion-titulo">📡 Narrativas Activas</div>
+        <div class="seccion-titulo">NARRATIVAS ACTIVAS</div>
         <div class="seccion-subtitulo">
             ¿Qué historias colectivas está construyendo
             la ciudadanía sobre el alcalde?
@@ -3195,22 +3338,7 @@ elif seccion == "📡 Narrativas Activas":
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:20px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">
-            Una narrativa es una historia que la ciudadanía repite
-            colectivamente. No es un comentario aislado — es un patrón
-            que se forma cuando muchas personas dicen lo mismo
-            con palabras distintas. Lo peligroso no es que exista
-            una narrativa negativa — es cuando está creciendo
-            semana a semana sin respuesta.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Una narrativa es una historia que la ciudadanía repite colectivamente. No es un comentario aislado — es un patrón que se forma cuando muchas personas dicen lo mismo con palabras distintas. Lo peligroso no es que exista una narrativa negativa — es cuando está creciendo semana a semana sin respuesta.")
 
     narrativas_data = calcular_narrativas_activas()
 
@@ -3257,19 +3385,19 @@ elif seccion == "📡 Narrativas Activas":
         )
 
         st.markdown(f"""
-        <div class="card" style="border-left:5px solid {borde_color}">
+        <div class="bloom-card" style="border-left:4px solid {borde_color}">
             <div style="display:flex;justify-content:space-between;
                  align-items:flex-start;margin-bottom:8px">
                 <div>
-                    <span style="font-size:18px">{narr['icono']}</span>
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{borde_color};margin-right:10px;vertical-align:middle"></span>
                     <span style="font-size:15px;font-weight:700;
-                          color:#f9fafb;margin-left:8px">
+                          color:var(--fg-primary);vertical-align:middle">
                         {narr['nombre']}
                     </span>
                 </div>
                 <div style="text-align:right">
                     <div style="font-size:28px;font-weight:800;
-                          color:{borde_color};font-family:'Courier New'">
+                          color:{borde_color};font-family:'IBM Plex Mono',monospace">
                         {narr['total']}
                     </div>
                     <div style="font-size:11px;
@@ -3358,11 +3486,11 @@ elif seccion == "📡 Narrativas Activas":
     )
     st.plotly_chart(fig_narr, use_container_width=True)
 
-elif seccion == "🌊 Contagio Emocional":
+elif seccion == "CONTAGIO EMOCIONAL":
 
     st.markdown("""
     <div class="seccion-header">
-        <div class="seccion-titulo">🌊 Contagio Emocional</div>
+        <div class="seccion-titulo">CONTAGIO EMOCIONAL</div>
         <div class="seccion-subtitulo">
             ¿Las emociones que publicas llegan como las envías,
             o la ciudadanía las recibe diferente?
@@ -3371,21 +3499,7 @@ elif seccion == "🌊 Contagio Emocional":
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:20px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">
-            Cuando publicas un post positivo, ¿la gente responde
-            positivamente? ¿O hay posts donde publicas algo positivo
-            y la ciudadanía responde con enojo? Eso se llama distorsión
-            narrativa — y es la señal más temprana de una crisis
-            de comunicación antes de que explote.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Cuando publicas un post positivo, ¿la gente responde positivamente? ¿O hay posts donde publicas algo positivo y la ciudadanía responde con enojo? Eso se llama distorsión narrativa — y es la señal más temprana de una crisis de comunicación antes de que explote.")
 
     df_posts, conteo_tipos, distorsion_alta, por_semana = calcular_contagio_emocional()
 
@@ -3401,34 +3515,34 @@ elif seccion == "🌊 Contagio Emocional":
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown(f"""
-        <div class="card" style="border-top:3px solid #22c55e">
-            <div class="card-title">Resonancia positiva</div>
-            <div class="card-value" style="color:#22c55e">
+        <div class="bloom-card" style="border-left:4px solid var(--green)">
+            <div class="bloom-card-title">Resonancia positiva</div>
+            <div class="bloom-card-value" style="color:#22c55e">
                 {pct_resonancia:.0f}%
             </div>
-            <div class="card-sub">
+            <div class="bloom-card-sub">
                 {resonancia_pos} posts donde el mensaje llegó bien
             </div>
         </div>""", unsafe_allow_html=True)
     with col2:
         st.markdown(f"""
-        <div class="card" style="border-top:3px solid #ef4444">
-            <div class="card-title">Rechazo a positivo</div>
-            <div class="card-value" style="color:#ef4444">
+        <div class="bloom-card" style="border-left:4px solid var(--red)">
+            <div class="bloom-card-title">Rechazo a positivo</div>
+            <div class="bloom-card-value" style="color:#ef4444">
                 {pct_rechazo:.0f}%
             </div>
-            <div class="card-sub">
+            <div class="bloom-card-sub">
                 {rechazo} posts positivos que generaron rechazo
             </div>
         </div>""", unsafe_allow_html=True)
     with col3:
         st.markdown(f"""
-        <div class="card" style="border-top:3px solid #f59e0b">
-            <div class="card-title">Alta distorsión</div>
-            <div class="card-value" style="color:#f59e0b">
+        <div class="bloom-card" style="border-left:4px solid var(--amber)">
+            <div class="bloom-card-title">Alta distorsión</div>
+            <div class="bloom-card-value" style="color:#f59e0b">
                 {pct_distorsion:.0f}%
             </div>
-            <div class="card-sub">
+            <div class="bloom-card-sub">
                 {distorsion} posts con brecha emocional alta
             </div>
         </div>""", unsafe_allow_html=True)
@@ -3551,27 +3665,13 @@ elif seccion == "🌊 Contagio Emocional":
         st.plotly_chart(fig_contagio, use_container_width=True)
 
     st.markdown("### Posts donde el mensaje positivo generó rechazo")
-    st.markdown("""
-    <div style="background:#0d1117;border-left:3px solid #374151;
-         padding:10px 14px;margin-bottom:12px;border-radius:0 4px 4px 0">
-        <span style="font-size:10px;font-weight:600;letter-spacing:1.5px;
-              color:#4b5563;text-transform:uppercase">QUÉ ESTÁS VIENDO</span>
-        <p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0;
-           line-height:1.5">
-            Estos son los posts donde más brecha hubo entre
-            lo que publicaste y cómo respondió la ciudadanía.
-            Son señales de alerta temprana — el tema tocó
-            una fibra sensible que las reacciones no reflejan
-            pero los comentarios sí revelan.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    que_ves_box("Estos son los posts donde más brecha hubo entre lo que publicaste y cómo respondió la ciudadanía. Son señales de alerta temprana — el tema tocó una fibra sensible que las reacciones no reflejan pero los comentarios sí revelan.")
 
     if distorsion_alta.empty:
         st.markdown("""
-        <div class="card">
+        <div class="bloom-card">
             <p style="color:#22c55e;text-align:center">
-                ✅ Sin casos de distorsión alta en este período
+                Sin casos de distorsión alta en este período
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -3590,9 +3690,9 @@ elif seccion == "🌊 Contagio Emocional":
             <div class="patron-rechazo">
                 <div style="display:flex;justify-content:space-between;
                      margin-bottom:8px">
-                    <span style="font-size:11px;color:#6b7280">{fecha}</span>
+                    <span style="font-size:11px;color:var(--fg-muted)">{fecha}</span>
                     <span style="font-size:11px;color:#9ca3af;
-                          background:#1f2937;padding:2px 8px;
+                          background:var(--border);padding:2px 8px;
                           border-radius:4px">{cat}</span>
                 </div>
                 <p style="font-size:13px;color:#d1d5db;
@@ -3608,7 +3708,7 @@ elif seccion == "🌊 Contagio Emocional":
                         </span>
                         <div style="font-size:18px;font-weight:700;
                               color:{color_post};
-                              font-family:'Courier New'">
+                              font-family:'IBM Plex Mono',monospace">
                             {score_post:+.2f}
                         </div>
                     </div>
@@ -3622,7 +3722,7 @@ elif seccion == "🌊 Contagio Emocional":
                         </span>
                         <div style="font-size:18px;font-weight:700;
                               color:{color_coment};
-                              font-family:'Courier New'">
+                              font-family:'IBM Plex Mono',monospace">
                             {score_coment:+.2f}
                         </div>
                     </div>
@@ -3633,7 +3733,7 @@ elif seccion == "🌊 Contagio Emocional":
                             Distorsión
                         </span>
                         <div style="font-size:18px;font-weight:700;
-                              color:#ef4444;font-family:'Courier New'">
+                              color:#ef4444;font-family:'IBM Plex Mono',monospace">
                             {abs(float(row.get('distorsion',0) or 0)):.2f}
                         </div>
                     </div>
@@ -3644,12 +3744,12 @@ elif seccion == "🌊 Contagio Emocional":
     st.markdown("### ¿Cómo responde la ciudadanía a tus posts?")
 
     labels_map = {
-        'resonancia_positiva': '✅ Resonancia positiva',
-        'rechazo_a_positivo': '🔴 Rechazo a mensaje positivo',
-        'resonancia_negativa': '⚠️ Resonancia negativa',
-        'inversion_positiva': '🔄 Inversión positiva',
-        'distorsion_alta': '📊 Alta distorsión',
-        'neutral': '⚪ Respuesta neutral',
+        'resonancia_positiva': 'Resonancia positiva',
+        'rechazo_a_positivo': 'Rechazo a mensaje positivo',
+        'resonancia_negativa': 'Resonancia negativa',
+        'inversion_positiva': 'Inversión positiva',
+        'distorsion_alta': 'Alta distorsión',
+        'neutral': 'Respuesta neutral',
         'sin_datos': '— Sin datos'
     }
     colors_map = {
@@ -3732,5 +3832,5 @@ elif seccion == "🌊 Contagio Emocional":
         )
         st.plotly_chart(fig_dist, use_container_width=True)
 
-elif seccion == "📋 Notas Metodológicas":
+elif seccion == "NOTAS METODOLÓGICAS":
     render_notas_metodologicas()

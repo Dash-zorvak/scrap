@@ -23,10 +23,10 @@ import logging
 import os
 import random
 import re
-import signal
 import sqlite3
 import subprocess
 import time
+from urllib.parse import urlparse, urlencode, parse_qs
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Set
@@ -43,26 +43,6 @@ FB_BASE = "https://www.facebook.com"
 REQUIRED_COOKIES = {"c_user", "xs"}
 EXTERNAL_DB_PATH = Path(os.getenv("EXTERNAL_DB_PATH",
     str(Path(__file__).resolve().parent.parent.parent / "data" / "externos.db")))
-
-
-class TimeoutGuard:
-    """Hard kill timer for hung Playwright processes."""
-    def __init__(self, seconds: int = 120):
-        self.seconds = seconds
-        self._old = None
-
-    def __enter__(self):
-        self._old = signal.signal(signal.SIGALRM, self._handler)
-        signal.alarm(self.seconds)
-        return self
-
-    def __exit__(self, *args):
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, self._old)
-
-    @staticmethod
-    def _handler(signum, frame):
-        raise TimeoutError(f"Scraper timed out after {signum}s — browser process likely dead")
 
 
 class CheckpointManager:
@@ -1003,7 +983,7 @@ Resuélvelo manualmente en el navegador.
             pass
 
         console.print("[yellow]⏳ Esperando que resuelvas el captcha...[/yellow]")
-        max_wait = 600
+        max_wait = int(os.getenv("CAPTCHA_TIMEOUT", "600"))
         waited = 0
         while waited < max_wait:
             time.sleep(3)
@@ -1033,7 +1013,7 @@ Resuélvelo manualmente en el navegador.
 
     # ── Post date enrichment ────────────────────────────────────
 
-    def _enrich_post_dates(self, seen_ids: set):
+    def enrich_post_dates(self, seen_ids: set):
         """Visit individual post URLs to extract absolute dates for NULL-timestamped posts."""
         logger.info("Starting post date enrichment...")
         try:
@@ -1306,7 +1286,7 @@ Resuélvelo manualmente en el navegador.
                             break
 
                 # Enrich NULL-date posts after finishing this page
-                self._enrich_post_dates(seen_ids)
+                self.enrich_post_dates(seen_ids)
                 console.print(f"[green]✓ {page_label}: {self.stats['posts_scraped']} posts, {self.stats['comments_scraped']} comments[/green]")
 
         except Exception as e:
@@ -1443,6 +1423,271 @@ def main():
     print(f"Total posts: {total_posts}")
     print(f"Total comentarios: {total_comments}")
     print(f"BD externos: {EXTERNAL_DB_PATH}")
+
+
+def run_enrich_cli(
+    cookies_file: str = "cookies.json",
+    headless: bool = False,
+    email: str = "",
+    password: str = "",
+    max_posts: int = 0,
+) -> int:
+    """
+    Standalone enrichment CLI.
+    Reads NULL-date posts from externos.db, opens its own browser,
+    extracts dates via JS strategies, writes back to DB.
+    Resumable: only processes posts WHERE created_time IS NULL.
+    """
+    logger.info("╌" * 40)
+    logger.info("Starting standalone enrichment...")
+
+    query = "SELECT post_id, post_url FROM external_posts WHERE created_time IS NULL AND post_url != ''"
+    try:
+        conn = sqlite3.connect(str(EXTERNAL_DB_PATH))
+        cur = conn.cursor()
+        cur.execute(query)
+        all_null = cur.fetchall()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error querying NULL-date posts: {e}")
+        return 0
+
+    if not all_null:
+        logger.info("No NULL-date posts to enrich")
+        return 0
+
+    pending = all_null[:max_posts] if max_posts > 0 else all_null
+    logger.info(f"  {len(pending)} posts to enrich (total NULL: {len(all_null)})")
+
+    from playwright.sync_api import sync_playwright
+    from playwright_stealth import Stealth
+    p = sync_playwright().start()
+    browser = p.chromium.launch(
+        headless=headless,
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--no-sandbox",
+            "--window-size=1366,768",
+        ],
+    )
+    context = browser.new_context(viewport={"width": 1366, "height": 768})
+    page = context.new_page()
+    Stealth().apply_stealth_sync(page)
+
+    if cookies_file and os.path.exists(cookies_file):
+        try:
+            with open(cookies_file, encoding="utf-8") as f:
+                raw = json.load(f)
+            if isinstance(raw, dict):
+                raw = raw.get("facebook", raw.get("cookies", []))
+            if isinstance(raw, list):
+                mapped = []
+                for c in raw:
+                    ss = c.get("sameSite")
+                    if ss is None:
+                        c["sameSite"] = "None"
+                    elif isinstance(ss, str):
+                        s = ss.lower()
+                        if s == "no_restriction":
+                            c["sameSite"] = "None"
+                        elif s in ("strict", "lax"):
+                            c["sameSite"] = s.capitalize()
+                    mapped.append(c)
+                context.add_cookies(mapped)
+                logger.info(f"Loaded {len(mapped)} cookies")
+        except Exception as e:
+            logger.warning(f"Cookie load failed: {e}")
+
+    REQUIRED_COOKIES = {"c_user", "xs"}
+    cookie_names = {c["name"] for c in context.cookies()}
+    if not REQUIRED_COOKIES.issubset(cookie_names):
+        logger.warning("Cookies insufficient — enrichment may fail on private posts")
+
+    backoffs = [5, 15, 45]
+    enriched = 0
+    failed = 0
+
+    try:
+        for idx, (post_id, post_url) in enumerate(pending, 1):
+            parsed = urlparse(post_url)
+            if '/posts/' in parsed.path:
+                clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+            else:
+                qs = parse_qs(parsed.query, keep_blank_values=True)
+                for key in list(qs):
+                    if key in ('comment_id', '__cft__', '__tn__', '__ccs__', '__hd__', 'ref'):
+                        del qs[key]
+                clean_qs = urlencode(qs, doseq=True) if qs else ''
+                clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}" + (f"?{clean_qs}" if clean_qs else '')
+
+            success = False
+            for attempt in range(MAX_BROWSER_RETRIES):
+                try:
+                    page.goto(clean_url, timeout=60000, wait_until="domcontentloaded")
+                    time.sleep(random.uniform(3, 5))
+
+                    ts_el = page.evaluate("""() => {
+                        const el = document.querySelector('abbr[data-utime], span[data-utime], time[datetime], [data-utime]');
+                        if (el) {
+                            const ut = el.getAttribute('data-utime') || el.getAttribute('utime');
+                            if (ut) return parseInt(ut) * 1000;
+                            const dt = el.getAttribute('datetime');
+                            if (dt) { const ms = Date.parse(dt); if (!isNaN(ms)) return ms; }
+                        }
+                        const links = document.querySelectorAll('a[href*=\\"/posts/\\"]');
+                        for (const link of links) {
+                            const ariaLabel = link.getAttribute('aria-label');
+                            if (ariaLabel) {
+                                const m = ariaLabel.match(/(\\d{1,2})\\s+de\\s+(\\w+)\\s+de\\s+(\\d{4})/i);
+                                if (m) {
+                                    const meses = {enero:0,febrero:1,marzo:2,abril:3,mayo:4,junio:5,julio:6,agosto:7,septiembre:8,octubre:9,noviembre:10,diciembre:11};
+                                    const d = new Date(parseInt(m[3]), meses[m[2].toLowerCase()], parseInt(m[1]), 12, 0, 0, 0);
+                                    if (!isNaN(d.getTime())) return d.getTime();
+                                }
+                            }
+                        }
+                        const meses = {enero:0,febrero:1,marzo:2,abril:3,mayo:4,junio:5,julio:6,agosto:7,septiembre:8,octubre:9,noviembre:10,diciembre:11};
+                        const now = new Date();
+                        const currentYear = now.getFullYear();
+                        const mesesPat = '(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)';
+                        const ampmPat = '(?:a\\.?\\s*m\\.?|p\\.?\\s*m\\.?)';
+                        const normAmpm = (s) => { if (!s) return ''; return s.replace(/\\./g,'').replace(/\\s+/g,'').toLowerCase(); };
+                        const applyAmpm = (h, a) => { const n = normAmpm(a); if (n === 'pm' && h < 12) return h+12; if (n === 'am' && h === 12) return 0; return h; };
+                        const walker = document.createTreeWalker(document.body, 4, null, false);
+                        let node;
+                        while (node = walker.nextNode()) {
+                            let inScript = false;
+                            for (let p = node.parentElement; p; p = p.parentElement) {
+                                const t = p.tagName.toLowerCase();
+                                if (t === 'script' || t === 'style') { inScript = true; break; }
+                            }
+                            if (inScript) continue;
+                            const txt = node.textContent.trim();
+                            if (!txt || txt.length < 8) continue;
+                            let m = txt.match(new RegExp('(\\\\d{1,2})\\\\s+de\\\\s+' + mesesPat + '(?:\\\\s+de\\\\s+(\\\\d{4}))?\\\\s+a\\\\s+las\\\\s+(\\\\d{1,2}):(\\\\d{2})\\\\s*(' + ampmPat + ')?', 'i'));
+                            if (m) {
+                                const day = parseInt(m[1]), monthName = m[2].toLowerCase(), yearStr = m[3], hour = parseInt(m[4]), min = parseInt(m[5]), ampm = m[6];
+                                const year = yearStr ? parseInt(yearStr) : currentYear;
+                                const h = applyAmpm(hour, ampm);
+                                const d = new Date(year, meses[monthName], day, h, min, 0, 0);
+                                if (!isNaN(d.getTime())) {
+                                    if (!yearStr && d.getTime() > now.getTime()) d.setFullYear(currentYear - 1);
+                                    return d.getTime();
+                                }
+                            }
+                            m = txt.match(new RegExp('(\\\\d{1,2})\\\\s+de\\\\s+' + mesesPat + '\\\\s+de\\\\s+(\\\\d{4})\\\\b', 'i'));
+                            if (m) {
+                                const d = new Date(parseInt(m[3]), meses[m[2].toLowerCase()], parseInt(m[1]), 12, 0, 0, 0);
+                                if (!isNaN(d.getTime())) return d.getTime();
+                            }
+                            m = txt.match(new RegExp('(\\\\d{1,2})\\\\s+de\\\\s+' + mesesPat + '\\\\b', 'i'));
+                            if (m) {
+                                const d = new Date(currentYear, meses[m[2].toLowerCase()], parseInt(m[1]), 12, 0, 0, 0);
+                                if (!isNaN(d.getTime())) {
+                                    if (d.getTime() > now.getTime()) d.setFullYear(currentYear - 1);
+                                    return d.getTime();
+                                }
+                            }
+                            m = txt.match(new RegExp('ayer\\\\s+a\\\\s+las\\\\s+(\\\\d{1,2}):(\\\\d{2})\\\\s*(' + ampmPat + ')?', 'i'));
+                            if (m) {
+                                const h = applyAmpm(parseInt(m[1]), m[3]);
+                                const d = new Date(now.getTime() - 86400000);
+                                d.setHours(h, parseInt(m[2]), 0, 0);
+                                if (!isNaN(d.getTime())) return d.getTime();
+                            }
+                        }
+                        const postLinks = document.querySelectorAll('a[href*=\\"/posts/\\"]');
+                        const relMatches = [];
+                        for (const link of postLinks) {
+                            const t = link.textContent.trim();
+                            const m2 = t.match(/^(\\d+)\\s*(h|hr|hrs?|min|mins?|d|d[ií]as?|sem|semanas?)$/i);
+                            if (m2) {
+                                const n = parseInt(m2[1]), u = m2[2].toLowerCase();
+                                let ageMs = 0;
+                                if (u === 'h'||u==='hr'||u==='hrs') ageMs = n*3600000;
+                                else if (u === 'min'||u==='mins') ageMs = n*60000;
+                                else if (u === 'd'||u==='día'||u==='días') ageMs = n*86400000;
+                                else if (u === 'sem'||u==='semana'||u==='semanas') ageMs = n*604800000;
+                                relMatches.push(ageMs);
+                            }
+                        }
+                        if (relMatches.length > 0) {
+                            const maxAge = Math.max(...relMatches);
+                            return now.getTime() - maxAge;
+                        }
+                        const scripts = document.querySelectorAll('script[type=\\"application/json\\"]');
+                        for (const s of scripts) {
+                            const t = s.textContent;
+                            if (!t) continue;
+                            const mm = t.match(/\\"publish_time\\":(\\d{10,13})/);
+                            if (mm) { const ts = parseInt(mm[1]); return ts < 1e12 ? ts * 1000 : ts; }
+                            const mm2 = t.match(/\\"creation_time\\":(\\d{10,13})/);
+                            if (mm2) { const ts = parseInt(mm2[1]); return ts < 1e12 ? ts * 1000 : ts; }
+                        }
+                        return null;
+                    }""")
+
+                    if ts_el:
+                        created_time = datetime.fromtimestamp(ts_el / 1000)
+                        conn2 = sqlite3.connect(str(EXTERNAL_DB_PATH))
+                        conn2.execute("UPDATE external_posts SET created_time = ? WHERE post_id = ?",
+                                     (created_time, post_id))
+                        conn2.commit()
+                        conn2.close()
+                        logger.info(f"  [{idx}/{len(pending)}] ✓ Enriched {post_id} → {created_time.isoformat()}")
+                        enriched += 1
+                    else:
+                        logger.warning(f"  [{idx}/{len(pending)}] ✗ Sin fecha extraíble: {post_id}")
+                        failed += 1
+                    success = True
+                    break
+                except Exception as e:
+                    msg = str(e).lower()
+                    is_browser_err = any(s in msg for s in [
+                        "targetclosederror", "target closed", "crashed", "disconnected",
+                        "execution context destroyed", "browser has been closed",
+                        "connection closed", "protocol error", "session closed",
+                        "epipe", "broken pipe", "write epipe", "pipe closed",
+                        "econnreset", "socket hang up", "channel closed", "transport closed",
+                    ])
+                    if is_browser_err and attempt < MAX_BROWSER_RETRIES - 1:
+                        logger.warning(f"  Browser error enriching {post_id} (attempt {attempt+1}): {e}")
+                        try:
+                            context.close()
+                        except Exception:
+                            pass
+                        context = browser.new_context(viewport={"width": 1366, "height": 768})
+                        page = context.new_page()
+                        Stealth().apply_stealth_sync(page)
+                        backoff = backoffs[min(attempt, len(backoffs) - 1)]
+                        time.sleep(backoff)
+                    else:
+                        logger.error(f"  Error enriching {post_id} (attempt {attempt+1}): {e}")
+                        failed += 1
+                        success = True
+                        break
+
+            if not success:
+                failed += 1
+
+            time.sleep(8)
+
+    finally:
+        try:
+            context.close()
+        except Exception:
+            pass
+        try:
+            browser.close()
+        except Exception:
+            pass
+        try:
+            p.stop()
+        except Exception:
+            pass
+
+    logger.info(f"Enrichment complete: {enriched} enriched, {failed} failed out of {len(pending)}")
+    return enriched
 
 
 if __name__ == "__main__":

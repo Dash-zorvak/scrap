@@ -261,6 +261,21 @@ def cmd_deep_scrape(args, cfg, storage):
 
 
 @timer
+def cmd_enrich(args, cfg, storage):
+    """Enrich NULL-date posts in externos.db (standalone, resumible)."""
+    console.print(Panel("[bold cyan]ENRICH — Fechas faltantes en externos.db[/bold cyan]"))
+    from src.fb_scraper.deep_scraper import run_enrich_cli
+    count = run_enrich_cli(
+        cookies_file=args.cookies_file or cfg.FB_COOKIES_FILE or "cookies.json",
+        headless=args.headless,
+        email=cfg.FB_EMAIL,
+        password=cfg.FB_PASSWORD,
+        max_posts=args.max,
+    )
+    console.print(f"\n[bold green]✓ Enrichment: {count} posts enriquecidos[/bold green]")
+
+
+@timer
 def cmd_scrape(args, cfg, storage):
     analyzer = SentimentAnalyzer()
 
@@ -601,14 +616,19 @@ def main():
     phase3_parser.add_argument("--page-id", default="", help="Facebook Page ID")
     phase3_parser.add_argument("--page-name", default="", help="Nombre de la página")
 
-    cambridge_parser =     extract_parser = subparsers.add_parser("extract-comments", help="Extraer comentarios de posts ya existentes en DB (Fase 2)")
+    extract_parser = subparsers.add_parser("extract-comments", help="Extraer comentarios de posts ya existentes en DB (Fase 2)")
     extract_parser.add_argument("--max", type=int, default=500, help="Posts a procesar")
     extract_parser.add_argument("--cookies-file", default="", help="Archivo de cookies")
     extract_parser.add_argument("--headless", action="store_true", help="Modo headless")
 
-    subparsers.add_parser("cambridge", help="Cambridge Index - alertas predictivas y sensibilidad por tópico")
+    cambridge_parser = subparsers.add_parser("cambridge", help="Cambridge Index - alertas predictivas y sensibilidad por tópico")
     cambridge_parser.add_argument("--days", type=int, default=30, help="Ventana de análisis en días")
     cambridge_parser.add_argument("--json", action="store_true", help="Output JSON en lugar de tabla")
+
+    enrich_parser = subparsers.add_parser("enrich", help="Enriquecer fechas NULL en externos.db (resumible)")
+    enrich_parser.add_argument("--max", type=int, default=0, help="Máximo de posts a procesar (0 = todos)")
+    enrich_parser.add_argument("--cookies-file", default="cookies.json", help="Archivo de cookies")
+    enrich_parser.add_argument("--headless", action="store_true", help="Modo headless (sin ventana)")
 
     args = parser.parse_args()
 
@@ -629,6 +649,8 @@ def main():
         cmd_extract_comments(args, cfg, storage)
     elif args.command == "deep-scrape":
         cmd_deep_scrape(args, cfg, storage)
+    elif args.command == "enrich":
+        cmd_enrich(args, cfg, storage)
     elif args.command == "analyze":
         cmd_analyze(args, cfg, storage)
     elif args.command == "reset":

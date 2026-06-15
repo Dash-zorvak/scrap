@@ -1588,7 +1588,7 @@ def seccion_cargar_contenido():
             placeholder="https://facebook.com/...",
         )
 
-        submitted = st.form_submit_button("➕ Agregar post al lote", use_container_width=True)
+        submitted = st.form_submit_button("➕ Agregar post al lote", width='stretch')
 
         if submitted:
             errores = []
@@ -1640,7 +1640,7 @@ def seccion_cargar_contenido():
 
     # ── Botón Procesar lote ──
     if lote:
-        if st.button("⚙️ Procesar lote", use_container_width=True, type="primary"):
+        if st.button("⚙️ Procesar lote", width='stretch', type="primary"):
             procesar_lote(lote)
 
 
@@ -1869,7 +1869,7 @@ if seccion == "ESTADO GENERAL":
             como_leerlo="Más alto: más gente se está involucrando. Más bajo: la gente lo ve pasar pero no responde.",
             ojo="Facebook no siempre dice cuánta gente vio cada publicación; cuando falta ese dato, se mide por publicación."
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     # Comparativa FB vs TK
     que_ves_box("Comparación directa entre tus dos plataformas principales. Facebook mide reacciones y comentarios. TikTok mide visualizaciones y engagement — cuántas personas no solo vieron sino interactuaron.")
@@ -2138,7 +2138,7 @@ elif seccion == "TEMAS Y EMOCIONES":
             que_es="Por cada tema, con qué emoción reacciona la gente.",
             como_leerlo="Cada casilla cruza un tema con una emoción. Mientras más encendido el color, más se repite esa emoción en ese tema."
         )
-        st.plotly_chart(fig_heat, use_container_width=True)
+        st.plotly_chart(fig_heat, width='stretch')
 
     # Top 5 posts
     que_ves_box("Los 5 contenidos que más movieron a la ciudadanía en el período seleccionado, medidos por interacciones totales (reacciones + comentarios + compartidos).")
@@ -2241,11 +2241,11 @@ elif seccion == "TEMAS Y EMOCIONES":
 
             st.markdown("**TOP 10 — MÁS QUERIDOS**")
             st.dataframe(df_val.head(10)[cols_show].rename(columns=ren).style.format(fmt),
-                         use_container_width=True, hide_index=True)
+                         width='stretch', hide_index=True)
 
             st.markdown("**BOTTOM 10 — MÁS POLÉMICOS**")
             st.dataframe(df_val.tail(10).sort_values("score_emocional_neto")[cols_show].rename(columns=ren).style.format(fmt),
-                         use_container_width=True, hide_index=True)
+                         width='stretch', hide_index=True)
 
             df_plot = df_val.head(15).copy()
             df_plot['lectura'] = np.where(
@@ -2272,7 +2272,7 @@ elif seccion == "TEMAS Y EMOCIONES":
                 que_es="Por cada publicación, un solo número que resume si la gente reaccionó con cariño o con enojo y tristeza.",
                 como_leerlo="Arriba de cero: ganó el cariño. Abajo de cero: ganó el enojo y la tristeza. Mientras más lejos del cero, más fuerte fue la emoción."
             )
-            st.plotly_chart(fig_sen, use_container_width=True)
+            st.plotly_chart(fig_sen, width='stretch')
 
     st.divider()
     bloom_subheader("Índice de Viralidad — TikTok")
@@ -2294,7 +2294,7 @@ elif seccion == "TEMAS Y EMOCIONES":
         st.dataframe(top.rename(columns={
             "video": "Video", "indice_viralidad": "Viralidad %", "engagement_rate": "Engagement %",
             "views": "Views", "shares": "Shares", "likes": "Likes",
-        }), use_container_width=True, hide_index=True)
+        }), width='stretch', hide_index=True)
 
         df_vir_plot = df_vir.copy()
         df_vir_plot['pct_viral'] = (df_vir_plot['shares'] / df_vir_plot['views'] * 100).fillna(0)
@@ -2317,7 +2317,7 @@ elif seccion == "TEMAS Y EMOCIONES":
             que_es="Qué tanto se comparte un video comparado con cuánta gente lo vio.",
             como_leerlo="Alto: la gente no solo lo vio, lo reenvió. Bajo: lo vieron pero no les interesó pasarlo."
         )
-        st.plotly_chart(fig_vir, use_container_width=True)
+        st.plotly_chart(fig_vir, width='stretch')
 
 # ═══════════════════════════════════════════
 # SECCIÓN 3 — LÍNEA DEL TIEMPO
@@ -2433,7 +2433,7 @@ elif seccion == "LÍNEA DEL TIEMPO":
             que_es="Semana a semana, cuánto se movió la gente con las publicaciones, marcando en rojo las semanas fuera de lo normal.",
             como_leerlo="La línea sube cuando hay más actividad y baja cuando hay menos. Los puntos rojos son semanas que se salieron de lo común, para arriba o para abajo."
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     # Anomalias
     que_ves_box("Estas son las semanas donde la conversación ciudadana explotó. No significa que fue bueno o malo — significa que algo captó masivamente la atención. Identifica qué pasó esa semana para entender por qué.")
@@ -2533,7 +2533,7 @@ elif seccion == "LÍNEA DEL TIEMPO":
             que_es="En qué días de la semana la gente reacciona más a las publicaciones.",
             como_leerlo="La barra más alta es el día en que la gente más reacciona; la más baja, el día en que menos reacciona."
         )
-        st.plotly_chart(fig_dias, use_container_width=True)
+        st.plotly_chart(fig_dias, width='stretch')
         st.markdown(
             f'<p style="font-size:13px;color:var(--fg-secondary)">El dia que mas reacciona '
             f'la gente en promedio: <strong style="color:var(--fg-primary)">{dia_pico["nombre"]}</strong> '
@@ -2835,7 +2835,7 @@ elif seccion == "VOZ CIUDADANA":
             que_es="Por cada tema, qué parte de los comentarios es a favor, en contra o neutral.",
             como_leerlo="En cada barra, mientras más grande el pedazo de un color, más comentarios de ese tipo tiene ese tema. Verde a favor, rojo en contra, gris neutral."
         )
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.plotly_chart(fig_bar, width='stretch')
 
     st.divider()
     bloom_subheader("Nube de palabras — comentarios negativos")
@@ -3107,7 +3107,7 @@ elif seccion == "MICROSEGMENTACIÓN":
             que_es="En qué días las páginas y medios de afuera hablaron más de la alcaldía.",
             como_leerlo="La barra más alta es el día con más movimiento desde afuera."
         )
-        st.plotly_chart(fig_dias, use_container_width=True)
+        st.plotly_chart(fig_dias, width='stretch')
         st.markdown(
             f'<p style="font-size:13px;color:var(--fg-secondary)">'
             f'El día que más reacciona la gente en promedio: '
@@ -3191,7 +3191,7 @@ elif seccion == "CONTEXTO EXTERNO":
                 que_es="Qué páginas o medios de afuera son los que más mencionan a la alcaldía.",
                 como_leerlo="Mientras más larga la barra, más veces esa página habló de la alcaldía."
             )
-            st.plotly_chart(fig_f, use_container_width=True)
+            st.plotly_chart(fig_f, width='stretch')
         with col_b2:
             st.markdown("**¿Como hablan de ti?**")
             if 'score_sentimiento' in df_ext.columns:
@@ -3217,7 +3217,7 @@ elif seccion == "CONTEXTO EXTERNO":
                     que_es="De todo lo que dicen de la alcaldía las páginas de afuera, cuánto es a favor, en contra o neutral.",
                     como_leerlo="Mientras más grande el pedazo de un color, más pesa ese tono. Verde a favor, rojo en contra, gris neutral."
                 )
-                st.plotly_chart(fig_dona, use_container_width=True)
+                st.plotly_chart(fig_dona, width='stretch')
 
         que_ves_box("Publicaciones de fuentes externas que hablan del alcalde con tono negativo. El número es el pulso — más negativo significa mayor rechazo en esa publicación externa.")
         st.markdown("### Alertas — menciones mas criticas")
@@ -3288,7 +3288,7 @@ elif seccion == "CONTEXTO EXTERNO":
             como_leerlo="Cuando un pico cae el mismo día que una noticia, lo más probable es que esa noticia movió la conversación.",
             ojo="Que coincidan no prueba que una cosa causó la otra."
         )
-        st.plotly_chart(fig_c, use_container_width=True)
+        st.plotly_chart(fig_c, width='stretch')
         bloom_metric("Semanas con pico de engagement", f'{corr["n_picos"]}', delta="picos detectados")
 
         coinc = corr["coincidencias"]
@@ -3297,7 +3297,7 @@ elif seccion == "CONTEXTO EXTERNO":
             st.dataframe(coinc.rename(columns={
                 "semana_pico": "Semana pico", "engagement": "Engagement", "z": "z",
                 "fuente": "Fuente", "noticia": "Titular / Texto", "fecha_noticia": "Fecha noticia",
-            }), use_container_width=True, hide_index=True)
+            }), width='stretch', hide_index=True)
 
 elif seccion == "CONFIANZA INSTITUCIONAL":
 
@@ -3499,7 +3499,7 @@ elif seccion == "CONFIANZA INSTITUCIONAL":
         como_leerlo="Mientras más estirada la figura hacia una punta, más confianza hay en esa parte. Mientras más encogida, ahí la gente desconfía.",
         ojo="Mide lo que la gente dice en redes, no una encuesta cara a cara."
     )
-    st.plotly_chart(fig_radar, use_container_width=True)
+    st.plotly_chart(fig_radar, width='stretch')
 
     dims_en_riesgo = [
         (d, v) for d, v in resultados.items() if v['score'] < 0
@@ -3677,7 +3677,7 @@ elif seccion == "NARRATIVAS ACTIVAS":
         que_es="Los temas o historias que la gente está repitiendo ahora mismo sobre la alcaldía.",
         como_leerlo="Mientras más grande o más arriba aparece una narrativa, más gente la está repitiendo. Salen las buenas y las malas."
     )
-    st.plotly_chart(fig_narr, use_container_width=True)
+    st.plotly_chart(fig_narr, width='stretch')
 
 elif seccion == "CONTAGIO EMOCIONAL":
 
@@ -3855,7 +3855,7 @@ elif seccion == "CONTAGIO EMOCIONAL":
             que_es="Si la emoción de cada publicación se contagia a los comentarios, o si la gente responde con otra emoción.",
             como_leerlo="Cuando coinciden, el mensaje generó lo que buscaba. Cuando no coinciden, la gente reaccionó distinto a lo que decía la publicación."
         )
-        st.plotly_chart(fig_contagio, use_container_width=True)
+        st.plotly_chart(fig_contagio, width='stretch')
 
     st.markdown("### Posts donde el mensaje positivo generó rechazo")
     que_ves_box("Estos son los posts donde más brecha hubo entre lo que publicaste y cómo respondió la ciudadanía. Son señales de alerta temprana — el tema tocó una fibra sensible que las reacciones no reflejan pero los comentarios sí revelan.")
@@ -4023,7 +4023,7 @@ elif seccion == "CONTAGIO EMOCIONAL":
             que_es="De qué temas habla la gente, repartido en porciones.",
             como_leerlo="Mientras más grande la porción, más se habla de ese tema."
         )
-        st.plotly_chart(fig_dist, use_container_width=True)
+        st.plotly_chart(fig_dist, width='stretch')
 
 elif seccion == "📥 Cargar contenido":
     seccion_cargar_contenido()

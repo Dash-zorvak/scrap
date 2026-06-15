@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import json
+import uuid
 sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
 from config import (
     FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB,
@@ -22,6 +23,10 @@ from config import (
 # ── Toggle modo prueba — antes de cualquier función cacheada ──
 if "modo_prueba" not in st.session_state:
     st.session_state.modo_prueba = False
+
+# ── Estado del lote de ingreso (Fase 1: solo en memoria) ──
+if "lote_ingreso" not in st.session_state:
+    st.session_state["lote_ingreso"] = []
 
 FACEBOOK_DB_ACTIVA = (
     FACEBOOK_TEST_DB if st.session_state.get("modo_prueba", False) else FACEBOOK_DB
@@ -673,6 +678,13 @@ periodo = st.sidebar.selectbox("PERÍODO", [
 
 plataforma = st.sidebar.selectbox("PLATAFORMA", [
     "Ambas", "Facebook", "TikTok"
+])
+
+seccion = st.sidebar.selectbox("SECCIÓN", [
+    "ESTADO GENERAL", "TEMAS Y EMOCIONES", "LÍNEA DEL TIEMPO",
+    "VOZ CIUDADANA", "MICROSEGMENTACIÓN", "CONTEXTO EXTERNO",
+    "CONFIANZA INSTITUCIONAL", "NARRATIVAS ACTIVAS", "CONTAGIO EMOCIONAL",
+    "📥 Cargar contenido", "NOTAS METODOLÓGICAS"
 ])
 
 st.sidebar.markdown("---")
@@ -1520,6 +1532,117 @@ def render_notas_metodologicas():
         "publicación (no a perfiles individuales) y con las limitaciones señaladas por "
         "Farina et al. (2025)."
     )
+
+
+# ═══════════════════════════════════════════
+# SECCIÓN — 📥 Cargar contenido (Fase 1)
+# ═══════════════════════════════════════════
+
+def procesar_lote(lote: list[dict]) -> None:
+    # TODO Fase 2-5: extracción Gemini -> revisión -> escritura SQLite -> pipeline
+    st.info("⚙️ Procesamiento aún no implementado (Fase 2 en adelante).")
+
+
+def seccion_cargar_contenido():
+    """Sección para que el operador cargue capturas y arme lotes de posts en memoria."""
+    # TODO Fase 9: proteger esta sección con login
+
+    st.markdown("""
+    <div class="seccion-header">
+        <div class="seccion-titulo">📥 Cargar contenido</div>
+        <div class="seccion-subtitulo">
+            Sube capturas de pantalla de redes sociales y arma lotes para procesar
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Formulario: agregar post al lote ──
+    with st.form("form_agregar_post"):
+        col_plat, col_fuente = st.columns(2)
+
+        with col_plat:
+            plataforma_post = st.radio(
+                "Plataforma",
+                ["Facebook", "TikTok"],
+                horizontal=True,
+            )
+
+        with col_fuente:
+            if plataforma_post == "Facebook":
+                fuente = st.selectbox("Fuente (página oficial)", FB_PAGES_OFICIALES)
+            else:
+                tk_nombres = list(TK_ACCOUNTS.values())
+                tk_label = st.selectbox("Fuente (cuenta oficial)", tk_nombres)
+                tk_id_map = {v: k for k, v in TK_ACCOUNTS.items()}
+                fuente = str(tk_id_map[tk_label])
+
+        imagenes = st.file_uploader(
+            "Capturas del post (post + comentarios)",
+            accept_multiple_files=True,
+            type=["png", "jpg", "jpeg"],
+        )
+
+        enlace = st.text_input(
+            "Enlace del post (opcional — solo referencia, no se scrapea)",
+            value="",
+            placeholder="https://facebook.com/...",
+        )
+
+        submitted = st.form_submit_button("➕ Agregar post al lote", use_container_width=True)
+
+        if submitted:
+            errores = []
+            if not imagenes:
+                errores.append("Debes subir al menos una captura de pantalla.")
+            if not fuente:
+                errores.append("Debes seleccionar una fuente (página/cuenta oficial).")
+
+            if errores:
+                for e in errores:
+                    st.error(e)
+            else:
+                post = {
+                    "id_temporal": str(uuid.uuid4()),
+                    "plataforma": plataforma_post.lower(),
+                    "fuente": fuente,
+                    "imagenes": list(imagenes),
+                    "enlace": enlace.strip(),
+                    "estado": "pendiente",
+                }
+                st.session_state["lote_ingreso"].append(post)
+                st.success(f"✅ Post agregado al lote ({len(imagenes)} imágenes)")
+
+    # ── Estado visual del lote ──
+    st.markdown("---")
+    lote = st.session_state["lote_ingreso"]
+
+    if not lote:
+        st.info("Aún no has agregado posts. Sube las capturas de un post y pulsa Agregar.")
+    else:
+        pendientes = sum(1 for p in lote if p["estado"] == "pendiente")
+        st.metric("Lote actual", f"{len(lote)} posts", f"{pendientes} pendientes de procesar")
+
+        for post in lote:
+            cols = st.columns([1, 2, 1, 1, 1, 0.5])
+            emoji = "📘" if post["plataforma"] == "facebook" else "🎵"
+            cols[0].markdown(f"**{emoji} {post['plataforma'].title()}**")
+            cols[1].markdown(f"*Fuente:* {post['fuente']}")
+            cols[2].markdown(f"*Imágenes:* {len(post['imagenes'])}")
+            cols[3].markdown("*Enlace:* sí" if post["enlace"] else "*Enlace:* —")
+            cols[4].markdown(f"*Estado:* {post['estado']}")
+            if cols[5].button("🗑️", key=f"quitar_{post['id_temporal']}"):
+                st.session_state["lote_ingreso"] = [
+                    p for p in st.session_state["lote_ingreso"]
+                    if p["id_temporal"] != post["id_temporal"]
+                ]
+                st.rerun()
+            st.markdown("---")
+
+    # ── Botón Procesar lote ──
+    if lote:
+        if st.button("⚙️ Procesar lote", use_container_width=True, type="primary"):
+            procesar_lote(lote)
+
 
 if seccion == "ESTADO GENERAL":
 
@@ -3901,6 +4024,9 @@ elif seccion == "CONTAGIO EMOCIONAL":
             como_leerlo="Mientras más grande la porción, más se habla de ese tema."
         )
         st.plotly_chart(fig_dist, use_container_width=True)
+
+elif seccion == "📥 Cargar contenido":
+    seccion_cargar_contenido()
 
 elif seccion == "NOTAS METODOLÓGICAS":
     render_notas_metodologicas()

@@ -2,6 +2,9 @@
 .env
 .env.local
 
+# # Streamlit secrets (API keys - NUNCA subir al repo)
+.streamlit/secrets.toml
+
 # # Python
 venv/
 venv_sentiment/
@@ -20,6 +23,9 @@ Thumbs.db
 # # Data
 data/*.db
 outputs/*.json
+
+# # Capturas subidas (temporales, se procesan en memoria y NO se versionan)
+data/uploads_tmp/
 
 # # Logs
 *.log

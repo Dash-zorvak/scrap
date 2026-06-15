@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
 from config import *
 import re
-import unicodedata
+from sentimiento_engine import clasificar_lote, analizar_sentimiento_rapido
 
 
 def limpiar_texto(texto):
@@ -22,122 +22,10 @@ def limpiar_texto(texto):
     return texto
 
 
-POSITIVE_WORDS = {
-    "buen", "buena", "bueno", "buenos", "buenas",
-    "excelente", "excelentes", "genial", "geniales",
-    "feliz", "felices", "felicidad", "gracias",
-    "agradecido", "agradecida", "bien", "mejor", "mejores",
-    "perfecto", "perfecta", "hermoso", "hermosa",
-    "maravilloso", "maravillosa", "increible", "increibles",
-    "fantastico", "fantastica", "apoyo", "apoyar",
-    "adelante", "avance", "avances", "progreso",
-    "trabajo", "trabajando", "logro", "logros",
-    "exito", "exitosa", "exitoso",
-    "beneficio", "beneficios", "orgullo", "orgulloso",
-    "bonito", "bonita", "contento", "contenta",
-    "alegria", "alegre", "gusta", "aprecio",
-    "bendicion", "bendiciones", "seguridad", "seguro",
-    "desarrollo", "crecimiento", "oportunidad",
-    "transparencia", "honestidad", "eficiente",
-    "victoria", "triunfo", "esperanza",
-    "unidos", "unidad", "liderazgo",
-    "magnifico", "espectacular", "brillante", "impresionante",
-    "fenomenal", "estupendo",
-}
-
-NEGATIVE_WORDS = {
-    "malo", "mala", "malos", "mal", "pesimo", "pesima",
-    "horrible", "horribles",
-    "triste", "tristes", "tristeza",
-    "corrupto", "corrupta", "corrupcion",
-    "fracaso", "fracasos", "peor", "peores",
-    "deficiente", "incompetente", "mentira", "mentiras",
-    "engano", "robo", "robos", "ladron", "ladrones",
-    "inseguridad", "delincuencia", "violencia",
-    "basura", "desastre", "verguenza", "vergonzoso",
-    "odio", "detesto",
-    "desempleo", "pobreza", "pobre", "pobres",
-    "abandono", "abandonado", "incumplimiento",
-    "falso", "falsa", "ineficiente",
-    "crisis", "emergencia", "caos", "abusos",
-    "injusticia", "injusto",
-    "conflicto", "problema", "problemas",
-    "grave", "graves", "preocupante",
-    "deuda", "deudas", "aumento", "recorte",
-    "lamentable", "deplorable", "desastroso",
-    "intolerable", "insoportable", "nefasto",
-}
-
-NEGATION_WORDS = {"no", "nunca", "jamas", "tampoco", "ni"}
-
-
-def _normalize(word):
-    return unicodedata.normalize('NFKD', word).encode('ascii', 'ignore').decode('ascii')
-
-
-def _match_word(word, stems):
-    word = word.strip(".,!?;:¿¡\"'()").lower()
-    word = _normalize(word)
-    if not word or len(word) < 3:
-        return False
-    if word in stems:
-        return True
-    for s in [word[:-1], word.rstrip("s"), word.rstrip("aeo"),
-               word.rstrip("os").rstrip("as")]:
-        if len(s) >= 3 and s in stems:
-            return True
-    for suf in ("ado", "ido", "ada", "ida", "ando", "iendo",
-                 "cion", "sion", "miento", "mente"):
-        if word.endswith(suf) and len(word) - len(suf) >= 3:
-            base = word[:-len(suf)]
-            if base in stems:
-                return True
-            if base.rstrip("aeo") in stems:
-                return True
-    return False
-
-
-def analizar_sentimiento_rapido(texto):
-    if not texto:
-        return ("NEU", 0.0)
-    text_norm = _normalize(texto.lower())
-    words = text_norm.split()
-
-    positives = sum(1 for w in words if _match_word(w, POSITIVE_WORDS))
-    negatives = sum(1 for w in words if _match_word(w, NEGATIVE_WORDS))
-
-    for i, word in enumerate(words):
-        wc = word.strip(".,!?;:¿¡\"'()")
-        if wc in NEGATION_WORDS:
-            for j in range(i + 1, min(i + 4, len(words))):
-                nw = words[j].strip(".,!?;:¿¡\"'()")
-                if _match_word(nw, POSITIVE_WORDS):
-                    negatives += 1
-                    positives = max(0, positives - 1)
-                    break
-
-    positives = max(0, positives)
-    negatives = max(0, negatives)
-    total = positives + negatives
-
-    if total == 0:
-        return ("NEU", 0.0)
-
-    if positives > 0 and negatives == 0:
-        return ("POS", round(min(positives / 5, 0.95), 4))
-    elif negatives > 0 and positives == 0:
-        return ("NEG", round(min(negatives / 5, 0.95), 4))
-
-    ratio = positives / total
-    if ratio >= 0.66:
-        return ("POS", round(ratio, 4))
-    elif ratio <= 0.33:
-        return ("NEG", round(1 - ratio, 4))
-    return ("NEU", round(ratio, 4))
-
-
-def analizar_sentimiento_facebook():
-    conn = sqlite3.connect(FACEBOOK_DB)
+def analizar_sentimiento_facebook(db_path=None):
+    if db_path is None:
+        db_path = FACEBOOK_DB
+    conn = sqlite3.connect(db_path)
     df = pd.read_sql_query(
         "SELECT comment_id, post_id, message FROM fb_comments WHERE message IS NOT NULL AND message != ''",
         conn,
@@ -151,8 +39,9 @@ def analizar_sentimiento_facebook():
     print(f"  ({total_raw} comentarios crudos → {len(df)} para análisis)")
 
     resultados = []
-    for _, row in df.iterrows():
-        label, score = analizar_sentimiento_rapido(row["texto_limpio"])
+    textos = df["texto_limpio"].tolist()
+    labels_scores, motor_usado = clasificar_lote(textos)
+    for (label, score), (_, row) in zip(labels_scores, df.iterrows()):
         resultados.append({
             "comment_id": row["comment_id"],
             "post_id": row["post_id"],
@@ -165,7 +54,7 @@ def analizar_sentimiento_facebook():
 
     if not resultados:
         print("  Sin resultados de sentimiento")
-        return pd.DataFrame()
+        return pd.DataFrame(), motor_usado
 
     df_res = pd.DataFrame(resultados)
 
@@ -200,16 +89,18 @@ def analizar_sentimiento_facebook():
 
     agrupado["score_sentimiento"] = agrupado["pct_positivo"] - agrupado["pct_negativo"]
 
-    conn = sqlite3.connect(FACEBOOK_DB)
+    conn = sqlite3.connect(db_path)
     agrupado.to_sql("fb_sentimiento", conn, if_exists="replace", index=False)
     conn.close()
 
     print(f"  Posts agrupados: {len(agrupado)}")
-    return agrupado
+    return agrupado, motor_usado
 
 
-def analizar_sentimiento_tiktok():
-    conn = sqlite3.connect(TIKTOK_DB)
+def analizar_sentimiento_tiktok(db_path=None):
+    if db_path is None:
+        db_path = TIKTOK_DB
+    conn = sqlite3.connect(db_path)
     df = pd.read_sql_query(
         "SELECT id as comment_id, video_id, text as message FROM comments WHERE text IS NOT NULL AND text != ''",
         conn,
@@ -219,7 +110,7 @@ def analizar_sentimiento_tiktok():
     total_raw = len(df)
     if total_raw == 0:
         print("  No hay comentarios en TikTok DB")
-        return pd.DataFrame()
+        return pd.DataFrame(), "reglas"
 
     df["texto_limpio"] = df["message"].apply(limpiar_texto)
     df = df[df["texto_limpio"].notna()].copy()
@@ -228,8 +119,9 @@ def analizar_sentimiento_tiktok():
     print(f"  ({total_raw} comentarios crudos → {len(df)} para análisis)")
 
     resultados = []
-    for _, row in df.iterrows():
-        label, score = analizar_sentimiento_rapido(row["texto_limpio"])
+    textos = df["texto_limpio"].tolist()
+    labels_scores, motor_usado = clasificar_lote(textos)
+    for (label, score), (_, row) in zip(labels_scores, df.iterrows()):
         resultados.append({
             "comment_id": row["comment_id"],
             "video_id": row["video_id"],
@@ -240,7 +132,7 @@ def analizar_sentimiento_tiktok():
 
     if not resultados:
         print("  Sin resultados de sentimiento")
-        return pd.DataFrame()
+        return pd.DataFrame(), motor_usado
 
     df_res = pd.DataFrame(resultados)
 
@@ -274,12 +166,12 @@ def analizar_sentimiento_tiktok():
 
     agrupado["score_sentimiento"] = agrupado["pct_positivo"] - agrupado["pct_negativo"]
 
-    conn = sqlite3.connect(TIKTOK_DB)
+    conn = sqlite3.connect(db_path)
     agrupado.to_sql("tiktok_sentimiento", conn, if_exists="replace", index=False)
     conn.close()
 
     print(f"  Videos agrupados: {len(agrupado)}")
-    return agrupado
+    return agrupado, motor_usado
 
 
 def imprimir_resultados(df_fb, df_tk):
@@ -339,8 +231,10 @@ def imprimir_resultados(df_fb, df_tk):
 if __name__ == "__main__":
     print("▶ Analizando sentimiento Facebook...")
     print("  (usando clasificador rápido basado en reglas)")
-    df_fb = analizar_sentimiento_facebook()
+    df_fb, motor_fb = analizar_sentimiento_facebook()
+    print(f"  Motor usado: {motor_fb}")
     print("▶ Analizando sentimiento TikTok...")
-    df_tk = analizar_sentimiento_tiktok()
+    df_tk, motor_tk = analizar_sentimiento_tiktok()
+    print(f"  Motor usado: {motor_tk}")
     imprimir_resultados(df_fb, df_tk)
     print("✓ Módulo 2 completo.")

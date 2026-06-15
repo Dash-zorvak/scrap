@@ -21,6 +21,7 @@ from config import (
     TK_ACCOUNTS, OUTPUT_DIR
 )
 from dashboard.guardar_lote import guardar_lote
+from dashboard.procesar_lote import procesar_pipeline
 
 # ── Toggle modo prueba — antes de cualquier función cacheada ──
 if "modo_prueba" not in st.session_state:
@@ -1993,6 +1994,28 @@ def seccion_cargar_contenido():
             st.rerun()
     if guardados:
         st.info(f"✅ {len(guardados)} post(s) ya guardados en la base de datos.")
+
+    # ── Procesamiento del pipeline (Fase 5) ──
+    st.markdown("### ⚙️ Procesar lote (reconstruir análisis)")
+    st.caption("Reconstruye las tablas agregadas (sentimiento, categorías, engagement, series) a partir de los datos guardados.")
+    if st.button("⚙️ Procesar lote (reconstruir análisis)", type="primary"):
+        status = st.status("Iniciando pipeline…", expanded=True)
+        def _progreso(paso, total, etiqueta):
+            status.update(label=f"Paso {paso}/{total}: {etiqueta}")
+        result = procesar_pipeline(st.session_state.get("modo_prueba", False), _progreso)
+        motor = result["motor_sentimiento"]
+        if motor == "bert":
+            st.success("🧠 Sentimiento analizado con BERT local (modelo principal).")
+        elif motor == "gemini":
+            st.warning("⚠️ BERT no se pudo cargar; se usó Gemini como respaldo.")
+        else:
+            st.warning("⚠️ Ni BERT ni Gemini disponibles; se usó el clasificador de reglas (último recurso). Resultados menos precisos.")
+        if result["pasos_ok"]:
+            st.info(f"✅ Pasos completados: {', '.join(result['pasos_ok'])}")
+        for err in result["errores"]:
+            st.error(f"❌ {err}")
+        status.update(label="Pipeline completado", state="complete", expanded=False)
+        st.rerun()
 
 
 if seccion == "ESTADO GENERAL":

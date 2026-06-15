@@ -7,8 +7,10 @@ sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
 from config import *
 
 
-def series_facebook():
-    conn = sqlite3.connect(FACEBOOK_DB)
+def series_facebook(fb_db=None):
+    if fb_db is None:
+        fb_db = FACEBOOK_DB
+    conn = sqlite3.connect(fb_db)
     df = pd.read_sql_query("SELECT * FROM fb_engagement", conn)
 
     df["created_time"] = pd.to_datetime(df["created_time"], errors="coerce")
@@ -45,8 +47,10 @@ def series_facebook():
     return agrupado
 
 
-def series_tiktok():
-    conn = sqlite3.connect(TIKTOK_DB)
+def series_tiktok(tk_db=None):
+    if tk_db is None:
+        tk_db = TIKTOK_DB
+    conn = sqlite3.connect(tk_db)
     df = pd.read_sql_query("SELECT * FROM tiktok_engagement", conn)
 
     df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")

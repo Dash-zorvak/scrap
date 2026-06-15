@@ -6,8 +6,10 @@ sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
 from config import *
 
 
-def procesar_facebook():
-    conn = sqlite3.connect(FACEBOOK_DB)
+def procesar_facebook(fb_db=None):
+    if fb_db is None:
+        fb_db = FACEBOOK_DB
+    conn = sqlite3.connect(fb_db)
 
     placeholders = ",".join(repr(p) for p in FB_PAGES_OFICIALES)
     query = f"""
@@ -43,8 +45,10 @@ def procesar_facebook():
     return df
 
 
-def procesar_tiktok():
-    conn = sqlite3.connect(TIKTOK_DB)
+def procesar_tiktok(tk_db=None):
+    if tk_db is None:
+        tk_db = TIKTOK_DB
+    conn = sqlite3.connect(tk_db)
 
     query = """
         SELECT id, account_id, description, created_at,
@@ -70,7 +74,7 @@ def procesar_tiktok():
         "score_engagement", "plataforma"
     ]
 
-    conn = sqlite3.connect(TIKTOK_DB)
+    conn = sqlite3.connect(tk_db)
     df[cols_salida].to_sql("tiktok_engagement", conn, if_exists="replace", index=False)
     conn.close()
 
@@ -88,13 +92,13 @@ def imprimir_resultados(df_fb, df_tk):
         top_amor = df_fb.nlargest(5, "score_emocional")
         for _, row in top_amor.iterrows():
             msg = (row["message"] or "")[:80].replace("\n", " ")
-            print(f"  - [{row['created_time'][:10]}] [{row['page_name']}] {msg} → score: {row['score_emocional']:.2f}")
+            print(f'  - [{row["created_time"][:10]}] [{row["page_name"]}] {msg} → score: {row["score_emocional"]:.2f}')
 
         print("Top 5 posts por indice_humor:")
         top_humor = df_fb.nlargest(5, "indice_humor")
         for _, row in top_humor.iterrows():
             msg = (row["message"] or "")[:80].replace("\n", " ")
-            print(f"  - [{row['created_time'][:10]}] [{row['page_name']}] {msg} → humor: {row['indice_humor']:.2f}")
+            print(f'  - [{row["created_time"][:10]}] [{row["page_name"]}] {msg} → humor: {row["indice_humor"]:.2f}')
 
     print("\n=== TIKTOK ===")
     print(f"Total videos procesados: {len(df_tk)}")
@@ -105,13 +109,13 @@ def imprimir_resultados(df_fb, df_tk):
         top_er = df_tk.nlargest(5, "engagement_rate")
         for _, row in top_er.iterrows():
             desc = (row["description"] or "")[:80].replace("\n", " ")
-            print(f"  - [{row['created_at'][:10]}] [{row['page_name']}] {desc} → rate: {row['engagement_rate']*100:.2f}%")
+            print(f'  - [{row["created_at"][:10]}] [{row["page_name"]}] {desc} → rate: {row["engagement_rate"]*100:.2f}%')
 
         print("Top 5 videos por indice_viralidad:")
         top_vir = df_tk.nlargest(5, "indice_viralidad")
         for _, row in top_vir.iterrows():
             desc = (row["description"] or "")[:80].replace("\n", " ")
-            print(f"  - [{row['created_at'][:10]}] [{row['page_name']}] {desc} → viral: {row['indice_viralidad']*100:.2f}%")
+            print(f'  - [{row["created_at"][:10]}] [{row["page_name"]}] {desc} → viral: {row["indice_viralidad"]*100:.2f}%')
 
 
 if __name__ == "__main__":

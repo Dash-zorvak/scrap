@@ -68,7 +68,11 @@ def normalizar_numero(texto: str | None) -> int | None:
             return None
 
     if len(partes) >= 3:
-        limpio = "".join(partes[:-1]) + "." + partes[-1]
+        seps = re.findall(r"[,.]", texto)
+        if len(set(seps)) == 1:
+            limpio = "".join(partes)
+        else:
+            limpio = "".join(partes[:-1]) + "." + partes[-1]
     else:
         izq, der = partes
         if len(der) == 3 and len(izq) <= 3:
@@ -88,6 +92,23 @@ def normalizar_numero(texto: str | None) -> int | None:
         return max(v_total, 0) if v_total >= 0 else None
     except (ValueError, TypeError):
         return None
+
+
+# ═══════════════════════════════════════════════
+# Detección de MIME type real para imágenes
+# ═══════════════════════════════════════════════
+
+def _detectar_mime(data: bytes, declarado: str | None = None) -> str:
+    """Detecta el mime real de la imagen. Respeta el declarado si es image/*."""
+    if declarado and declarado.startswith("image/"):
+        return declarado
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/png"
 
 
 # ═══════════════════════════════════════════════
@@ -120,18 +141,18 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 
 {
   "texto_post": "string (texto del post, vacío si no se ve)",
-  "fecha": "YYYY-MM-DD o null si no visible",
+  "fecha": {"valor": "YYYY-MM-DD o null", "confianza": "seguro|dudoso"},
   "autor_pagina": "nombre de la página o null",
   "reacciones": {
-    "likes": 0,
-    "loves": null,
-    "hahas": null,
-    "sads": null,
-    "wows": null,
-    "angrys": null,
-    "total": null
+    "likes": {"valor": 0, "confianza": "seguro|dudoso"},
+    "loves": {"valor": null, "confianza": "seguro|dudoso"},
+    "hahas": {"valor": null, "confianza": "seguro|dudoso"},
+    "sads": {"valor": null, "confianza": "seguro|dudoso"},
+    "wows": {"valor": null, "confianza": "seguro|dudoso"},
+    "angrys": {"valor": null, "confianza": "seguro|dudoso"},
+    "total": {"valor": null, "confianza": "seguro|dudoso"}
   },
-  "comentarios_count": null,
+  "comentarios_count": {"valor": null, "confianza": "seguro|dudoso"},
   "comentarios": [
     {"texto": "texto literal", "autor": "nombre o null"}
   ]
@@ -141,8 +162,10 @@ REGLAS:
 - "Me gusta"=likes, "Me encanta"=loves, "Me divierte"=hahas,
   "Me entristece"=sads, "Me asombra"=wows, "Me enoja"=angrys
 - NO extraer "compartidos" ni reproducciones/vistas
-- Si un número no es claramente visible → null
-- Si se ve pero está borroso/ambiguo → pon el número igual
+- Por cada número y la fecha, devuelve {"valor": ..., "confianza": "..."}.
+- confianza="seguro" si el dato se lee con total claridad.
+- confianza="dudoso" si se ve pero está borroso, ambiguo o cortado.
+- Si el dato NO se ve → valor=null (la confianza se ignora en ese caso).
 - Transcribe comentarios TEXTUALMENTE, sin resumir ni corregir
 - NO inventes datos
 - Analiza TODAS las imágenes; los comentarios pueden estar en varias
@@ -156,14 +179,12 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 
 {
   "texto_post": "string (descripción, vacío si no se ve)",
-  "fecha": "YYYY-MM-DD o null si no visible",
+  "fecha": {"valor": "YYYY-MM-DD o null", "confianza": "seguro|dudoso"},
   "autor_cuenta": "nombre de la cuenta o null",
   "metricas": {
-    "likes": null,
-    "favoritos": null,
-    "comentarios_count": null,
-    "compartidos": null,
-    "vistas": null
+    "likes": {"valor": null, "confianza": "seguro|dudoso"},
+    "favoritos": {"valor": null, "confianza": "seguro|dudoso"},
+    "comentarios_count": {"valor": null, "confianza": "seguro|dudoso"}
   },
   "comentarios": [
     {"texto": "texto literal", "autor": "nombre o null"}
@@ -172,9 +193,11 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 
 REGLAS:
 - corazón=likes, marcador/guardar=favoritos, bocadillo=comentarios_count
-- NO extraer "compartir" ni "reproducciones" (se teclean a mano)
-- Si un número no es claramente visible → null
-- Si se ve pero está borroso/ambiguo → pon el número igual
+- NO extraer "compartidos" ni "vistas" (se teclean a mano)
+- Por cada número y la fecha, devuelve {"valor": ..., "confianza": "..."}.
+- confianza="seguro" si el dato se lee con total claridad.
+- confianza="dudoso" si se ve pero está borroso, ambiguo o cortado.
+- Si el dato NO se ve → valor=null (la confianza se ignora en ese caso).
 - Transcribe comentarios TEXTUALMENTE, sin resumir ni corregir
 - NO inventes datos
 - Analiza TODAS las imágenes; los comentarios pueden estar en varias
@@ -204,15 +227,35 @@ def _norm(v: Any) -> int | None:
     return normalizar_numero(str(v))
 
 
-def _valor_confianza(valor: Any, predeterminado: str = "no_detectado") -> dict:
-    """Envuelve un valor en {valor, confianza}.
+def _num_confianza(raw: Any, predeterminado: str = "no_detectado") -> dict:
+    """Procesa un campo numérico que Gemini devuelve como {valor, confianza}
+    o como número suelto (compat). Normaliza el valor con _norm."""
+    if isinstance(raw, dict):
+        valor = _norm(raw.get("valor"))
+        conf = raw.get("confianza")
+    else:
+        valor = _norm(raw)
+        conf = None
+    if valor is None:
+        return {"valor": None, "confianza": predeterminado}
+    if conf not in ("seguro", "dudoso"):
+        conf = "seguro"
+    return {"valor": valor, "confianza": conf}
 
-    Si valor no es None → confianza "seguro".
-    Si es None → confianza predeterminado (no_detectado).
-    """
-    if valor is not None:
-        return {"valor": valor, "confianza": "seguro"}
-    return {"valor": None, "confianza": predeterminado}
+
+def _fecha_confianza(raw: Any) -> dict:
+    """Igual que _num_confianza pero sin normalizar (la fecha es string ISO)."""
+    if isinstance(raw, dict):
+        valor = raw.get("valor") or None
+        conf = raw.get("confianza")
+    else:
+        valor = raw or None
+        conf = None
+    if valor is None:
+        return {"valor": None, "confianza": "no_detectado"}
+    if conf not in ("seguro", "dudoso"):
+        conf = "seguro"
+    return {"valor": valor, "confianza": conf}
 
 
 def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
@@ -225,22 +268,18 @@ def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
         return {
             "plataforma": "facebook",
             "texto_post": respuesta.get("texto_post") or "",
-            "fecha": _valor_confianza(respuesta.get("fecha")),
+            "fecha": _fecha_confianza(respuesta.get("fecha")),
             "autor_pagina": respuesta.get("autor_pagina") or None,
             "reacciones": {
-                "likes": _valor_confianza(_norm(reacs.get("likes"))),
-                "loves": _valor_confianza(_norm(reacs.get("loves"))),
-                "hahas": _valor_confianza(_norm(reacs.get("hahas"))),
-                "sads": _valor_confianza(_norm(reacs.get("sads"))),
-                "wows": _valor_confianza(_norm(reacs.get("wows"))),
-                "angrys": _valor_confianza(_norm(reacs.get("angrys"))),
-                "total": _valor_confianza(
-                    _norm(reacs.get("total")), predeterminado="dudoso"
-                ),
+                "likes": _num_confianza(reacs.get("likes")),
+                "loves": _num_confianza(reacs.get("loves")),
+                "hahas": _num_confianza(reacs.get("hahas")),
+                "sads": _num_confianza(reacs.get("sads")),
+                "wows": _num_confianza(reacs.get("wows")),
+                "angrys": _num_confianza(reacs.get("angrys")),
+                "total": _num_confianza(reacs.get("total"), predeterminado="dudoso"),
             },
-            "comentarios_count": _valor_confianza(
-                _norm(respuesta.get("comentarios_count"))
-            ),
+            "comentarios_count": _num_confianza(respuesta.get("comentarios_count")),
             "compartidos": {"valor": None, "confianza": "manual"},
             "vistas": {"valor": None, "confianza": "manual"},
             "comentarios": [
@@ -258,14 +297,12 @@ def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
         return {
             "plataforma": "tiktok",
             "texto_post": respuesta.get("texto_post") or "",
-            "fecha": _valor_confianza(respuesta.get("fecha")),
+            "fecha": _fecha_confianza(respuesta.get("fecha")),
             "autor_cuenta": respuesta.get("autor_cuenta") or None,
             "metricas": {
-                "likes": _valor_confianza(_norm(metrics.get("likes"))),
-                "favoritos": _valor_confianza(_norm(metrics.get("favoritos"))),
-                "comentarios_count": _valor_confianza(
-                    _norm(metrics.get("comentarios_count"))
-                ),
+                "likes": _num_confianza(metrics.get("likes")),
+                "favoritos": _num_confianza(metrics.get("favoritos")),
+                "comentarios_count": _num_confianza(metrics.get("comentarios_count")),
                 "compartidos": {"valor": None, "confianza": "manual"},
                 "vistas": {"valor": None, "confianza": "manual"},
             },
@@ -349,8 +386,10 @@ def extraer_post_desde_capturas(imagenes: list, plataforma: str) -> dict:
         try:
             if hasattr(img, "getvalue"):
                 data = img.getvalue()
+                mime = _detectar_mime(data, getattr(img, "type", None))
             elif isinstance(img, bytes):
                 data = img
+                mime = _detectar_mime(data)
             else:
                 import io
                 from PIL import Image
@@ -360,7 +399,8 @@ def extraer_post_desde_capturas(imagenes: list, plataforma: str) -> dict:
                 else:
                     Image.open(img).save(buf, format="PNG")
                 data = buf.getvalue()
-            image_parts.append({"mime_type": "image/png", "data": data})
+                mime = "image/png"
+            image_parts.append({"mime_type": mime, "data": data})
         except Exception:
             continue  # imagen corrupta → saltar
 

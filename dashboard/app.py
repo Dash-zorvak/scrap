@@ -12,7 +12,8 @@ import os
 import sys
 import json
 import uuid
-sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboard"))
 from config import (
     FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB,
     FACEBOOK_TEST_DB, TIKTOK_TEST_DB, EXTERNOS_TEST_DB,

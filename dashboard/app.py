@@ -2003,6 +2003,11 @@ def seccion_cargar_contenido():
         def _progreso(paso, total, etiqueta):
             status.update(label=f"Paso {paso}/{total}: {etiqueta}")
         result = procesar_pipeline(st.session_state.get("modo_prueba", False), _progreso)
+        st.session_state["ultimo_procesamiento"] = result
+        st.cache_data.clear()
+        status.update(label="Pipeline completado", state="complete", expanded=False)
+    result = st.session_state.get("ultimo_procesamiento")
+    if result:
         motor = result["motor_sentimiento"]
         if motor == "bert":
             st.success("🧠 Sentimiento analizado con BERT local (modelo principal).")
@@ -2014,8 +2019,6 @@ def seccion_cargar_contenido():
             st.info(f"✅ Pasos completados: {', '.join(result['pasos_ok'])}")
         for err in result["errores"]:
             st.error(f"❌ {err}")
-        status.update(label="Pipeline completado", state="complete", expanded=False)
-        st.rerun()
 
 
 if seccion == "ESTADO GENERAL":

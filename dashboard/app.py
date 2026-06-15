@@ -12,13 +12,15 @@ import os
 import sys
 import json
 import uuid
-sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboard"))
 from config import (
     FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB,
     FACEBOOK_TEST_DB, TIKTOK_TEST_DB, EXTERNOS_TEST_DB,
     FB_PAGES_OFICIALES, FB_REACTIONS, TK_ENGAGEMENT,
     TK_ACCOUNTS, OUTPUT_DIR
 )
+from dashboard.guardar_lote import guardar_lote
 
 # ── Toggle modo prueba — antes de cualquier función cacheada ──
 if "modo_prueba" not in st.session_state:
@@ -1963,6 +1965,34 @@ def seccion_cargar_contenido():
 
     # ── Revisión Fase 3 ──
     seccion_revisar_lote()
+
+    # ── Guardado a SQLite (Fase 4) ──
+    lote = st.session_state["lote_ingreso"]
+    revisados = [p for p in lote if p["estado"] == "revisado"]
+    guardados = [p for p in lote if p["estado"] == "guardado"]
+    if revisados:
+        st.markdown("### 💾 Paso 4 — Guardar en base de datos")
+        st.caption(f"{len(revisados)} post(s) confirmados listos para guardar.")
+        if st.button("💾 Guardar lote en base de datos", type="primary"):
+            resumen = guardar_lote(lote, st.session_state.get("modo_prueba", False))
+            partes = []
+            if resumen["fb_posts"]:
+                partes.append(f"{resumen['fb_posts']} posts FB")
+            if resumen["fb_comments"]:
+                partes.append(f"{resumen['fb_comments']} comentarios FB")
+            if resumen["tk_videos"]:
+                partes.append(f"{resumen['tk_videos']} videos TikTok")
+            if resumen["tk_comments"]:
+                partes.append(f"{resumen['tk_comments']} comentarios TikTok")
+            msg = "✅ Guardado: " + ", ".join(partes) if partes else "⚠️ No se guardó nada."
+            if resumen["errores"]:
+                msg += "  \n".join(f"❌ {e}" for e in resumen["errores"][:5])
+                if len(resumen["errores"]) > 5:
+                    msg += f"\n... y {len(resumen['errores'])-5} error(es) más."
+            st.success(msg)
+            st.rerun()
+    if guardados:
+        st.info(f"✅ {len(guardados)} post(s) ya guardados en la base de datos.")
 
 
 if seccion == "ESTADO GENERAL":

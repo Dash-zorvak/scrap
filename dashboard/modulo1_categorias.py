@@ -11,7 +11,7 @@ import re
 
 
 STOPWORDS = {
-    "de","la","el","en","y","a","los","las","un","una","es","se",
+    "de","la","el","en","y","a","los","las","un","una","un","es","se",
     "que","por","con","del","al","su","sus","para","como","más",
     "pero","o","si","le","lo","ya","fue","son","hay","este","esta",
     "no","ni","lo","les","las","dos","muy","cada","todo","todos",
@@ -61,10 +61,14 @@ def generar_embeddings(textos, batch_size=64):
     return np.vstack(todos)
 
 
-def categorizar_posts():
-    # 1. Leer Facebook posts
+def categorizar_posts(fb_db=None, tk_db=None):
+    if fb_db is None:
+        fb_db = FACEBOOK_DB
+    if tk_db is None:
+        tk_db = TIKTOK_DB
+
     placeholders = ",".join(repr(p) for p in FB_PAGES_OFICIALES)
-    conn = sqlite3.connect(FACEBOOK_DB)
+    conn = sqlite3.connect(fb_db)
     df_fb = pd.read_sql_query(
         f"SELECT post_id as item_id, 'facebook' as plataforma, "
         f"message as texto, created_time as fecha "
@@ -74,8 +78,7 @@ def categorizar_posts():
     )
     conn.close()
 
-    # 2. Leer TikTok videos
-    conn = sqlite3.connect(TIKTOK_DB)
+    conn = sqlite3.connect(tk_db)
     df_tt = pd.read_sql_query(
         "SELECT id as item_id, 'tiktok' as plataforma, "
         "description as texto, created_at as fecha "
@@ -87,28 +90,23 @@ def categorizar_posts():
     print(f"  FB posts: {len(df_fb)}")
     print(f"  TT videos: {len(df_tt)}")
 
-    # 3. Unir
     df = pd.concat([df_fb, df_tt], ignore_index=True)
     print(f"  Total items: {len(df)}")
 
-    # 4. Limpiar
     df["texto_limpio"] = df["texto"].apply(limpiar_texto)
     df = df[df["texto_limpio"].notna()].copy()
     print(f"  Después de limpieza: {len(df)}")
 
-    # 5. Embeddings
     textos = df["texto_limpio"].tolist()
     print("  Generando embeddings...")
     X = generar_embeddings(textos)
     X = normalize(X)
 
-    # 6. KMeans
     print("  Corriendo KMeans con k=8...")
     km = KMeans(n_clusters=8, random_state=42, n_init=10)
     df["cluster_id"] = km.fit_predict(X)
     centroides = km.cluster_centers_
 
-    # 7. Imprimir clusters
     print("\n" + "="*60)
     print("CLUSTERS DETECTADOS")
     print("="*60)
@@ -130,8 +128,7 @@ def categorizar_posts():
             plat = row["plataforma"]
             print(f"  {rank}. [{plat}] {txt}")
 
-    # 8. Guardar
-    conn = sqlite3.connect(FACEBOOK_DB)
+    conn = sqlite3.connect(fb_db)
     df[["item_id", "plataforma", "cluster_id", "texto_limpio"]].to_sql(
         "post_categorias", conn, if_exists="replace", index=False
     )
@@ -139,7 +136,9 @@ def categorizar_posts():
     print(f"\n✓ {len(df)} items categorizados guardados en post_categorias")
 
 
-def guardar_nombres_clusters():
+def guardar_nombres_clusters(fb_db=None):
+    if fb_db is None:
+        fb_db = FACEBOOK_DB
     nombres = {
         0: "Obras viales y calles",
         1: "Contenido promocional",
@@ -151,7 +150,7 @@ def guardar_nombres_clusters():
         7: "Deporte",
     }
 
-    conn = sqlite3.connect(FACEBOOK_DB)
+    conn = sqlite3.connect(fb_db)
     cur = conn.cursor()
 
     cur.execute("PRAGMA table_info(post_categorias)")

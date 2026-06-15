@@ -13,6 +13,9 @@ httpx>=0.27.0
 pandas>=2.0.0
 numpy>=1.24.0
 
+# ML / Clustering (categorizacion de posts - modulo1: KMeans + normalize)
+scikit-learn>=1.3.0
+
 # Database
 sqlalchemy>=2.0.0
 

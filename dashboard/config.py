@@ -42,3 +42,6 @@ EXTERNOS_TEST_DB = os.path.join(BASE_DIR, "data", "externos_test.db")
 
 # Crear carpeta outputs si no existe
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Mínimo de comentarios analizados para considerar la muestra "suficiente" (Decisión #1)
+MIN_COMENTARIOS_MUESTRA = 15

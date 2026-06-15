@@ -18,10 +18,11 @@ from config import (
     FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB,
     FACEBOOK_TEST_DB, TIKTOK_TEST_DB, EXTERNOS_TEST_DB,
     FB_PAGES_OFICIALES, FB_REACTIONS, TK_ENGAGEMENT,
-    TK_ACCOUNTS, OUTPUT_DIR
+    TK_ACCOUNTS, OUTPUT_DIR, MIN_COMENTARIOS_MUESTRA,
 )
 from dashboard.guardar_lote import guardar_lote
 from dashboard.procesar_lote import procesar_pipeline
+from dashboard.muestra import evaluar_muestra
 
 # ── Toggle modo prueba — antes de cualquier función cacheada ──
 if "modo_prueba" not in st.session_state:
@@ -2592,6 +2593,11 @@ elif seccion == "TEMAS Y EMOCIONES":
         "Combina afecto vs. controversia (reacciones) y el sentimiento de los comentarios. "
         "Rango ~[-1, 1]: positivo = post querido; negativo = post que genera rechazo."
     )
+    st.info(
+        "El análisis de sentimiento se basa en los comentarios capturados de cada post, "
+        "no en el 100% de la conversación. Los porcentajes son un proxy de la reacción "
+        "del público, no una medición exhaustiva."
+    )
     df_sen = calcular_score_emocional_neto(min_reacciones=10)
     if hay_datos(df_sen, "Aún no hay posts para el score emocional."):
         df_val = df_sen[df_sen["incluido_proporciones"]].copy()
@@ -2603,16 +2609,29 @@ elif seccion == "TEMAS Y EMOCIONES":
             c2.metric("Post más querido", f"{df_val['score_emocional_neto'].max():+.2f}")
             c3.metric("Post más controversial", f"{df_val['score_emocional_neto'].min():+.2f}")
 
+            ocultar_insuf = st.checkbox(
+                f"Ocultar posts con muestra insuficiente (< {MIN_COMENTARIOS_MUESTRA} comentarios)",
+                value=False,
+            )
+            if ocultar_insuf:
+                df_val = df_val[df_val["total_comentarios"] >= MIN_COMENTARIOS_MUESTRA]
+            if df_val.empty:
+                st.warning("No hay posts que cumplan el filtro de muestra suficiente.")
+                st.stop()
+
             def _resumen(m):
                 m = (str(m) if m is not None else "").replace("\n", " ").strip()
                 return (m[:90] + "…") if len(m) > 90 else (m or "(sin texto)")
             df_val["post"] = df_val["message"].apply(_resumen)
+            df_val["Muestra"] = df_val["total_comentarios"].apply(
+                lambda x: evaluar_muestra(x)["etiqueta"]
+            )
 
             cols_show = ["post", "score_emocional_neto", "afecto_positivo",
-                         "controversia", "score_sent_norm", "total_reacciones"]
+                         "controversia", "score_sent_norm", "Muestra"]
             ren = {"post": "Post", "score_emocional_neto": "Score neto",
                    "afecto_positivo": "Afecto", "controversia": "Controversia",
-                   "score_sent_norm": "Sent. coment.", "total_reacciones": "Reacciones"}
+                   "score_sent_norm": "Sent. coment.", "Muestra": "Muestra"}
             fmt = {"Score neto": "{:+.2f}", "Afecto": "{:.2f}",
                    "Controversia": "{:.2f}", "Sent. coment.": "{:+.2f}"}
 

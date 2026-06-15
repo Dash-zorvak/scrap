@@ -10,7 +10,6 @@ from collections import Counter
 import logging
 import os
 import sys
-import json
 sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
 from config import (
     FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB,
@@ -32,79 +31,6 @@ TIKTOK_DB_ACTIVA = (
 EXTERNOS_DB_ACTIVA = (
     EXTERNOS_TEST_DB if st.session_state.get("modo_prueba", False) else EXTERNOS_DB
 )
-
-# ═══════════════════════════════════════════
-# CAPA DE IA — Google Gemini
-# ═══════════════════════════════════════════
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
-    """
-    Genera narrativa ejecutiva usando Google Gemini.
-    Tipos: 'eco_historico', 'leccion', 'brecha', 'contexto',
-           'correlacion', 'proyeccion', 'recomendacion'
-    """
-    api_key = st.secrets.get("GOOGLE_API_KEY") if hasattr(st, "secrets") else None
-    if not api_key:
-        return "Análisis IA no disponible en este momento (falta GOOGLE_API_KEY en .streamlit/secrets.toml)"
-    
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
-    except Exception:
-        return "Análisis IA no disponible en este momento (error de configuración)"
-    
-    prompts = {
-        "eco_historico": (
-            "Eres analista político senior para Alcaldía de Santa Ana. "
-            "Dado el contexto de métricas de percepción de la semana, escribe un párrafo ejecutivo "
-            "(máx 120 palabras) que explique qué patrón histórico o 'eco' del pasado "
-            "resuena con la situación actual. Tono: directo, sin adjetivos vacíos, "
-            "orientado a decisión de reelección. Español."
-        ),
-        "leccion": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "sintetizando la lección operativa clara que deja esta semana de datos. "
-            "Qué NO repetir, qué replicar. Tono: brutal honestidad, acción inmediata. Español."
-        ),
-        "brecha": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "sobre la brecha entre lo que la ciudadanía PERCIBE (sentimiento, temas, enojo) "
-            "y la GESTIÓN REAL (obras, servicios, indicadores municipales — dato no disponible en BD, "
-            "asume que existe). Tono: confronta percepción vs realidad sin suavizar. Español."
-        ),
-        "contexto": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "explicando qué está pasando FUERA de las redes (eventos municipales, opositores, "
-            "economía local, clima, noticias) que explica el sentimiento negativo detectado "
-            "en comentarios. Usa solo el contexto implícito en los datos. Tono: discreto, informado. Español."
-        ),
-        "correlacion": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "sobre la correlación entre TIPO DE CONTENIDO publicado y REACCIÓN CIUDADANA "
-            "(brecha reacción vs comentario). Qué contenido genera desconexión. Tono: diagnóstico preciso. Español."
-        ),
-        "proyeccion": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "proyectando el escenario a 2 semanas si la tendencia actual de sentimiento, "
-            "engagement y narrativas se mantiene. Tono: alerta temprana, sin alarmismo. Español."
-        ),
-        "recomendacion": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "con LA recomendación estratégica única de la semana, sintetizando TODOS los indicadores: "
-            "Pulso, Audiencia, Riesgo, Memoria. Qué hacer el lunes. Tono: orden directa, ejecutable. Español."
-        ),
-    }
-    
-    prompt_base = prompts.get(tipo, prompts["recomendacion"])
-    ctx_str = json.dumps(contexto, ensure_ascii=False, default=str)[:3000]
-    
-    try:
-        response = model.generate_content(f"{prompt_base}\n\nCONTEXTO (JSON):\n{ctx_str}")
-        return response.text.strip()
-    except Exception:
-        return "Análisis IA no disponible en este momento (error en llamada API)"
 
 def generar_interpretacion(tipo, datos):
     score = datos.get('score', 0)
@@ -718,14 +644,18 @@ st.sidebar.markdown(
 
 st.sidebar.markdown("---")
 
-# ── NAVEGACIÓN: 4 PESTAÑAS AGRUPADAS ──
-TABS = [
-    "📊 Pulso General",
-    "👥 Segmentación de Audiencia",
-    "⚠️ Riesgo y Autenticidad",
-    "🧠 Memoria e Inteligencia Aplicada"
-]
-tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs(TABS)
+seccion = st.sidebar.radio("SECCIÓN", [
+    "ESTADO GENERAL",
+    "TEMAS Y EMOCIONES",
+    "LÍNEA DEL TIEMPO",
+    "VOZ CIUDADANA",
+    "MICROSEGMENTACIÓN",
+    "CONFIANZA INSTITUCIONAL",
+    "NARRATIVAS ACTIVAS",
+    "CONTAGIO EMOCIONAL",
+    "CONTEXTO EXTERNO",
+    "NOTAS METODOLÓGICAS"
+])
 
 # ── HELPERS ──
 

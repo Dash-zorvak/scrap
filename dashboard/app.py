@@ -1538,9 +1538,332 @@ def render_notas_metodologicas():
 # SECCIÓN — 📥 Cargar contenido (Fase 1)
 # ═══════════════════════════════════════════
 
-def procesar_lote(lote: list[dict]) -> None:
-    # TODO Fase 2-5: extracción Gemini -> revisión -> escritura SQLite -> pipeline
-    st.info("⚙️ Procesamiento aún no implementado (Fase 2 en adelante).")
+# ═══════════════════════════════════════════════════
+# Helpers de revisión (Fase 3)
+# ═══════════════════════════════════════════════════
+
+def _campo_numero(label: str, dato_confianza: dict, key_suffix: str, id_temporal: str) -> None:
+    """Renderiza st.number_input con resaltado por confianza.
+
+    confianza 'seguro' → normal
+    confianza 'dudoso' → 🟡 + "revisar: lectura dudosa"
+    confianza 'no_detectado' → 🟡 + "no detectado — completa a mano"
+    confianza 'manual' → 🟡 + "se teclea a mano (no se confía al OCR)"
+    """
+    confianza = dato_confianza.get("confianza", "no_detectado")
+    valor = dato_confianza.get("valor")
+    key = f"rev_{key_suffix}_{id_temporal}"
+
+    label_display = f"🟡 {label}" if confianza != "seguro" else label
+    initial = valor if valor is not None else 0
+
+    st.number_input(label_display, min_value=0, value=initial, step=1, key=key)
+    if confianza == "dudoso":
+        st.caption("revisar: lectura dudosa")
+    elif confianza == "no_detectado":
+        st.caption("no detectado — completa a mano")
+    elif confianza == "manual":
+        st.caption("se teclea a mano (no se confía al OCR)")
+
+
+def _contrato_vacio(plataforma: str) -> dict:
+    """Contrato vacío para rellenar a mano cuando Gemini falla."""
+    vacio = {"valor": None, "confianza": "no_detectado"}
+    if plataforma == "facebook":
+        return {
+            "plataforma": "facebook",
+            "texto_post": "",
+            "fecha": {"valor": None, "confianza": "no_detectado"},
+            "autor_pagina": None,
+            "reacciones": {k: dict(vacio) for k in (
+                "likes", "loves", "hahas", "sads", "wows", "angrys", "total"
+            )},
+            "comentarios_count": dict(vacio),
+            "compartidos": {"valor": None, "confianza": "manual"},
+            "vistas": {"valor": None, "confianza": "manual"},
+            "comentarios": [],
+        }
+    elif plataforma == "tiktok":
+        return {
+            "plataforma": "tiktok",
+            "texto_post": "",
+            "fecha": {"valor": None, "confianza": "no_detectado"},
+            "autor_cuenta": None,
+            "metricas": {k: dict(vacio) for k in (
+                "likes", "favoritos", "comentarios_count"
+            )} | {
+                "compartidos": {"valor": None, "confianza": "manual"},
+                "vistas": {"valor": None, "confianza": "manual"},
+            },
+            "comentarios": [],
+        }
+
+
+# ═══════════════════════════════════════════════════
+# Fase 3 — Revisión editable del lote
+# ═══════════════════════════════════════════════════
+
+def seccion_revisar_lote() -> None:
+    """Pantalla de revisión editable post-extracción (Fase 3).
+
+    Dispara extracción con Gemini, muestra tarjetas editables
+    con resaltado por confianza, y produce datos_revisados.
+    """
+    lote = st.session_state["lote_ingreso"]
+    pendientes = [p for p in lote if p["estado"] == "pendiente"]
+    extraidos = [p for p in lote if p["estado"] in ("extraido", "revisado")]
+
+    if not pendientes and not extraidos:
+        return
+
+    # ── Paso 1: Botón de extracción ──
+    if pendientes:
+        st.markdown("### 🔍 Extracción con IA")
+        st.caption(
+            "Gemini Vision leerá las capturas y extraerá texto, fechas, "
+            "reacciones y comentarios. Los números borrosos o no visibles "
+            "quedarán marcados para que los completes."
+        )
+        if st.button("🔍 Extraer y revisar lote", width='stretch', type="primary"):
+            from ingreso_extraccion import extraer_post_desde_capturas
+
+            n = len(pendientes)
+            status = st.status(f"Extrayendo datos de las capturas… 0/{n}", expanded=True)
+            for i, item in enumerate(pendientes):
+                status.write(
+                    f"Procesando post {i+1}/{n}: "
+                    f"{item['plataforma'].title()} — {item['fuente']}"
+                )
+                datos = extraer_post_desde_capturas(item["imagenes"], item["plataforma"])
+                item["datos_extraidos"] = datos
+                item["estado"] = "extraido"
+            status.update(label=f"✅ Extracción completada ({n} posts)", state="complete", expanded=False)
+            st.rerun()
+
+    # ── Paso 2: Tarjetas editables ──
+    if extraidos:
+        st.markdown("### ✏️ Revisión y corrección")
+        st.caption("Campos marcados con 🟡 requieren atención. Vistas y compartidos se teclean siempre a mano.")
+
+        n_revisados = sum(1 for p in extraidos if p["estado"] == "revisado")
+        if n_revisados:
+            st.info(f"{n_revisados}/{len(extraidos)} posts confirmados hasta ahora.")
+
+        for i, item in enumerate(extraidos):
+            datos = item.get("datos_extraidos", {})
+            is_error = "error" in datos
+            is_revisado = item["estado"] == "revisado"
+            id_ = item["id_temporal"]
+
+            plat_emoji = "📘" if item["plataforma"] == "facebook" else "🎵"
+            tag = "✅ Revisado" if is_revisado else "🟡 Pendiente"
+            label = f"{plat_emoji} Post {i+1}: {item['fuente']} — {tag}"
+
+            with st.expander(label, expanded=not is_revisado):
+                if item.get("enlace"):
+                    st.markdown(f"**Enlace:** {item['enlace']}")
+
+                if is_error:
+                    st.error(f"⚠️ Gemini no pudo leer esta captura: «{datos['error']}». Llénala a mano.")
+                    datos = _contrato_vacio(item["plataforma"])
+
+                with st.form(key=f"form_revision_{id_}"):
+                    # ── Texto del post ──
+                    texto_key = f"rev_texto_{id_}"
+                    texto_val = datos.get("texto_post", "")
+                    st.text_area("Texto del post / descripción", value=texto_val, key=texto_key)
+                    if not texto_val:
+                        st.caption("no se leyó texto, escríbelo si aplica")
+
+                    # ── Fecha ──
+                    fecha_key = f"rev_fecha_{id_}"
+                    fecha_dato = datos.get("fecha", {"valor": None, "confianza": "no_detectado"})
+                    fecha_conf = fecha_dato.get("confianza", "no_detectado")
+                    fecha_label = "🟡 Fecha" if fecha_conf != "seguro" else "Fecha"
+                    fv = fecha_dato.get("valor")
+                    try:
+                        fecha_init = datetime.strptime(fv, "%Y-%m-%d").date() if fv else None
+                    except (ValueError, TypeError):
+                        fecha_init = None
+                    st.date_input(fecha_label, value=fecha_init, key=fecha_key)
+                    if fecha_conf == "dudoso":
+                        st.caption("revisar: lectura dudosa")
+                    elif fecha_conf == "no_detectado":
+                        st.caption("no detectado — completa a mano")
+
+                    # ── Métricas según plataforma ──
+                    if item["plataforma"] == "facebook":
+                        reacs = datos.get("reacciones", {})
+                        st.markdown("**Reacciones**")
+                        cols = st.columns(3)
+                        fb_order = [
+                            ("likes", "Likes"), ("loves", "Me encanta"),
+                            ("hahas", "Me divierte"), ("sads", "Me entristece"),
+                            ("wows", "Me asombra"), ("angrys", "Me enoja"),
+                        ]
+                        for idx, (field, lbl) in enumerate(fb_order):
+                            with cols[idx % 3]:
+                                _campo_numero(lbl, reacs.get(field, {"valor": None, "confianza": "no_detectado"}),
+                                              f"fb_{field}", id_)
+                        _campo_numero("Total reacciones",
+                                      reacs.get("total", {"valor": None, "confianza": "dudoso"}),
+                                      "fb_total", id_)
+                        _campo_numero("Comentarios (conteo)",
+                                      datos.get("comentarios_count", {"valor": None, "confianza": "no_detectado"}),
+                                      "fb_comentarios_count", id_)
+                        st.markdown("**Campos manuales**")
+                        c2 = st.columns(2)
+                        with c2[0]:
+                            _campo_numero("Compartidos", {"valor": None, "confianza": "manual"},
+                                          "fb_compartidos", id_)
+                        with c2[1]:
+                            _campo_numero("Vistas", {"valor": None, "confianza": "manual"},
+                                          "fb_vistas", id_)
+                    else:  # TikTok
+                        metrics = datos.get("metricas", {})
+                        st.markdown("**Métricas**")
+                        cols = st.columns(3)
+                        tk_order = [
+                            ("likes", "Likes"), ("favoritos", "Favoritos"),
+                            ("comentarios_count", "Comentarios (conteo)"),
+                        ]
+                        for idx, (field, lbl) in enumerate(tk_order):
+                            with cols[idx % 3]:
+                                _campo_numero(lbl, metrics.get(field, {"valor": None, "confianza": "no_detectado"}),
+                                              f"tk_{field}", id_)
+                        st.markdown("**Campos manuales**")
+                        c2 = st.columns(2)
+                        with c2[0]:
+                            _campo_numero("Compartidos", {"valor": None, "confianza": "manual"},
+                                          "tk_compartidos", id_)
+                        with c2[1]:
+                            _campo_numero("Vistas", {"valor": None, "confianza": "manual"},
+                                          "tk_vistas", id_)
+
+                    # ── Comentarios (data_editor dinámico) ──
+                    comments_key = f"rev_comments_{id_}"
+                    raw = datos.get("comentarios", [])
+                    if item["plataforma"] == "facebook":
+                        df_init = pd.DataFrame([
+                            {"texto": c.get("texto", ""), "autor": c.get("autor") or ""}
+                            for c in raw
+                        ])
+                    else:
+                        df_init = pd.DataFrame([
+                            {"texto": c.get("texto", "")} for c in raw
+                        ])
+
+                    st.markdown("**Comentarios transcritos**")
+                    n_comments = len(df_init)
+                    suf = "suficiente" if n_comments >= 15 else "insuficiente"
+                    st.caption(
+                        f"Edita, borra o agrega filas. Comentarios sin texto se descartan."
+                    )
+                    col_config = {
+                        "texto": st.column_config.TextColumn("Texto", required=True, width="large"),
+                    }
+                    if item["plataforma"] == "facebook":
+                        col_config["autor"] = st.column_config.TextColumn("Autor", width="medium")
+                    edited_df = st.data_editor(
+                        df_init,
+                        column_config=col_config,
+                        num_rows="dynamic",
+                        key=comments_key,
+                        width='stretch',
+                    )
+
+                    st.markdown("---")
+                    confirmado = st.form_submit_button("✅ Confirmar este post", disabled=is_revisado)
+
+                    if confirmado:
+                        _confirmar_post(item, texto_key, fecha_key, edited_df)
+
+
+def _confirmar_post(item: dict, texto_key: str, fecha_key: str, df_comentarios: pd.DataFrame) -> None:
+    """Lee widgets, valida, y escribe datos_revisados + estado revisado."""
+    import streamlit as st
+
+    id_ = item["id_temporal"]
+    plataforma = item["plataforma"]
+
+    mensaje = st.session_state.get(texto_key, "")
+    fecha = st.session_state.get(fecha_key)
+
+    if not fecha:
+        st.error("❌ La fecha es obligatoria. Sin fecha, el post queda excluido del análisis.")
+        return
+
+    created = str(fecha)
+
+    comentarios = []
+    for _, row in df_comentarios.iterrows():
+        t = str(row.get("texto", "") or "").strip()
+        if t:
+            entry = {"texto": t}
+            if plataforma == "facebook":
+                entry["autor"] = str(row.get("autor", "") or "").strip() or None
+            comentarios.append(entry)
+
+    muestra_suf = len(comentarios) >= 15
+    if not muestra_suf:
+        st.warning(f"⚠️ Muestra insuficiente ({len(comentarios)} < 15). "
+                   "El análisis de sentimiento será limitado.")
+
+    # Detectar duplicado por enlace
+    enlace = item.get("enlace", "").strip()
+    if enlace:
+        lote = st.session_state["lote_ingreso"]
+        for otro in lote:
+            if otro["id_temporal"] != id_ and otro.get("enlace", "").strip() == enlace:
+                st.warning(f"⚠️ Este enlace ya existe en el lote (post {otro.get('id_temporal', '?')[:8]}…).")
+                break
+
+    # Leer widgets numéricos
+    def _r(suffix):
+        return st.session_state.get(f"rev_{suffix}_{id_}", 0) or 0
+
+    if plataforma == "facebook":
+        revisados = {
+            "plataforma": "facebook",
+            "page_name": item["fuente"],
+            "message": mensaje,
+            "created_time": created,
+            "likes_count": _r("fb_likes"),
+            "loves_count": _r("fb_loves"),
+            "hahas_count": _r("fb_hahas"),
+            "sads_count": _r("fb_sads"),
+            "wows_count": _r("fb_wows"),
+            "angrys_count": _r("fb_angrys"),
+            "comments_count": _r("fb_comentarios_count"),
+            "shares_count": _r("fb_compartidos"),
+            "views_count": _r("fb_vistas"),
+            "post_url": enlace,
+            "comentarios": comentarios,
+            "muestra_suficiente": muestra_suf,
+        }
+    else:  # TikTok
+        try:
+            account_id = int(item["fuente"])
+        except (ValueError, TypeError):
+            account_id = 0
+        revisados = {
+            "plataforma": "tiktok",
+            "account_id": account_id,
+            "description": mensaje,
+            "created_at": created,
+            "views": _r("tk_vistas"),
+            "likes": _r("tk_likes"),
+            "favorites_count": _r("tk_favoritos"),
+            "shares": _r("tk_compartidos"),
+            "comments_count": _r("tk_comentarios_count"),
+            "comentarios": comentarios,
+            "muestra_suficiente": muestra_suf,
+        }
+
+    item["datos_revisados"] = revisados
+    item["estado"] = "revisado"
+    st.success("✅ Post confirmado.")
+    st.rerun()
 
 
 def seccion_cargar_contenido():
@@ -1638,10 +1961,8 @@ def seccion_cargar_contenido():
                 st.rerun()
             st.markdown("---")
 
-    # ── Botón Procesar lote ──
-    if lote:
-        if st.button("⚙️ Procesar lote", width='stretch', type="primary"):
-            procesar_lote(lote)
+    # ── Revisión Fase 3 ──
+    seccion_revisar_lote()
 
 
 if seccion == "ESTADO GENERAL":

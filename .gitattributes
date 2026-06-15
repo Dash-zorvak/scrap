@@ -1,0 +1,8 @@
+* text eol=lf
+*.zip binary
+*.db binary
+*.db-shm binary
+*.db-wal binary
+*.pyc binary
+.DS_Store binary
+cookies.json binary

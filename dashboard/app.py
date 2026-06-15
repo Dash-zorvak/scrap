@@ -1742,32 +1742,30 @@ def seccion_revisar_lote() -> None:
 
                     # ── Comentarios (data_editor dinámico) ──
                     comments_key = f"rev_comments_{id_}"
-                    if comments_key not in st.session_state:
-                        raw = datos.get("comentarios", [])
-                        if item["plataforma"] == "facebook":
-                            st.session_state[comments_key] = pd.DataFrame([
-                                {"texto": c.get("texto", ""), "autor": c.get("autor") or ""}
-                                for c in raw
-                            ])
-                        else:
-                            st.session_state[comments_key] = pd.DataFrame([
-                                {"texto": c.get("texto", "")} for c in raw
-                            ])
+                    raw = datos.get("comentarios", [])
+                    if item["plataforma"] == "facebook":
+                        df_init = pd.DataFrame([
+                            {"texto": c.get("texto", ""), "autor": c.get("autor") or ""}
+                            for c in raw
+                        ])
+                    else:
+                        df_init = pd.DataFrame([
+                            {"texto": c.get("texto", "")} for c in raw
+                        ])
 
                     st.markdown("**Comentarios transcritos**")
-                    n_comments = len(st.session_state[comments_key])
+                    n_comments = len(df_init)
                     suf = "suficiente" if n_comments >= 15 else "insuficiente"
                     st.caption(
-                        f"Edita, borra o agrega filas ({n_comments} comentarios — "
-                        f"muestra {suf}). Comentarios sin texto se descartan."
+                        f"Edita, borra o agrega filas. Comentarios sin texto se descartan."
                     )
                     col_config = {
                         "texto": st.column_config.TextColumn("Texto", required=True, width="large"),
                     }
                     if item["plataforma"] == "facebook":
                         col_config["autor"] = st.column_config.TextColumn("Autor", width="medium")
-                    st.data_editor(
-                        st.session_state[comments_key],
+                    edited_df = st.data_editor(
+                        df_init,
                         column_config=col_config,
                         num_rows="dynamic",
                         key=comments_key,
@@ -1778,10 +1776,10 @@ def seccion_revisar_lote() -> None:
                     confirmado = st.form_submit_button("✅ Confirmar este post", disabled=is_revisado)
 
                     if confirmado:
-                        _confirmar_post(item, texto_key, fecha_key, comments_key)
+                        _confirmar_post(item, texto_key, fecha_key, edited_df)
 
 
-def _confirmar_post(item: dict, texto_key: str, fecha_key: str, comments_key: str) -> None:
+def _confirmar_post(item: dict, texto_key: str, fecha_key: str, df_comentarios: pd.DataFrame) -> None:
     """Lee widgets, valida, y escribe datos_revisados + estado revisado."""
     import streamlit as st
 
@@ -1797,9 +1795,8 @@ def _confirmar_post(item: dict, texto_key: str, fecha_key: str, comments_key: st
 
     created = str(fecha)
 
-    dfc = st.session_state.get(comments_key, pd.DataFrame())
     comentarios = []
-    for _, row in dfc.iterrows():
+    for _, row in df_comentarios.iterrows():
         t = str(row.get("texto", "") or "").strip()
         if t:
             entry = {"texto": t}

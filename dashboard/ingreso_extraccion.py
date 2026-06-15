@@ -194,6 +194,16 @@ def _construir_prompt(plataforma: str) -> str:
 # Aplicación del contrato JSON de salida
 # ═══════════════════════════════════════════════
 
+def _norm(v: Any) -> int | None:
+    """Normaliza un valor numérico crudo de Gemini via normalizar_numero.
+
+    None → None; int → int; str como '1.2K' → 1200; ilegible → None.
+    """
+    if v is None:
+        return None
+    return normalizar_numero(str(v))
+
+
 def _valor_confianza(valor: Any, predeterminado: str = "no_detectado") -> dict:
     """Envuelve un valor en {valor, confianza}.
 
@@ -218,18 +228,18 @@ def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
             "fecha": _valor_confianza(respuesta.get("fecha")),
             "autor_pagina": respuesta.get("autor_pagina") or None,
             "reacciones": {
-                "likes": _valor_confianza(reacs.get("likes")),
-                "loves": _valor_confianza(reacs.get("loves")),
-                "hahas": _valor_confianza(reacs.get("hahas")),
-                "sads": _valor_confianza(reacs.get("sads")),
-                "wows": _valor_confianza(reacs.get("wows")),
-                "angrys": _valor_confianza(reacs.get("angrys")),
+                "likes": _valor_confianza(_norm(reacs.get("likes"))),
+                "loves": _valor_confianza(_norm(reacs.get("loves"))),
+                "hahas": _valor_confianza(_norm(reacs.get("hahas"))),
+                "sads": _valor_confianza(_norm(reacs.get("sads"))),
+                "wows": _valor_confianza(_norm(reacs.get("wows"))),
+                "angrys": _valor_confianza(_norm(reacs.get("angrys"))),
                 "total": _valor_confianza(
-                    reacs.get("total"), predeterminado="dudoso"
+                    _norm(reacs.get("total")), predeterminado="dudoso"
                 ),
             },
             "comentarios_count": _valor_confianza(
-                respuesta.get("comentarios_count")
+                _norm(respuesta.get("comentarios_count"))
             ),
             "compartidos": {"valor": None, "confianza": "manual"},
             "vistas": {"valor": None, "confianza": "manual"},
@@ -251,10 +261,10 @@ def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
             "fecha": _valor_confianza(respuesta.get("fecha")),
             "autor_cuenta": respuesta.get("autor_cuenta") or None,
             "metricas": {
-                "likes": _valor_confianza(metrics.get("likes")),
-                "favoritos": _valor_confianza(metrics.get("favoritos")),
+                "likes": _valor_confianza(_norm(metrics.get("likes"))),
+                "favoritos": _valor_confianza(_norm(metrics.get("favoritos"))),
                 "comentarios_count": _valor_confianza(
-                    metrics.get("comentarios_count")
+                    _norm(metrics.get("comentarios_count"))
                 ),
                 "compartidos": {"valor": None, "confianza": "manual"},
                 "vistas": {"valor": None, "confianza": "manual"},

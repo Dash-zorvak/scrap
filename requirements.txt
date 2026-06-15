@@ -43,3 +43,6 @@ wordcloud==1.9.6
 python-dotenv>=1.0.0
 tqdm>=4.66.0
 rich>=13.7.0
+
+# Tests (necesario para el job de CI)
+pytest>=8.0.0

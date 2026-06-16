@@ -1,10 +1,18 @@
 """
-Módulo de extracción desde capturas con Gemini Vision.
+Módulo de extracción desde capturas/PDF con Gemini Vision.
 
 Fase 2 — no toca UI ni DB.
-Funciones:
-  - extraer_post_desde_capturas(imagenes, plataforma) -> dict
+Funciones públicas:
+  - extraer_post_desde_capturas(imagenes, plataforma) -> dict   (1 post, compat)
+  - extraer_posts_desde_archivos(archivos, plataforma) -> dict  (N posts; PDF/img)
   - normalizar_numero(texto) -> int | None
+
+Novedades:
+  - Soporta PDF nativo (Gemini procesa PDF multipágina como inline_data).
+  - Un mismo archivo (p.ej. un PDF) puede contener VARIOS posts: el motor los
+    segmenta y devuelve una lista bajo la clave 'posts'.
+  - Extrae automáticamente el ENLACE del post (post_url) visible en el archivo,
+    con marca de confianza (seguro|dudoso|no_detectado).
 """
 
 import json
@@ -14,9 +22,9 @@ from typing import Any
 GEMINI_MODEL = "gemini-2.0-flash"
 
 
-# ═══════════════════════════════════════════════
+# ═══════════════════════════════════
 # Normalizador determinista de números
-# ═══════════════════════════════════════════════
+# ═══════════════════════════════════
 
 _SUFIJOS = [
     ("millones", 1_000_000),
@@ -94,14 +102,19 @@ def normalizar_numero(texto: str | None) -> int | None:
         return None
 
 
-# ═══════════════════════════════════════════════
-# Detección de MIME type real para imágenes
-# ═══════════════════════════════════════════════
+# ═══════════════════════════════════
+# Detección de MIME type real (imágenes + PDF)
+# ═══════════════════════════════════
 
 def _detectar_mime(data: bytes, declarado: str | None = None) -> str:
-    """Detecta el mime real de la imagen. Respeta el declarado si es image/*."""
-    if declarado and declarado.startswith("image/"):
+    """Detecta el mime real del archivo. Respeta el declarado si es image/* o PDF.
+
+    Soporta: JPEG, PNG, WEBP y PDF (application/pdf). Fallback: image/png.
+    """
+    if declarado and (declarado.startswith("image/") or declarado == "application/pdf"):
         return declarado
+    if data[:4] == b"%PDF":
+        return "application/pdf"
     if data[:3] == b"\xff\xd8\xff":
         return "image/jpeg"
     if data[:8] == b"\x89PNG\r\n\x1a\n":
@@ -111,9 +124,9 @@ def _detectar_mime(data: bytes, declarado: str | None = None) -> str:
     return "image/png"
 
 
-# ═══════════════════════════════════════════════
+# ═══════════════════════════════════
 # Configuración de Gemini (diferida)
-# ═══════════════════════════════════════════════
+# ═══════════════════════════════════
 
 def _configurar_gemini() -> bool:
     """Lee la clave de st.secrets o variable de entorno y configura la API.
@@ -136,9 +149,9 @@ def _configurar_gemini() -> bool:
     return False
 
 
-# ═══════════════════════════════════════════════
-# Prompts por plataforma
-# ═══════════════════════════════════════════════
+# ═══════════════════════════════════
+# Prompts por plataforma (1 post — compat)
+# ═══════════════════════════════════
 
 _PROMPT_FACEBOOK = """
 Eres un extractor de datos. Analiza las imágenes de esta captura de pantalla de Facebook.
@@ -219,9 +232,112 @@ def _construir_prompt(plataforma: str) -> str:
     raise ValueError(f"Plataforma no soportada: {plataforma}")
 
 
-# ═══════════════════════════════════════════════
+# ═══════════════════════════════════
+# Prompts MULTI-POST (segmentación + enlace) — PDF/imágenes
+# ═══════════════════════════════════
+
+_PROMPT_FACEBOOK_MULTI = """
+Eres un extractor de datos. Analiza el documento adjunto (puede ser un PDF de varias
+páginas o varias imágenes) con capturas de pantalla de Facebook.
+
+IMPORTANTE: el documento puede contener VARIOS posts DISTINTOS. Debes SEGMENTARLO e
+identificar cada post por separado. Cada post suele incluir su propio texto, sus
+reacciones, sus comentarios y, frecuentemente, su ENLACE (URL) pegado junto a la captura.
+
+DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
+
+{
+  "posts": [
+    {
+      "texto_post": "string (texto del post, vacío si no se ve)",
+      "fecha": {"valor": "YYYY-MM-DD o null", "confianza": "seguro|dudoso"},
+      "autor_pagina": "nombre de la página o null",
+      "enlace": {"valor": "https://... o null", "confianza": "seguro|dudoso"},
+      "reacciones": {
+        "likes": {"valor": 0, "confianza": "seguro|dudoso"},
+        "loves": {"valor": null, "confianza": "seguro|dudoso"},
+        "hahas": {"valor": null, "confianza": "seguro|dudoso"},
+        "sads": {"valor": null, "confianza": "seguro|dudoso"},
+        "wows": {"valor": null, "confianza": "seguro|dudoso"},
+        "angrys": {"valor": null, "confianza": "seguro|dudoso"},
+        "total": {"valor": null, "confianza": "seguro|dudoso"}
+      },
+      "comentarios_count": {"valor": null, "confianza": "seguro|dudoso"},
+      "comentarios": [
+        {"texto": "texto literal", "autor": "nombre o null"}
+      ]
+    }
+  ]
+}
+
+REGLAS:
+- Si solo hay UN post, devuelve igualmente "posts" con un único elemento.
+- "Me gusta"=likes, "Me encanta"=loves, "Me divierte"=hahas,
+  "Me entristece"=sads, "Me asombra"=wows, "Me enoja"=angrys
+- NO extraer "compartidos" ni reproducciones/vistas
+- ENLACE: busca la URL del post (facebook.com/...). Si está escrita/pegada en el
+  documento úsala; si no aparece → valor=null.
+- Por cada número, la fecha y el enlace, devuelve {"valor": ..., "confianza": "..."}.
+- confianza="seguro" si el dato se lee con total claridad; "dudoso" si está borroso/cortado.
+- Si un dato NO se ve → valor=null.
+- Transcribe comentarios TEXTUALMENTE, sin resumir ni corregir. NO inventes datos.
+- Asocia cada comentario al post correcto.
+"""
+
+_PROMPT_TIKTOK_MULTI = """
+Eres un extractor de datos. Analiza el documento adjunto (puede ser un PDF de varias
+páginas o varias imágenes) con capturas de pantalla de TikTok.
+
+IMPORTANTE: el documento puede contener VARIOS posts DISTINTOS. Debes SEGMENTARLO e
+identificar cada post por separado. Cada post suele incluir su descripción, sus métricas,
+sus comentarios y, frecuentemente, su ENLACE (URL) pegado junto a la captura.
+
+DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
+
+{
+  "posts": [
+    {
+      "texto_post": "string (descripción, vacío si no se ve)",
+      "fecha": {"valor": "YYYY-MM-DD o null", "confianza": "seguro|dudoso"},
+      "autor_cuenta": "nombre de la cuenta o null",
+      "enlace": {"valor": "https://... o null", "confianza": "seguro|dudoso"},
+      "metricas": {
+        "likes": {"valor": null, "confianza": "seguro|dudoso"},
+        "favoritos": {"valor": null, "confianza": "seguro|dudoso"},
+        "comentarios_count": {"valor": null, "confianza": "seguro|dudoso"}
+      },
+      "comentarios": [
+        {"texto": "texto literal", "autor": "nombre o null"}
+      ]
+    }
+  ]
+}
+
+REGLAS:
+- Si solo hay UN post, devuelve igualmente "posts" con un único elemento.
+- corazón=likes, marcador/guardar=favoritos, bocadillo=comentarios_count
+- NO extraer "compartidos" ni "vistas" (se teclean a mano)
+- ENLACE: busca la URL del post (tiktok.com/...). Si está escrita/pegada en el
+  documento úsala; si no aparece → valor=null.
+- Por cada número, la fecha y el enlace, devuelve {"valor": ..., "confianza": "..."}.
+- confianza="seguro" si el dato se lee con total claridad; "dudoso" si está borroso/cortado.
+- Si un dato NO se ve → valor=null.
+- Transcribe comentarios TEXTUALMENTE, sin resumir ni corregir. NO inventes datos.
+- Asocia cada comentario al post correcto.
+"""
+
+
+def _construir_prompt_multi(plataforma: str) -> str:
+    if plataforma == "facebook":
+        return _PROMPT_FACEBOOK_MULTI
+    elif plataforma == "tiktok":
+        return _PROMPT_TIKTOK_MULTI
+    raise ValueError(f"Plataforma no soportada: {plataforma}")
+
+
+# ═══════════════════════════════════
 # Aplicación del contrato JSON de salida
-# ═══════════════════════════════════════════════
+# ═══════════════════════════════════
 
 def _norm(v: Any) -> int | None:
     """Normaliza un valor numérico crudo de Gemini via normalizar_numero.
@@ -264,10 +380,30 @@ def _fecha_confianza(raw: Any) -> dict:
     return {"valor": valor, "confianza": conf}
 
 
+def _enlace_confianza(raw: Any) -> dict:
+    """Procesa el enlace (post_url) que Gemini devuelve como {valor, confianza}
+    o como string suelto. No normaliza (es una URL)."""
+    if isinstance(raw, dict):
+        valor = raw.get("valor") or None
+        conf = raw.get("confianza")
+    else:
+        valor = raw or None
+        conf = None
+    if valor is None:
+        return {"valor": None, "confianza": "no_detectado"}
+    valor = str(valor).strip() or None
+    if valor is None:
+        return {"valor": None, "confianza": "no_detectado"}
+    if conf not in ("seguro", "dudoso"):
+        conf = "seguro"
+    return {"valor": valor, "confianza": conf}
+
+
 def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
     """Rellena la plantilla del contrato con lo que devolvió Gemini.
 
     compartidos/vistas siempre null + "manual".
+    enlace: {valor, confianza} (no_detectado si no vino).
     """
     if plataforma == "facebook":
         reacs = respuesta.get("reacciones", {})
@@ -276,6 +412,7 @@ def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
             "texto_post": respuesta.get("texto_post") or "",
             "fecha": _fecha_confianza(respuesta.get("fecha")),
             "autor_pagina": respuesta.get("autor_pagina") or None,
+            "enlace": _enlace_confianza(respuesta.get("enlace")),
             "reacciones": {
                 "likes": _num_confianza(reacs.get("likes")),
                 "loves": _num_confianza(reacs.get("loves")),
@@ -305,6 +442,7 @@ def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
             "texto_post": respuesta.get("texto_post") or "",
             "fecha": _fecha_confianza(respuesta.get("fecha")),
             "autor_cuenta": respuesta.get("autor_cuenta") or None,
+            "enlace": _enlace_confianza(respuesta.get("enlace")),
             "metricas": {
                 "likes": _num_confianza(metrics.get("likes")),
                 "favoritos": _num_confianza(metrics.get("favoritos")),
@@ -325,9 +463,9 @@ def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
     raise ValueError(f"Plataforma no soportada: {plataforma}")
 
 
-# ═══════════════════════════════════════════════
+# ═══════════════════════════════════
 # Parseo de la respuesta de Gemini
-# ═══════════════════════════════════════════════
+# ═══════════════════════════════════
 
 def _parsear_respuesta(texto_respuesta: str) -> dict | None:
     """Extrae el primer JSON válido de la respuesta de Gemini."""
@@ -361,12 +499,137 @@ def _parsear_respuesta(texto_respuesta: str) -> dict | None:
     return None
 
 
-# ═══════════════════════════════════════════════
-# Función principal
-# ═══════════════════════════════════════════════
+def _extraer_lista_posts(parsed: Any) -> list:
+    """Normaliza la respuesta multi-post a una lista de dicts de post.
+
+    Acepta: {"posts": [...]} | [ ... ] | un solo post suelto.
+    """
+    if isinstance(parsed, list):
+        return [p for p in parsed if isinstance(p, dict)]
+    if isinstance(parsed, dict):
+        if isinstance(parsed.get("posts"), list):
+            return [p for p in parsed["posts"] if isinstance(p, dict)]
+        # Fallback: respuesta de un solo post sin envoltura
+        if any(k in parsed for k in ("texto_post", "reacciones", "metricas", "comentarios")):
+            return [parsed]
+    return []
+
+
+# ═══════════════════════════════════
+# Conversión de archivos a partes inline para Gemini
+# ═══════════════════════════════════
+
+def _archivos_a_partes(archivos: list) -> list:
+    """Convierte UploadedFile/bytes/PIL a partes inline_data {mime_type, data}.
+
+    Soporta PDF e imágenes. Los archivos corruptos se saltan.
+    """
+    partes = []
+    for arch in archivos:
+        try:
+            if hasattr(arch, "getvalue"):
+                data = arch.getvalue()
+                mime = _detectar_mime(data, getattr(arch, "type", None))
+            elif isinstance(arch, bytes):
+                data = arch
+                mime = _detectar_mime(data)
+            else:
+                import io
+                from PIL import Image
+                buf = io.BytesIO()
+                if hasattr(arch, "save"):
+                    arch.save(buf, format="PNG")
+                else:
+                    Image.open(arch).save(buf, format="PNG")
+                data = buf.getvalue()
+                mime = "image/png"
+            partes.append({"mime_type": mime, "data": data})
+        except Exception:
+            continue  # archivo corrupto → saltar
+    return partes
+
+
+# ═══════════════════════════════════
+# Función principal MULTI-POST (PDF/imágenes)
+# ═══════════════════════════════════
+
+def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
+    """Extrae UNO O VARIOS posts desde archivos (PDF o imágenes) con Gemini Vision.
+
+    Args:
+        archivos: Lista de UploadedFile de Streamlit, bytes o imágenes PIL.
+        plataforma: "facebook" | "tiktok".
+
+    Returns:
+        {"posts": [contrato, ...]} con un contrato por post detectado.
+        En error grave: {"error": "<motivo>"}.
+    """
+    if not _configurar_gemini():
+        return {"error": "GOOGLE_API_KEY no configurada en st.secrets ni variable de entorno"}
+
+    if not archivos:
+        return {"error": "No se recibieron archivos"}
+
+    if plataforma not in ("facebook", "tiktok"):
+        return {"error": f"Plataforma no soportada: {plataforma}"}
+
+    partes = _archivos_a_partes(archivos)
+    if not partes:
+        return {"error": "Ningún archivo pudo procesarse"}
+
+    import google.generativeai as genai
+
+    prompt = _construir_prompt_multi(plataforma)
+    modelo = genai.GenerativeModel(
+        GEMINI_MODEL,
+        generation_config={"response_mime_type": "application/json"},
+    )
+
+    contenido = [prompt] + partes
+    ultimo_error = None
+
+    for intento in range(2):
+        try:
+            respuesta = modelo.generate_content(contenido)
+
+            if not respuesta or not respuesta.text:
+                ultimo_error = "Gemini devolvió respuesta vacía"
+                if intento == 0:
+                    contenido[0] = (
+                        prompt
+                        + "\n\nADVERTENCIA: la respuesta anterior fue inválida. "
+                        'Devuelve SOLO JSON con la forma {"posts": [...]}, sin markdown.'
+                    )
+                continue
+
+            parsed = _parsear_respuesta(respuesta.text)
+            posts_raw = _extraer_lista_posts(parsed) if parsed is not None else []
+            if not posts_raw:
+                ultimo_error = "No se detectaron posts en los archivos"
+                if intento == 0:
+                    contenido[0] = (
+                        prompt
+                        + "\n\nADVERTENCIA: la respuesta anterior no fue JSON válido o no "
+                        'traía posts. Devuelve SOLO JSON con la forma {"posts": [...]}.'
+                    )
+                continue
+
+            posts = [_aplicar_contrato(p, plataforma) for p in posts_raw]
+            return {"posts": posts}
+
+        except Exception as e:
+            ultimo_error = f"Error en llamada a Gemini: {e}"
+            continue
+
+    return {"error": ultimo_error or "Error desconocido"}
+
+
+# ═══════════════════════════════════
+# Función principal 1-POST (compat con Fase 2 original)
+# ═══════════════════════════════════
 
 def extraer_post_desde_capturas(imagenes: list, plataforma: str) -> dict:
-    """Extrae datos de un post desde capturas de pantalla con Gemini Vision.
+    """Extrae datos de UN post desde capturas con Gemini Vision (compat).
 
     Args:
         imagenes: Lista de UploadedFile de Streamlit o bytes.
@@ -386,30 +649,7 @@ def extraer_post_desde_capturas(imagenes: list, plataforma: str) -> dict:
     if plataforma not in ("facebook", "tiktok"):
         return {"error": f"Plataforma no soportada: {plataforma}"}
 
-    # ── Convertir imágenes a bytes ──
-    image_parts = []
-    for img in imagenes:
-        try:
-            if hasattr(img, "getvalue"):
-                data = img.getvalue()
-                mime = _detectar_mime(data, getattr(img, "type", None))
-            elif isinstance(img, bytes):
-                data = img
-                mime = _detectar_mime(data)
-            else:
-                import io
-                from PIL import Image
-                buf = io.BytesIO()
-                if hasattr(img, "save"):
-                    img.save(buf, format="PNG")
-                else:
-                    Image.open(img).save(buf, format="PNG")
-                data = buf.getvalue()
-                mime = "image/png"
-            image_parts.append({"mime_type": mime, "data": data})
-        except Exception:
-            continue  # imagen corrupta → saltar
-
+    image_parts = _archivos_a_partes(imagenes)
     if not image_parts:
         return {"error": "Ninguna imagen pudo procesarse"}
 

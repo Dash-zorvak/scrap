@@ -23,6 +23,7 @@ from config import (
 from dashboard.guardar_lote import guardar_lote
 from dashboard.procesar_lote import procesar_pipeline
 from dashboard.muestra import evaluar_muestra
+from dashboard.sentimiento_engine import get_diagnostico_sentimiento
 
 # ── Toggle modo prueba — antes de cualquier función cacheada ──
 if "modo_prueba" not in st.session_state:
@@ -736,6 +737,30 @@ st.sidebar.markdown(
 )
 
 st.sidebar.markdown("---")
+
+with st.sidebar.expander("🔧 Diagnóstico"):
+    st.caption("GOOGLE_API_KEY")
+    api_key_env = os.environ.get("GOOGLE_API_KEY")
+    api_key_secrets = None
+    try:
+        api_key_secrets = st.secrets.get("GOOGLE_API_KEY")
+    except Exception:
+        pass
+    if api_key_env:
+        st.code("detectada (env)", language="text")
+    elif api_key_secrets:
+        st.code("detectada (secrets)", language="text")
+    else:
+        st.code("NO detectada", language="text")
+
+    diag = get_diagnostico_sentimiento()
+    st.caption("Motor de sentimiento")
+    st.code(f"forzado: {diag['motor_forzado']}", language="text")
+    st.code(f"bert_fallo: {diag['bert_fallo']}", language="text")
+    if diag["ultimo_error_bert"]:
+        st.code(f"último error BERT: {diag['ultimo_error_bert']}", language="text")
+    if diag["ultimo_error_gemini"]:
+        st.code(f"último error Gemini: {diag['ultimo_error_gemini']}", language="text")
 
 # ── HELPERS ──
 
@@ -2042,6 +2067,10 @@ def seccion_cargar_contenido():
     result = st.session_state.get("ultimo_procesamiento")
     if result:
         motor = result["motor_sentimiento"]
+        if result["errores"]:
+            st.warning("⚠️ Pipeline con errores:")
+            for err in result["errores"]:
+                st.error(f"❌ {err}")
         if motor == "bert":
             st.success("🧠 Sentimiento analizado con BERT local (modelo principal).")
         elif motor == "gemini":
@@ -2050,8 +2079,6 @@ def seccion_cargar_contenido():
             st.warning("⚠️ Ni BERT ni Gemini disponibles; se usó el clasificador de reglas (último recurso). Resultados menos precisos.")
         if result["pasos_ok"]:
             st.info(f"✅ Pasos completados: {', '.join(result['pasos_ok'])}")
-        for err in result["errores"]:
-            st.error(f"❌ {err}")
 
 
 def _build_serie_chart(df_fb_s, df_tk_s, periodo):

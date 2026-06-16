@@ -1,11 +1,19 @@
 """Motor de sentimiento enchufable: BERT (pysentimiento) → Gemini → reglas."""
 
+import logging
 import os
 import threading
+import time
 import unicodedata
 import re
 
-BERT_LOAD_TIMEOUT_S = 120
+logger = logging.getLogger("sentimiento")
+
+ULTIMO_ERROR_BERT = None
+ULTIMO_ERROR_GEMINI = None
+_BERT_FALLO = False
+
+BERT_LOAD_TIMEOUT_S = int(os.environ.get("BERT_LOAD_TIMEOUT_S", "120"))
 
 POSITIVE_WORDS = {
     "buen", "buena", "bueno", "buenos", "buenas",
@@ -179,8 +187,19 @@ def _clasificar_gemini_lote(textos):
     )
     import json
     items = "\n".join(f"{i}. {t}" for i, t in enumerate(textos))
-    respuesta = model.generate_content(_PROMPT_SENTIMIENTO + items)
-    parsed = json.loads(respuesta.text)
+    ultimo_error = None
+    for intento in range(2):
+        try:
+            respuesta = model.generate_content(_PROMPT_SENTIMIENTO + items)
+            parsed = json.loads(respuesta.text)
+            break
+        except Exception as e:
+            ultimo_error = e
+            if intento == 0:
+                logger.warning("Gemini rate limit / error en intento 1: %r — reintentando en 2s", e)
+                time.sleep(2)
+            else:
+                raise ultimo_error
     raw = parsed.get("resultados", parsed if isinstance(parsed, list) else [])
     resultados = []
     for i, texto in enumerate(textos):
@@ -198,6 +217,8 @@ def _clasificar_reglas(textos):
 
 
 def clasificar_lote(textos):
+    global ULTIMO_ERROR_BERT, ULTIMO_ERROR_GEMINI, _BERT_FALLO
+
     if not textos:
         return [], "reglas"
     empty_mask = [not t or not t.strip() for t in textos]
@@ -206,50 +227,79 @@ def clasificar_lote(textos):
     if not non_empty_texts:
         return [("NEU", 0.0)] * len(textos), "reglas"
 
+    motor_forzado = os.environ.get("MOTOR_SENTIMIENTO", "auto")
+
     motor = "reglas"
     resultados_non_empty = None
 
-    bert_ok = False
-    bert_resultados = None
-    bert_exception = None
-    carga_ok = [False]
-    carga_exception = [None]
+    def _intentar_bert():
+        nonlocal motor, resultados_non_empty
+        global _BERT_FALLO, ULTIMO_ERROR_BERT
+        bert_ok = False
+        bert_resultados = None
+        carga_ok = [False]
+        carga_exception = [None]
+        timeout = 1 if _BERT_FALLO else BERT_LOAD_TIMEOUT_S
 
-    def _load_bert():
-        try:
-            _cargar_bert()
-            carga_ok[0] = True
-        except Exception as e:
-            carga_exception[0] = e
+        def _load_bert():
+            try:
+                _cargar_bert()
+                carga_ok[0] = True
+            except Exception as e:
+                carga_exception[0] = e
 
-    t = threading.Thread(target=_load_bert, daemon=True)
-    t.start()
-    t.join(timeout=BERT_LOAD_TIMEOUT_S)
+        t = threading.Thread(target=_load_bert, daemon=True)
+        t.start()
+        t.join(timeout=timeout)
 
-    if carga_ok[0]:
+        if not carga_ok[0]:
+            _BERT_FALLO = True
+            exc = carga_exception[0]
+            ULTIMO_ERROR_BERT = repr(exc) if exc else "timeout"
+            logger.warning("BERT carga falló: %s", ULTIMO_ERROR_BERT)
+            return False
+
         try:
             bert_resultados = _clasificar_bert(non_empty_texts)
             bert_ok = True
-        except Exception:
+        except Exception as e:
+            ULTIMO_ERROR_BERT = repr(e)
+            logger.warning("BERT predicción falló: %r", e)
             bert_ok = False
 
-    if bert_ok:
-        motor = "bert"
-        resultados_non_empty = bert_resultados
-    else:
-        gemini_ok = False
+        if bert_ok:
+            motor = "bert"
+            resultados_non_empty = bert_resultados
+            return True
+        return False
+
+    def _intentar_gemini():
+        nonlocal motor, resultados_non_empty
+        global ULTIMO_ERROR_GEMINI
         try:
             if _configurar_gemini():
                 gemini_resultados = _clasificar_gemini_lote(non_empty_texts)
                 resultados_non_empty = gemini_resultados
-                gemini_ok = True
                 motor = "gemini"
-        except Exception:
-            gemini_ok = False
+                return True
+        except Exception as e:
+            ULTIMO_ERROR_GEMINI = repr(e)
+            logger.warning("Gemini sentiment falló: %r", e)
+        return False
 
-        if not gemini_ok:
-            motor = "reglas"
-            resultados_non_empty = _clasificar_reglas(non_empty_texts)
+    if motor_forzado == "bert":
+        _intentar_bert()
+    elif motor_forzado == "gemini":
+        _intentar_gemini()
+    elif motor_forzado == "reglas":
+        pass
+    else:
+        if not _intentar_bert():
+            _intentar_gemini()
+
+    if resultados_non_empty is None:
+        motor = "reglas"
+        resultados_non_empty = _clasificar_reglas(non_empty_texts)
 
     resultados = []
     idx = 0
@@ -261,3 +311,12 @@ def clasificar_lote(textos):
             idx += 1
 
     return resultados, motor
+
+
+def get_diagnostico_sentimiento():
+    return {
+        "ultimo_error_bert": ULTIMO_ERROR_BERT,
+        "ultimo_error_gemini": ULTIMO_ERROR_GEMINI,
+        "bert_fallo": _BERT_FALLO,
+        "motor_forzado": os.environ.get("MOTOR_SENTIMIENTO", "auto"),
+    }

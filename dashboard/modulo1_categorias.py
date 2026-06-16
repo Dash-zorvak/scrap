@@ -2,8 +2,8 @@ import sqlite3
 import pandas as pd
 import numpy as np
 import json
-import sys
-sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import *
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import normalize

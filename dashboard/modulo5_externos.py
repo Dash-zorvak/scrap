@@ -3,8 +3,8 @@ import sqlite3
 import pandas as pd
 import random
 from datetime import datetime, timedelta
-import sys
-sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import *
 
 # Allow test to redirect to a temp DB

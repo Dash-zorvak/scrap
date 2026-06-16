@@ -1,7 +1,7 @@
 import sqlite3
 import pandas as pd
-import sys
-sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import *
 
 # Clasificador por reglas (rápido, sin ML)

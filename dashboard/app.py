@@ -60,7 +60,7 @@ def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.0-flash")
     except Exception:
         return "Análisis IA no disponible en este momento (error de configuración)"
     
@@ -684,11 +684,8 @@ plataforma = st.sidebar.selectbox("PLATAFORMA", [
     "Ambas", "Facebook", "TikTok"
 ])
 
-seccion = st.sidebar.selectbox("SECCIÓN", [
-    "ESTADO GENERAL", "TEMAS Y EMOCIONES", "LÍNEA DEL TIEMPO",
-    "VOZ CIUDADANA", "MICROSEGMENTACIÓN", "CONTEXTO EXTERNO",
-    "CONFIANZA INSTITUCIONAL", "NARRATIVAS ACTIVAS", "CONTAGIO EMOCIONAL",
-    "📥 Cargar contenido", "NOTAS METODOLÓGICAS"
+vista = st.sidebar.radio("VISTA", [
+    "📊 Dashboard", "📥 Cargar contenido", "📋 Notas metodológicas"
 ])
 
 st.sidebar.markdown("---")
@@ -733,15 +730,6 @@ st.sidebar.markdown(
 )
 
 st.sidebar.markdown("---")
-
-# ── NAVEGACIÓN: 4 PESTAÑAS AGRUPADAS ──
-TABS = [
-    "📊 Pulso General",
-    "👥 Segmentación de Audiencia",
-    "⚠️ Riesgo y Autenticidad",
-    "🧠 Memoria e Inteligencia Aplicada"
-]
-tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs(TABS)
 
 # ── HELPERS ──
 
@@ -2022,2407 +2010,408 @@ def seccion_cargar_contenido():
             st.error(f"❌ {err}")
 
 
-if seccion == "ESTADO GENERAL":
-
-    st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">ESTADO GENERAL</div>
-        <div class="seccion-subtitulo">
-            Un vistazo — panorama completo en 30 segundos
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
-    df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
-
-    if df_fb.empty and df_tk.empty:
-        hay_datos(df_fb, "No hay datos de Facebook ni TikTok para este periodo.")
-        st.stop()
-
-    color_sem, texto_sem = calcular_semaforo(df_fb)
-
-    # Bullets
-    df_cat = safe_query("SELECT item_id, categoria_nombre FROM post_categorias", FACEBOOK_DB_ACTIVA)
-
-    df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
-    pct_positivo = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
-
-    df_tema_neg = safe_query("""
-        SELECT pc.categoria_nombre,
-               AVG(fs.pct_negativo) as pct_neg
-        FROM fb_sentimiento fs
-        LEFT JOIN post_categorias pc ON fs.post_id = pc.item_id
-        WHERE pc.categoria_nombre IS NOT NULL
-        AND pc.categoria_nombre != ''
-        GROUP BY pc.categoria_nombre
-        ORDER BY pct_neg DESC
-        LIMIT 1
-    """, FACEBOOK_DB_ACTIVA)
-    tema_top_neg = df_tema_neg.iloc[0]['categoria_nombre'] if not df_tema_neg.empty else "Sin datos"
-
-    df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA)
-    semana_anomalia = "sin anomalias recientes"
-    anomalias_tk = df_tk_s[df_tk_s['es_anomalia'] == True].sort_values('semana', ascending=False)
-    if not anomalias_tk.empty:
-        semana_anomalia = formato_fecha_espanol(anomalias_tk.iloc[0]['semana'])
-
-    clase_sem = f"semaforo-{color_sem}"
-    st.markdown(f"""
-    <div class="{clase_sem}">
-        <p class="semaforo-texto">{texto_sem}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Interpretación
-    score_sent_val = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
-    pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
-    pct_pos_val = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
-    enojo_val = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
-
-    interpretacion_sem = generar_interpretacion("semaforo", {
-        'score': score_sent_val,
-        'pct_negativo': pct_neg_val,
-        'pct_positivo': pct_pos_val,
-        'indice_enojo': enojo_val
-    })
-
-    st.markdown(f"""
-    <div class="interpretacion-box">
-        <div class="interpretacion-label">◈ LO QUE ESTO SIGNIFICA</div>
-        <div class="interpretacion-texto">
-            {interpretacion_sem}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    total_reacciones = 0
-    if not df_fb.empty:
-        total_reacciones += df_fb['total_reacciones'].sum()
-    if not df_tk.empty:
-        total_reacciones += df_tk['likes'].sum()
-
-    st.markdown(f"""
-    <div class="bloom-card">
-        <p style="font-size:13px;color:var(--fg-secondary);margin:5px 0;padding-left:6px;font-family:'Inter',sans-serif">
-            En este período recibiste
-            <strong style="color:var(--accent)">{total_reacciones:,.0f}</strong>
-            reacciones en total
-        </p>
-        <p style="font-size:13px;color:var(--fg-secondary);margin:5px 0;padding-left:6px;font-family:'Inter',sans-serif">
-            El tema con mayor rechazo ciudadano:
-            <strong style="color:var(--red)">{tema_top_neg}</strong>
-        </p>
-        <p style="font-size:13px;color:var(--fg-secondary);margin:5px 0;padding-left:6px;font-family:'Inter',sans-serif">
-            El <strong style="color:var(--green)">{pct_positivo:.1f}%</strong>
-            de los comentarios son de apoyo
-        </p>
-        <p style="font-size:13px;color:var(--fg-secondary);margin:5px 0;padding-left:6px;font-family:'Inter',sans-serif">
-            Semana con actividad inusual más reciente:
-            <strong style="color:var(--blue)">{semana_anomalia}</strong>
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # 4 metricas
-    total_eng = 0
-    total_posts = 0
-    if not df_fb.empty:
-        total_eng += int(df_fb['engagement_total'].sum())
-        total_posts += len(df_fb)
-    if not df_tk.empty:
-        total_eng += int(df_tk['engagement_total'].sum())
-        total_posts += len(df_tk)
-
-    n_comments = 0
-    df_nc = safe_query("SELECT COUNT(*) as n FROM fb_comments WHERE message != ''", FACEBOOK_DB_ACTIVA)
-    if not df_nc.empty:
-        n_comments = int(df_nc.iloc[0]['n'])
-
-    sent_fb = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
-    score_sent = sent_fb['score_sentimiento'].mean() if not sent_fb.empty else 0
-    if score_sent > 0.2:
-        tono_txt, tono_color = "POSITIVO", "#22c55e"
-    elif score_sent > 0:
-        tono_txt, tono_color = "MIXTO", "#eab308"
-    else:
-        tono_txt, tono_color = "CRITICO", "#ef4444"
-
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(f"""
-        <div class="bloom-card">
-            <div class="bloom-card-title">Personas que reaccionaron</div>
-            <div class="bloom-card-value" style="font-size:28px">{total_eng:,}</div>
-            <div class="bloom-card-sub">reacciones totales</div>
-        </div>""", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"""
-        <div class="bloom-card">
-            <div class="bloom-card-title">Comentarios recibidos</div>
-            <div class="bloom-card-value" style="font-size:28px">{int(n_comments):,}</div>
-            <div class="bloom-card-sub">con texto analizable</div>
-        </div>""", unsafe_allow_html=True)
-    with col3:
-        st.markdown(f"""
-        <div class="bloom-card">
-            <div class="bloom-card-title">Contenido publicado</div>
-            <div class="bloom-card-value" style="font-size:28px">{total_posts:,}</div>
-            <div class="bloom-card-sub">posts y videos</div>
-        </div>""", unsafe_allow_html=True)
-    with col4:
-        st.markdown(f"""
-        <div class="bloom-card">
-            <div class="bloom-card-title">Tono ciudadano</div>
-            <div class="bloom-card-value" style="color:{tono_color};font-size:24px">{tono_txt}</div>
-            <div class="bloom-card-sub">basado en comentarios</div>
-        </div>""", unsafe_allow_html=True)
-
-    # Grafico tendencia
-    que_ves_box("Cada punto en esta línea es una semana. Cuando la línea sube, más gente interactuó con tu contenido. Los puntos rojos son semanas donde la actividad fue inusualmente alta o baja — algo ocurrió esa semana que movilizó a la ciudadanía.")
-    st.markdown("### ¿Cuanto esta hablando la gente de ti?")
-
+def _build_serie_chart(df_fb_s, df_tk_s, periodo):
+    if df_fb_s.empty and df_tk_s.empty:
+        return None
     if plataforma == "Facebook":
-        df_serie = df_fb_s[['semana','engagement','es_anomalia']].copy()
+        df = df_fb_s[['semana','engagement','es_anomalia']].copy()
     elif plataforma == "TikTok":
-        df_serie = df_tk_s[['semana','views_suma','es_anomalia']].copy()
-        df_serie = df_serie.rename(columns={'views_suma':'engagement'})
+        df = df_tk_s[['semana','views_suma','es_anomalia']].copy()
+        df = df.rename(columns={'views_suma':'engagement'})
     else:
-        df_merged = pd.merge(
+        merged = pd.merge(
             df_fb_s[['semana','engagement']].rename(columns={'engagement':'fb'}),
             df_tk_s[['semana','views_suma','es_anomalia']].rename(columns={'views_suma':'tk'}),
             on='semana', how='outer'
         ).fillna(0)
-        df_merged['engagement'] = df_merged['fb'] + df_merged['tk']
-        df_serie = df_merged[['semana','engagement','es_anomalia']].copy()
+        merged['engagement'] = merged['fb'] + merged['tk']
+        df = merged[['semana','engagement','es_anomalia']].copy()
+    fecha_inicio = get_fecha_inicio(periodo)
+    df = df[df['semana'] >= fecha_inicio].copy()
+    if df.empty:
+        return None
+    df['media_movil'] = df['engagement'].rolling(4, min_periods=1).mean()
+    df['ratio'] = np.where(df['media_movil'] > 0, df['engagement'] / df['media_movil'], 1.0)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df['semana'], y=df['engagement'], mode='lines',
+        line=dict(color='#3b82f6', width=2.5), name='Actividad ciudadana',
+        customdata=df[['ratio']].values,
+        hovertemplate="<b>%{x|%d %b %Y}</b><br>%{y:,.0f} interacciones<extra></extra>"))
+    anom = df[df['es_anomalia'] == True]
+    if not anom.empty:
+        fig.add_trace(go.Scatter(x=anom['semana'], y=anom['engagement'], mode='markers',
+            marker=dict(color='#ef4444', size=12), name='Semana inusual',
+            hovertemplate="<b>Semana inusual</b><br>%{x|%d %b %Y}<extra></extra>"))
+    fig.update_layout(plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)',
+        font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
+        xaxis=dict(gridcolor='var(--border)', tickformat='%d %b\n%Y', tickfont=dict(size=9)),
+        yaxis=dict(gridcolor='var(--border)', tickformat=','),
+        margin=dict(l=0,r=0,t=10,b=0), height=250, showlegend=False)
+    return fig
 
-    fecha_inicio_plot = get_fecha_inicio(periodo)
-    df_serie = df_serie[df_serie['semana'] >= fecha_inicio_plot]
 
-    if not df_serie.empty:
-        df_serie = df_serie.copy()
-        df_serie['media_movil'] = df_serie['engagement'].rolling(4, min_periods=1).mean()
-        df_serie['ratio'] = np.where(df_serie['media_movil'] > 0, df_serie['engagement'] / df_serie['media_movil'], 1.0)
+# ═══════════════════════════════════════════
+# BLOQUE I — PULSO GENERAL
+# ═══════════════════════════════════════════
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=df_serie['semana'], y=df_serie['engagement'],
-            mode='lines',
-            line=dict(color='#3b82f6', width=2.5),
-            name='Actividad ciudadana',
-            customdata=df_serie[['ratio']].values,
-            hovertemplate=(
-                "<b>%{x|%d %b %Y}</b><br>"
-                "%{y:,.0f} interacciones<br>"
-                "→ así de involucrada estuvo la gente esa semana"
-                "<extra></extra>"
-            )
-        ))
-        anomalias = df_serie[df_serie['es_anomalia'] == True]
-        if not anomalias.empty:
-            fig.add_trace(go.Scatter(
-                x=anomalias['semana'], y=anomalias['engagement'],
-                mode='markers',
-                marker=dict(color='#ef4444', size=12, symbol='circle'),
-                name='Semana inusual',
-                customdata=anomalias[['ratio']].values,
-                hovertemplate=(
-                    "<b>Semana inusual</b><br>"
-                    "%{x|%d %b %Y} · %{y:,.0f} interacciones<br>"
-                    "→ %{customdata[0]:.1f}× el promedio normal: algo disparó la conversación esa semana"
-                    "<extra></extra>"
-                )
-            ))
-        fig.update_layout(
-            plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)',
-            font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
-            xaxis=dict(gridcolor='var(--border)', showgrid=True, tickformat='%d %b\n%Y', tickfont=dict(size=9)),
-            yaxis=dict(gridcolor='var(--border)', showgrid=True, tickformat=',', tickfont=dict(size=9)),
-            legend=dict(bgcolor='var(--bg-surface)', bordercolor='var(--border)'),
-            margin=dict(l=0, r=0, t=10, b=0), height=280
-        )
-        card_explicativa(
-            que_es="Qué tanto la gente reacciona, comenta y comparte lo que publica la alcaldía.",
-            como_leerlo="Más alto: más gente se está involucrando. Más bajo: la gente lo ve pasar pero no responde.",
-            ojo="Facebook no siempre dice cuánta gente vio cada publicación; cuando falta ese dato, se mide por publicación."
-        )
+def render_bloque1_pulso():
+    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
+    df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
+    df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
+
+    st.markdown("""
+    <div class="seccion-header">
+        <div class="seccion-titulo">📊 PULSO GENERAL</div>
+        <div class="seccion-subtitulo">Panorama completo — 3 indicadores clave</div>
+    </div>""", unsafe_allow_html=True)
+
+    if df_fb.empty and df_tk.empty:
+        hay_datos(df_fb, "No hay datos para este período.")
+        return
+
+    # ── 1. CLIMA NARRATIVO ──
+    st.markdown("### 1. Clima Narrativo")
+    color_sem, texto_sem = calcular_semaforo(df_fb)
+    st.markdown(f'<div class="semaforo-{color_sem}"><p class="semaforo-texto">{texto_sem}</p></div>', unsafe_allow_html=True)
+
+    df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
+    score_val = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
+    pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
+    pct_pos_val = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
+    enojo_val = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
+
+    interp = generar_interpretacion("semaforo", {
+        'score': score_val, 'pct_negativo': pct_neg_val,
+        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val
+    })
+    st.markdown(f'<div class="interpretacion-box"><div class="interpretacion-label">◈ LO QUE ESTO SIGNIFICA</div><div class="interpretacion-texto">{interp}</div></div>', unsafe_allow_html=True)
+
+    total_comentarios = df_sent['total_comentarios'].sum() if not df_sent.empty else 0
+    m = evaluar_muestra(total_comentarios)
+    st.markdown(f'<p style="font-size:12px;color:var(--fg-muted)">{m["emoji"]} {m["etiqueta"]} en total</p>', unsafe_allow_html=True)
+
+    # ── 2. INTENSIDAD ──
+    st.markdown("### 2. Intensidad de la Conversación")
+    total_eng = (int(df_fb['engagement_total'].sum()) if not df_fb.empty else 0) + (int(df_tk['engagement_total'].sum()) if not df_tk.empty else 0)
+    total_posts = len(df_fb) + len(df_tk)
+    total_reacciones = (int(df_fb['total_reacciones'].sum()) if not df_fb.empty else 0) + (int(df_tk['likes'].sum()) if not df_tk.empty else 0)
+
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(f'<div class="bloom-card"><div class="bloom-card-title">Interacciones totales</div><div class="bloom-card-value">{total_eng:,}</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="bloom-card"><div class="bloom-card-title">Contenido publicado</div><div class="bloom-card-value">{total_posts}</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="bloom-card"><div class="bloom-card-title">Reacciones totales</div><div class="bloom-card-value">{total_reacciones:,}</div></div>', unsafe_allow_html=True)
+
+    df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA)
+    fig = _build_serie_chart(df_fb_s, df_tk_s, periodo)
+    if fig:
+        card_explicativa("Qué tanto la gente reacciona, comenta y comparte.", "Más alto: más gente se involucra. Más bajo: la gente lo ve pero no responde.")
         st.plotly_chart(fig, width='stretch')
 
-    # Comparativa FB vs TK
-    que_ves_box("Comparación directa entre tus dos plataformas principales. Facebook mide reacciones y comentarios. TikTok mide visualizaciones y engagement — cuántas personas no solo vieron sino interactuaron.")
-    st.markdown("### ¿Como se compara cada plataforma?")
-    col_fb, col_tk = st.columns(2)
+    # ── 3. CONCENTRACIÓN TEMÁTICA ──
+    st.markdown("### 3. Concentración Temática")
+    df_cat = safe_query("SELECT item_id, categoria_nombre FROM post_categorias", FACEBOOK_DB_ACTIVA)
+    if not df_cat.empty:
+        conteo = df_cat['categoria_nombre'].value_counts()
+        total_cat = conteo.sum()
+        top_tema = conteo.index[0]
+        share_top = conteo.iloc[0] / total_cat * 100
+        hhi = sum((c/total_cat*100)**2 for c in conteo) / 10000
+        st.markdown(f'<p style="font-size:13px;color:var(--fg-secondary)">Tema principal: <strong>{top_tema}</strong> — {share_top:.0f}% del contenido · HHI: {hhi:.2f}</p>', unsafe_allow_html=True)
+        st.markdown(f'<div style="background:var(--bg-card);padding:10px;border-radius:4px"><div style="background:var(--accent-dim);width:{share_top:.0f}%;height:12px;border-radius:2px"></div></div>', unsafe_allow_html=True)
+        otros = conteo.iloc[1:].index.tolist()[:5]
+        if otros:
+            st.markdown(f'<p style="font-size:11px;color:var(--fg-muted);margin-top:6px">Otros temas: {", ".join(str(t) for t in otros)}</p>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="bloom-status-info">Clasificación de temas requiere sentence-transformers (no instalado).</div>', unsafe_allow_html=True)
 
-    with col_fb:
-        if not df_fb.empty:
-            reac_fb = int(df_fb['total_reacciones'].sum())
-            sent_fb2 = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
-            tono_fb = "Positivo" if sent_fb2['score_sentimiento'].mean() > 0.1 else "Mixto"
-            amor = df_fb['indice_amor'].mean()
-            humor = df_fb['indice_humor'].mean()
-            tristeza = df_fb['indice_tristeza'].mean()
-            enojo = df_fb['indice_enojo'].mean() if 'indice_enojo' in df_fb.columns else 0
-            reac_max = max([
-                (amor,    'Amor'),
-                (humor,   'Humor'),
-                (tristeza,'Tristeza'),
-                (enojo,   'Enojo')
-            ], key=lambda x: x[0] if not pd.isna(x[0]) else 0)[1]
-            st.markdown(f"""
-            <div class="bloom-card">
-                <div class="bloom-card-title">FACEBOOK</div>
-                <p style="font-size:13px;margin:6px 0">
-                    <strong>Reacciones totales:</strong> {reac_fb:,}
-                </p>
-                <p style="font-size:13px;margin:6px 0">
-                    <strong>Comentarios totales:</strong> {int(n_comments):,}
-                </p>
-                <p style="font-size:13px;margin:6px 0">
-                    <strong>Tono predominante:</strong> {tono_fb}
-                </p>
-                <p style="font-size:13px;margin:6px 0">
-                    <strong>Reacción más usada:</strong> {reac_max}
-                </p>
-            </div>""", unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="bloom-card"><p>Sin datos de Facebook para este periodo</p></div>', unsafe_allow_html=True)
+    # Metodológica Fase 6
+    st.info("El análisis de sentimiento se basa en los comentarios capturados, no en el 100% de la conversación. Los % son un proxy, no medición exhaustiva.")
 
-    with col_tk:
-        if not df_tk.empty:
-            views_tk = int(df_tk['views'].sum())
-            likes_tk = int(df_tk['likes'].sum())
-            shares_prom = df_tk['shares'].mean() if not df_tk.empty else 0
-            eng_rate = df_tk['engagement_rate'].mean() * 100
-            st.markdown(f"""
-            <div class="bloom-card">
-                <div class="bloom-card-title">TIKTOK</div>
-                <p style="font-size:13px;margin:6px 0">
-                    <strong>Views totales:</strong> {views_tk:,}
-                </p>
-                <p style="font-size:13px;margin:6px 0">
-                    <strong>Likes totales:</strong> {likes_tk:,}
-                </p>
-                <p style="font-size:13px;margin:6px 0">
-                    <strong>Compartidos promedio:</strong> {shares_prom:.1f}
-                </p>
-                <p style="font-size:13px;margin:6px 0">
-                    <strong>Engagement promedio:</strong> {eng_rate:.2f}%
-                </p>
-            </div>""", unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════
+# BLOQUE II — SEGMENTACIÓN DE AUDIENCIA
+# ═══════════════════════════════════════════
+
+def render_bloque2_audiencia():
+    st.markdown("""
+    <div class="seccion-header">
+        <div class="seccion-titulo">👥 SEGMENTACIÓN DE AUDIENCIA</div>
+        <div class="seccion-subtitulo">¿Quién reacciona, quién critica y quién impulsa la conversación?</div>
+    </div>""", unsafe_allow_html=True)
+
+    df_comentarios = cargar_comentarios_fb(FACEBOOK_DB_ACTIVA)
+    if not hay_datos(df_comentarios, "Aún no hay comentarios procesados."):
+        return
+
+    # ── 1. MAPA DE PÚBLICOS ──
+    st.markdown("### 1. Mapa de Públicos")
+    df_tmp = df_comentarios.dropna(subset=['score_sentimiento'])
+    if not df_tmp.empty:
+        n_pos = (df_tmp['score_sentimiento'] > 0.1).sum()
+        n_neg = (df_tmp['score_sentimiento'] < -0.1).sum()
+        n_neu = len(df_tmp) - n_pos - n_neg
+        total = n_pos + n_neg + n_neu
+        p_pos = n_pos / total * 100 if total else 0
+        p_neg = n_neg / total * 100 if total else 0
+        p_neu = n_neu / total * 100 if total else 0
+
+        fig_pub = go.Figure()
+        fig_pub.add_trace(go.Bar(name='Simpatizante', x=['Públicos'], y=[p_pos], marker_color='#16a34a', text=f'{p_pos:.0f}%', textposition='inside'))
+        fig_pub.add_trace(go.Bar(name='Neutral', x=['Públicos'], y=[p_neu], marker_color='#374151', text=f'{p_neu:.0f}%', textposition='inside'))
+        fig_pub.add_trace(go.Bar(name='Crítico', x=['Públicos'], y=[p_neg], marker_color='#dc2626', text=f'{p_neg:.0f}%', textposition='inside'))
+        fig_pub.update_layout(barmode='stack', height=100, margin=dict(l=0,r=0,t=0,b=0), showlegend=True,
+            plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)',
+            font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
+            legend=dict(orientation='h', y=1.1))
+        st.plotly_chart(fig_pub, width='stretch')
+        st.markdown(f'<p style="font-size:12px;color:var(--fg-muted)">⚠️ Proxy: la base son comentarios, no personas individuales.</p>', unsafe_allow_html=True)
+
+        m = evaluar_muestra(len(df_comentarios))
+        st.markdown(f'<p style="font-size:12px;color:var(--fg-muted)">{m["emoji"]} {m["etiqueta"]}</p>', unsafe_allow_html=True)
+
+    # ── 2. POLARIZACIÓN ──
+    st.markdown("### 2. Polarización")
+    if not df_tmp.empty:
+        p_extremos = ((df_tmp['score_sentimiento'].abs() > 0.5).sum() / len(df_tmp) * 100)
+        p_centro = 100 - p_extremos
+        fig_pol = go.Figure()
+        fig_pol.add_trace(go.Bar(name='Extremos', x=['Polarización'], y=[p_extremos], marker_color='#ef4444', text=f'{p_extremos:.0f}%', textposition='inside'))
+        fig_pol.add_trace(go.Bar(name='Centro', x=['Polarización'], y=[p_centro], marker_color='#6b7280', text=f'{p_centro:.0f}%', textposition='inside'))
+        fig_pol.update_layout(barmode='stack', height=100, margin=dict(l=0,r=0,t=0,b=0), showlegend=True,
+            plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)',
+            font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
+            legend=dict(orientation='h', y=1.1))
+        st.plotly_chart(fig_pol, width='stretch')
+        st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">Extremos = comentarios con |score| > 0.5 (muy positivos o muy negativos). Alto % indica audiencia polarizada.</p>', unsafe_allow_html=True)
+
+    # ── 3. VOCES DE INFLUENCIA ──
+    st.markdown("### 3. Voces de Influencia (proxy)")
+    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
+    if not df_fb_raw.empty:
+        top_pages = df_fb_raw.groupby('page_name').agg(
+            engagement=('engagement_total', 'sum'),
+            posts=('post_id', 'count')
+        ).reset_index().sort_values('engagement', ascending=False).head(5)
+        for _, r in top_pages.iterrows():
+            st.markdown(f'<div class="bloom-card" style="padding:8px 14px"><span style="font-size:13px;color:var(--fg-primary)"><strong>{r["page_name"]}</strong></span><span style="float:right;color:var(--fg-secondary)">{int(r["engagement"]):,} interacciones · {int(r["posts"])} posts</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">⚠️ Son páginas/cuentas oficiales, no ciudadanos individuales.</p>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="bloom-status-info">Sin datos de engagement para identificar voces.</div>', unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════
+# BLOQUE III — RIESGO Y AUTENTICIDAD
+# ═══════════════════════════════════════════
+
+def render_bloque3_riesgo():
+    st.markdown("""
+    <div class="seccion-header">
+        <div class="seccion-titulo">⚠️ RIESGO Y AUTENTICIDAD</div>
+        <div class="seccion-subtitulo">Señales de alerta temprana y calidad de la interacción</div>
+    </div>""", unsafe_allow_html=True)
+
+    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
+    df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
+    df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
+    df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
+    df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA)
+
+    if df_fb.empty and df_tk.empty:
+        hay_datos(df_fb, "No hay datos para este período.")
+        return
+
+    # ── 1. AUTENTICIDAD (heurística) ──
+    st.markdown("### 1. Índice de Autenticidad (heurística)")
+    if not df_fb.empty and 'created_time' in df_fb.columns:
+        daily = df_fb.copy()
+        daily['fecha'] = daily['created_time'].dt.date
+        daily_vol = daily.groupby('fecha').size()
+        cv = daily_vol.std() / daily_vol.mean() if daily_vol.mean() > 0 else 0
+        if cv < 0.5:
+            label_aut = "ESTABLE (perfil orgánico)"
+            color_aut = "#22c55e"
+        elif cv < 1.0:
+            label_aut = "MODERADA (algunos picos)"
+            color_aut = "#f59e0b"
         else:
-            st.markdown('<div class="bloom-card"><p>Sin datos de TikTok para este periodo</p></div>', unsafe_allow_html=True)
+            label_aut = "VOLÁTIL (posible coordinación)"
+            color_aut = "#ef4444"
+        st.markdown(f'<div class="bloom-card" style="border-left:4px solid {color_aut}"><div class="bloom-card-title">Coeficiente de variación: {cv:.2f}</div><div class="bloom-card-value" style="color:{color_aut};font-size:18px">{label_aut}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">⚠️ Heurística: CV bajo = volumen diario estable (más orgánico). CV alto = picos súbitos (posible coordinación). No es detección de bots.</p>', unsafe_allow_html=True)
+
+    # ── 2. NIVEL DE ALERTA ──
+    st.markdown("### 2. Nivel de Alerta")
+    color_sem, texto_sem = calcular_semaforo(df_fb)
+    score_val = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
+    pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
+    pct_pos_val = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
+    enojo_val = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
+    interp = generar_interpretacion("semaforo", {
+        'score': score_val, 'pct_negativo': pct_neg_val,
+        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val
+    })
+    st.markdown(f'<div class="semaforo-{color_sem}"><p class="semaforo-texto">{texto_sem}</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="interpretacion-box"><div class="interpretacion-texto">{interp}</div></div>', unsafe_allow_html=True)
+
+    # ── 3. VELOCIDAD DE PROPAGACIÓN ──
+    st.markdown("### 3. Velocidad de Propagación")
+    df_series = pd.concat([df_fb_s, df_tk_s], ignore_index=True) if not df_fb_s.empty or not df_tk_s.empty else pd.DataFrame()
+    if not df_series.empty and 'engagement' in df_series.columns:
+        df_series = df_series.sort_values('semana')
+        recent = df_series.tail(2)
+        if len(recent) == 2:
+            prev = recent.iloc[0]['engagement']
+            curr = recent.iloc[1]['engagement']
+            if prev > 0:
+                cambio = (curr - prev) / prev * 100
+            else:
+                cambio = 0
+            if cambio > 15:
+                flecha, color_v = "↑", "#ef4444"
+                nota = f"La conversación creció {cambio:.0f}% vs la semana anterior."
+            elif cambio < -15:
+                flecha, color_v = "↓", "#3b82f6"
+                nota = f"La conversación cayó {abs(cambio):.0f}% vs la semana anterior."
+            else:
+                flecha, color_v = "→", "#6b7280"
+                nota = "Volumen estable respecto a la semana anterior."
+            st.markdown(f'<div class="bloom-card"><span style="font-size:28px;color:{color_v};font-weight:700">{flecha}</span><span style="font-size:14px;color:var(--fg-secondary);margin-left:12px">{nota}</span></div>', unsafe_allow_html=True)
+
+    # ── 4. PUNTOS DE FRICCIÓN ──
+    st.markdown("### 4. Puntos de Fricción")
+    df_neg = cargar_comentarios_negativos()
+    if not df_neg.empty:
+        top_neg = df_neg.nsmallest(3, 'sentiment_score') if 'sentiment_score' in df_neg.columns else df_neg.head(3)
+        for _, r in top_neg.iterrows():
+            msg = str(r.get('message', ''))[:120]
+            st.markdown(f'<div class="patron-rechazo"><p style="font-size:13px;color:#d1d5db">"{msg}"</p></div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="bloom-status-info">Sin comentarios negativos destacados.</div>', unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════
+# BLOQUE IV — MEMORIA E INTELIGENCIA APLICADA
+# ═══════════════════════════════════════════
+
+def render_bloque4_inteligencia():
+    st.markdown("""
+    <div class="seccion-header">
+        <div class="seccion-titulo">🧠 MEMORIA E INTELIGENCIA APLICADA</div>
+        <div class="seccion-subtitulo">Análisis profundo con datos e IA</div>
+    </div>""", unsafe_allow_html=True)
+
+    df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
+    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
+    df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
+    df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
+
+    score = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
+    pct_neg = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
+    pct_pos = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
+    enojo = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
+    total_eng = (int(df_fb['engagement_total'].sum()) if not df_fb.empty else 0) + (int(df_tk['engagement_total'].sum()) if not df_tk.empty else 0)
+
+    ctx = {"score": round(score, 3), "pct_negativo": round(pct_neg, 1), "pct_positivo": round(pct_pos, 1),
+           "indice_enojo": round(enojo, 3), "interacciones": total_eng, "periodo": periodo}
+
+    # ── Tarjetas IA ──
+    for label, tipo in [
+        ("Eco Histórico", "eco_historico"),
+        ("Lección Aprendida", "leccion"),
+        ("Contexto No Visible", "contexto"),
+        ("Proyección de Escenario", "proyeccion"),
+        ("Recomendación Estratégica", "recomendacion"),
+    ]:
+        with st.spinner(f"Generando {label}…"):
+            narrativa = generar_narrativa_ia(tipo, ctx)
+        st.markdown(f'<div class="bloom-card"><div class="bloom-card-title">{label.upper()}</div><p style="font-size:13px;color:var(--fg-primary);line-height:1.6">{narrativa}</p></div>', unsafe_allow_html=True)
+
+    # ── Temas Emergentes / Extinción ──
+    st.markdown("### Temas Emergentes y en Extinción")
+    df_cat = safe_query("SELECT item_id, categoria_nombre, created_time FROM fb_posts LEFT JOIN post_categorias ON fb_posts.post_id = post_categorias.item_id", FACEBOOK_DB_ACTIVA)
+    if not df_cat.empty and 'created_time' in df_cat.columns and 'categoria_nombre' in df_cat.columns:
+        df_cat['created_time'] = pd.to_datetime(df_cat['created_time'], errors='coerce')
+        df_cat['semana'] = df_cat['created_time'].dt.to_period('W').dt.start_time
+        df_cat = df_cat.dropna(subset=['categoria_nombre', 'semana'])
+        if not df_cat.empty:
+            ultima_sem = df_cat['semana'].max()
+            sem_actual = df_cat[df_cat['semana'] == ultima_sem]
+            sem_prev = df_cat[df_cat['semana'] == ultima_sem - pd.Timedelta(days=7)]
+            freq_actual = sem_actual['categoria_nombre'].value_counts()
+            freq_prev = sem_prev['categoria_nombre'].value_counts()
+            emergentes = [c for c in freq_actual.index if c not in freq_prev.index]
+            extintos = [c for c in freq_prev.index if c not in freq_actual.index]
+
+            col_e, col_x = st.columns(2)
+            with col_e:
+                st.markdown("**🆕 Emergentes**")
+                if emergentes:
+                    for t in emergentes[:5]:
+                        st.markdown(f'<p style="font-size:13px;color:#22c55e">+ {t}</p>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<p style="font-size:12px;color:var(--fg-muted)">Sin temas nuevos esta semana.</p>', unsafe_allow_html=True)
+            with col_x:
+                st.markdown("**📉 En extinción**")
+                if extintos:
+                    for t in extintos[:5]:
+                        st.markdown(f'<p style="font-size:13px;color:#ef4444">- {t}</p>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<p style="font-size:12px;color:var(--fg-muted)">Sin temas en extinción esta semana.</p>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="bloom-status-info">Clasificación de temas requiere sentence-transformers.</div>', unsafe_allow_html=True)
+
+    # ── Correlación Contenido-Reacción ──
+    st.markdown("### Correlación Contenido-Reacción")
+    df_posts, conteo_tipos, distorsion_alta, por_semana = calcular_contagio_emocional()
+    if not df_posts.empty:
+        resonancia_pos = conteo_tipos.get('resonancia_positiva', 0)
+        rechazo = conteo_tipos.get('rechazo_a_positivo', 0)
+        total_p = len(df_posts)
+        st.markdown(f'<div class="bloom-card"><p style="font-size:13px">Resonancia positiva: <strong style="color:#22c55e">{resonancia_pos}/{total_p}</strong> · Rechazo a positivo: <strong style="color:#ef4444">{rechazo}/{total_p}</strong></p></div>', unsafe_allow_html=True)
+
+        if not distorsion_alta.empty:
+            st.markdown("**Posts con mayor distorsión (brecha reacción vs comentarios):**")
+            for _, r in distorsion_alta.head(3).iterrows():
+                msg = str(r.get('message', ''))[:100]
+                st.markdown(f'<div class="patron-rechazo"><p style="font-size:12px">"{msg}"</p></div>', unsafe_allow_html=True)
+
+    # ── Comparativa Sectorial ──
+    st.markdown("### Comparativa Sectorial")
+    df_ext = cargar_externos(EXTERNOS_DB_ACTIVA)
+    if not df_ext.empty:
+        n_fuentes = df_ext['page_name'].nunique()
+        n_menciones = len(df_ext)
+        score_ext = df_ext['score_sentimiento'].mean() if 'score_sentimiento' in df_ext.columns else 0
+        tono_ext = "POSITIVO" if score_ext > 0.1 else "MIXTO" if score_ext > -0.1 else "CRITICO"
+        c_cs1, c_cs2, c_cs3 = st.columns(3)
+        c_cs1.markdown(f'<div class="bloom-card"><div class="bloom-card-title">Fuentes</div><div class="bloom-card-value">{n_fuentes}</div></div>', unsafe_allow_html=True)
+        c_cs2.markdown(f'<div class="bloom-card"><div class="bloom-card-title">Menciones</div><div class="bloom-card-value">{n_menciones}</div></div>', unsafe_allow_html=True)
+        c_cs3.markdown(f'<div class="bloom-card"><div class="bloom-card-title">Tono externo</div><div class="bloom-card-value" style="color:{"#22c55e" if score_ext>0.1 else "#eab308" if score_ext>-0.1 else "#ef4444"}">{tono_ext}</div></div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="bloom-status-info">Sin datos externos para comparativa sectorial.</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════
 # SECCIÓN 2 — TEMAS Y EMOCIONES
 # ═══════════════════════════════════════════
 
-elif seccion == "TEMAS Y EMOCIONES":
-
-    st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">TEMAS Y EMOCIONES</div>
-        <div class="seccion-subtitulo">
-            ¿De que habla la gente y como se siente segun el tema?
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
-    df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
-
-    if df_fb.empty and df_tk.empty:
-        hay_datos(df_fb, "No hay datos en este periodo para Temas y Emociones.")
-        st.stop()
-
-    df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
-
-    for df in [df_fb, df_tk, df_fb_raw, df_tk_raw]:
-        if 'categoria_nombre' in df.columns:
-            df['categoria_nombre'] = df['categoria_nombre'].replace(
-                'Contenido promocional',
-                'Convocatorias y celebraciones'
-            )
-
-    dfs = []
-    if not df_fb.empty and 'categoria_nombre' in df_fb.columns:
-        fb_cat = df_fb.groupby('categoria_nombre').agg(
-            reacciones=('total_reacciones','sum'),
-            comentarios=('engagement_total','sum'),
-            amor=('indice_amor','mean'),
-            humor=('indice_humor','mean'),
-            tristeza=('indice_tristeza','mean')
-        ).reset_index()
-        fb_cat['plataforma'] = 'Facebook'
-        dfs.append(fb_cat)
-
-    if not df_tk.empty and 'categoria_nombre' in df_tk.columns:
-        tk_cat = df_tk.groupby('categoria_nombre').agg(
-            reacciones=('likes','sum'),
-            comentarios=('comments_count','sum')
-        ).reset_index()
-        tk_cat['amor'] = 0
-        tk_cat['humor'] = 0
-        tk_cat['tristeza'] = 0
-        tk_cat['plataforma'] = 'TikTok'
-        dfs.append(tk_cat)
-
-    if dfs:
-        df_temas = pd.concat(dfs).groupby('categoria_nombre').agg(
-            reacciones=('reacciones','sum'),
-            comentarios=('comentarios','sum'),
-            amor=('amor','mean'),
-            humor=('humor','mean'),
-            tristeza=('tristeza','mean')
-        ).reset_index().sort_values('reacciones', ascending=False)
-
-        df_sent_cat = safe_query("""
-            SELECT pc.categoria_nombre,
-                   AVG(fs.pct_positivo) as pct_pos,
-                   AVG(fs.pct_negativo) as pct_neg,
-                   AVG(fs.score_sentimiento) as score
-            FROM fb_sentimiento fs
-            LEFT JOIN post_categorias pc ON fs.post_id = pc.item_id
-            WHERE pc.categoria_nombre IS NOT NULL
-            GROUP BY pc.categoria_nombre
-        """, FACEBOOK_DB_ACTIVA)
-        df_sent_cat['categoria_nombre'] = df_sent_cat['categoria_nombre'].replace(
-            'Contenido promocional', 'Convocatorias y celebraciones'
-        )
-        df_temas = df_temas.merge(df_sent_cat, on='categoria_nombre', how='left')
-
-        def get_tono_badge(score):
-            if pd.isna(score): return '<span class="badge-mixto">MIXTO</span>'
-            if score > 0.15: return '<span class="badge-positivo">POSITIVO</span>'
-            if score > 0: return '<span class="badge-mixto">MIXTO</span>'
-            return '<span class="badge-critico">CRITICO</span>'
-
-        def get_riesgo(pct_neg, reacciones):
-            if pd.isna(pct_neg): return '<span class="riesgo-medio">MEDIO</span>'
-            if pct_neg > 8: return '<span class="riesgo-alto">ALTO</span>'
-            if pct_neg > 4: return '<span class="riesgo-medio">MEDIO</span>'
-            return '<span class="riesgo-bajo">BAJO</span>'
-
-        def get_emocion(amor, humor, tristeza):
-            if pd.isna(amor): return "—"
-            vals = [(amor,'Amor'),(humor,'Humor'),(tristeza,'Tristeza')]
-            return max(vals, key=lambda x: x[0] if not pd.isna(x[0]) else 0)[1]
-
-        # Interpretación temas
-        if not df_temas.empty and 'pct_neg' in df_temas.columns:
-            tema_mas_critico = df_temas.nlargest(1, 'pct_neg').iloc[0]
-            tema_mas_positivo = df_temas.nsmallest(1, 'pct_neg').iloc[0]
-
-            texto_critico = generar_interpretacion("tema_critico", {
-                'tema': str(tema_mas_critico['categoria_nombre']).replace('\n',' ')[:40],
-                'pct_negativo': tema_mas_critico.get('pct_neg', 0),
-                'reacciones': int(tema_mas_critico['reacciones'])
-            })
-
-            texto_positivo = generar_interpretacion("tema_positivo", {
-                'tema': str(tema_mas_positivo['categoria_nombre']).replace('\n',' ')[:40],
-                'pct_positivo': tema_mas_positivo.get('pct_pos', 0)
-            })
-
-            st.markdown(f"""
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
-                <div class="patron-rechazo" style="padding:14px 18px">
-                    <div class="interpretacion-label" style="color:#ef4444">TEMA EN ZONA DE RIESGO</div>
-                    <div class="interpretacion-texto" style="margin-top:6px">{texto_critico}</div>
-                </div>
-                <div class="patron-respaldo" style="padding:14px 18px">
-                    <div class="interpretacion-label" style="color:#22c55e">TEMA MÁS SÓLIDO</div>
-                    <p style="font-size:14px;color:var(--fg-primary);margin:0;line-height:1.6">{texto_positivo}</p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        que_ves_box("Cada fila es un tema de tu contenido. TONO indica si los comentarios sobre ese tema son positivos, mixtos o críticos. EMOCIÓN es la reacción predominante. RIESGO señala los temas donde la ciudadanía está más molesta.")
-
-        st.markdown("""
-        <div class="grid-header" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr">
-            <span>TEMA</span>
-            <span style="text-align:right">REACCIONES</span>
-            <span style="text-align:center">TONO</span>
-            <span style="text-align:center">EMOCION</span>
-            <span style="text-align:right">COMENTARIOS</span>
-            <span style="text-align:center">RIESGO</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-        for _, row in df_temas.iterrows():
-            nombre = str(row['categoria_nombre']).replace('\n',' ')
-            reac = f"{int(row['reacciones']):,}"
-            tono = get_tono_badge(row.get('score'))
-            emocion = get_emocion(row['amor'], row['humor'], row['tristeza'])
-            comentarios = f"{int(row['comentarios']):,}"
-            riesgo = get_riesgo(row.get('pct_neg'), row['reacciones'])
-
-            st.markdown(f"""
-            <div class="grid-row" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr;">
-                <span class="grid-label">{nombre}</span>
-                <span class="grid-num" style="color:#60a5fa">{reac}</span>
-                <span style="text-align:center">{tono}</span>
-                <span style="text-align:center">{emocion}</span>
-                <span class="grid-muted" style="text-align:right">{comentarios}</span>
-                <span style="text-align:center">{riesgo}</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Mapa de calor
-    que_ves_box("Cuanto más azul e intenso el color, más fuerte es esa emoción en ese tema. Blanco o gris = poca emoción. Azul brillante = tema que genera reacción emocional fuerte.")
-    st.markdown("### ¿Que emocion genera cada tema?")
-
-    if dfs and not df_temas.empty:
-        df_heat = df_temas[['categoria_nombre','amor','humor','tristeza']].copy()
-        df_heat = df_heat.fillna(0)
-        df_heat = df_heat[
-            (df_heat['amor'] > 0) |
-            (df_heat['humor'] > 0) |
-            (df_heat['tristeza'] > 0)
-        ]
-        df_heat['categoria_nombre'] = df_heat['categoria_nombre'].str.replace('\n',' ')
-        df_heat_melt = df_heat.melt(
-            id_vars='categoria_nombre',
-            value_vars=['amor','humor','tristeza'],
-            var_name='emocion', value_name='intensidad'
-        )
-        df_heat_melt['emocion'] = df_heat_melt['emocion'].map({
-            'amor': 'Amor', 'humor': 'Humor', 'tristeza': 'Tristeza'
-        })
-        fig_heat = px.density_heatmap(
-            df_heat_melt, x='emocion', y='categoria_nombre', z='intensidad',
-            color_continuous_scale=[[0,'#111827'],[0.3,'#1e3a5f'],[0.7,'#2563eb'],[1,'#60a5fa']],
-            labels={'intensidad':'Intensidad','emocion':'Emocion','categoria_nombre':'Tema'}
-        )
-        fig_heat.update_layout(
-            plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)',
-            font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
-            coloraxis_showscale=False,
-            margin=dict(l=0, r=0, t=10, b=0), height=300
-        )
-        fig_heat.update_traces(
-            hovertemplate=(
-                "<b>%{y}</b> · %{x}<br>"
-                "Fuerza: %{z:.2f}<br>"
-                "→ de cada 100 reacciones a este tema, %{z:.0f} son de %{x|lower}"
-                "<extra></extra>"
-            )
-        )
-        card_explicativa(
-            que_es="Por cada tema, con qué emoción reacciona la gente.",
-            como_leerlo="Cada casilla cruza un tema con una emoción. Mientras más encendido el color, más se repite esa emoción en ese tema."
-        )
-        st.plotly_chart(fig_heat, width='stretch')
-
-    # Top 5 posts
-    que_ves_box("Los 5 contenidos que más movieron a la ciudadanía en el período seleccionado, medidos por interacciones totales (reacciones + comentarios + compartidos).")
-    st.markdown("### El contenido que mas movio a la ciudadania")
-
-    dfs_top = []
-    if not df_fb.empty:
-        fb_top = df_fb.nlargest(5, 'engagement_total')[
-            ['post_id','created_time','message','engagement_total',
-             'total_reacciones','indice_amor','indice_humor',
-             'indice_tristeza','categoria_nombre']
-        ].copy()
-        fb_top['plataforma'] = 'Facebook'
-        fb_top['fecha'] = fb_top['created_time']
-        fb_top['texto'] = fb_top['message']
-        dfs_top.append(fb_top.rename(columns={'engagement_total':'total','total_reacciones':'reacciones'}))
-
-    if not df_tk.empty:
-        tk_top = df_tk.nlargest(5, 'engagement_total')[
-            ['id','created_at','description','engagement_total','likes','categoria_nombre']
-        ].copy()
-        tk_top['plataforma'] = 'TikTok'
-        tk_top['fecha'] = tk_top['created_at']
-        tk_top['texto'] = tk_top['description']
-        tk_top['reacciones'] = tk_top['likes']
-        tk_top['indice_amor'] = 0
-        tk_top['indice_humor'] = 0
-        tk_top['indice_tristeza'] = 0
-        dfs_top.append(tk_top.rename(columns={'engagement_total':'total'}))
-
-    if dfs_top:
-        df_top = pd.concat(dfs_top).nlargest(5, 'total')
-        for _, row in df_top.iterrows():
-            plat = row['plataforma']
-            plat_color = "#1877f2" if plat == "Facebook" else "#ff0050"
-            plat_badge = f'<span style="background:{plat_color};color:white;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700">{plat.upper()}</span>'
-            fecha = formato_fecha_espanol(row['fecha'])
-            texto = str(row['texto'])[:120] + "..." if len(str(row['texto'])) > 120 else str(row['texto'])
-            categoria = str(row.get('categoria_nombre',''))[:40]
-            total = int(row['total'])
-
-            ia_val = float(row.get('indice_amor',0) or 0)
-            ih_val = float(row.get('indice_humor',0) or 0)
-            it_val = float(row.get('indice_tristeza',0) or 0)
-            reac_val = float(row.get('reacciones',0) or 0)
-            amor_n = int(ia_val * reac_val) if pd.notna(reac_val) else 0
-            humor_n = int(ih_val * reac_val) if pd.notna(reac_val) else 0
-            trist_n = int(it_val * reac_val) if pd.notna(reac_val) else 0
-
-            st.markdown(f"""
-            <div class="bloom-card bloom-border-accent">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                    <span style="font-size:11px;color:var(--fg-muted)">{fecha}</span>
-                    <div style="display:flex;gap:8px;align-items:center">
-                        {plat_badge}
-                        <span style="font-size:11px;color:var(--fg-muted);background:var(--border-light);padding:2px 8px;border-radius:4px">{categoria}</span>
-                    </div>
-                </div>
-                <p style="font-size:14px;color:var(--fg-primary);margin:8px 0;line-height:1.5">{texto}</p>
-                <div style="display:flex;gap:16px;margin-top:10px;align-items:center">
-                    <span style="font-size:12px;color:var(--fg-secondary)">
-                        Amor {amor_n:,} &nbsp;·&nbsp; Humor {humor_n:,} &nbsp;·&nbsp; Tristeza {trist_n:,}
-                    </span>
-                    <span style="margin-left:auto;font-size:18px;font-weight:700;color:#60a5fa;font-family:'IBM Plex Mono',monospace">
-                        {total:,} interacciones
-                    </span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    st.divider()
-    bloom_subheader("Score Emocional Neto por post")
-    bloom_caption(
-        "Combina afecto vs. controversia (reacciones) y el sentimiento de los comentarios. "
-        "Rango ~[-1, 1]: positivo = post querido; negativo = post que genera rechazo."
-    )
-    st.info(
-        "El análisis de sentimiento se basa en los comentarios capturados de cada post, "
-        "no en el 100% de la conversación. Los porcentajes son un proxy de la reacción "
-        "del público, no una medición exhaustiva."
-    )
-    df_sen = calcular_score_emocional_neto(min_reacciones=10)
-    if hay_datos(df_sen, "Aún no hay posts para el score emocional."):
-        df_val = df_sen[df_sen["incluido_proporciones"]].copy()
-        if hay_datos(df_val, "Ningún post supera el mínimo de 10 reacciones para el análisis de proporciones."):
-            df_val = df_val.sort_values("score_emocional_neto", ascending=False)
-
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Score neto promedio", f"{df_val['score_emocional_neto'].mean():+.2f}")
-            c2.metric("Post más querido", f"{df_val['score_emocional_neto'].max():+.2f}")
-            c3.metric("Post más controversial", f"{df_val['score_emocional_neto'].min():+.2f}")
-
-            ocultar_insuf = st.checkbox(
-                f"Ocultar posts con muestra insuficiente (< {MIN_COMENTARIOS_MUESTRA} comentarios)",
-                value=False,
-            )
-            if ocultar_insuf:
-                df_val = df_val[df_val["total_comentarios"] >= MIN_COMENTARIOS_MUESTRA]
-            if df_val.empty:
-                st.warning("No hay posts que cumplan el filtro de muestra suficiente.")
-                st.stop()
-
-            def _resumen(m):
-                m = (str(m) if m is not None else "").replace("\n", " ").strip()
-                return (m[:90] + "…") if len(m) > 90 else (m or "(sin texto)")
-            df_val["post"] = df_val["message"].apply(_resumen)
-            df_val["Muestra"] = df_val["total_comentarios"].apply(
-                lambda x: evaluar_muestra(x)["etiqueta"]
-            )
-
-            cols_show = ["post", "score_emocional_neto", "afecto_positivo",
-                         "controversia", "score_sent_norm", "Muestra"]
-            ren = {"post": "Post", "score_emocional_neto": "Score neto",
-                   "afecto_positivo": "Afecto", "controversia": "Controversia",
-                   "score_sent_norm": "Sent. coment.", "Muestra": "Muestra"}
-            fmt = {"Score neto": "{:+.2f}", "Afecto": "{:.2f}",
-                   "Controversia": "{:.2f}", "Sent. coment.": "{:+.2f}"}
-
-            st.markdown("**TOP 10 — MÁS QUERIDOS**")
-            st.dataframe(df_val.head(10)[cols_show].rename(columns=ren).style.format(fmt),
-                         width='stretch', hide_index=True)
-
-            st.markdown("**BOTTOM 10 — MÁS POLÉMICOS**")
-            st.dataframe(df_val.tail(10).sort_values("score_emocional_neto")[cols_show].rename(columns=ren).style.format(fmt),
-                         width='stretch', hide_index=True)
-
-            df_plot = df_val.head(15).copy()
-            df_plot['lectura'] = np.where(
-                df_plot['score_emocional_neto'] >= 0.3, 'la gente lo recibió con cariño',
-                np.where(df_plot['score_emocional_neto'] <= -0.1, 'la gente lo rechazó', 'recepción dividida')
-            )
-            fig_sen = px.bar(
-                df_plot, x="score_emocional_neto", y="post", orientation="h",
-                color="score_emocional_neto", color_continuous_scale="RdYlGn",
-                labels={"score_emocional_neto": "Score emocional neto", "post": ""},
-            )
-            fig_sen.update_traces(
-                customdata=df_plot[['lectura', 'afecto_positivo', 'controversia']].values,
-                hovertemplate=(
-                    "%{y}<br>"
-                    "<b>Score neto:</b> %{x:+.2f} (de −1 a +1)<br>"
-                    "Afecto: %{customdata[1]:.2f} · Controversia: %{customdata[2]:.2f}<br>"
-                    "→ %{customdata[0]}"
-                    "<extra></extra>"
-                )
-            )
-            fig_sen.update_layout(height=520, yaxis={"categoryorder": "total ascending"})
-            card_explicativa(
-                que_es="Por cada publicación, un solo número que resume si la gente reaccionó con cariño o con enojo y tristeza.",
-                como_leerlo="Arriba de cero: ganó el cariño. Abajo de cero: ganó el enojo y la tristeza. Mientras más lejos del cero, más fuerte fue la emoción."
-            )
-            st.plotly_chart(fig_sen, width='stretch')
-
-    st.divider()
-    bloom_subheader("Índice de Viralidad — TikTok")
-    bloom_caption(
-        "Viralidad = compartidos / views (qué tanto se propaga). TikTok no tiene reacciones "
-        "diferenciadas, así que esto mide ALCANCE, no emoción (esa vive en los comentarios)."
-    )
-    df_vir = calcular_viralidad_tiktok(min_views=100)
-    if hay_datos(df_vir, "Aún no hay videos de TikTok con views suficientes."):
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Viralidad promedio", f"{df_vir['indice_viralidad'].mean()*100:.2f}%")
-        c2.metric("Video más viral", f"{df_vir['indice_viralidad'].max()*100:.2f}%")
-        c3.metric("Engagement rate prom.", f"{df_vir['engagement_rate'].mean()*100:.2f}%")
-
-        top = df_vir.head(10)[["video", "indice_viralidad", "engagement_rate", "views", "shares", "likes"]].copy()
-        top["indice_viralidad"] = (top["indice_viralidad"] * 100).round(2)
-        top["engagement_rate"] = (top["engagement_rate"] * 100).round(2)
-        st.markdown("**TOP 10 — VIDEOS MÁS VIRALES**")
-        st.dataframe(top.rename(columns={
-            "video": "Video", "indice_viralidad": "Viralidad %", "engagement_rate": "Engagement %",
-            "views": "Views", "shares": "Shares", "likes": "Likes",
-        }), width='stretch', hide_index=True)
-
-        df_vir_plot = df_vir.copy()
-        df_vir_plot['pct_viral'] = (df_vir_plot['shares'] / df_vir_plot['views'] * 100).fillna(0)
-        fig_vir = px.scatter(
-            df_vir_plot, x="views", y="shares", size="likes", color="indice_viralidad",
-            color_continuous_scale="Plasma",
-            custom_data=['video', 'shares', 'pct_viral'],
-            labels={"views": "Views", "shares": "Compartidos", "indice_viralidad": "Viralidad"},
-        )
-        fig_vir.update_traces(
-            hovertemplate=(
-                "%{customdata[0]}<br>"
-                "%{x:,.0f} vistas · %{customdata[1]:,.0f} compartidos<br>"
-                "→ de cada 100 que lo vieron, %{customdata[2]:.1f} lo reenviaron"
-                "<extra></extra>"
-            )
-        )
-        fig_vir.update_layout(height=480)
-        card_explicativa(
-            que_es="Qué tanto se comparte un video comparado con cuánta gente lo vio.",
-            como_leerlo="Alto: la gente no solo lo vio, lo reenvió. Bajo: lo vieron pero no les interesó pasarlo."
-        )
-        st.plotly_chart(fig_vir, width='stretch')
-
 # ═══════════════════════════════════════════
-# SECCIÓN 3 — LÍNEA DEL TIEMPO
+# DISPATCH PRINCIPAL
 # ═══════════════════════════════════════════
 
-elif seccion == "LÍNEA DEL TIEMPO":
-
-    st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">LÍNEA DEL TIEMPO</div>
-        <div class="seccion-subtitulo">
-            ¿Cuando explota la conversacion y que la causo?
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA)
-
-    if df_fb_s.empty and df_tk_s.empty:
-        hay_datos(df_fb_s, "No hay datos de series temporales.")
-        st.stop()
-
-    plat_sel = st.radio("Seleccionar plataforma:", ["Ambas","Facebook","TikTok"], horizontal=True)
-
-    if plat_sel == "Facebook":
-        df_plot = df_fb_s[['semana','engagement_promedio','es_anomalia','total_posts','score_emocional_promedio']].copy()
-        df_plot = df_plot.rename(columns={'engagement_promedio':'engagement','score_emocional_promedio':'score'})
-        ylabel = "Engagement promedio"
-    elif plat_sel == "TikTok":
-        df_plot = df_tk_s[['semana','views_suma','es_anomalia','engagement_rate_promedio']].copy()
-        df_plot = df_plot.rename(columns={'views_suma':'engagement','engagement_rate_promedio':'score'})
-        df_plot['score'] = df_plot.get('score', 0)
-        ylabel = "Views totales"
-    else:
-        df_fb_m = df_fb_s[['semana','engagement_promedio','es_anomalia']].copy()
-        df_fb_m['eng'] = df_fb_m['engagement_promedio']
-        df_tk_m = df_tk_s[['semana','views_suma','es_anomalia']].copy()
-        df_tk_m['eng'] = df_tk_m['views_suma']
-        df_both = pd.merge(
-            df_fb_m[['semana','eng']].rename(columns={'eng':'fb'}),
-            df_tk_m[['semana','eng','es_anomalia']].rename(columns={'eng':'tk'}),
-            on='semana', how='outer'
-        ).fillna(0)
-        df_both['engagement'] = df_both['fb'] + df_both['tk']
-        df_both['score'] = 0
-        df_plot = df_both[['semana','engagement','es_anomalia','score']].copy()
-        ylabel = "Actividad total"
-
-    fecha_inicio_plot = get_fecha_inicio(periodo)
-    df_plot = df_plot[df_plot['semana'] >= fecha_inicio_plot].copy()
-
-    if not df_plot.empty:
-        df_plot = df_plot.sort_values('semana')
-        df_plot['media_movil'] = df_plot['engagement'].rolling(4, min_periods=1).mean()
-        df_plot['ratio'] = np.where(df_plot['media_movil'] > 0, df_plot['engagement'] / df_plot['media_movil'], 1.0)
-
-        st.markdown(leyenda_grafica([
-            {'simbolo': '—', 'color': '#3b82f6',
-             'label': 'Actividad semanal',
-             'descripcion': 'Total de reacciones y comentarios sumados cada 7 días. Cada punto = una semana completa.'},
-            {'simbolo': '····', 'color': '#f97316',
-             'label': 'Promedio móvil 4 semanas',
-             'descripcion': 'El nivel "normal" de actividad calculado sobre el último mes. Si la línea azul está muy por encima o abajo de esta → semana inusual.'},
-            {'simbolo': '●', 'color': '#ef4444',
-             'label': 'Anomalía detectada',
-             'descripcion': 'Semana donde la actividad fue 2 veces mayor o menor que el promedio histórico. Algo pasó esa semana — busca qué publicaste o qué ocurrió en el municipio.'},
-        ]), unsafe_allow_html=True)
-
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=df_plot['semana'], y=df_plot['engagement'],
-            mode='lines', line=dict(color='#3b82f6', width=2),
-            name='Actividad semanal',
-            fill='tozeroy', fillcolor='rgba(59,130,246,0.08)',
-            customdata=df_plot[['ratio']].values,
-            hovertemplate=(
-                "<b>Semana del %{x|%d %b %Y}</b><br>"
-                "%{y:,.0f} interacciones<br>"
-                "→ así de involucrada estuvo la gente esa semana"
-                "<extra></extra>"
-            )
-        ))
-        fig.add_trace(go.Scatter(
-            x=df_plot['semana'], y=df_plot['media_movil'],
-            mode='lines', line=dict(color='#f59e0b', width=1.5, dash='dot'),
-            name='Promedio 4 semanas',
-            hovertemplate='Promedio móvil: %{y:,.0f}<extra></extra>'
-        ))
-        anom = df_plot[df_plot['es_anomalia'] == True]
-        if not anom.empty:
-            fig.add_trace(go.Scatter(
-                x=anom['semana'], y=anom['engagement'],
-                mode='markers',
-                marker=dict(color='#ef4444', size=14, symbol='circle', line=dict(color='#fca5a5', width=2)),
-                name='Semana inusual',
-                customdata=anom[['ratio']].values,
-                hovertemplate=(
-                    "<b>Semana inusual</b><br>"
-                    "%{x|%d %b %Y} · %{y:,.0f} interacciones<br>"
-                    "→ %{customdata[0]:.1f}× el promedio normal: algo disparó la conversación esa semana"
-                    "<extra></extra>"
-                )
-            ))
-        fig.update_layout(
-            plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)',
-            font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
-            xaxis=dict(gridcolor='var(--border)', tickformat='%d %b\n%Y', showgrid=True, tickfont=dict(size=9)),
-            yaxis=dict(gridcolor='var(--border)', showgrid=True, tickformat=',', title=ylabel),
-            legend=dict(bgcolor='var(--bg-surface)', bordercolor='var(--border)', x=0, y=1),
-            margin=dict(l=0, r=0, t=10, b=0), height=350
-        )
-        card_explicativa(
-            que_es="Semana a semana, cuánto se movió la gente con las publicaciones, marcando en rojo las semanas fuera de lo normal.",
-            como_leerlo="La línea sube cuando hay más actividad y baja cuando hay menos. Los puntos rojos son semanas que se salieron de lo común, para arriba o para abajo."
-        )
-        st.plotly_chart(fig, width='stretch')
-
-    # Anomalias
-    que_ves_box("Estas son las semanas donde la conversación ciudadana explotó. No significa que fue bueno o malo — significa que algo captó masivamente la atención. Identifica qué pasó esa semana para entender por qué.")
-    st.markdown("### Semanas con actividad inusual")
-    st.markdown("*Estas semanas tuvieron una actividad significativamente mayor a lo normal — algo ocurrio que movilizo a la ciudadania.*")
-
-    anom_fb = df_fb_s[df_fb_s['es_anomalia']==True].sort_values('semana', ascending=False)
-    anom_tk = df_tk_s[df_tk_s['es_anomalia']==True].sort_values('semana', ascending=False)
-
-    col_a1, col_a2 = st.columns(2)
-    with col_a1:
-        st.markdown("**Facebook**")
-        if anom_fb.empty:
-            st.markdown('<div class="bloom-card"><p style="color:var(--fg-muted)">Sin anomalias detectadas</p></div>', unsafe_allow_html=True)
-        else:
-            for _, row in anom_fb.head(5).iterrows():
-                fecha = formato_fecha_espanol(row['semana'])
-                eng = int(row['engagement_promedio'])
-                score = row.get('score_emocional_promedio', 0)
-                tipo_pico = 'positivo' if score > 0 else 'negativo'
-                interp_anom = generar_interpretacion("anomalia", {
-                    'fecha': fecha, 'views': eng, 'tipo': tipo_pico
-                })
-                st.markdown(f"""
-                <div class="anomalia-item">
-                    <strong style="color:#f87171"> {fecha}</strong><br>
-                    <span style="font-size:12px;color:var(--fg-secondary)">
-                        Engagement: <strong style="color:#60a5fa">{eng:,}</strong>
-                    </span>
-                    <p style="font-size:12px;color:var(--fg-primary);margin:6px 0 0 0;line-height:1.5;font-style:italic">{interp_anom}</p>
-                </div>
-                """, unsafe_allow_html=True)
-    with col_a2:
-        st.markdown("**TikTok**")
-        if anom_tk.empty:
-            st.markdown('<div class="bloom-card"><p style="color:var(--fg-muted)">Sin anomalias detectadas</p></div>', unsafe_allow_html=True)
-        else:
-            for _, row in anom_tk.head(5).iterrows():
-                fecha = formato_fecha_espanol(row['semana'])
-                views = int(row['views_suma'])
-                rate = float(row.get('engagement_rate_promedio', 0)) * 100
-                interp_anom = generar_interpretacion("anomalia", {
-                    'fecha': fecha, 'views': views, 'tipo': 'negativo'
-                })
-                st.markdown(f"""
-                <div class="anomalia-item">
-                    <strong style="color:#f87171"> {fecha}</strong><br>
-                    <span style="font-size:12px;color:var(--fg-secondary)">
-                        Views: <strong style="color:#60a5fa">{views:,}</strong>
-                        &nbsp;·&nbsp; Engagement: {rate:.2f}%
-                    </span>
-                    <p style="font-size:12px;color:var(--fg-primary);margin:6px 0 0 0;line-height:1.5;font-style:italic">{interp_anom}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-    # Heatmap dia de semana
-    que_ves_box("Cuándo reacciona más la gente según el día de la semana. Azul oscuro = más actividad. Útil para saber qué días publicar para maximizar el alcance.")
-    st.markdown("### Cómo reacciona la gente según el día")
-
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
-
-    dfs_dias = []
-    if not df_fb_raw.empty:
-        df_fb_wk = df_fb_raw.copy()
-        df_fb_wk['dia'] = df_fb_wk['created_time'].dt.dayofweek
-        dfs_dias.append(df_fb_wk[['dia','total_reacciones']].rename(columns={'total_reacciones':'valor'}))
-    if not df_tk_raw.empty:
-        df_tk_wk = df_tk_raw.copy()
-        df_tk_wk['dia'] = df_tk_wk['created_at'].dt.dayofweek
-        dfs_dias.append(df_tk_wk[['dia','likes']].rename(columns={'likes':'valor'}))
-
-    if dfs_dias:
-        df_dias = pd.concat(dfs_dias).groupby('dia')['valor'].sum().reset_index()
-        dias_nombres = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom']
-        df_dias['nombre'] = df_dias['dia'].map(lambda x: dias_nombres[x] if x < 7 else '?')
-        dia_pico = df_dias.loc[df_dias['valor'].idxmax()]
-
-        fig_dias = go.Figure(go.Bar(
-            x=df_dias['nombre'], y=df_dias['valor'],
-            marker=dict(color=df_dias['valor'], colorscale=[[0,'#1f2937'],[0.5,'#1d4ed8'],[1,'#60a5fa']]),
-            customdata=df_dias[['valor']].values,
-            hovertemplate=(
-                "<b>%{x}</b><br>"
-                "%{y:,} reacciones<br>"
-                "→ de cada 100 reacciones semanales, %{customdata[0]:.0f} caen en %{x}"
-                "<extra></extra>"
-            )
-        ))
-        fig_dias.update_layout(
-            plot_bgcolor='#111827', paper_bgcolor='#111827',
-            font=dict(color='#9ca3af', size=12),
-            xaxis=dict(gridcolor='var(--border)'), yaxis=dict(gridcolor='var(--border)', tickformat=','),
-            showlegend=False, margin=dict(l=0, r=0, t=10, b=0), height=200
-        )
-        card_explicativa(
-            que_es="En qué días de la semana la gente reacciona más a las publicaciones.",
-            como_leerlo="La barra más alta es el día en que la gente más reacciona; la más baja, el día en que menos reacciona."
-        )
-        st.plotly_chart(fig_dias, width='stretch')
-        st.markdown(
-            f'<p style="font-size:13px;color:var(--fg-secondary)">El dia que mas reacciona '
-            f'la gente en promedio: <strong style="color:var(--fg-primary)">{dia_pico["nombre"]}</strong> '
-            f'({int(dia_pico["valor"]):,} reacciones totales)</p>',
-            unsafe_allow_html=True
-        )
-
-# ═══════════════════════════════════════════
-# SECCIÓN 4 — VOZ CIUDADANA
-# ═══════════════════════════════════════════
-
-elif seccion == "VOZ CIUDADANA":
-
-    st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">VOZ CIUDADANA</div>
-        <div class="seccion-subtitulo">
-            Señales de comportamiento colectivo — metodologia Kosinski adaptada
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    df_comentarios = cargar_comentarios_fb(FACEBOOK_DB_ACTIVA)
-
-    if not hay_datos(df_comentarios, "Aún no hay comentarios procesados."):
-        st.stop()
-
-    # Senal 1
-    que_ves_box("Diferencia entre los likes que la gente da por inercia (apoyo vacío) y los temas donde los comentarios confirman que el apoyo es real (apoyo genuino). Basado en metodología Kosinski 2013: el comportamiento real revela más que las reacciones superficiales.")
-    st.markdown("""
-    <div class="senal-card">
-        <div class="senal-numero">SEÑAL 01</div>
-        <div class="senal-titulo">
-            ¿Que temas generan apoyo genuino vs. apoyo vacio?
-        </div>
-    """, unsafe_allow_html=True)
-
-    df_s1 = safe_query("""
-        SELECT pc.categoria_nombre,
-               AVG(fe.indice_amor) as amor_promedio,
-               AVG(fe.total_reacciones) as reacciones_promedio,
-               AVG(fs.pct_positivo) as pct_positivo,
-               AVG(fs.pct_negativo) as pct_negativo,
-               AVG(fs.score_sentimiento) as score_sent
-        FROM fb_engagement fe
-        LEFT JOIN post_categorias pc ON fe.post_id = pc.item_id
-        LEFT JOIN fb_sentimiento fs ON fe.post_id = fs.post_id
-        WHERE pc.categoria_nombre IS NOT NULL
-        GROUP BY pc.categoria_nombre
-    """, FACEBOOK_DB_ACTIVA)
-
-    score_sent = df_s1['score_sent']
-    genuino = df_s1.nlargest(3, 'score_sent')[
-        ['categoria_nombre','amor_promedio','pct_positivo','score_sent']
-    ].copy()
-
-    vacio = df_s1.nsmallest(3, 'score_sent')[
-        ['categoria_nombre','amor_promedio','pct_negativo','score_sent']
-    ].copy()
-
-    col_g, col_v = st.columns(2)
-    with col_g:
-        st.markdown('<p style="color:#22c55e;font-weight:600;font-size:12px;letter-spacing:1px">TEMAS CON MENOR RECHAZO</p>', unsafe_allow_html=True)
-        st.markdown('<p style="color:var(--fg-muted);font-size:11px">Mejor balance comentarios vs. reacciones</p>', unsafe_allow_html=True)
-        for _, r in genuino.iterrows():
-            nombre = str(r['categoria_nombre']).replace('\n',' ')[:35]
-            st.markdown(f'<p style="font-size:13px;color:var(--fg-primary);padding:4px 0">→ <strong>{nombre}</strong>: {r["pct_positivo"]:.1f}% comentarios positivos</p>', unsafe_allow_html=True)
-    with col_v:
-        st.markdown('<p style="color:var(--amber);font-weight:600;font-size:12px;letter-spacing:1px">APOYO VACÍO</p>', unsafe_allow_html=True)
-        st.markdown('<p style="color:var(--fg-muted);font-size:11px">Reacciones altas pero comentarios críticos</p>', unsafe_allow_html=True)
-        for _, r in vacio.iterrows():
-            nombre = str(r['categoria_nombre']).replace('\n',' ')[:35]
-            st.markdown(f'<p style="font-size:13px;color:var(--fg-primary);padding:4px 0">→ <strong>{nombre}</strong>: {r["pct_negativo"]:.1f}% comentarios negativos</p>', unsafe_allow_html=True)
-
-    nota = "NOTA: Todos los temas tienen rechazo predominante. Estos son los menos críticos." if score_sent.max() < 0 else "NOTA: La gente da \'me gusta\' por inercia en eventos pero en comentarios dice lo que realmente piensa."
-    st.markdown(f"""
-        <p style="font-size:12px;color:var(--fg-muted);margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
-            {nota}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Senal 2
-    que_ves_box("Intensidad emocional por tema. Alta intensidad positiva = temas que movilizan al ciudadano a favor. Alta intensidad negativa = temas que generan indignación. Baja intensidad = temas que la gente ignora emocionalmente.")
-    st.markdown("""
-    <div class="senal-card">
-        <div class="senal-numero">SEÑAL 02</div>
-        <div class="senal-titulo">
-            ¿Que temas generan reaccion emocional fuerte?
-        </div>
-    """, unsafe_allow_html=True)
-
-    if not df_s1.empty:
-        df_s1_sort = df_s1.sort_values('amor_promedio', ascending=False)
-        alta_pos = df_s1_sort[df_s1_sort['score_sent'] > 0.15].head(2)
-        alta_neg = df_s1_sort[df_s1_sort['score_sent'] < 0].head(2)
-        baja = df_s1_sort[
-            (df_s1_sort['amor_promedio'] < df_s1_sort['amor_promedio'].median()) &
-            (df_s1_sort['score_sent'].abs() < 0.1)
-        ].head(2)
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown('<p style="color:#22c55e;font-weight:600;font-size:11px;letter-spacing:1px">ALTA INTENSIDAD POSITIVA</p>', unsafe_allow_html=True)
-            if alta_pos.empty:
-                st.markdown('<p style="font-size:12px;color:var(--fg-muted)">Sin datos positivos significativos</p>', unsafe_allow_html=True)
-            for _, r in alta_pos.iterrows():
-                nombre = str(r['categoria_nombre']).replace('\n',' ')[:30]
-                st.markdown(f'<p style="font-size:13px;color:var(--fg-primary);padding:4px 0">● <strong>{nombre}</strong><br><span style="font-size:11px;color:var(--fg-muted)">La ciudadanía comparte espontáneamente</span></p>', unsafe_allow_html=True)
-        with col2:
-            st.markdown('<p style="color:#ef4444;font-weight:600;font-size:11px;letter-spacing:1px">ALTA INTENSIDAD NEGATIVA</p>', unsafe_allow_html=True)
-            if alta_neg.empty:
-                st.markdown('<p style="font-size:12px;color:var(--fg-muted)">Sin datos negativos significativos</p>', unsafe_allow_html=True)
-            for _, r in alta_neg.iterrows():
-                nombre = str(r['categoria_nombre']).replace('\n',' ')[:30]
-                st.markdown(f'<p style="font-size:13px;color:var(--fg-primary);padding:4px 0">● <strong>{nombre}</strong><br><span style="font-size:11px;color:var(--fg-muted)">Comentarios de denuncia y queja</span></p>', unsafe_allow_html=True)
-        with col3:
-            st.markdown('<p style="color:var(--fg-muted);font-weight:600;font-size:11px;letter-spacing:1px">BAJA INTENSIDAD</p>', unsafe_allow_html=True)
-            if baja.empty:
-                st.markdown('<p style="font-size:12px;color:var(--fg-muted)">Sin datos de baja intensidad</p>', unsafe_allow_html=True)
-            for _, r in baja.iterrows():
-                nombre = str(r['categoria_nombre']).replace('\n',' ')[:30]
-                st.markdown(f'<p style="font-size:13px;color:var(--fg-primary);padding:4px 0">● <strong>{nombre}</strong><br><span style="font-size:11px;color:var(--fg-muted)">No conecta emocionalmente</span></p>', unsafe_allow_html=True)
-    else:
-        st.markdown('<p style="color:var(--fg-muted);padding:16px">Sin datos suficientes para analizar intensidad emocional</p>', unsafe_allow_html=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # Senal 3
-    palabras_electorales = ['eleccion','voto','reeleccion','campana','boto','votar','elecciones','proximas','candidato','partido']
-    df_electoral = df_comentarios[
-        df_comentarios['message'].str.lower().str.contains('|'.join(palabras_electorales), na=False)
-    ]
-
-    pct_neg_electoral = 0
-    if len(df_electoral) > 0 and 'score_sentimiento' in df_electoral.columns:
-        pct_neg_electoral = (df_electoral['score_sentimiento'] < -0.1).mean() * 100
-
-    que_ves_box("Comentarios donde la ciudadanía interpreta tus acciones en clave electoral. Cuántos son, qué tono tienen, y si están creciendo. Este patrón predice percepción electoral antes de que aparezca en encuestas.")
-    st.markdown(f"""
-    <div class="senal-card">
-        <div class="senal-numero">SEÑAL 03</div>
-        <div class="senal-titulo">
-            Narrativa electoral activa en tiempo real
-        </div>
-        <p style="font-size:13px;color:#9ca3af;margin-bottom:16px">
-            Comentarios donde la ciudadania lee las acciones en clave electoral:
-            <strong style="color:var(--fg-primary)">{len(df_electoral)}</strong> comentarios detectados
-            &nbsp;·&nbsp;
-            <strong style="color:#ef4444">{pct_neg_electoral:.0f}%</strong> negativos
-        </p>
-    """, unsafe_allow_html=True)
-
-    if not df_electoral.empty:
-        for _, row in df_electoral.head(4).iterrows():
-            msg = str(row['message'])[:150]
-            score = row.get('score_sentimiento', 0)
-            color = "#ef4444" if score < -0.1 else "#22c55e"
-            st.markdown(f'<div class="comentario-rep" style="border-left-color:{color}">"{msg}"</div>', unsafe_allow_html=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # Patrones de comportamiento
-    que_ves_box("Cada bloque representa un patrón compartido por múltiples ciudadanos que expresaron lo mismo con palabras distintas. El número grande es cuántas personas expresaron ese patrón. La flecha indica si ese patrón está creciendo o estable.")
-    st.markdown("### Lo que dice la ciudadania — cada comentario es un patron")
-    st.markdown("*Cada comentario mostrado aqui representa un patron compartido por multiples ciudadanos que expresaron lo mismo con palabras distintas.*")
-
-    patrones_rechazo, patrones_respaldo = detectar_patrones_comentarios(df_comentarios)
-
-    col_rec, col_res = st.columns(2)
-
-    with col_rec:
-        st.markdown('<p style="color:#ef4444;font-weight:700;font-size:13px;letter-spacing:1px;margin-bottom:12px">PATRONES DE RECHAZO</p>', unsafe_allow_html=True)
-        if not patrones_rechazo:
-            st.markdown('<p style="color:var(--fg-muted);font-size:12px">Sin patrones de rechazo detectados</p>', unsafe_allow_html=True)
-        for p in patrones_rechazo:
-            otros_html = ''.join([f'<p class="comentario-lista">• "{c[:80]}..."</p>' for c in p['otros']])
-            tend_class = "tendencia-subiendo" if "Creciendo" in p['tendencia'] else "tendencia-estable"
-            st.markdown(f"""
-            <div class="patron-rechazo">
-                <div class="patron-titulo" style="color:#f87171">{p['nombre']}</div>
-                <div class="patron-meta">
-                    <span class="patron-count" style="color:#ef4444;font-size:22px">{p['count']}</span>
-                    personas expresaron esto &nbsp;·&nbsp;
-                    <span>{p['tendencia']}</span>
-                    <br><span style="font-size:11px">Tema: {p['categoria']}</span>
-                </div>
-                <div class="comentario-rep">"{p['representativo'][:140]}"</div>
-                {otros_html}
-                <p style="font-size:12px;color:#fca5a5;margin-top:10px;font-style:italic;border-top:1px solid #7f1d1d;padding-top:8px">{generar_interpretacion("patron_rechazo", {'nombre': p['nombre'], 'count': p['count'], 'tendencia': p['tendencia']})}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-    with col_res:
-        st.markdown('<p style="color:#22c55e;font-weight:700;font-size:13px;letter-spacing:1px;margin-bottom:12px">PATRONES DE RESPALDO</p>', unsafe_allow_html=True)
-        if not patrones_respaldo:
-            st.markdown('<p style="color:var(--fg-muted);font-size:12px">Sin patrones de respaldo detectados</p>', unsafe_allow_html=True)
-        for p in patrones_respaldo:
-            otros_html = ''.join([f'<p class="comentario-lista">• "{c[:80]}..."</p>' for c in p['otros']])
-            tend_class = "tendencia-subiendo" if "Creciendo" in p['tendencia'] else "tendencia-estable"
-            st.markdown(f"""
-            <div class="patron-respaldo">
-                <div class="patron-titulo" style="color:#4ade80">{p['nombre']}</div>
-                <div class="patron-meta">
-                    <span class="patron-count" style="color:#22c55e;font-size:22px">{p['count']}</span>
-                    personas expresaron esto &nbsp;·&nbsp;
-                    <span>{p['tendencia']}</span>
-                    <br><span style="font-size:11px">Tema: {p['categoria']}</span>
-                </div>
-                <div class="comentario-rep">"{p['representativo'][:140]}"</div>
-                {otros_html}
-                <p style="font-size:12px;color:#86efac;margin-top:10px;font-style:italic;border-top:1px solid #14532d;padding-top:8px">{generar_interpretacion("patron_respaldo", {'nombre': p['nombre'], 'count': p['count'], 'tendencia': p['tendencia']})}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Sentimiento por tema
-    que_ves_box("Para cada tema, cómo se distribuye la opinión ciudadana entre positivo (verde), neutral (gris) y negativo (rojo). Una barra mayormente verde = tema bien recibido. Mucho rojo = tema que genera rechazo activo.")
-    st.markdown("### ¿Como reacciona la gente segun el tema?")
-    df_sent_tema = safe_query("""
-        SELECT pc.categoria_nombre,
-               AVG(fs.pct_positivo) as positivo,
-               AVG(fs.pct_negativo) as negativo,
-               AVG(100 - fs.pct_positivo - fs.pct_negativo) as neutral
-        FROM fb_sentimiento fs
-        LEFT JOIN post_categorias pc ON fs.post_id = pc.item_id
-        WHERE pc.categoria_nombre IS NOT NULL AND pc.categoria_nombre != ''
-        GROUP BY pc.categoria_nombre
-        ORDER BY positivo DESC
-    """, FACEBOOK_DB_ACTIVA)
-    df_sent_tema['categoria_nombre'] = df_sent_tema['categoria_nombre'].str.replace('\n',' ')
-
-    if not df_sent_tema.empty:
-        fig_bar = go.Figure()
-        fig_bar.add_trace(go.Bar(
-            name='Positivo', y=df_sent_tema['categoria_nombre'], x=df_sent_tema['positivo'],
-            orientation='h', marker_color='#16a34a',
-            text=df_sent_tema['positivo'].apply(lambda x: f'{x:.1f}%'),
-            textposition='inside', textfont=dict(size=10, color='white'),
-            hovertemplate=(
-                "<b>%{y}</b> · A favor: %{x:.1f}%<br>"
-                "→ de cada 100 comentarios sobre este tema, %{x:.1f} son a favor"
-                "<extra></extra>"
-            )
-        ))
-        fig_bar.add_trace(go.Bar(
-            name='Neutral', y=df_sent_tema['categoria_nombre'], x=df_sent_tema['neutral'],
-            orientation='h', marker_color='#374151',
-            text=df_sent_tema['neutral'].apply(lambda x: f'{x:.1f}%'),
-            textposition='inside', textfont=dict(size=10, color='#9ca3af'),
-            hovertemplate=(
-                "<b>%{y}</b> · Neutral: %{x:.1f}%<br>"
-                "→ de cada 100 comentarios sobre este tema, %{x:.1f} son neutrales"
-                "<extra></extra>"
-            )
-        ))
-        fig_bar.add_trace(go.Bar(
-            name='Negativo', y=df_sent_tema['categoria_nombre'], x=df_sent_tema['negativo'],
-            orientation='h', marker_color='#dc2626',
-            text=df_sent_tema['negativo'].apply(lambda x: f'{x:.1f}%'),
-            textposition='inside', textfont=dict(size=10, color='white'),
-            hovertemplate=(
-                "<b>%{y}</b> · En contra: %{x:.1f}%<br>"
-                "→ de cada 100 comentarios sobre este tema, %{x:.1f} son en contra"
-                "<extra></extra>"
-            )
-        ))
-        fig_bar.add_trace(go.Bar(
-            name='Neutral', y=df_sent_tema['categoria_nombre'], x=df_sent_tema['neutral'],
-            orientation='h', marker_color='#374151',
-            text=df_sent_tema['neutral'].apply(lambda x: f'{x:.1f}%'),
-            textposition='inside', textfont=dict(size=10, color='#9ca3af'),
-            hovertemplate=(
-                "<b>%{y}</b> · Neutral: %{x:.1f}%<br>"
-                "→ esta parte de lo que se dice del tema es neutral"
-                "<extra></extra>"
-            )
-        ))
-        fig_bar.add_trace(go.Bar(
-            name='Negativo', y=df_sent_tema['categoria_nombre'], x=df_sent_tema['negativo'],
-            orientation='h', marker_color='#dc2626',
-            text=df_sent_tema['negativo'].apply(lambda x: f'{x:.1f}%'),
-            textposition='inside', textfont=dict(size=10, color='white'),
-            hovertemplate=(
-                "<b>%{y}</b> · En contra: %{x:.1f}%<br>"
-                "→ esta parte de lo que se dice del tema es en contra"
-                "<extra></extra>"
-            )
-        ))
-        fig_bar.update_layout(
-            barmode='stack',
-            plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)',
-            font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
-            xaxis=dict(gridcolor='var(--border)', ticksuffix='%', range=[0,100], tickfont=dict(size=9)),
-            yaxis=dict(gridcolor='var(--border)'),
-            legend=dict(bgcolor='var(--bg-surface)', bordercolor='var(--border)', orientation='h', y=1.05),
-            margin=dict(l=0, r=0, t=30, b=0), height=320
-        )
-        card_explicativa(
-            que_es="Por cada tema, qué parte de los comentarios es a favor, en contra o neutral.",
-            como_leerlo="En cada barra, mientras más grande el pedazo de un color, más comentarios de ese tipo tiene ese tema. Verde a favor, rojo en contra, gris neutral."
-        )
-        st.plotly_chart(fig_bar, width='stretch')
-
-    st.divider()
-    bloom_subheader("Nube de palabras — comentarios negativos")
-    bloom_caption("Términos más frecuentes en comentarios clasificados como negativos / muy negativos.")
-    df_neg = cargar_comentarios_negativos()
-    if hay_datos(df_neg, "Aún no hay comentarios negativos analizados. (Corré el re-análisis de sentimiento.)"):
-        import re
-        import matplotlib.pyplot as plt
-        from wordcloud import WordCloud, STOPWORDS
-        stop_es = set(STOPWORDS) | {
-            "que", "de", "la", "el", "los", "las", "un", "una", "y", "o", "a", "en", "es", "se",
-            "no", "con", "por", "para", "su", "sus", "lo", "le", "les", "mas", "más", "como",
-            "pero", "ya", "si", "sí", "del", "al", "me", "mi", "tu", "te", "yo", "muy", "esta",
-            "este", "eso", "esa", "ese", "son", "fue", "han", "hay", "ha", "va", "van", "ser",
-            "porque", "cuando", "donde", "quien", "cual", "nos", "sino", "tan", "todo", "toda",
-            "todos", "todas", "the", "https", "http", "com", "www", "ni", "ese", "esos", "esas",
-        }
-        texto = " ".join(df_neg["message"].astype(str).tolist()).lower()
-        texto = re.sub(r"http\S+|www\S+", " ", texto)
-        texto = re.sub(r"@\w+", " ", texto)
-        try:
-            wc = WordCloud(width=1000, height=500, background_color="#0a0e17",
-                           stopwords=stop_es, colormap="Reds", collocations=False).generate(texto)
-            fig_wc, ax = plt.subplots(figsize=(10, 5))
-            ax.imshow(wc, interpolation="bilinear")
-            ax.axis("off")
-            card_explicativa(
-                que_es="Las palabras que más repite la gente cuando comenta molesta o en contra.",
-                como_leerlo="Mientras más grande la palabra, más veces la escribieron. Son las quejas más comunes, con las palabras de la propia gente."
-            )
-            st.pyplot(fig_wc)
-            bloom_caption(f"Basado en {len(df_neg):,} comentarios negativos.")
-        except ValueError:
-            st.markdown('<div class="bloom-status-info">No hay suficientes palabras para generar la nube.</div>', unsafe_allow_html=True)
-
-# ═══════════════════════════════════════════
-# SECCIÓN 5 — MICROSEGMENTACIÓN
-# ═══════════════════════════════════════════
-
-elif seccion == "MICROSEGMENTACIÓN":
-
-    st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">MICROSEGMENTACIÓN</div>
-        <div class="seccion-subtitulo">
-            ¿Que tipo de contenido funciona, cual no, y que patron emocional genera cada uno?
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
-    df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
-
-    if df_fb.empty and df_tk.empty:
-        hay_datos(df_fb, "No hay datos en este periodo para Microsegmentación.")
-        st.stop()
-
-    st.markdown("### Patrones de contenido detectados")
-    st.markdown("*Cada fila es un tipo de contenido agrupado automaticamente por similitud semantica y patron de reaccion.*")
-
-    dfs_micro = []
-    if not df_fb.empty and 'categoria_nombre' in df_fb.columns:
-        fb_micro = df_fb.groupby('categoria_nombre').agg(
-            posts=('post_id','count'),
-            eng_prom=('engagement_total','mean'),
-            reac_prom=('total_reacciones','mean'),
-            amor=('indice_amor','mean'),
-            humor=('indice_humor','mean'),
-            tristeza=('indice_tristeza','mean')
-        ).reset_index()
-        fb_micro['plataforma'] = 'FB'
-        dfs_micro.append(fb_micro)
-
-    if not df_tk.empty and 'categoria_nombre' in df_tk.columns:
-        tk_micro = df_tk.groupby('categoria_nombre').agg(
-            posts=('id','count'),
-            eng_prom=('engagement_total','mean'),
-            reac_prom=('likes','mean'),
-            viral_prom=('indice_viralidad','mean')
-        ).reset_index()
-        tk_micro['amor'] = 0
-        tk_micro['humor'] = 0
-        tk_micro['tristeza'] = 0
-        tk_micro['plataforma'] = 'TK'
-        dfs_micro.append(tk_micro)
-
-    if dfs_micro:
-        df_micro = pd.concat(dfs_micro).groupby('categoria_nombre').agg(
-            posts=('posts','sum'),
-            eng_prom=('eng_prom','mean'),
-            amor=('amor','mean'),
-            humor=('humor','mean'),
-            tristeza=('tristeza','mean')
-        ).reset_index().sort_values('eng_prom', ascending=False)
-
-        if not df_tk.empty and 'categoria_nombre' in df_tk.columns:
-            tk_viral = df_tk.groupby('categoria_nombre')['indice_viralidad'].mean().reset_index().rename(columns={'indice_viralidad':'viral'})
-            df_micro = df_micro.merge(tk_viral, on='categoria_nombre', how='left')
-        else:
-            df_micro['viral'] = 0
-
-        df_micro['categoria_nombre'] = df_micro['categoria_nombre'].str.replace('\n',' ')
-        df_micro['viral'] = df_micro['viral'].fillna(0)
-
-        que_ves_box("Cada fila es un tipo de contenido agrupado automáticamente por similitud. ENG. PROM. es el promedio de interacciones por post. VIRALIDAD es cuánto comparte la gente ese tipo de contenido vs cuánto lo ve. PATRÓN indica si ese tipo de contenido tiene alto, medio o bajo impacto comparado con el resto.")
-
-        st.markdown("""
-        <div class="grid-header" style="grid-template-columns:2fr 0.7fr 1fr 1fr 1fr 1.2fr">
-            <span>TIPO DE CONTENIDO</span>
-            <span style="text-align:center">POSTS</span>
-            <span style="text-align:right">ENG. PROM.</span>
-            <span style="text-align:right">VIRALIDAD</span>
-            <span style="text-align:center">EMOCION</span>
-            <span style="text-align:center">PATRON</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-        for _, row in df_micro.iterrows():
-            nombre = str(row['categoria_nombre'])[:40]
-            posts = int(row['posts'])
-            eng_val = float(row['eng_prom'])
-            eng = f"{int(eng_val):,}"
-            viral = f"{float(row['viral'])*100:.1f}%"
-
-            amor = float(row['amor']) if not pd.isna(row['amor']) else 0
-            humor = float(row['humor']) if not pd.isna(row['humor']) else 0
-            tristeza = float(row['tristeza']) if not pd.isna(row['tristeza']) else 0
-
-            emo_max = max([(amor,'Amor'),(humor,'Humor'),(tristeza,'Tristeza')], key=lambda x: x[0])[1]
-
-            all_med = df_micro['eng_prom'].median()
-            if eng_val > all_med * 1.5:
-                patron_str = 'ALTO IMPACTO'
-                patron = '<span style="color:#22c55e;font-weight:600">ALTO IMPACTO</span>'
-            elif eng_val > all_med:
-                patron_str = 'MODERADO'
-                patron = '<span style="color:#f59e0b;font-weight:600">MODERADO</span>'
-            else:
-                patron_str = 'BAJO IMPACTO'
-                patron = '<span style="color:#6b7280;font-weight:600">BAJO IMPACTO</span>'
-
-            interp_micro = generar_interpretacion("microsegmentacion", {
-                'tipo': nombre, 'engagement': eng_val, 'patron': patron_str
-            })
-
-            st.markdown(f"""
-            <div class="grid-row" style="grid-template-columns:2fr 0.7fr 1fr 1fr 1fr 1.2fr">
-                <span><strong>{nombre}</strong><br><span class="grid-muted" style="font-size:10px">{interp_micro[:80]}...</span></span>
-                <span style="text-align:center;color:var(--fg-secondary)">{posts}</span>
-                <span class="grid-num" style="text-align:right">{eng}</span>
-                <span style="text-align:right;color:var(--fg-secondary)">{viral}</span>
-                <span style="text-align:center;color:var(--fg-secondary)">{emo_max}</span>
-                <span style="text-align:center">{patron}</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Top 5
-    st.markdown("<br>", unsafe_allow_html=True)
-    que_ves_box("Los 5 posts y videos más impactantes del período. El número grande a la derecha son las interacciones totales. Las cifras pequeñas abajo son el desglose por tipo de reacción.")
-    st.markdown("### Los 5 contenidos mas impactantes")
-
-    dfs_top5 = []
-    if not df_fb.empty:
-        fb5 = df_fb.nlargest(10, 'engagement_total').copy()
-        fb5['plataforma'] = 'Facebook'
-        fb5['fecha'] = fb5['created_time']
-        fb5['texto'] = fb5['message']
-        fb5['total'] = fb5['engagement_total']
-        fb5['reac'] = fb5['total_reacciones']
-        dfs_top5.append(fb5)
-    if not df_tk.empty:
-        tk5 = df_tk.nlargest(10, 'engagement_total').copy()
-        tk5['plataforma'] = 'TikTok'
-        tk5['fecha'] = tk5['created_at']
-        tk5['texto'] = tk5['description']
-        tk5['total'] = tk5['engagement_total']
-        tk5['reac'] = tk5['likes']
-        dfs_top5.append(tk5)
-
-    if dfs_top5:
-        df_top5 = pd.concat(dfs_top5).nlargest(5, 'total')
-        for i, (_, row) in enumerate(df_top5.iterrows(), 1):
-            plat = row['plataforma']
-            plat_color = "#1877f2" if plat == "Facebook" else "#ff0050"
-            fecha = formato_fecha_espanol(row['fecha'])
-            texto = str(row['texto'])[:120]
-            cat = str(row.get('categoria_nombre','—'))[:35].replace('\n',' ')
-            total = int(row['total'])
-
-            amor_v = float(row.get('indice_amor',0) or 0)
-            humor_v = float(row.get('indice_humor',0) or 0)
-            trist_v = float(row.get('indice_tristeza',0) or 0)
-            reac_v = float(row.get('reac',0) or 0)
-
-            amor_n = int(amor_v * reac_v) if pd.notna(amor_v) and pd.notna(reac_v) else 0
-            humor_n = int(humor_v * reac_v) if pd.notna(humor_v) and pd.notna(reac_v) else 0
-            trist_n = int(trist_v * reac_v) if pd.notna(trist_v) and pd.notna(reac_v) else 0
-
-            st.markdown(f"""
-            <div class="bloom-card bloom-border-accent">
-                <div style="display:flex;justify-content:space-between;margin-bottom:8px;align-items:center">
-                    <span style="font-size:22px;font-weight:800;color:var(--fg-muted);font-family:'IBM Plex Mono',monospace">#{i}</span>
-                    <div style="display:flex;gap:8px">
-                        <span style="background:{plat_color};color:white;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700">{plat.upper()}</span>
-                        <span style="background:var(--border);color:var(--fg-secondary);padding:2px 8px;border-radius:4px;font-size:10px">{cat}</span>
-                    </div>
-                </div>
-                <p style="font-size:11px;color:var(--fg-muted);margin:4px 0">{fecha}</p>
-                <p style="font-size:14px;color:var(--fg-primary);margin:8px 0;line-height:1.5">{texto}...</p>
-                <div style="display:flex;justify-content:space-between;margin-top:10px;align-items:center">
-                    <span style="font-size:12px;color:var(--fg-secondary)">
-                        Amor {amor_n:,} · Humor {humor_n:,} · Tristeza {trist_n:,}
-                    </span>
-                    <span style="font-size:20px;font-weight:700;color:#60a5fa;font-family:'IBM Plex Mono',monospace">{total:,}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Día de semana
-    st.markdown("### ¿Cuándo reacciona más la gente?")
-
-    dfs_dias = []
-    if not df_fb.empty:
-        df_fb['dia'] = df_fb['created_time'].dt.dayofweek
-        dfs_dias.append(df_fb[['dia','total_reacciones']].rename(
-            columns={'total_reacciones':'valor'}
-        ))
-    if not df_tk.empty:
-        df_tk['dia'] = df_tk['created_at'].dt.dayofweek
-        dfs_dias.append(df_tk[['dia','likes']].rename(
-            columns={'likes':'valor'}
-        ))
-
-    if dfs_dias:
-        df_dias = pd.concat(dfs_dias).groupby('dia')['valor'].sum().reset_index()
-        dias_nombres = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']
-        df_dias['nombre'] = df_dias['dia'].map(
-            lambda x: dias_nombres[x] if x < 7 else '?'
-        )
-        dia_pico = df_dias.loc[df_dias['valor'].idxmax()]
-
-        fig_dias = go.Figure(go.Bar(
-            x=df_dias['nombre'],
-            y=df_dias['valor'],
-            marker=dict(
-                color=df_dias['valor'],
-                colorscale=[[0,'#1f2937'],[0.5,'#1d4ed8'],[1,'#60a5fa']]
-            ),
-            customdata=df_dias[['valor']].values,
-            hovertemplate=(
-                "<b>%{x}</b><br>"
-                "%{y:,} reacciones<br>"
-                "→ de cada 100 reacciones semanales, %{customdata[0]:.0f} caen en %{x}"
-                "<extra></extra>"
-            )
-        ))
-        fig_dias.update_layout(
-            plot_bgcolor='#111827',
-            paper_bgcolor='#111827',
-            font=dict(color='#9ca3af', size=12),
-            xaxis=dict(gridcolor='var(--border)'),
-            yaxis=dict(gridcolor='var(--border)', tickformat=','),
-            showlegend=False,
-            margin=dict(l=0, r=0, t=10, b=0),
-            height=200
-        )
-        card_explicativa(
-            que_es="En qué días las páginas y medios de afuera hablaron más de la alcaldía.",
-            como_leerlo="La barra más alta es el día con más movimiento desde afuera."
-        )
-        st.plotly_chart(fig_dias, width='stretch')
-        st.markdown(
-            f'<p style="font-size:13px;color:var(--fg-secondary)">'
-            f'El día que más reacciona la gente en promedio: '
-            f'<strong style="color:var(--fg-primary)">{dia_pico["nombre"]}</strong> '
-            f'({int(dia_pico["valor"]):,} reacciones totales)</p>',
-            unsafe_allow_html=True
-        )
-
-# ═══════════════════════════════════════════
-# SECCIÓN 6 — CONTEXTO EXTERNO
-# ═══════════════════════════════════════════
-
-elif seccion == "CONTEXTO EXTERNO":
-
-    st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">CONTEXTO EXTERNO</div>
-        <div class="seccion-subtitulo">
-            ¿Que dicen de ti fuera de tus redes oficiales?
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("""
-    <div style="background:var(--amber-dim);border:1px solid var(--amber);border-left:4px solid var(--amber);padding:10px 14px;margin-bottom:18px">
-        <span style="color:var(--amber);font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:1px">DATOS SIMULADOS</span>
-        <span style="color:#9ca3af;font-size:12px"> &nbsp;— Esta seccion se activara automaticamente cuando lleguen las URLs de paginas externas reales a monitorear.</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    df_ext = cargar_externos(EXTERNOS_DB_ACTIVA)
-
-    if df_ext.empty:
-        st.markdown('<div class="bloom-card"><p style="color:var(--fg-muted);text-align:center">Sin datos externos disponibles</p></div>', unsafe_allow_html=True)
-    else:
-        n_fuentes = df_ext['page_name'].nunique()
-        n_menciones = len(df_ext)
-        score_ext = df_ext['score_sentimiento'].mean() if 'score_sentimiento' in df_ext.columns else 0
-        n_neg = int((df_ext['score_sentimiento'] < -0.2).sum()) if 'score_sentimiento' in df_ext.columns else 0
-        fuente_top = df_ext['page_name'].value_counts().idxmax() if not df_ext.empty else '—'
-
-        ctx = generar_interpretacion("contexto_externo", {
-            'negativas': n_neg, 'total': n_menciones, 'fuente_top': fuente_top
-        })
-        st.markdown(f"""
-        <div style="background:#111827;border-left:4px solid #eab308;padding:16px 20px;border-radius:4px;margin-bottom:24px">
-            <p style="font-size:11px;color:#eab308;margin:0 0 6px 0;font-weight:600;letter-spacing:1px;text-transform:uppercase">LO QUE DICEN FUERA DE TUS REDES</p>
-            <p style="font-size:14px;color:var(--fg-primary);margin:0;line-height:1.6">{ctx}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown(f"""
-            <div class="bloom-card"><div class="bloom-card-title">Fuentes monitoreadas</div><div class="bloom-card-value" style="font-size:28px">{n_fuentes}</div><div class="bloom-card-sub">paginas externas</div></div>""", unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"""
-            <div class="bloom-card"><div class="bloom-card-title">Menciones externas</div><div class="bloom-card-value" style="font-size:28px">{n_menciones}</div><div class="bloom-card-sub">publicaciones sobre el alcalde</div></div>""", unsafe_allow_html=True)
-        with col3:
-            tono_ext = "POSITIVO" if score_ext > 0.1 else "MIXTO" if score_ext > -0.1 else "CRITICO"
-            color_ext = "#22c55e" if score_ext > 0.1 else "#eab308" if score_ext > -0.1 else "#ef4444"
-            st.markdown(f"""
-            <div class="bloom-card"><div class="bloom-card-title">Tono externo</div><div class="bloom-card-value" style="color:{color_ext};font-size:22px">{tono_ext}</div><div class="bloom-card-sub">percepcion fuera de tus redes</div></div>""", unsafe_allow_html=True)
-
-        col_b1, col_b2 = st.columns(2)
-        with col_b1:
-            st.markdown("**¿Quien habla de ti?**")
-            fuentes = df_ext.groupby('page_name').size().reset_index(name='menciones').sort_values('menciones', ascending=True)
-            fig_f = go.Figure(go.Bar(
-                x=fuentes['menciones'], y=fuentes['page_name'], orientation='h',
-                marker_color='#3b82f6',
-                hovertemplate=(
-                    "<b>%{y}</b><br>"
-                    "%{x} menciones<br>"
-                    "→ de cada 100 menciones externas, %{x} vienen de %{y}"
-                    "<extra></extra>"
-                )
-            ))
-            fig_f.update_layout(plot_bgcolor='#111827', paper_bgcolor='#111827', font=dict(color='#9ca3af',size=10), xaxis=dict(gridcolor='var(--border)'), yaxis=dict(gridcolor='var(--border)'), margin=dict(l=0,r=0,t=10,b=0), height=300)
-            card_explicativa(
-                que_es="Qué páginas o medios de afuera son los que más mencionan a la alcaldía.",
-                como_leerlo="Mientras más larga la barra, más veces esa página habló de la alcaldía."
-            )
-            st.plotly_chart(fig_f, width='stretch')
-        with col_b2:
-            st.markdown("**¿Como hablan de ti?**")
-            if 'score_sentimiento' in df_ext.columns:
-                pos = (df_ext['score_sentimiento'] > 0.2).sum()
-                neg = (df_ext['score_sentimiento'] < -0.2).sum()
-                neu = len(df_ext) - pos - neg
-                labels = ['Positivo','Negativo','Neutral']
-                values = [pos, neg, neu]
-                fig_dona = go.Figure(go.Pie(
-                    labels=labels, values=values, hole=0.6,
-                    marker=dict(colors=['#16a34a','#dc2626','#374151']),
-                ))
-                fig_dona.update_traces(
-                    hovertemplate=(
-                        "<b>%{label}</b><br>"
-                        "%{value} menciones (%{percent})<br>"
-                        "→ de cada 100 menciones externas, %{value} son %{label|lower}"
-                        "<extra></extra>"
-                    )
-                )
-                fig_dona.update_layout(plot_bgcolor='var(--bg-card)', paper_bgcolor='var(--bg-card)', font=dict(color='var(--fg-secondary)', size=10), showlegend=True, legend=dict(bgcolor='rgba(0,0,0,0)'), margin=dict(l=0,r=0,t=10,b=0), height=300)
-                card_explicativa(
-                    que_es="De todo lo que dicen de la alcaldía las páginas de afuera, cuánto es a favor, en contra o neutral.",
-                    como_leerlo="Mientras más grande el pedazo de un color, más pesa ese tono. Verde a favor, rojo en contra, gris neutral."
-                )
-                st.plotly_chart(fig_dona, width='stretch')
-
-        que_ves_box("Publicaciones de fuentes externas que hablan del alcalde con tono negativo. El número es el pulso — más negativo significa mayor rechazo en esa publicación externa.")
-        st.markdown("### Alertas — menciones mas criticas")
-        if 'score_sentimiento' in df_ext.columns:
-            df_criticas = df_ext.nsmallest(10, 'score_sentimiento')[['created_time','page_name','message','score_sentimiento','comentario_mas_negativo']]
-            for _, row in df_criticas.iterrows():
-                fecha = formato_fecha_espanol(row['created_time'])
-                fuente = str(row['page_name'])
-                msg = str(row['message'])[:100]
-                score = float(row['score_sentimiento'])
-                coment = str(row.get('comentario_mas_negativo',''))[:80]
-                st.markdown(f"""
-                <div class="patron-rechazo">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                        <span style="font-size:11px;color:var(--fg-muted)">{fecha}</span>
-                        <span style="font-size:11px;color:#f87171;font-weight:600">{fuente}</span>
-                    </div>
-                    <p style="font-size:13px;color:#d1d5db;margin:4px 0">{msg}...</p>
-                    <p style="font-size:11px;color:#9ca3af;margin-top:6px">Pulso: <strong style="color:#ef4444">{score:.2f}</strong> &nbsp;·&nbsp; Comentario: "{coment}"</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-    st.divider()
-    bloom_subheader("Correlación: picos de engagement ↔ noticias externas")
-    st.markdown('<div class="bloom-status-warning"><span class="bloom-status-label">AVISO</span> La coincidencia temporal NO implica causalidad.</div>', unsafe_allow_html=True)
-    corr = calcular_correlacion_noticias_picos(z_umbral=1.0, ventana_dias=3)
-    if not corr:
-        st.markdown('<div class="bloom-status-info"><span class="bloom-status-marker">●</span> No hay datos de FB suficientes para detectar picos.</div>', unsafe_allow_html=True)
-    else:
-        serie = corr["serie"]
-        coinc = corr["coincidencias"]
-        # Build headline map for pico weeks
-        headline_map = {}
-        if not coinc.empty:
-            for _, row in coinc.iterrows():
-                wk = row['semana_pico']
-                if wk not in headline_map:
-                    headline_map[wk] = row['noticia']
-        serie['headline'] = serie['semana'].apply(lambda s: headline_map.get(s.date().isoformat(), ""))
-        fig_c = px.line(serie, x="semana", y="engagement", markers=True,
-                        labels={"semana": "Semana", "engagement": "Engagement semanal"},
-                        custom_data=['headline'])
-        picos = serie[serie["es_pico"]]
-        if not picos.empty:
-            fig_c.add_scatter(
-                x=picos["semana"], y=picos["engagement"], mode="markers",
-                marker=dict(size=13, color="red", symbol="star"),
-                name="Pico",
-                customdata=picos[['headline']].values,
-                hovertemplate=(
-                    "<b>Pico de engagement</b><br>"
-                    "%{x|%d %b %Y} · %{y:,.0f} interacciones<br>"
-                    "→ coincide con: %{customdata[0]}. Coincidencia, no prueba de causa"
-                    "<extra></extra>"
-                )
-            )
-        fig_c.update_traces(
-            hovertemplate=(
-                "<b>%{x|%d %b %Y}</b><br>"
-                "%{y:,.0f} interacciones<br>"
-                "→ así de fuerte estuvo la conversación esa semana"
-                "<extra></extra>"
-            )
-        )
-        fig_c.update_layout(height=420)
-        card_explicativa(
-            que_es="Si los días en que se dispara la conversación caen junto a alguna noticia.",
-            como_leerlo="Cuando un pico cae el mismo día que una noticia, lo más probable es que esa noticia movió la conversación.",
-            ojo="Que coincidan no prueba que una cosa causó la otra."
-        )
-        st.plotly_chart(fig_c, width='stretch')
-        bloom_metric("Semanas con pico de engagement", f'{corr["n_picos"]}', delta="picos detectados")
-
-        coinc = corr["coincidencias"]
-        st.markdown("**Noticias externas que coinciden con semanas de pico**")
-        if hay_datos(coinc, "No se encontraron noticias externas en las semanas de pico."):
-            st.dataframe(coinc.rename(columns={
-                "semana_pico": "Semana pico", "engagement": "Engagement", "z": "z",
-                "fuente": "Fuente", "noticia": "Titular / Texto", "fecha_noticia": "Fecha noticia",
-            }), width='stretch', hide_index=True)
-
-elif seccion == "CONFIANZA INSTITUCIONAL":
-
-    st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">CONFIANZA INSTITUCIONAL</div>
-        <div class="seccion-subtitulo">
-            ¿La ciudadanía confía en el alcalde como persona e institución?
-            Basado en Trust Analytics — Budzynska 2025
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    que_ves_box("Esta sección mide algo diferente al sentimiento general. No es si la gente está contenta o enojada con un servicio — es si la ciudadanía confía en el alcalde como persona: si lo percibe honesto, competente, presente y justo. Estas son las 4 dimensiones que determinan si alguien merece reelección según la ciudadanía.")
-
-    resultados, score_global, dim_riesgo = calcular_confianza_institucional()
-
-    if score_global > 0.3:
-        color_conf = "#22c55e"
-        texto_conf = "CONFIANZA ALTA"
-        desc_conf = "La ciudadanía tiene una percepción favorable del alcalde como persona"
-    elif score_global > 0:
-        color_conf = "#eab308"
-        texto_conf = "CONFIANZA MODERADA"
-        desc_conf = "Hay señales mixtas — algunas dimensiones están en riesgo"
-    else:
-        color_conf = "#ef4444"
-        texto_conf = "CONFIANZA EROSIONADA"
-        desc_conf = "La ciudadanía cuestiona el carácter del alcalde en múltiples dimensiones"
-
-    st.markdown(f"""
-    <div class="bloom-card" style="border-left:4px solid {color_conf};
-         text-align:center;padding:24px">
-        <div style="font-size:28px;font-weight:800;color:{color_conf};
-             font-family:'IBM Plex Mono',monospace;letter-spacing:2px">
-            {texto_conf}
-        </div>
-        <div style="font-size:13px;color:#9ca3af;margin-top:8px">
-            {desc_conf}
-        </div>
-        <div style="font-size:13px;color:#6b7280;margin-top:4px">
-            Dimensión más en riesgo:
-            <strong style="color:#ef4444">
-                {dim_riesgo[0].upper()}
-            </strong>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("### Las 4 dimensiones de confianza")
-
-    nombres = {
-        'honestidad': ('Honestidad',
-                      '¿La ciudadanía percibe al alcalde como honesto?'),
-        'competencia': ('Competencia',
-                       '¿Lo perciben como capaz de hacer el trabajo?'),
-        'presencia': ('Presencia territorial',
-                     '¿Siente la gente que el alcalde está cerca?'),
-        'integridad': ('Integridad / Equidad',
-                      '¿Perciben que actúa igual para todos?')
-    }
-
-    col1, col2 = st.columns(2)
-    cols = [col1, col2, col1, col2]
-
-    for i, (dim, datos) in enumerate(resultados.items()):
-        nombre, descripcion = nombres[dim]
-        trust = datos['trust']
-        distrust = datos['distrust']
-        score = datos['score']
-        total = trust + distrust
-
-        pct_trust = (trust / total * 100) if total > 0 else 50
-        pct_distrust = (distrust / total * 100) if total > 0 else 50
-
-        if score > 0.3:
-            color_d = "#22c55e"
-            estado = "CONFIABLE"
-        elif score > 0:
-            color_d = "#eab308"
-            estado = "EN RIESGO"
-        else:
-            color_d = "#ef4444"
-            estado = "EROSIONADA"
-
-        barra_trust = int(pct_trust)
-        barra_distrust = int(pct_distrust)
-
-        comentarios_html = ''
-        for c in datos['comentarios_distrust'][:2]:
-            comentarios_html += f'<p class="comentario-lista">• "{c[:80]}"</p>'
-
-        with cols[i]:
-            st.markdown(f"""
-            <div class="bloom-card" style="border-left:4px solid {color_d};padding:14px 18px">
-                <div style="display:flex;justify-content:space-between;
-                     align-items:center;margin-bottom:6px">
-                    <span style="font-weight:700;font-size:14px;
-                          color:var(--fg-primary)">{nombre}</span>
-                    <span style="font-size:11px;font-weight:600;
-                          color:{color_d}">{estado}</span>
-                </div>
-                <p style="font-size:11px;color:var(--fg-muted);margin-bottom:12px">
-                    {descripcion}
-                </p>
-                <div style="display:flex;margin-bottom:8px;
-                     border-radius:3px;overflow:hidden;height:8px">
-                    <div style="width:{barra_trust}%;background:#16a34a"></div>
-                    <div style="width:{barra_distrust}%;background:#dc2626"></div>
-                </div>
-                <div style="display:flex;justify-content:space-between;
-                     font-size:11px;margin-bottom:12px">
-                    <span style="color:#22c55e">
-                        + {trust} menciones de confianza
-                    </span>
-                    <span style="color:#ef4444">
-                        - {distrust} menciones de desconfianza
-                    </span>
-                </div>
-                {comentarios_html}
-            </div>
-            """, unsafe_allow_html=True)
-
-    st.markdown("### Radar de confianza institucional")
-    st.markdown(leyenda_grafica([
-        {'simbolo': '◆', 'color': '#3b82f6',
-         'label': 'Confianza actual',
-         'descripcion': 'Qué tan lleno está cada eje según lo que dice la ciudadanía. Más lleno = más confianza en esa dimensión.'},
-        {'simbolo': '◇', 'color': '#4b5563',
-         'label': 'Referencia neutral',
-         'descripcion': 'El punto de equilibrio. Si la forma azul está por dentro de este hexágono, hay déficit de confianza en esa dimensión.'},
-        {'simbolo': '■', 'color': '#22c55e',
-         'label': 'Eje verde (confiable)',
-         'descripcion': 'Dimensión donde la ciudadanía expresa más confianza que desconfianza.'},
-        {'simbolo': '■', 'color': '#ef4444',
-         'label': 'Eje rojo (en riesgo)',
-         'descripcion': 'Dimensión donde las menciones de desconfianza superan a las de confianza.'},
-    ]), unsafe_allow_html=True)
-
-    categorias = [nombres[d][0] for d in resultados.keys()]
-    valores = [max(0, (v['score'] + 1) / 2) for v in resultados.values()]
-    valores_norm = [v * 100 for v in valores]
-
-    lecturas = [f"entre más alto, más confía la gente en {n.lower()}" for n in categorias]
-    fig_radar = go.Figure()
-    fig_radar.add_trace(go.Scatterpolar(
-        r=valores_norm + [valores_norm[0]],
-        theta=categorias + [categorias[0]],
-        fill='toself',
-        fillcolor='rgba(59,130,246,0.15)',
-        line=dict(color='#3b82f6', width=2),
-        name='Confianza actual',
-        customdata=lecturas + [lecturas[0]],
-        hovertemplate=(
-            "<b>%{theta}</b><br>"
-            "%{r:.0f}% confianza<br>"
-            "→ %{customdata}"
-            "<extra></extra>"
-        )
-    ))
-    fig_radar.add_trace(go.Scatterpolar(
-        r=[50,50,50,50,50],
-        theta=categorias + [categorias[0]],
-        mode='lines',
-        line=dict(color='#374151', width=1, dash='dot'),
-        name='Referencia neutral',
-        hovertemplate=(
-            "Referencia neutral: 50%<br>"
-            "→ punto de equilibrio"
-            "<extra></extra>"
-        )
-    ))
-    fig_radar.update_layout(
-        polar=dict(
-            bgcolor='#111827',
-            radialaxis=dict(
-                visible=True,
-                range=[0,100],
-                gridcolor='#1f2937',
-                tickfont=dict(color='#6b7280', size=9),
-                ticksuffix='%'
-            ),
-            angularaxis=dict(
-                gridcolor='#1f2937',
-                tickfont=dict(color='#9ca3af', size=11)
-            )
-        ),
-        paper_bgcolor='#111827',
-        font=dict(color='#9ca3af'),
-        legend=dict(
-            bgcolor='rgba(17,24,39,0.8)',
-            bordercolor='#1f2937'
-        ),
-        margin=dict(l=40,r=40,t=20,b=20),
-        height=380
-    )
-    card_explicativa(
-        que_es="Qué tanto confía la gente en la alcaldía, separado en cuatro partes.",
-        como_leerlo="Mientras más estirada la figura hacia una punta, más confianza hay en esa parte. Mientras más encogida, ahí la gente desconfía.",
-        ojo="Mide lo que la gente dice en redes, no una encuesta cara a cara."
-    )
-    st.plotly_chart(fig_radar, width='stretch')
-
-    dims_en_riesgo = [
-        (d, v) for d, v in resultados.items() if v['score'] < 0
-    ]
-    if dims_en_riesgo:
-        st.markdown("### DIMENSIONES CON EROSIÓN DE CONFIANZA")
-        for dim, datos in dims_en_riesgo:
-            nombre = nombres[dim][0]
-            for comentario in datos['comentarios_distrust'][:3]:
-                st.markdown(f"""
-                <div class="patron-rechazo">
-                    <div class="patron-titulo" style="color:#f87171">
-                        {nombre} — señal de desconfianza
-                    </div>
-                    <div class="comentario-rep">"{comentario[:160]}"</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-elif seccion == "NARRATIVAS ACTIVAS":
-
-    st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">NARRATIVAS ACTIVAS</div>
-        <div class="seccion-subtitulo">
-            ¿Qué historias colectivas está construyendo
-            la ciudadanía sobre el alcalde?
-            Basado en Framing Theory — McCombs & Shaw 1972
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    que_ves_box("Una narrativa es una historia que la ciudadanía repite colectivamente. No es un comentario aislado — es un patrón que se forma cuando muchas personas dicen lo mismo con palabras distintas. Lo peligroso no es que exista una narrativa negativa — es cuando está creciendo semana a semana sin respuesta.")
-
-    narrativas_data = calcular_narrativas_activas()
-
-    orden = sorted(
-        narrativas_data.items(),
-        key=lambda x: (
-            0 if (x[1]['cambio_pct'] > 20 and x[0] != 'reconocimiento') else
-            1 if x[0] != 'reconocimiento' else 2
-        )
-    )
-
-    for key, narr in orden:
-        es_positiva = key == 'reconocimiento'
-        borde_color = narr['color']
-
-        ejemplos_html = ''.join([
-            f'<p class="comentario-lista">• "{e[:90]}"</p>'
-            for e in narr['ejemplos'][:2]
-        ])
-
-        sparkline_html = ''
-        if not narr['por_semana'].empty and len(narr['por_semana']) > 1:
-            max_val = narr['por_semana']['count'].max()
-            if max_val > 0:
-                bars = []
-                for _, row in narr['por_semana'].tail(8).iterrows():
-                    height = int((row['count'] / max_val) * 24)
-                    height = max(2, height)
-                    bars.append(
-                        f'<div style="width:6px;height:{height}px;'
-                        f'background:{borde_color};opacity:0.7;'
-                        f'border-radius:1px;margin:0 1px;'
-                        f'align-self:flex-end"></div>'
-                    )
-                sparkline_html = (
-                    f'<div style="display:flex;align-items:flex-end;'
-                    f'height:28px;margin-top:8px">{"".join(bars)}</div>'
-                )
-
-        cambio_abs = abs(narr['cambio_pct'])
-        cambio_str = (
-            f"+{cambio_abs:.0f}%" if narr['cambio_pct'] > 0
-            else f"-{cambio_abs:.0f}%"
-        )
-
-        st.markdown(f"""
-        <div class="bloom-card" style="border-left:4px solid {borde_color}">
-            <div style="display:flex;justify-content:space-between;
-                 align-items:flex-start;margin-bottom:8px">
-                <div>
-                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{borde_color};margin-right:10px;vertical-align:middle"></span>
-                    <span style="font-size:15px;font-weight:700;
-                          color:var(--fg-primary);vertical-align:middle">
-                        {narr['nombre']}
-                    </span>
-                </div>
-                <div style="text-align:right">
-                    <div style="font-size:28px;font-weight:800;
-                          color:{borde_color};font-family:'IBM Plex Mono',monospace">
-                        {narr['total']}
-                    </div>
-                    <div style="font-size:11px;
-                          color:{narr['tend_color']};font-weight:600">
-                        {narr['tendencia']} {cambio_str}
-                    </div>
-                </div>
-            </div>
-            <p style="font-size:12px;color:#6b7280;margin-bottom:10px">
-                {narr['descripcion']}
-            </p>
-            {sparkline_html}
-            <div style="margin-top:10px;border-top:1px solid #1f2937;
-                 padding-top:8px">
-                {ejemplos_html}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("### Evolución de todas las narrativas")
-    st.markdown(leyenda_grafica([
-        {'simbolo': '—', 'color': '#ef4444',
-         'label': 'Abandono territorial',
-         'descripcion': 'Menciones donde la ciudadanía siente que su colonia o zona es ignorada.'},
-        {'simbolo': '—', 'color': '#f59e0b',
-         'label': 'Promesas incumplidas',
-         'descripcion': 'Comentarios que hacen referencia a compromisos no cumplidos.'},
-        {'simbolo': '—', 'color': '#a855f7',
-         'label': 'Narrativa electoral',
-         'descripcion': 'La ciudadanía interpreta las acciones del alcalde como movimientos de campaña, no de gestión.'},
-        {'simbolo': '—', 'color': '#ec4899',
-         'label': 'Narrativa de corrupción',
-         'descripcion': 'Señalamientos sobre uso irregular de recursos públicos.'},
-        {'simbolo': '—', 'color': '#22c55e',
-         'label': 'Reconocimiento ciudadano',
-         'descripcion': 'Narrativa positiva — ciudadanos que defienden y reconocen la gestión espontáneamente.'},
-        {'simbolo': '↑', 'color': '#9ca3af',
-         'label': 'Una línea que sube',
-         'descripcion': 'Esa narrativa está ganando fuerza en la conversación ciudadana semana a semana.'},
-    ]), unsafe_allow_html=True)
-
-    fig_narr = go.Figure()
-    for key, narr in narrativas_data.items():
-        if not narr['por_semana'].empty:
-            df_n = narr['por_semana'].copy()
-            fig_narr.add_trace(go.Scatter(
-                x=df_n['semana'],
-                y=df_n['count'],
-                mode='lines+markers',
-                name=f"{narr['icono']} {narr['nombre']}",
-                line=dict(color=narr['color'], width=2),
-                marker=dict(size=5),
-                hovertemplate=(
-                    "<b>%{fullData.name}</b><br>"
-                    "%{x|%d %b %Y}<br>"
-                    "%{y} menciones<br>"
-                    "→ de cada 100 comentarios esa semana, %{y} mencionan esta narrativa"
-                    "<extra></extra>"
-                )
-            ))
-
-    fig_narr.update_layout(
-        plot_bgcolor='#111827',
-        paper_bgcolor='#111827',
-        font=dict(color='#9ca3af', size=11),
-        xaxis=dict(
-            gridcolor='#1f2937',
-            tickformat='%d %b\n%Y'
-        ),
-        yaxis=dict(
-            gridcolor='#1f2937',
-            title='Menciones por semana'
-        ),
-        legend=dict(
-            bgcolor='rgba(17,24,39,0.8)',
-            bordercolor='#1f2937',
-            orientation='h',
-            y=-0.2
-        ),
-        margin=dict(l=0,r=0,t=10,b=60),
-        height=350
-    )
-    card_explicativa(
-        que_es="Los temas o historias que la gente está repitiendo ahora mismo sobre la alcaldía.",
-        como_leerlo="Mientras más grande o más arriba aparece una narrativa, más gente la está repitiendo. Salen las buenas y las malas."
-    )
-    st.plotly_chart(fig_narr, width='stretch')
-
-elif seccion == "CONTAGIO EMOCIONAL":
-
-    st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">CONTAGIO EMOCIONAL</div>
-        <div class="seccion-subtitulo">
-            ¿Las emociones que publicas llegan como las envías,
-            o la ciudadanía las recibe diferente?
-            Basado en Affective Agenda Setting — Nature 2023
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    que_ves_box("Cuando publicas un post positivo, ¿la gente responde positivamente? ¿O hay posts donde publicas algo positivo y la ciudadanía responde con enojo? Eso se llama distorsión narrativa — y es la señal más temprana de una crisis de comunicación antes de que explote.")
-
-    df_posts, conteo_tipos, distorsion_alta, por_semana = calcular_contagio_emocional()
-
-    total_posts = len(df_posts)
-    resonancia_pos = conteo_tipos.get('resonancia_positiva', 0)
-    rechazo = conteo_tipos.get('rechazo_a_positivo', 0)
-    distorsion = conteo_tipos.get('distorsion_alta', 0)
-
-    pct_resonancia = (resonancia_pos / total_posts * 100) if total_posts > 0 else 0
-    pct_rechazo = (rechazo / total_posts * 100) if total_posts > 0 else 0
-    pct_distorsion = (distorsion / total_posts * 100) if total_posts > 0 else 0
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown(f"""
-        <div class="bloom-card" style="border-left:4px solid var(--green)">
-            <div class="bloom-card-title">Resonancia positiva</div>
-            <div class="bloom-card-value" style="color:#22c55e">
-                {pct_resonancia:.0f}%
-            </div>
-            <div class="bloom-card-sub">
-                {resonancia_pos} posts donde el mensaje llegó bien
-            </div>
-        </div>""", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"""
-        <div class="bloom-card" style="border-left:4px solid var(--red)">
-            <div class="bloom-card-title">Rechazo a positivo</div>
-            <div class="bloom-card-value" style="color:#ef4444">
-                {pct_rechazo:.0f}%
-            </div>
-            <div class="bloom-card-sub">
-                {rechazo} posts positivos que generaron rechazo
-            </div>
-        </div>""", unsafe_allow_html=True)
-    with col3:
-        st.markdown(f"""
-        <div class="bloom-card" style="border-left:4px solid var(--amber)">
-            <div class="bloom-card-title">Alta distorsión</div>
-            <div class="bloom-card-value" style="color:#f59e0b">
-                {pct_distorsion:.0f}%
-            </div>
-            <div class="bloom-card-sub">
-                {distorsion} posts con brecha emocional alta
-            </div>
-        </div>""", unsafe_allow_html=True)
-
-    if df_posts['score_emocional'].max() < 0:
-        st.markdown("""
-        <p style="font-size:11px;color:#6b7280;margin-top:4px">
-        * Clasificación relativa — todos los posts tienen tono negativo;
-        estos son los comparativamente menos negativos.
-        </p>
-        """, unsafe_allow_html=True)
-
-    st.markdown("### Emoción publicada vs emoción recibida por la ciudadanía")
-    st.markdown(leyenda_grafica([
-        {'simbolo': '—', 'color': '#3b82f6',
-         'label': 'Tono de tus posts',
-         'descripcion': 'Emoción promedio de lo que publica el alcalde cada semana. Valores positivos = contenido con tono positivo. Negativos = contenido con tono de urgencia o problema.'},
-        {'simbolo': '—', 'color': '#f97316',
-         'label': 'Tono de los comentarios',
-         'descripcion': 'Cómo responde emocionalmente la ciudadanía a esos mismos posts esa semana.'},
-        {'simbolo': '▓', 'color': '#7f1d1d',
-         'label': 'Zona de distorsión',
-         'descripcion': 'Área donde ambas líneas se separan. Cuando esta zona es grande, el mensaje que publicas llega diferente a como lo pensaste — la ciudadanía recibe otra cosa.'},
-        {'simbolo': '- -', 'color': '#4b5563',
-         'label': 'Línea neutral (0)',
-         'descripcion': 'El punto de equilibrio. Por encima = tono positivo. Por debajo = tono negativo.'},
-    ]), unsafe_allow_html=True)
-
-    if not por_semana.empty:
-        df_c = por_semana.copy()
-        # Convert scores to emotion labels
-        def score_to_emo(score):
-            if score > 0.2:
-                return "positiva"
-            elif score < -0.2:
-                return "negativa"
-            return "neutral"
-        df_c['emo_post'] = df_c['score_post'].apply(score_to_emo)
-        df_c['emo_coment'] = df_c['score_comentarios'].apply(score_to_emo)
-
-        fig_contagio = go.Figure()
-
-        fig_contagio.add_trace(go.Scatter(
-            x=df_c['semana'],
-            y=df_c['score_post'],
-            mode='lines+markers',
-            name='Tono de tus posts',
-            line=dict(color='#3b82f6', width=2.5),
-            marker=dict(size=6),
-            customdata=df_c[['emo_post', 'emo_coment', 'score_post', 'score_comentarios']].values,
-            hovertemplate=(
-                '<b>Tono publicado</b><br>'
-                '%{x|%d %b %Y}<br>'
-                'Score: %{customdata[2]:+.2f} (%{customdata[0]}) → Comentarios: %{customdata[3]:+.2f} (%{customdata[1]})<br>'
-                '→ cuando coinciden, el mensaje pegó; cuando no, la gente sintió distinto'
-                '<extra></extra>'
-            )
-        ))
-
-        fig_contagio.add_trace(go.Scatter(
-            x=df_c['semana'],
-            y=df_c['score_comentarios'],
-            mode='lines+markers',
-            name='Tono de los comentarios',
-            line=dict(color='#f59e0b', width=2.5),
-            marker=dict(size=6),
-            customdata=df_c[['emo_post', 'emo_coment', 'score_post', 'score_comentarios']].values,
-            hovertemplate=(
-                '<b>Tono recibido</b><br>'
-                '%{x|%d %b %Y}<br>'
-                'Score: %{customdata[3]:+.2f} (%{customdata[1]}) ← Publicación: %{customdata[2]:+.2f} (%{customdata[0]})<br>'
-                '→ cuando coinciden, el mensaje pegó; cuando no, la gente sintió distinto'
-                '<extra></extra>'
-            )
-        ))
-
-        fig_contagio.add_trace(go.Scatter(
-            x=pd.concat([df_c['semana'], df_c['semana'][::-1]]),
-            y=pd.concat([df_c['score_post'], df_c['score_comentarios'][::-1]]),
-            fill='toself',
-            fillcolor='rgba(239,68,68,0.08)',
-            line=dict(color='rgba(0,0,0,0)'),
-            name='Zona de distorsión',
-            hoverinfo='skip'
-        ))
-
-        fig_contagio.add_hline(
-            y=0,
-            line_dash='dot',
-            line_color='#374151',
-            annotation_text='Neutral',
-            annotation_font_color='#6b7280',
-            annotation_font_size=10
-        )
-
-        fig_contagio.update_layout(
-            plot_bgcolor='#111827',
-            paper_bgcolor='#111827',
-            font=dict(color='#9ca3af', size=11),
-            xaxis=dict(
-                gridcolor='#1f2937',
-                tickformat='%d %b\n%Y'
-            ),
-            yaxis=dict(
-                gridcolor='#1f2937',
-                title='Score emocional',
-                range=[-1, 1]
-            ),
-            legend=dict(
-                bgcolor='rgba(17,24,39,0.8)',
-                bordercolor='#1f2937'
-            ),
-            margin=dict(l=0,r=0,t=10,b=0),
-            height=320
-        )
-        card_explicativa(
-            que_es="Si la emoción de cada publicación se contagia a los comentarios, o si la gente responde con otra emoción.",
-            como_leerlo="Cuando coinciden, el mensaje generó lo que buscaba. Cuando no coinciden, la gente reaccionó distinto a lo que decía la publicación."
-        )
-        st.plotly_chart(fig_contagio, width='stretch')
-
-    st.markdown("### Posts donde el mensaje positivo generó rechazo")
-    que_ves_box("Estos son los posts donde más brecha hubo entre lo que publicaste y cómo respondió la ciudadanía. Son señales de alerta temprana — el tema tocó una fibra sensible que las reacciones no reflejan pero los comentarios sí revelan.")
-
-    if distorsion_alta.empty:
-        st.markdown("""
-        <div class="bloom-card">
-            <p style="color:#22c55e;text-align:center">
-                Sin casos de distorsión alta en este período
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        for _, row in distorsion_alta.iterrows():
-            fecha = formato_fecha_espanol(row['created_time'])
-            msg = str(row['message'])[:100]
-            score_post = float(row.get('score_emocional', 0) or 0)
-            score_coment = float(row.get('sent_comentarios', 0) or 0)
-            cat = str(row.get('categoria_nombre','—'))[:30].replace('\n',' ')
-
-            color_post = '#22c55e' if score_post > 0 else '#ef4444'
-            color_coment = '#22c55e' if score_coment > 0 else '#ef4444'
-
-            st.markdown(f"""
-            <div class="patron-rechazo">
-                <div style="display:flex;justify-content:space-between;
-                     margin-bottom:8px">
-                    <span style="font-size:11px;color:var(--fg-muted)">{fecha}</span>
-                    <span style="font-size:11px;color:#9ca3af;
-                          background:var(--border);padding:2px 8px;
-                          border-radius:4px">{cat}</span>
-                </div>
-                <p style="font-size:13px;color:#d1d5db;
-                          margin-bottom:10px;line-height:1.5">
-                    {msg}...
-                </p>
-                <div style="display:flex;gap:24px">
-                    <div>
-                        <span style="font-size:10px;color:#6b7280;
-                              text-transform:uppercase;
-                              letter-spacing:1px">
-                            Tono publicado
-                        </span>
-                        <div style="font-size:18px;font-weight:700;
-                              color:{color_post};
-                              font-family:'IBM Plex Mono',monospace">
-                            {score_post:+.2f}
-                        </div>
-                    </div>
-                    <div style="font-size:20px;color:#374151;
-                          align-self:center">→</div>
-                    <div>
-                        <span style="font-size:10px;color:#6b7280;
-                              text-transform:uppercase;
-                              letter-spacing:1px">
-                            Tono recibido
-                        </span>
-                        <div style="font-size:18px;font-weight:700;
-                              color:{color_coment};
-                              font-family:'IBM Plex Mono',monospace">
-                            {score_coment:+.2f}
-                        </div>
-                    </div>
-                    <div style="margin-left:auto;text-align:right">
-                        <span style="font-size:10px;color:#6b7280;
-                              text-transform:uppercase;
-                              letter-spacing:1px">
-                            Distorsión
-                        </span>
-                        <div style="font-size:18px;font-weight:700;
-                              color:#ef4444;font-family:'IBM Plex Mono',monospace">
-                            {abs(float(row.get('distorsion',0) or 0)):.2f}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    st.markdown("### ¿Cómo responde la ciudadanía a tus posts?")
-
-    labels_map = {
-        'resonancia_positiva': 'Resonancia positiva',
-        'rechazo_a_positivo': 'Rechazo a mensaje positivo',
-        'resonancia_negativa': 'Resonancia negativa',
-        'inversion_positiva': 'Inversión positiva',
-        'distorsion_alta': 'Alta distorsión',
-        'neutral': 'Respuesta neutral',
-        'sin_datos': '— Sin datos'
-    }
-    colors_map = {
-        'resonancia_positiva': '#16a34a',
-        'rechazo_a_positivo': '#dc2626',
-        'resonancia_negativa': '#ca8a04',
-        'inversion_positiva': '#2563eb',
-        'distorsion_alta': '#9333ea',
-        'neutral': '#374151',
-        'sin_datos': '#1f2937'
-    }
-
-    tipos_validos = {
-        k: v for k, v in conteo_tipos.items()
-        if k != 'sin_datos' and v > 0
-    }
-
-    if tipos_validos:
-        st.markdown(leyenda_grafica([
-            {'simbolo': '■', 'color': '#f59e0b',
-             'label': 'Resonancia negativa',
-             'descripcion': 'Posts donde tanto el contenido como los comentarios tienen tono negativo. La ciudadanía y el alcalde coinciden en que hay un problema.'},
-            {'simbolo': '■', 'color': '#a855f7',
-             'label': 'Alta distorsión',
-             'descripcion': 'Posts donde el alcalde publica algo con un tono y la ciudadanía responde con el opuesto. La señal más temprana de una crisis de comunicación.'},
-            {'simbolo': '■', 'color': '#3b82f6',
-             'label': 'Inversión positiva',
-             'descripcion': 'Posts donde el alcalde publicó algo negativo o neutro pero la ciudadanía respondió positivamente. Contenido que conecta más de lo esperado.'},
-            {'simbolo': '■', 'color': '#374151',
-             'label': 'Respuesta neutral',
-             'descripcion': 'Posts que no generaron reacción emocional clara en ninguna dirección.'},
-        ]), unsafe_allow_html=True)
-
-        lecturas = []
-        for k in tipos_validos.keys():
-            if k in ('resonancia_positiva', 'resonancia_negativa'):
-                lecturas.append('en esta parte la gente reaccionó igual al mensaje')
-            elif k in ('rechazo_a_positivo', 'inversion_positiva', 'distorsion_alta'):
-                lecturas.append('en esta parte la gente reaccionó distinto al mensaje')
-            elif k == 'neutral':
-                lecturas.append('en esta parte la gente reaccionó neutral al mensaje')
-            else:
-                lecturas.append('en esta parte la gente reaccionó de forma mixta')
-
-        fig_dist = go.Figure(go.Pie(
-            labels=[labels_map.get(k, k) for k in tipos_validos.keys()],
-            values=list(tipos_validos.values()),
-            hole=0.55,
-            marker=dict(
-                colors=[colors_map.get(k,'#374151') for k in tipos_validos.keys()],
-                line=dict(color='#111827', width=2)
-            ),
-            textfont=dict(size=11, color='white'),
-            customdata=[lecturas],
-        ))
-        fig_dist.update_traces(
-            hovertemplate=(
-                "<b>%{label}</b><br>"
-                "%{value} posts (%{percent})<br>"
-                "→ %{customdata[0][%{index}]}"
-                "<extra></extra>"
-            )
-        )
-        fig_dist.update_layout(
-            plot_bgcolor='#111827',
-            paper_bgcolor='#111827',
-            font=dict(color='#9ca3af'),
-            showlegend=True,
-            legend=dict(
-                bgcolor='rgba(17,24,39,0.8)',
-                bordercolor='#1f2937',
-                font=dict(size=11)
-            ),
-            margin=dict(l=0,r=0,t=10,b=0),
-            height=320
-        )
-        card_explicativa(
-            que_es="De qué temas habla la gente, repartido en porciones.",
-            como_leerlo="Mientras más grande la porción, más se habla de ese tema."
-        )
-        st.plotly_chart(fig_dist, width='stretch')
-
-elif seccion == "📥 Cargar contenido":
+if vista == "📊 Dashboard":
+    tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs([
+        "📊 Pulso General", "👥 Segmentación de Audiencia",
+        "⚠️ Riesgo y Autenticidad", "🧠 Memoria e Inteligencia Aplicada"
+    ])
+    with tab_pulso:
+        render_bloque1_pulso()
+    with tab_audiencia:
+        render_bloque2_audiencia()
+    with tab_riesgo:
+        render_bloque3_riesgo()
+    with tab_inteligencia:
+        render_bloque4_inteligencia()
+elif vista == "📥 Cargar contenido":
     seccion_cargar_contenido()
-
-elif seccion == "NOTAS METODOLÓGICAS":
+elif vista == "📋 Notas metodológicas":
     render_notas_metodologicas()

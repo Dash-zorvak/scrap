@@ -1,8 +1,7 @@
 import sqlite3
 import pandas as pd
-import os
-import sys
-sys.path.insert(0, "/Users/pro/Downloads/scrapeo-social/dashboard")
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import *
 import re
 from sentimiento_engine import clasificar_lote, analizar_sentimiento_rapido

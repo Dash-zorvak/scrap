@@ -1623,7 +1623,7 @@ def seccion_revisar_lote() -> None:
             "quedarán marcados para que los completes."
         )
         if st.button("🔍 Extraer y revisar lote", width='stretch', type="primary"):
-            from dashboard.ingreso_extraccion import extraer_posts_desde_archivos
+            from ingreso_extraccion import extraer_posts_desde_archivos
             import uuid
 
             n = len(pendientes)

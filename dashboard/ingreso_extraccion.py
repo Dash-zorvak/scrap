@@ -116,18 +116,24 @@ def _detectar_mime(data: bytes, declarado: str | None = None) -> str:
 # ═══════════════════════════════════════════════
 
 def _configurar_gemini() -> bool:
-    """Lee la clave de st.secrets y configura la API.
+    """Lee la clave de st.secrets o variable de entorno y configura la API.
 
     Retorna True si ok, False si no hay clave disponible.
     """
+    import os
     import streamlit as st
     import google.generativeai as genai
 
-    try:
-        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        try:
+            api_key = st.secrets.get("GOOGLE_API_KEY")
+        except Exception:
+            api_key = None
+    if api_key:
+        genai.configure(api_key=api_key)
         return True
-    except (KeyError, FileNotFoundError):
-        return False
+    return False
 
 
 # ═══════════════════════════════════════════════
@@ -372,7 +378,7 @@ def extraer_post_desde_capturas(imagenes: list, plataforma: str) -> dict:
     """
     # ── Validaciones tempranas ──
     if not _configurar_gemini():
-        return {"error": "GOOGLE_API_KEY no configurada en st.secrets"}
+        return {"error": "GOOGLE_API_KEY no configurada en st.secrets ni variable de entorno"}
 
     if not imagenes:
         return {"error": "No se recibieron imágenes"}

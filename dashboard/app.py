@@ -53,9 +53,15 @@ def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
     Tipos: 'eco_historico', 'leccion', 'brecha', 'contexto',
            'correlacion', 'proyeccion', 'recomendacion'
     """
-    api_key = st.secrets.get("GOOGLE_API_KEY") if hasattr(st, "secrets") else None
+    api_key = None
+    try:
+        api_key = st.secrets.get("GOOGLE_API_KEY")
+    except Exception:
+        api_key = None
     if not api_key:
-        return "Análisis IA no disponible en este momento (falta GOOGLE_API_KEY en .streamlit/secrets.toml)"
+        api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        return "Análisis IA no disponible en este momento (falta GOOGLE_API_KEY en .streamlit/secrets.toml o variable de entorno)"
     
     try:
         import google.generativeai as genai

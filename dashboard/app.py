@@ -1623,19 +1623,48 @@ def seccion_revisar_lote() -> None:
             "quedarán marcados para que los completes."
         )
         if st.button("🔍 Extraer y revisar lote", width='stretch', type="primary"):
-            from ingreso_extraccion import extraer_post_desde_capturas
+            from dashboard.ingreso_extraccion import extraer_posts_desde_archivos
+            import uuid
 
             n = len(pendientes)
-            status = st.status(f"Extrayendo datos de las capturas… 0/{n}", expanded=True)
-            for i, item in enumerate(pendientes):
-                status.write(
-                    f"Procesando post {i+1}/{n}: "
-                    f"{item['plataforma'].title()} — {item['fuente']}"
-                )
-                datos = extraer_post_desde_capturas(item["imagenes"], item["plataforma"])
-                item["datos_extraidos"] = datos
-                item["estado"] = "extraido"
-            status.update(label=f"✅ Extracción completada ({n} posts)", state="complete", expanded=False)
+            status = st.status(f"Extrayendo datos de los archivos… 0/{n}", expanded=True)
+            nuevos_items = []
+            for item in st.session_state["lote_ingreso"]:
+                if item.get("estado") != "pendiente":
+                    nuevos_items.append(item)
+                    continue
+
+                resultado = extraer_posts_desde_archivos(item["imagenes"], item["plataforma"])
+
+                if isinstance(resultado, dict) and resultado.get("error"):
+                    item["estado"] = "error"
+                    item["error_msg"] = resultado["error"]
+                    nuevos_items.append(item)
+                    continue
+
+                posts = resultado.get("posts", [])
+                if not posts:
+                    item["estado"] = "error"
+                    item["error_msg"] = "No se detectaron posts en el archivo"
+                    nuevos_items.append(item)
+                    continue
+
+                for datos in posts:
+                    enlace_auto = (datos.get("enlace") or {}).get("valor")
+                    nuevos_items.append({
+                        "id_temporal": str(uuid.uuid4()),
+                        "plataforma": item["plataforma"],
+                        "fuente": item["fuente"],
+                        "imagenes": item["imagenes"],
+                        "enlace": enlace_auto or item.get("enlace", ""),
+                        "enlace_confianza": (datos.get("enlace") or {}).get("confianza", "no_detectado"),
+                        "estado": "extraido",
+                        "datos_extraidos": datos,
+                    })
+
+            st.session_state["lote_ingreso"] = nuevos_items
+            n_total = sum(1 for p in nuevos_items if p["estado"] == "extraido")
+            status.update(label=f"✅ Extracción completada ({n_total} posts)", state="complete", expanded=False)
             st.rerun()
 
     # ── Paso 2: Tarjetas editables ──
@@ -1658,8 +1687,15 @@ def seccion_revisar_lote() -> None:
             label = f"{plat_emoji} Post {i+1}: {item['fuente']} — {tag}"
 
             with st.expander(label, expanded=not is_revisado):
-                if item.get("enlace"):
-                    st.markdown(f"**Enlace:** {item['enlace']}")
+                conf = item.get("enlace_confianza", "no_detectado")
+                if conf in ("dudoso", "no_detectado"):
+                    st.warning("Revisa el enlace: no se detectó con seguridad en el PDF.")
+                st.text_input(
+                    "Enlace del post",
+                    value=item.get("enlace", ""),
+                    key=f"rev_enlace_{id_}",
+                    help="Extraído automáticamente del PDF. Corrige si es necesario.",
+                )
 
                 if is_error:
                     st.error(f"⚠️ Gemini no pudo leer esta captura: «{datos['error']}». Llénala a mano.")
@@ -1807,12 +1843,12 @@ def _confirmar_post(item: dict, texto_key: str, fecha_key: str, df_comentarios: 
         st.warning(f"⚠️ Muestra insuficiente ({len(comentarios)} < 15). "
                    "El análisis de sentimiento será limitado.")
 
-    # Detectar duplicado por enlace
-    enlace = item.get("enlace", "").strip()
-    if enlace:
+    # Leer enlace del campo editable
+    enlace_final = st.session_state.get(f"rev_enlace_{id_}", item.get("enlace", ""))
+    if enlace_final:
         lote = st.session_state["lote_ingreso"]
         for otro in lote:
-            if otro["id_temporal"] != id_ and otro.get("enlace", "").strip() == enlace:
+            if otro["id_temporal"] != id_ and otro.get("enlace", "").strip() == enlace_final.strip():
                 st.warning(f"⚠️ Este enlace ya existe en el lote (post {otro.get('id_temporal', '?')[:8]}…).")
                 break
 
@@ -1835,7 +1871,7 @@ def _confirmar_post(item: dict, texto_key: str, fecha_key: str, df_comentarios: 
             "comments_count": _r("fb_comentarios_count"),
             "shares_count": _r("fb_compartidos"),
             "views_count": _r("fb_vistas"),
-            "post_url": enlace,
+            "post_url": enlace_final or None,
             "comentarios": comentarios,
             "muestra_suficiente": muestra_suf,
         }
@@ -1849,6 +1885,7 @@ def _confirmar_post(item: dict, texto_key: str, fecha_key: str, df_comentarios: 
             "account_id": account_id,
             "description": mensaje,
             "created_at": created,
+            "post_url": enlace_final or None,
             "views": _r("tk_vistas"),
             "likes": _r("tk_likes"),
             "favorites_count": _r("tk_favoritos"),
@@ -1898,15 +1935,16 @@ def seccion_cargar_contenido():
                 fuente = str(tk_id_map[tk_label])
 
         imagenes = st.file_uploader(
-            "Capturas del post (post + comentarios)",
+            "Sube capturas (PNG/JPG) o un PDF con uno o varios posts",
+            type=["png", "jpg", "jpeg", "pdf"],
             accept_multiple_files=True,
-            type=["png", "jpg", "jpeg"],
+            key=f"uploader_{st.session_state.get('uploader_nonce', 0)}",
+            help="Un PDF puede contener varios posts distintos; el sistema los separa automáticamente.",
         )
 
         enlace = st.text_input(
-            "Enlace del post (opcional — solo referencia, no se scrapea)",
-            value="",
-            placeholder="https://facebook.com/...",
+            "Enlace del post (opcional)",
+            help="Solo de respaldo. Si el PDF ya incluye el enlace, se extrae automáticamente y este campo puede quedar vacío.",
         )
 
         submitted = st.form_submit_button("➕ Agregar post al lote", width='stretch')

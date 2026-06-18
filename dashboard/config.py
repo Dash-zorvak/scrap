@@ -23,8 +23,15 @@ FB_COMMENTS_TABLE = "fb_comments"
 TK_VIDEOS_TABLE   = "videos"
 TK_COMMENTS_TABLE = "comments"
 
-# Reacciones Facebook disponibles con datos reales
-FB_REACTIONS = ["likes_count", "loves_count", "hahas_count", "sads_count"]
+# Reacciones Facebook: las 6 reacciones completas (ninguna queda fuera)
+FB_REACTIONS = [
+    "likes_count",
+    "loves_count",
+    "hahas_count",
+    "wows_count",
+    "sads_count",
+    "angrys_count"
+]
 
 # Columnas TikTok
 TK_ENGAGEMENT = ["views", "likes", "shares", "favorites_count", "comments_count"]

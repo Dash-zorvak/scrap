@@ -238,6 +238,28 @@ def _detectar_mime(data: bytes, declarado: str | None = None) -> str:
 
 
 # ═══════════════════════════════════
+# Renderizado de PDF a imágenes por página (PyMuPDF)
+# ═══════════════════════════════════
+
+def _pdf_a_imagenes(data: bytes, dpi: int = 150) -> list[bytes]:
+    """Abre un PDF con PyMuPDF y devuelve una lista de PNG (bytes), uno por página."""
+    try:
+        import fitz
+    except ImportError:
+        return []
+    try:
+        doc = fitz.open(stream=data, filetype="pdf")
+        paginas = []
+        for page in doc:
+            pix = page.get_pixmap(dpi=dpi)
+            paginas.append(pix.tobytes("png"))
+        doc.close()
+        return paginas
+    except Exception:
+        return []
+
+
+# ═══════════════════════════════════
 # Configuración de Gemini (diferida)
 # ═══════════════════════════════════
 
@@ -650,6 +672,45 @@ def _extraer_lista_posts(parsed: Any) -> list:
 
 
 # ═══════════════════════════════════
+# Segmentación (pasada 1 del flujo de dos pasadas)
+# ═══════════════════════════════════
+
+_PROMPT_SEGMENTACION_TEMPLATE = (
+    "Eres un segmentador de documentos. Te paso N imágenes que son páginas CONSECUTIVAS "
+    "de capturas de pantalla de {platform}. Varias páginas seguidas pueden pertenecer al "
+    "MISMO post (la publicación y sus comentarios). Agrupa las páginas en posts distintos.\n\n"
+    "Devuelve SOLO JSON, sin texto extra:\n"
+    '{{"posts": [{{"paginas": [1, 2], "enlace": "https://... o null"}}]}}\n\n'
+    "Reglas: numeración 1-based en el mismo orden recibido; cada página pertenece a UN solo "
+    "post; las páginas de un post son consecutivas; si una página tiene una URL pegada "
+    "normalmente marca el inicio de un post; enlace = la URL del post si aparece, si no null."
+)
+
+
+def _extraer_grupos(parsed: Any) -> list | None:
+    """Extrae grupos de páginas de la respuesta de segmentación.
+
+    Acepta: {"posts": [{"paginas": [1,2], "enlace": "..."}]}
+    Devuelve None si no se puede extraer nada.
+    """
+    if not isinstance(parsed, dict):
+        return None
+    posts = parsed.get("posts")
+    if not isinstance(posts, list):
+        return None
+    grupos = []
+    for p in posts:
+        if not isinstance(p, dict):
+            continue
+        paginas = p.get("paginas")
+        if not isinstance(paginas, list) or not paginas:
+            continue
+        enlace = p.get("enlace")
+        grupos.append({"paginas": paginas, "enlace": enlace})
+    return grupos if grupos else None
+
+
+# ═══════════════════════════════════
 # Conversión de archivos a partes inline para Gemini
 # ═══════════════════════════════════
 
@@ -684,6 +745,47 @@ def _archivos_a_partes(archivos: list) -> list:
 
 
 # ═══════════════════════════════════
+# Conversión de archivos a páginas (imágenes individuales por página)
+# ═══════════════════════════════════
+
+def _archivos_a_paginas(archivos: list) -> list[dict]:
+    """Convierte archivos (UploadedFile/bytes/PIL/Pdf) a partes inline UNA POR PÁGINA.
+
+    Un PDF se rasteriza → tantas partes image/png como páginas.
+    Una imagen → una parte con su mime original.
+    Archivos corruptos → se saltan.
+    """
+    partes = []
+    for arch in archivos:
+        try:
+            if hasattr(arch, "getvalue"):
+                data = arch.getvalue()
+                mime = _detectar_mime(data, getattr(arch, "type", None))
+            elif isinstance(arch, bytes):
+                data = arch
+                mime = _detectar_mime(data)
+            else:
+                import io
+                from PIL import Image
+                buf = io.BytesIO()
+                if hasattr(arch, "save"):
+                    arch.save(buf, format="PNG")
+                else:
+                    Image.open(arch).save(buf, format="PNG")
+                data = buf.getvalue()
+                mime = "image/png"
+
+            if mime == "application/pdf":
+                for png_bytes in _pdf_a_imagenes(data):
+                    partes.append({"mime_type": "image/png", "data": png_bytes})
+            else:
+                partes.append({"mime_type": mime, "data": data})
+        except Exception:
+            continue
+    return partes
+
+
+# ═══════════════════════════════════
 # Función principal MULTI-POST (PDF/imágenes)
 # ═══════════════════════════════════
 
@@ -707,55 +809,130 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
     if plataforma not in ("facebook", "tiktok"):
         return {"error": f"Plataforma no soportada: {plataforma}"}
 
-    partes = _archivos_a_partes(archivos)
-    if not partes:
+    paginas = _archivos_a_paginas(archivos)
+    if not paginas:
         return {"error": "Ningún archivo pudo procesarse"}
 
     import google.generativeai as genai
 
-    prompt = _construir_prompt_multi(plataforma)
     modelo = genai.GenerativeModel(
         GEMINI_MODEL,
-        generation_config={"response_mime_type": "application/json"},
+        generation_config={"response_mime_type": "application/json", "max_output_tokens": 8192},
     )
 
-    contenido = [prompt] + partes
+    # ── Una sola página → ruta tradicional (compat) ──
+    if len(paginas) <= 1:
+        prompt = _construir_prompt_multi(plataforma)
+        contenido = [prompt] + paginas
+        ultimo_error = None
+
+        for intento in range(2):
+            try:
+                respuesta = modelo.generate_content(contenido)
+
+                if not respuesta or not respuesta.text:
+                    ultimo_error = "Gemini devolvió respuesta vacía"
+                    if intento == 0:
+                        contenido[0] = (
+                            prompt
+                            + "\n\nADVERTENCIA: la respuesta anterior fue inválida. "
+                            'Devuelve SOLO JSON con la forma {"posts": [...]}, sin markdown.'
+                        )
+                    continue
+
+                parsed = _parsear_respuesta(respuesta.text)
+                posts_raw = _extraer_lista_posts(parsed) if parsed is not None else []
+                if not posts_raw:
+                    ultimo_error = "No se detectaron posts en los archivos"
+                    if intento == 0:
+                        contenido[0] = (
+                            prompt
+                            + "\n\nADVERTENCIA: la respuesta anterior no fue JSON válido o no "
+                            'traía posts. Devuelve SOLO JSON con la forma {"posts": [...]}.'
+                        )
+                    continue
+
+                posts = [_aplicar_contrato(p, plataforma) for p in posts_raw]
+                return {"posts": posts}
+
+            except Exception as e:
+                ultimo_error = f"Error en llamada a Gemini: {e}"
+                continue
+
+        return {"error": ultimo_error or "Error desconocido"}
+
+    # ── Múltiples páginas → dos pasadas ──
+    # PASADA 1: segmentación
+    prompt_seg = _PROMPT_SEGMENTACION_TEMPLATE.format(platform=plataforma)
     ultimo_error = None
+    grupos = None
 
-    for intento in range(2):
-        try:
-            respuesta = modelo.generate_content(contenido)
+    try:
+        respuesta_seg = modelo.generate_content([prompt_seg] + paginas)
+        if respuesta_seg and respuesta_seg.text:
+            parsed_seg = _parsear_respuesta(respuesta_seg.text)
+            grupos = _extraer_grupos(parsed_seg)
+    except Exception as e:
+        ultimo_error = f"Error en segmentación: {e}"
 
-            if not respuesta or not respuesta.text:
-                ultimo_error = "Gemini devolvió respuesta vacía"
-                if intento == 0:
-                    contenido[0] = (
-                        prompt
-                        + "\n\nADVERTENCIA: la respuesta anterior fue inválida. "
-                        'Devuelve SOLO JSON con la forma {"posts": [...]}, sin markdown.'
-                    )
-                continue
+    if not grupos:
+        # Fallback: tratar todo como un solo grupo
+        grupos = [{"paginas": list(range(1, len(paginas) + 1)), "enlace": None}]
 
-            parsed = _parsear_respuesta(respuesta.text)
-            posts_raw = _extraer_lista_posts(parsed) if parsed is not None else []
-            if not posts_raw:
-                ultimo_error = "No se detectaron posts en los archivos"
-                if intento == 0:
-                    contenido[0] = (
-                        prompt
-                        + "\n\nADVERTENCIA: la respuesta anterior no fue JSON válido o no "
-                        'traía posts. Devuelve SOLO JSON con la forma {"posts": [...]}.'
-                    )
-                continue
+    # PASADA 2: extraer cada post por separado
+    prompt_unico = _construir_prompt(plataforma)
+    posts = []
 
-            posts = [_aplicar_contrato(p, plataforma) for p in posts_raw]
-            return {"posts": posts}
-
-        except Exception as e:
-            ultimo_error = f"Error en llamada a Gemini: {e}"
+    for grupo in grupos:
+        idxs = [i - 1 for i in grupo.get("paginas", [])]
+        idxs = [i for i in idxs if 0 <= i < len(paginas)]
+        if not idxs:
             continue
 
-    return {"error": ultimo_error or "Error desconocido"}
+        paginas_grupo = [paginas[i] for i in idxs]
+        contrato = None
+
+        for intento in range(2):
+            try:
+                contenido = [prompt_unico] + paginas_grupo
+                respuesta = modelo.generate_content(contenido)
+
+                if not respuesta or not respuesta.text:
+                    if intento == 0:
+                        continue
+                    ultimo_error = "Gemini devolvió respuesta vacía"
+                    continue
+
+                parsed = _parsear_respuesta(respuesta.text)
+                if parsed is None:
+                    if intento == 0:
+                        continue
+                    ultimo_error = "No se pudo parsear el JSON"
+                    continue
+
+                contrato = _aplicar_contrato(parsed, plataforma)
+
+                # Inyectar enlace de la pasada 1 si el contrato no detectó uno
+                enlace_grupo = grupo.get("enlace")
+                if enlace_grupo:
+                    enlace_actual = (contrato.get("enlace") or {}).get("valor")
+                    if not enlace_actual:
+                        contrato["enlace"] = _enlace_confianza(enlace_grupo)
+
+                posts.append(contrato)
+                break
+
+            except Exception as e:
+                ultimo_error = f"Error en llamada a Gemini: {e}"
+                continue
+
+        if contrato is None:
+            # Si un grupo falla, continuamos con los demás
+            continue
+
+    if not posts:
+        return {"error": ultimo_error or "No se pudo extraer ningún post"}
+    return {"posts": posts}
 
 
 # ═══════════════════════════════════
@@ -793,7 +970,7 @@ def extraer_post_desde_capturas(imagenes: list, plataforma: str) -> dict:
     prompt = _construir_prompt(plataforma)
     modelo = genai.GenerativeModel(
         GEMINI_MODEL,
-        generation_config={"response_mime_type": "application/json"},
+        generation_config={"response_mime_type": "application/json", "max_output_tokens": 8192},
     )
 
     contenido = [prompt] + image_parts

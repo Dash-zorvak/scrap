@@ -962,8 +962,14 @@ def cargar_externos(db_path):
 
 def filtrar_por_periodo_plataforma(df_fb, df_tk, periodo, plataforma):
     fecha_inicio = get_fecha_inicio(periodo)
-    fb = df_fb[df_fb['created_time'] >= fecha_inicio].copy()
-    tk = df_tk[df_tk['created_at'] >= fecha_inicio].copy()
+    if df_fb is not None and not df_fb.empty and 'created_time' in df_fb.columns:
+        fb = df_fb[df_fb['created_time'] >= fecha_inicio].copy()
+    else:
+        fb = pd.DataFrame()
+    if df_tk is not None and not df_tk.empty and 'created_at' in df_tk.columns:
+        tk = df_tk[df_tk['created_at'] >= fecha_inicio].copy()
+    else:
+        tk = pd.DataFrame()
     if plataforma == "Facebook": return fb, pd.DataFrame()
     if plataforma == "TikTok": return pd.DataFrame(), tk
     return fb, tk

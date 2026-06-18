@@ -46,12 +46,13 @@ def detect_anomalies(posts_df, monthly_df=None) -> List[Dict[str, Any]]:
 
     topic_agg = posts_df.groupby('topic_category').agg(
         angrys=('angrys_count', 'sum'),
+        cares=('cares_count', 'sum'),
         likes=('likes_count', 'sum'),
         loves=('loves_count', 'sum'),
         count=('post_id', 'count'),
     ).reset_index()
-    topic_agg['angry_ratio'] = topic_agg['angrys'] / (topic_agg['likes'] + topic_agg['loves'] + topic_agg['angrys'] + 1)
-    overall_angry_ratio = topic_agg['angrys'].sum() / (topic_agg['likes'].sum() + topic_agg['loves'].sum() + topic_agg['angrys'].sum() + 1)
+    topic_agg['angry_ratio'] = topic_agg['angrys'] / (topic_agg['likes'] + topic_agg['loves'] + topic_agg['cares'] + topic_agg['angrys'] + 1)
+    overall_angry_ratio = topic_agg['angrys'].sum() / (topic_agg['likes'].sum() + topic_agg['loves'].sum() + topic_agg['cares'].sum() + topic_agg['angrys'].sum() + 1)
     for _, row in topic_agg.iterrows():
         if row['count'] > 2 and row['angry_ratio'] > overall_angry_ratio * 2 and row['angry_ratio'] > 0.03:
             alerts.append({

@@ -248,7 +248,7 @@ def predict_controversy(posts: List[Dict]) -> Dict:
 
     neg_mask = np.array([
         p.get("sentiment") in ("negativo", "muy_negativo") or
-        (p.get("sads_count", 0) or 0) + (p.get("angrys_count", 0) or 0) > 10
+        (p.get("cares_count", 0) or 0) + (p.get("sads_count", 0) or 0) + (p.get("angrys_count", 0) or 0) > 10
         for p in posts
     ])
 

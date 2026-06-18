@@ -24,6 +24,7 @@ def series_facebook(fb_db=None):
         engagement_promedio=("engagement_total", "mean"),
         score_emocional_promedio=("score_emocional", "mean"),
         indice_amor_promedio=("indice_amor", "mean"),
+        indice_carino_promedio=("indice_carino", "mean"),
         indice_humor_promedio=("indice_humor", "mean"),
         indice_tristeza_promedio=("indice_tristeza", "mean"),
         total_reacciones_suma=("total_reacciones", "sum"),

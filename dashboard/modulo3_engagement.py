@@ -14,7 +14,7 @@ def procesar_facebook(fb_db=None):
     placeholders = ",".join(repr(p) for p in FB_PAGES_OFICIALES)
     query = f"""
         SELECT post_id, page_name, created_time, message,
-               likes_count, loves_count, hahas_count, wows_count,
+               likes_count, loves_count, cares_count, hahas_count, wows_count,
                sads_count, angrys_count, comments_count
         FROM fb_posts
         WHERE page_name IN ({placeholders})
@@ -23,9 +23,9 @@ def procesar_facebook(fb_db=None):
     """
     df = pd.read_sql_query(query, conn)
 
-    # Total de reacciones: TODAS las 6 reacciones de Facebook (ninguna queda fuera)
+    # Total de reacciones: TODAS las 7 reacciones de Facebook (ninguna queda fuera)
     df["total_reacciones"] = (
-        df["likes_count"] + df["loves_count"] + df["hahas_count"]
+        df["likes_count"] + df["loves_count"] + df["cares_count"] + df["hahas_count"]
         + df["wows_count"] + df["sads_count"] + df["angrys_count"]
     )
 
@@ -37,14 +37,15 @@ def procesar_facebook(fb_db=None):
         )
 
     df["indice_amor"] = _indice("loves_count")
+    df["indice_carino"] = _indice("cares_count")
     df["indice_humor"] = _indice("hahas_count")
     df["indice_asombro"] = _indice("wows_count")
     df["indice_tristeza"] = _indice("sads_count")
     df["indice_enojo"] = _indice("angrys_count")
     df["engagement_total"] = df["total_reacciones"] + df["comments_count"]
-    # Score emocional neto: afecto positivo (amor + asombro) menos carga negativa (tristeza + enojo)
+    # Score emocional neto: afecto positivo (amor + carino + asombro) menos carga negativa (tristeza + enojo)
     df["score_emocional"] = (
-        (df["indice_amor"] + df["indice_asombro"])
+        (df["indice_amor"] + df["indice_carino"] + df["indice_asombro"])
         - (df["indice_tristeza"] + df["indice_enojo"])
     )
     df["plataforma"] = "facebook"
@@ -53,7 +54,7 @@ def procesar_facebook(fb_db=None):
 
     cols_salida = [
         "post_id", "page_name", "created_time", "message",
-        "total_reacciones", "indice_amor", "indice_humor", "indice_asombro",
+        "total_reacciones", "indice_amor", "indice_carino", "indice_humor", "indice_asombro",
         "indice_tristeza", "indice_enojo", "engagement_total",
         "score_emocional", "plataforma"
     ]

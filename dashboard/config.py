@@ -23,10 +23,11 @@ FB_COMMENTS_TABLE = "fb_comments"
 TK_VIDEOS_TABLE   = "videos"
 TK_COMMENTS_TABLE = "comments"
 
-# Reacciones Facebook: las 6 reacciones completas (ninguna queda fuera)
+# Reacciones Facebook: las 7 reacciones completas (ninguna queda fuera)
 FB_REACTIONS = [
     "likes_count",
     "loves_count",
+    "cares_count",
     "hahas_count",
     "wows_count",
     "sads_count",

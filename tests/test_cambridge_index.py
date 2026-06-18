@@ -27,6 +27,7 @@ def make_post(overrides=None):
         "post_id": "p1",
         "likes_count": 10,
         "loves_count": 5,
+        "cares_count": 0,
         "hahas_count": 2,
         "wows_count": 1,
         "sads_count": 1,

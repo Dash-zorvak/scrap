@@ -8,21 +8,22 @@ from config import *
 conn = sqlite3.connect(FACEBOOK_TEST_DB)
 df = pd.read_sql("""
     SELECT post_id, page_name, created_time, message,
-           likes_count, loves_count, hahas_count, sads_count,
+           likes_count, loves_count, cares_count, hahas_count, sads_count,
            angrys_count, comments_count
     FROM fb_posts
     WHERE created_time IS NOT NULL
 """, conn)
 
-df['total_reacciones'] = (df['likes_count'] + df['loves_count'] +
+df['total_reacciones'] = (df['likes_count'] + df['loves_count'] + df['cares_count'] +
                            df['hahas_count'] + df['sads_count'] +
                            df['angrys_count'])
 df['indice_amor']     = df['loves_count'] / df['total_reacciones'].replace(0,1)
+df['indice_carino']   = df['cares_count'] / df['total_reacciones'].replace(0,1)
 df['indice_humor']    = df['hahas_count'] / df['total_reacciones'].replace(0,1)
 df['indice_tristeza'] = df['sads_count']  / df['total_reacciones'].replace(0,1)
 df['indice_enojo']    = df['angrys_count']/ df['total_reacciones'].replace(0,1)
 df['engagement_total']= df['total_reacciones'] + df['comments_count']
-df['score_emocional'] = df['indice_amor'] - df['indice_tristeza'] - df['indice_enojo']
+df['score_emocional'] = (df['indice_amor'] + df['indice_carino']) - df['indice_tristeza'] - df['indice_enojo']
 df['plataforma']      = 'facebook'
 
 df.to_sql('fb_engagement', conn, if_exists='replace', index=False)

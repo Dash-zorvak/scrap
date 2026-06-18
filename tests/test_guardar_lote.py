@@ -24,6 +24,7 @@ _FB_SAMPLE = {
     "created_time": "2026-05-12T00:00:00",
     "likes_count": 10,
     "loves_count": 5,
+    "cares_count": 0,
     "hahas_count": 1,
     "sads_count": 0,
     "wows_count": 2,

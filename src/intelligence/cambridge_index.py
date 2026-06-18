@@ -454,7 +454,7 @@ def _engagement_metrics(total_reactions, total_comments, total_shares, total_vie
 def _compute_indices(posts: List[Dict]) -> Dict:
     total = len(posts)
     total_reactions = sum(
-        p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("hahas_count", 0)
+        p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("cares_count", 0) + p.get("hahas_count", 0)
         + p.get("wows_count", 0) + p.get("sads_count", 0) + p.get("angrys_count", 0)
         for p in posts
     )
@@ -464,13 +464,14 @@ def _compute_indices(posts: List[Dict]) -> Dict:
 
     likes = sum(p.get("likes_count", 0) for p in posts)
     loves = sum(p.get("loves_count", 0) for p in posts)
+    cares = sum(p.get("cares_count", 0) for p in posts)
     angrys = sum(p.get("angrys_count", 0) for p in posts)
     sads = sum(p.get("sads_count", 0) for p in posts)
 
     n = total_reactions or 1
-    net_sentiment = (likes + loves - angrys - sads) / n
+    net_sentiment = (likes + loves + cares - angrys - sads) / n
     controversy = (angrys + sads) / n
-    effectiveness = (likes + loves) / n
+    effectiveness = (likes + loves + cares) / n
     engagement, engagement_basis = _engagement_metrics(
         total_reactions, total_comments, total_shares, total_views, total
     )
@@ -484,7 +485,7 @@ def _compute_indices(posts: List[Dict]) -> Dict:
         topic_groups[p.get("topic_category", "uncategorized")].append(p)
     max_topic_controversy = controversy
     for topic_posts in topic_groups.values():
-        t_reactions = sum(p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("hahas_count", 0)
+        t_reactions = sum(p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("cares_count", 0) + p.get("hahas_count", 0)
                          + p.get("wows_count", 0) + p.get("sads_count", 0) + p.get("angrys_count", 0) for p in topic_posts)
         t_neg = sum(p.get("angrys_count", 0) + p.get("sads_count", 0) for p in topic_posts)
         if t_reactions > 0:
@@ -498,7 +499,7 @@ def _compute_indices(posts: List[Dict]) -> Dict:
     risk = (max_topic_controversy * 10 * 0.50 + nsi_deviation * 0.50) * vol_factor
     risk = max(0.0, min(1.0, risk))
 
-    como_pct = (likes + loves) / max(total_reactions, 1) * 100
+    como_pct = (likes + loves + cares) / max(total_reactions, 1) * 100
     no_gusta_pct = (angrys + sads) / max(total_reactions, 1) * 100
 
     return {
@@ -527,16 +528,17 @@ def _build_monthly_series(posts: List[Dict]) -> Dict[str, Dict]:
         key = dt.strftime("%Y-%m")
         if key not in monthly:
             monthly[key] = {"posts": 0, "reactions": 0, "comments": 0, "shares": 0,
-                            "views": 0, "likes": 0, "loves": 0, "angrys": 0, "sads": 0}
+                            "views": 0, "likes": 0, "loves": 0, "cares": 0, "angrys": 0, "sads": 0}
         monthly[key]["posts"] += 1
         monthly[key]["reactions"] += sum(p.get(c, 0) for c in
-                                          ["likes_count", "loves_count", "hahas_count",
+                                          ["likes_count", "loves_count", "cares_count", "hahas_count",
                                            "wows_count", "sads_count", "angrys_count"])
         monthly[key]["comments"] += p.get("comments_count", 0)
         monthly[key]["shares"] += p.get("shares_count", 0)
         monthly[key]["views"] += p.get("views_count", 0)
         monthly[key]["likes"] += p.get("likes_count", 0)
         monthly[key]["loves"] += p.get("loves_count", 0)
+        monthly[key]["cares"] += p.get("cares_count", 0)
         monthly[key]["angrys"] += p.get("angrys_count", 0)
         monthly[key]["sads"] += p.get("sads_count", 0)
 
@@ -565,9 +567,10 @@ def _compute_controversy_window(posts: List[Dict], days: int = 7) -> float:
         return 0.0
     likes = sum(p.get("likes_count", 0) for p in recent)
     loves = sum(p.get("loves_count", 0) for p in recent)
+    cares = sum(p.get("cares_count", 0) for p in recent)
     angrys = sum(p.get("angrys_count", 0) for p in recent)
     sads = sum(p.get("sads_count", 0) for p in recent)
-    tr = likes + loves + angrys + sads or 1
+    tr = likes + loves + cares + angrys + sads or 1
     return (angrys + sads) / tr
 
 
@@ -577,7 +580,7 @@ def _compute_sentiment_series(posts: List[Dict]) -> List[float]:
     for k in sorted(monthly.keys()):
         v = monthly[k]
         tr = v["reactions"] or 1
-        ns = (v["likes"] + v["loves"] - v["angrys"] - v["sads"]) / tr
+        ns = (v["likes"] + v["loves"] + v["cares"] - v["angrys"] - v["sads"]) / tr
         series.append(ns)
     return series
 
@@ -598,11 +601,12 @@ def _aggregate_topics(posts: List[Dict]) -> Dict[str, Dict]:
     for p in posts:
         topic = p.get("topic_category", "uncategorized")
         if topic not in agg:
-            agg[topic] = {"count": 0, "likes": 0, "loves": 0,
+            agg[topic] = {"count": 0, "likes": 0, "loves": 0, "cares": 0,
                           "angrys": 0, "sads": 0, "negative": 0}
         agg[topic]["count"] += 1
         agg[topic]["likes"] += p.get("likes_count", 0)
         agg[topic]["loves"] += p.get("loves_count", 0)
+        agg[topic]["cares"] += p.get("cares_count", 0)
         agg[topic]["angrys"] += p.get("angrys_count", 0)
         agg[topic]["sads"] += p.get("sads_count", 0)
         if p.get("sentiment") == "negative":
@@ -615,9 +619,10 @@ def _aggregate_zones(posts: List[Dict]) -> Dict[str, Dict]:
     for p in posts:
         zona = p.get("zona", "unknown")
         if zona not in agg:
-            agg[zona] = {"count": 0, "negative": 0, "likes": 0, "angrys": 0}
+            agg[zona] = {"count": 0, "negative": 0, "likes": 0, "cares": 0, "angrys": 0}
         agg[zona]["count"] += 1
         agg[zona]["likes"] += p.get("likes_count", 0)
+        agg[zona]["cares"] += p.get("cares_count", 0)
         agg[zona]["angrys"] += p.get("angrys_count", 0)
         if p.get("sentiment") == "negative":
             agg[zona]["negative"] += 1

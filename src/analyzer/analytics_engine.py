@@ -115,8 +115,9 @@ class AnalyticsEngine:
             SELECT post_id AS id, 'facebook' AS platform,
                    page_name AS account, message, created_time,
                    COALESCE(likes_count,0) AS likes_count,
-                   COALESCE(loves_count,0) AS loves_count,
-                   COALESCE(hahas_count,0) AS hahas_count,
+                    COALESCE(loves_count,0) AS loves_count,
+                    COALESCE(cares_count,0) AS cares_count,
+                    COALESCE(hahas_count,0) AS hahas_count,
                    COALESCE(wows_count,0) AS wows_count,
                    COALESCE(sads_count,0) AS sads_count,
                    COALESCE(angrys_count,0) AS angrys_count,
@@ -131,7 +132,7 @@ class AnalyticsEngine:
         rows = cur.fetchall()
         conn.close()
         for r in rows:
-            r["total_reactions"] = (r["likes_count"] + r["loves_count"] + r["hahas_count"]
+            r["total_reactions"] = (r["likes_count"] + r["loves_count"] + r["cares_count"] + r["hahas_count"]
                                     + r["wows_count"] + r["sads_count"] + r["angrys_count"])
         return rows
 
@@ -143,8 +144,8 @@ class AnalyticsEngine:
                    a.display_name AS account, v.description AS message,
                    v.created_at AS created_time,
                    COALESCE(v.likes,0) AS likes_count,
-                   0 AS loves_count, 0 AS hahas_count,
-                   0 AS wows_count, 0 AS sads_count, 0 AS angrys_count,
+                    0 AS loves_count, 0 AS cares_count, 0 AS hahas_count,
+                    0 AS wows_count, 0 AS sads_count, 0 AS angrys_count,
                    COALESCE(v.comments_count,0) AS comments_count,
                    COALESCE(v.shares,0) AS shares_count,
                    COALESCE(v.views,0) AS views_count,

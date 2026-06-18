@@ -25,9 +25,10 @@ class ExecutiveMetrics:
     def get_engagement_score(self, post: Dict) -> float:
         likes = post.get("likes_count", 0)
         loves = post.get("loves_count", 0)
+        cares = post.get("cares_count", 0)
         comments = post.get("comments_count", 0)
         shares = post.get("shares_count", 0)
-        return likes + (loves * 1.5) + (comments * 2) + (shares * 3)
+        return likes + (loves * 1.5) + (cares * 1.5) + (comments * 2) + (shares * 3)
 
     def generate_daily_metrics(self, platform: str) -> Dict:
         posts = self.storage.get_fb_posts(limit=10000)
@@ -41,7 +42,7 @@ class ExecutiveMetrics:
         neutral_count = sum(1 for p in posts if p.get("sentiment") == "neutral")
 
         total_reactions = sum(
-            p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("comments_count", 0)
+            p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("cares_count", 0) + p.get("comments_count", 0)
             for p in posts
         )
 

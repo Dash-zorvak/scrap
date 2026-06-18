@@ -18,6 +18,7 @@ def _fb_post_insert_dict(datos: dict, post_id: str) -> dict:
         "created_time": datos.get("created_time"),
         "likes_count": datos.get("likes_count", 0) or 0,
         "loves_count": datos.get("loves_count", 0) or 0,
+        "cares_count": datos.get("cares_count", 0) or 0,
         "hahas_count": datos.get("hahas_count", 0) or 0,
         "sads_count": datos.get("sads_count", 0) or 0,
         "wows_count": datos.get("wows_count", 0) or 0,

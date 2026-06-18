@@ -31,7 +31,9 @@ plotly>=5.0.0
 # Dashboard
 streamlit>=1.30.0
 
-# IA / Vision (extraccion manual con Gemini Vision)
+# IA / Vision (extraccion con Groq via API compatible OpenAI)
+openai>=1.0.0
+# google-generativeai se mantiene porque sentimiento_engine aún lo usa
 google-generativeai>=0.8.0
 
 # Sentiment (modelo BERT espanol) — versiones fijadas a lo resuelto en venv 3.11

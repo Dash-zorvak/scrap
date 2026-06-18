@@ -44,32 +44,20 @@ EXTERNOS_DB_ACTIVA = (
 )
 
 # ═══════════════════════════════════════════
-# CAPA DE IA — Google Gemini
+# CAPA DE IA — Groq (API compatible OpenAI)
 # ═══════════════════════════════════════════
+
+from dashboard.llm_groq import chat_texto, groq_disponible
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
     """
-    Genera narrativa ejecutiva usando Google Gemini.
+    Genera narrativa ejecutiva usando Groq (Llama 3.3 70B).
     Tipos: 'eco_historico', 'leccion', 'brecha', 'contexto',
            'correlacion', 'proyeccion', 'recomendacion'
     """
-    api_key = None
-    try:
-        api_key = st.secrets.get("GOOGLE_API_KEY")
-    except Exception:
-        api_key = None
-    if not api_key:
-        api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        return "Análisis IA no disponible en este momento (falta GOOGLE_API_KEY en .streamlit/secrets.toml o variable de entorno)"
-    
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-    except Exception:
-        return "Análisis IA no disponible en este momento (error de configuración)"
+    if not groq_disponible():
+        return "Análisis IA no disponible en este momento (falta GROQ_API_KEY en .streamlit/secrets.toml o variable de entorno)"
     
     prompts = {
         "eco_historico": (
@@ -117,8 +105,12 @@ def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
     ctx_str = json.dumps(contexto, ensure_ascii=False, default=str)[:3000]
     
     try:
-        response = model.generate_content(f"{prompt_base}\n\nCONTEXTO (JSON):\n{ctx_str}")
-        return response.text.strip()
+        return chat_texto(
+            f"{prompt_base}\n\nCONTEXTO (JSON):\n{ctx_str}",
+            max_tokens=600,
+            temperature=0.7,
+            json=False,
+        )
     except Exception:
         return "Análisis IA no disponible en este momento (error en llamada API)"
 
@@ -739,11 +731,11 @@ st.sidebar.markdown(
 st.sidebar.markdown("---")
 
 with st.sidebar.expander("🔧 Diagnóstico"):
-    st.caption("GOOGLE_API_KEY")
-    api_key_env = os.environ.get("GOOGLE_API_KEY")
+    st.caption("GROQ_API_KEY (visión + texto)")
+    api_key_env = os.environ.get("GROQ_API_KEY")
     api_key_secrets = None
     try:
-        api_key_secrets = st.secrets.get("GOOGLE_API_KEY")
+        api_key_secrets = st.secrets.get("GROQ_API_KEY")
     except Exception:
         pass
     if api_key_env:
@@ -760,7 +752,7 @@ with st.sidebar.expander("🔧 Diagnóstico"):
     if diag["ultimo_error_bert"]:
         st.code(f"último error BERT: {diag['ultimo_error_bert']}", language="text")
     if diag["ultimo_error_gemini"]:
-        st.code(f"último error Gemini: {diag['ultimo_error_gemini']}", language="text")
+        st.code(f"último error Gemini (sentimiento): {diag['ultimo_error_gemini']}", language="text")
 
 # ── HELPERS ──
 
@@ -1596,7 +1588,7 @@ def _campo_numero(label: str, dato_confianza: dict, key_suffix: str, id_temporal
 
 
 def _contrato_vacio(plataforma: str) -> dict:
-    """Contrato vacío para rellenar a mano cuando Gemini falla."""
+    """Contrato vacío para rellenar a mano cuando la IA falla."""
     vacio = {"valor": None, "confianza": "no_detectado"}
     if plataforma == "facebook":
         return {
@@ -1635,7 +1627,7 @@ def _contrato_vacio(plataforma: str) -> dict:
 def seccion_revisar_lote() -> None:
     """Pantalla de revisión editable post-extracción (Fase 3).
 
-    Dispara extracción con Gemini, muestra tarjetas editables
+    Dispara extracción con Groq (Llama 4 Scout), muestra tarjetas editables
     con resaltado por confianza, y produce datos_revisados.
     """
     lote = st.session_state["lote_ingreso"]
@@ -1650,7 +1642,7 @@ def seccion_revisar_lote() -> None:
     if pendientes:
         st.markdown("### 🔍 Extracción con IA")
         st.caption(
-            "Gemini Vision leerá las capturas y extraerá texto, fechas, "
+            "Groq (Llama 4 Scout) leerá las capturas y extraerá texto, fechas, "
             "reacciones y comentarios. Los números borrosos o no visibles "
             "quedarán marcados para que los completes."
         )
@@ -1730,7 +1722,7 @@ def seccion_revisar_lote() -> None:
                 )
 
                 if is_error:
-                    st.error(f"⚠️ Gemini no pudo leer esta captura: «{datos['error']}». Llénala a mano.")
+                    st.error(f"⚠️ Groq no pudo leer esta captura: «{datos['error']}». Llénala a mano.")
                     datos = _contrato_vacio(item["plataforma"])
 
                 with st.form(key=f"form_revision_{id_}"):
@@ -2093,7 +2085,7 @@ def seccion_cargar_contenido():
         if motor == "bert":
             st.success("🧠 Sentimiento analizado con BERT local (modelo principal).")
         elif motor == "gemini":
-            st.warning("⚠️ BERT no se pudo cargar; se usó Gemini como respaldo.")
+            st.warning("⚠️ BERT no se pudo cargar; se usó Gemini (sentimiento_engine) como respaldo.")
         else:
             st.warning("⚠️ Ni BERT ni Gemini disponibles; se usó el clasificador de reglas (último recurso). Resultados menos precisos.")
         if result["pasos_ok"]:

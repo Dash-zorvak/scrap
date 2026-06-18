@@ -6,6 +6,7 @@ Funciones públicas:
   - extraer_post_desde_capturas(imagenes, plataforma) -> dict   (1 post, compat)
   - extraer_posts_desde_archivos(archivos, plataforma) -> dict  (N posts; PDF/img)
   - normalizar_numero(texto) -> int | None
+  - resolver_fecha_relativa(texto, hoy=None) -> str | None
 
 Novedades:
   - Soporta PDF nativo (Gemini procesa PDF multipágina como inline_data).
@@ -13,10 +14,13 @@ Novedades:
     segmenta y devuelve una lista bajo la clave 'posts'.
   - Extrae automáticamente el ENLACE del post (post_url) visible en el archivo,
     con marca de confianza (seguro|dudoso|no_detectado).
+  - Resuelve fechas relativas ('hace 2 h', 'ayer', 'hace 3 días') a 'YYYY-MM-DD'.
 """
 
 import json
 import re
+import unicodedata
+from datetime import date, datetime, timedelta
 from typing import Any
 
 GEMINI_MODEL = "gemini-2.0-flash"
@@ -103,6 +107,115 @@ def normalizar_numero(texto: str | None) -> int | None:
 
 
 # ═══════════════════════════════════
+# Resolución de fechas relativas → absolutas (determinista)
+# ═══════════════════════════════════
+
+_FECHA_ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
+
+_MESES = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
+    "noviembre": 11, "diciembre": 12,
+}
+
+_UNIDAD_RE = re.compile(
+    r"(\d+)\s*"
+    r"(meses|mes|semanas|semana|sem|minutos|minuto|mins|min|horas|hora|hrs|hr|"
+    r"dias|dia|anos|ano|segundos|segs|seg|h|d|m|s|a)\b"
+)
+
+
+def _quitar_acentos(s: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s)
+        if unicodedata.category(c) != "Mn"
+    )
+
+
+def resolver_fecha_relativa(texto, hoy=None):
+    """Convierte una fecha relativa o absoluta (texto) a 'YYYY-MM-DD'.
+
+    Ejemplos (con hoy = 2026-06-18):
+      '2026-05-01'      -> '2026-05-01'   (ya es ISO, passthrough)
+      'hace 2 h' / '2h' -> '2026-06-18'   (segundos/minutos/horas = hoy)
+      'ayer'            -> '2026-06-17'
+      'anteayer'        -> '2026-06-16'
+      'hace 3 dias'     -> '2026-06-15'
+      'hace 2 semanas'  -> '2026-06-04'
+      'hace 2 meses'    -> '2026-04-19'
+      '17 de junio'     -> '2026-06-17'
+    Devuelve None si el texto está vacío o no se puede interpretar.
+    """
+    if not texto or not isinstance(texto, str):
+        return None
+    t = texto.strip()
+    if not t:
+        return None
+
+    # Ya es una fecha ISO -> passthrough (primeros 10 caracteres)
+    if _FECHA_ISO_RE.match(t):
+        return t[:10]
+
+    if hoy is None:
+        hoy = date.today()
+    elif isinstance(hoy, datetime):
+        hoy = hoy.date()
+
+    base = _quitar_acentos(t.lower())
+
+    # Palabras clave
+    if "anteayer" in base or "antier" in base:
+        return (hoy - timedelta(days=2)).isoformat()
+    if "ayer" in base:
+        return (hoy - timedelta(days=1)).isoformat()
+    if "hoy" in base or "ahora" in base or "recien" in base:
+        return hoy.isoformat()
+
+    # "hace N <unidad>" o "N<unidad>"
+    m = _UNIDAD_RE.search(base)
+    if m:
+        n = int(m.group(1))
+        u = m.group(2)
+        if u in ("s", "seg", "segs", "segundos", "min", "mins", "minuto",
+                 "minutos", "m", "h", "hr", "hrs", "hora", "horas"):
+            return hoy.isoformat()  # segundos/minutos/horas -> hoy
+        if u in ("d", "dia", "dias"):
+            return (hoy - timedelta(days=n)).isoformat()
+        if u in ("sem", "semana", "semanas"):
+            return (hoy - timedelta(days=7 * n)).isoformat()
+        if u in ("mes", "meses"):
+            return (hoy - timedelta(days=30 * n)).isoformat()
+        if u in ("a", "ano", "anos"):
+            return (hoy - timedelta(days=365 * n)).isoformat()
+
+    # "17 de junio" / "5 de enero de 2025" / "5 ene"
+    m = re.search(r"(\d{1,2})\s*(?:de\s+)?([a-z]+)\.?(?:\s+(?:de\s+)?(\d{4}))?", base)
+    if m:
+        dia = int(m.group(1))
+        mes_txt = m.group(2)
+        mes_num = None
+        for nombre, num in _MESES.items():
+            if nombre.startswith(mes_txt[:3]):
+                mes_num = num
+                break
+        if mes_num is not None:
+            anio = int(m.group(3)) if m.group(3) else hoy.year
+            try:
+                d = date(anio, mes_num, dia)
+            except ValueError:
+                return None
+            # Sin año explícito y fecha futura -> asumir año anterior
+            if not m.group(3) and d > hoy:
+                try:
+                    d = date(anio - 1, mes_num, dia)
+                except ValueError:
+                    return None
+            return d.isoformat()
+
+    return None
+
+
+# ═══════════════════════════════════
 # Detección de MIME type real (imágenes + PDF)
 # ═══════════════════════════════════
 
@@ -160,7 +273,7 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 
 {
   "texto_post": "string (texto del post, vacío si no se ve)",
-  "fecha": {"valor": "YYYY-MM-DD o null", "confianza": "seguro|dudoso"},
+  "fecha": {"valor": "YYYY-MM-DD, o el texto relativo tal cual (p.ej. 'hace 2 h', 'ayer'), o null", "confianza": "seguro|dudoso"},
   "autor_pagina": "nombre de la página o null",
   "reacciones": {
     "likes": {"valor": 0, "confianza": "seguro|dudoso"},
@@ -181,6 +294,7 @@ REGLAS:
 - "Me gusta"=likes, "Me encanta"=loves, "Me divierte"=hahas,
   "Me entristece"=sads, "Me asombra"=wows, "Me enoja"=angrys
 - NO extraer "compartidos" ni reproducciones/vistas
+- FECHA: si es absoluta, devuélvela como 'YYYY-MM-DD'. Si es RELATIVA (p.ej. 'hace 2 h', 'hace 35 min', 'ayer', 'hace 3 días', 'hace 2 sem'), copia ESE TEXTO TAL CUAL en fecha.valor; NO inventes una fecha exacta. El sistema lo convertirá.
 - Por cada número y la fecha, devuelve {"valor": ..., "confianza": "..."}.
 - confianza="seguro" si el dato se lee con total claridad.
 - confianza="dudoso" si se ve pero está borroso, ambiguo o cortado.
@@ -198,7 +312,7 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 
 {
   "texto_post": "string (descripción, vacío si no se ve)",
-  "fecha": {"valor": "YYYY-MM-DD o null", "confianza": "seguro|dudoso"},
+  "fecha": {"valor": "YYYY-MM-DD, o el texto relativo tal cual (p.ej. 'hace 2 h', 'ayer'), o null", "confianza": "seguro|dudoso"},
   "autor_cuenta": "nombre de la cuenta o null",
   "metricas": {
     "likes": {"valor": null, "confianza": "seguro|dudoso"},
@@ -213,6 +327,7 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 REGLAS:
 - corazón=likes, marcador/guardar=favoritos, bocadillo=comentarios_count
 - NO extraer "compartidos" ni "vistas" (se teclean a mano)
+- FECHA: si es absoluta, devuélvela como 'YYYY-MM-DD'. Si es RELATIVA (p.ej. 'hace 2 h', 'hace 35 min', 'ayer', 'hace 3 días', 'hace 2 sem'), copia ESE TEXTO TAL CUAL en fecha.valor; NO inventes una fecha exacta. El sistema lo convertirá.
 - Por cada número y la fecha, devuelve {"valor": ..., "confianza": "..."}.
 - confianza="seguro" si el dato se lee con total claridad.
 - confianza="dudoso" si se ve pero está borroso, ambiguo o cortado.
@@ -250,7 +365,7 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
   "posts": [
     {
       "texto_post": "string (texto del post, vacío si no se ve)",
-      "fecha": {"valor": "YYYY-MM-DD o null", "confianza": "seguro|dudoso"},
+      "fecha": {"valor": "YYYY-MM-DD, o el texto relativo tal cual (p.ej. 'hace 2 h', 'ayer'), o null", "confianza": "seguro|dudoso"},
       "autor_pagina": "nombre de la página o null",
       "enlace": {"valor": "https://... o null", "confianza": "seguro|dudoso"},
       "reacciones": {
@@ -275,6 +390,7 @@ REGLAS:
 - "Me gusta"=likes, "Me encanta"=loves, "Me divierte"=hahas,
   "Me entristece"=sads, "Me asombra"=wows, "Me enoja"=angrys
 - NO extraer "compartidos" ni reproducciones/vistas
+- FECHA: si es absoluta, devuélvela como 'YYYY-MM-DD'. Si es RELATIVA (p.ej. 'hace 2 h', 'hace 35 min', 'ayer', 'hace 3 días', 'hace 2 sem'), copia ESE TEXTO TAL CUAL en fecha.valor; NO inventes una fecha exacta. El sistema lo convertirá.
 - ENLACE: busca la URL del post (facebook.com/...). Si está escrita/pegada en el
   documento úsala; si no aparece → valor=null.
 - Por cada número, la fecha y el enlace, devuelve {"valor": ..., "confianza": "..."}.
@@ -298,7 +414,7 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
   "posts": [
     {
       "texto_post": "string (descripción, vacío si no se ve)",
-      "fecha": {"valor": "YYYY-MM-DD o null", "confianza": "seguro|dudoso"},
+      "fecha": {"valor": "YYYY-MM-DD, o el texto relativo tal cual (p.ej. 'hace 2 h', 'ayer'), o null", "confianza": "seguro|dudoso"},
       "autor_cuenta": "nombre de la cuenta o null",
       "enlace": {"valor": "https://... o null", "confianza": "seguro|dudoso"},
       "metricas": {
@@ -317,6 +433,7 @@ REGLAS:
 - Si solo hay UN post, devuelve igualmente "posts" con un único elemento.
 - corazón=likes, marcador/guardar=favoritos, bocadillo=comentarios_count
 - NO extraer "compartidos" ni "vistas" (se teclean a mano)
+- FECHA: si es absoluta, devuélvela como 'YYYY-MM-DD'. Si es RELATIVA (p.ej. 'hace 2 h', 'hace 35 min', 'ayer', 'hace 3 días', 'hace 2 sem'), copia ESE TEXTO TAL CUAL en fecha.valor; NO inventes una fecha exacta. El sistema lo convertirá.
 - ENLACE: busca la URL del post (tiktok.com/...). Si está escrita/pegada en el
   documento úsala; si no aparece → valor=null.
 - Por cada número, la fecha y el enlace, devuelve {"valor": ..., "confianza": "..."}.
@@ -365,8 +482,14 @@ def _num_confianza(raw: Any, predeterminado: str = "no_detectado") -> dict:
     return {"valor": valor, "confianza": conf}
 
 
-def _fecha_confianza(raw: Any) -> dict:
-    """Igual que _num_confianza pero sin normalizar (la fecha es string ISO)."""
+def _fecha_confianza(raw: Any, hoy=None) -> dict:
+    """Procesa la fecha que Gemini devuelve como {valor, confianza} o string.
+
+    Resuelve fechas relativas ('hace 2 h', 'ayer', ...) y absolutas no-ISO a
+    'YYYY-MM-DD' usando `hoy` (por defecto, la fecha actual). Si el valor fue
+    inferido de una expresión relativa/natural, la confianza se degrada a
+    'dudoso'. Si no se puede interpretar, se marca como no_detectado.
+    """
     if isinstance(raw, dict):
         valor = raw.get("valor") or None
         conf = raw.get("confianza")
@@ -375,9 +498,20 @@ def _fecha_confianza(raw: Any) -> dict:
         conf = None
     if valor is None:
         return {"valor": None, "confianza": "no_detectado"}
+
+    texto = str(valor).strip()
+    era_iso = bool(_FECHA_ISO_RE.match(texto))
+    resuelta = resolver_fecha_relativa(texto, hoy=hoy)
+    if resuelta is None:
+        # No interpretable -> mejor no_detectado que guardar basura
+        return {"valor": None, "confianza": "no_detectado"}
+
     if conf not in ("seguro", "dudoso"):
         conf = "seguro"
-    return {"valor": valor, "confianza": conf}
+    if not era_iso:
+        # Fecha inferida de texto relativo/natural -> degradar confianza
+        conf = "dudoso"
+    return {"valor": resuelta, "confianza": conf}
 
 
 def _enlace_confianza(raw: Any) -> dict:

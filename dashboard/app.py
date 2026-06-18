@@ -785,6 +785,27 @@ def safe_query(query: str, db_path: str, params=None) -> pd.DataFrame:
         logging.warning(f"safe_query falló ({db_path}): {e}")
         return pd.DataFrame()
 
+def _warn_dropped_null_dates():
+    """Advierte si hay posts/videos sin fecha que serán descartados."""
+    for table, col, label in [
+        ("fb_posts", "created_time", "posts de Facebook"),
+        ("videos", "created_at", "videos de TikTok"),
+    ]:
+        try:
+            db = FACEBOOK_DB_ACTIVA if table == "fb_posts" else TIKTOK_DB_ACTIVA
+            if not os.path.exists(db):
+                continue
+            with sqlite3.connect(db) as conn:
+                n = pd.read_sql(
+                    f"SELECT COUNT(*) as c FROM {table} WHERE {col} IS NULL OR TRIM(CAST({col} AS TEXT)) = ''",
+                    conn
+                ).iloc[0]['c']
+                if n > 0:
+                    st.warning(f"Se descartaron {n} {label} sin fecha.")
+        except Exception:
+            pass
+
+
 def hay_datos(df, mensaje: str = "Aún no hay datos suficientes para esta sección.") -> bool:
     """Muestra un aviso elegante y devuelve False si el DataFrame está vacío."""
     if df is None or len(df) == 0:
@@ -1302,7 +1323,7 @@ def calcular_contagio_emocional():
         FROM fb_engagement fe
         LEFT JOIN post_categorias pc ON fe.post_id = pc.item_id
         LEFT JOIN fb_sentimiento fs ON fe.post_id = fs.post_id
-        WHERE fe.total_reacciones >= 10
+        WHERE 1=1
     """, FACEBOOK_DB_ACTIVA)
     if df_posts.empty:
         return pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame()
@@ -1365,7 +1386,7 @@ def calcular_contagio_emocional():
 
     return df_posts, conteo_tipos, distorsion_alta, por_semana
 
-def calcular_score_emocional_neto(min_reacciones: int = 10) -> pd.DataFrame:
+def calcular_score_emocional_neto(min_reacciones: int = 0) -> pd.DataFrame:
     """Score emocional neto por post (Módulo 3 del blueprint).
     Lee fb_posts (reacciones/shares/views reales) + fb_sentimiento (sentimiento por post)."""
     posts = safe_query("""
@@ -1424,11 +1445,9 @@ def calcular_score_emocional_neto(min_reacciones: int = 10) -> pd.DataFrame:
         posts["afecto_positivo"] - posts["controversia"] + (posts["score_sent_norm"] * 0.3)
     )
 
-    # regla del blueprint: solo posts con >= min_reacciones cuentan para proporciones
-    posts["incluido_proporciones"] = posts["total_reacciones"] >= min_reacciones
     return posts
 
-def calcular_viralidad_tiktok(min_views: int = 100) -> pd.DataFrame:
+def calcular_viralidad_tiktok(min_views: int = 0) -> pd.DataFrame:
     """Índice de viralidad de TikTok (Módulo 3, adaptado).
     TikTok no tiene reacciones diferenciadas → medimos ALCANCE/propagación, no emoción."""
     df = safe_query("SELECT * FROM videos", TIKTOK_DB_ACTIVA)
@@ -1436,7 +1455,6 @@ def calcular_viralidad_tiktok(min_views: int = 100) -> pd.DataFrame:
         return pd.DataFrame()
     for c in ["views", "likes", "shares", "comments_count", "favorites_count"]:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0) if c in df.columns else 0
-    df = df[df["views"] >= min_views].copy()
     if df.empty:
         return df
     v = df["views"].replace(0, pd.NA)
@@ -2068,27 +2086,48 @@ def seccion_cargar_contenido():
     # ── Procesamiento del pipeline (Fase 5) ──
     st.markdown("### ⚙️ Procesar lote (reconstruir análisis)")
     st.caption("Reconstruye las tablas agregadas (sentimiento, categorías, engagement, series) a partir de los datos guardados.")
-    if st.button("⚙️ Procesar lote (reconstruir análisis)", type="primary"):
+
+    _check_hay_datos = False
+    for db, tabla in [(FACEBOOK_DB_ACTIVA, "fb_posts"), (TIKTOK_DB_ACTIVA, "videos")]:
+        if os.path.exists(db):
+            try:
+                with sqlite3.connect(db) as conn:
+                    c = pd.read_sql(f"SELECT COUNT(*) as c FROM {tabla}", conn).iloc[0]['c']
+                    if c > 0:
+                        _check_hay_datos = True
+                        break
+            except Exception:
+                pass
+    if not _check_hay_datos:
+        st.warning("No hay datos guardados. Haz primero la ingesta/guardado.")
+
+    if st.button("⚙️ Procesar lote (reconstruir análisis)", type="primary", disabled=not _check_hay_datos):
         status = st.status("Iniciando pipeline…", expanded=True)
         def _progreso(paso, total, etiqueta):
             status.update(label=f"Paso {paso}/{total}: {etiqueta}")
         result = procesar_pipeline(st.session_state.get("modo_prueba", False), _progreso)
         st.session_state["ultimo_procesamiento"] = result
         st.cache_data.clear()
-        status.update(label="Pipeline completado", state="complete", expanded=False)
+        if result["errores"]:
+            status.update(label="Pipeline con errores", state="error", expanded=True)
+        else:
+            status.update(label="Pipeline completado", state="complete", expanded=False)
+        st.rerun()
     result = st.session_state.get("ultimo_procesamiento")
     if result:
         motor = result["motor_sentimiento"]
         if result["errores"]:
-            st.warning("⚠️ Pipeline con errores:")
+            st.error("❌ Pipeline completado con errores:")
             for err in result["errores"]:
-                st.error(f"❌ {err}")
-        if motor == "bert":
-            st.success("🧠 Sentimiento analizado con BERT local (modelo principal).")
-        elif motor == "gemini":
-            st.warning("⚠️ BERT no se pudo cargar; se usó Gemini (sentimiento_engine) como respaldo.")
+                st.error(f"  • {err}")
         else:
-            st.warning("⚠️ Ni BERT ni Gemini disponibles; se usó el clasificador de reglas (último recurso). Resultados menos precisos.")
+            st.success("✅ Pipeline completado sin errores.")
+        if motor == "bert":
+            st.info("🧠 Sentimiento analizado con BERT local (modelo principal).")
+        elif motor == "gemini":
+            st.warning("⚠️ BERT no se pudo cargar; se usó Gemini como respaldo.")
+        else:
+            st.warning("⚠️ Ni BERT ni Gemini disponibles; se usó clasificador de reglas (último recurso).")
         if result["pasos_ok"]:
             st.info(f"✅ Pasos completados: {', '.join(result['pasos_ok'])}")
 
@@ -2138,6 +2177,7 @@ def _build_serie_chart(df_fb_s, df_tk_s, periodo):
 # ═══════════════════════════════════════════
 
 def render_bloque1_pulso():
+    _warn_dropped_null_dates()
     df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
     df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
     df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)

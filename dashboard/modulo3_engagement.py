@@ -50,8 +50,6 @@ def procesar_facebook(fb_db=None):
     )
     df["plataforma"] = "facebook"
 
-    df = df[df["total_reacciones"] >= 10].copy()
-
     cols_salida = [
         "post_id", "page_name", "created_time", "message",
         "total_reacciones", "indice_amor", "indice_carino", "indice_humor", "indice_asombro",
@@ -84,8 +82,6 @@ def procesar_tiktok(tk_db=None):
     df["score_engagement"] = df["engagement_rate"]
     df["page_name"] = df["account_id"].map(TK_ACCOUNTS).fillna("Desconocido")
     df["plataforma"] = "tiktok"
-
-    df = df[df["views"] >= 100].copy()
 
     cols_salida = [
         "id", "account_id", "page_name", "description", "created_at",

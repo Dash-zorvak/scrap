@@ -225,6 +225,7 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
   "reacciones": {
     "likes": {"valor": 0, "confianza": "seguro|dudoso"},
     "loves": {"valor": null, "confianza": "seguro|dudoso"},
+    "cares": {"valor": null, "confianza": "seguro|dudoso"},
     "hahas": {"valor": null, "confianza": "seguro|dudoso"},
     "sads": {"valor": null, "confianza": "seguro|dudoso"},
     "wows": {"valor": null, "confianza": "seguro|dudoso"},
@@ -238,7 +239,7 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 }
 
 REGLAS:
-- "Me gusta"=likes, "Me encanta"=loves, "Me divierte"=hahas,
+- "Me gusta"=likes, "Me encanta"=loves, "Me importa"=cares, "Me divierte"=hahas,
   "Me entristece"=sads, "Me asombra"=wows, "Me enoja"=angrys
 - NO extraer "compartidos" ni reproducciones/vistas
 - FECHA: si es absoluta, devuélvela como 'YYYY-MM-DD'. Si es RELATIVA (p.ej. 'hace 2 h', 'hace 35 min', 'ayer', 'hace 3 días', 'hace 2 sem'), copia ESE TEXTO TAL CUAL en fecha.valor; NO inventes una fecha exacta. El sistema lo convertirá.
@@ -318,6 +319,7 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
       "reacciones": {
         "likes": {"valor": 0, "confianza": "seguro|dudoso"},
         "loves": {"valor": null, "confianza": "seguro|dudoso"},
+        "cares": {"valor": null, "confianza": "seguro|dudoso"},
         "hahas": {"valor": null, "confianza": "seguro|dudoso"},
         "sads": {"valor": null, "confianza": "seguro|dudoso"},
         "wows": {"valor": null, "confianza": "seguro|dudoso"},
@@ -334,7 +336,7 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 
 REGLAS:
 - Si solo hay UN post, devuelve igualmente "posts" con un único elemento.
-- "Me gusta"=likes, "Me encanta"=loves, "Me divierte"=hahas,
+- "Me gusta"=likes, "Me encanta"=loves, "Me importa"=cares, "Me divierte"=hahas,
   "Me entristece"=sads, "Me asombra"=wows, "Me enoja"=angrys
 - NO extraer "compartidos" ni reproducciones/vistas
 - FECHA: si es absoluta, devuélvela como 'YYYY-MM-DD'. Si es RELATIVA (p.ej. 'hace 2 h', 'hace 35 min', 'ayer', 'hace 3 días', 'hace 2 sem'), copia ESE TEXTO TAL CUAL en fecha.valor; NO inventes una fecha exacta. El sistema lo convertirá.
@@ -351,7 +353,7 @@ _PROMPT_TIKTOK_MULTI = """
 Eres un extractor de datos. Analiza el documento adjunto (puede ser un PDF de varias
 páginas o varias imágenes) con capturas de pantalla de TikTok.
 
-IMPORTANTE: el documento puede contener VARIos posts DISTINTOS. Debes SEGMENTARLO e
+IMPORTANTE: el documento puede contener VARIOS posts DISTINTOS. Debes SEGMENTARLO e
 identificar cada post por separado. Cada post suele incluir su descripción, sus métricas,
 sus comentarios y, frecuentemente, su ENLACE (URL) pegado junto a la captura.
 
@@ -473,6 +475,7 @@ def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
             "reacciones": {
                 "likes": _num_confianza(reacs.get("likes")),
                 "loves": _num_confianza(reacs.get("loves")),
+                "cares": _num_confianza(reacs.get("cares")),
                 "hahas": _num_confianza(reacs.get("hahas")),
                 "sads": _num_confianza(reacs.get("sads")),
                 "wows": _num_confianza(reacs.get("wows")),

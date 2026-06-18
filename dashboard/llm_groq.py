@@ -29,6 +29,8 @@ TEXT_MODEL = os.environ.get(
 )
 VENTANA = int(os.environ.get("GROQ_VENTANA_PAGINAS", "4"))
 SOLAPE = int(os.environ.get("GROQ_SOLAPE_PAGINAS", "1"))
+GROQ_MAX_LADO = int(os.environ.get("GROQ_MAX_LADO", "1280"))
+GROQ_JPEG_QUALITY = int(os.environ.get("GROQ_JPEG_QUALITY", "82"))
 
 
 # ── Cliente lazy ──
@@ -99,13 +101,13 @@ def _paginas_a_contenido(prompt: str, paginas: list) -> list:
             img = PILImage.open(io.BytesIO(raw))
             w, h = img.size
             max_side = max(w, h)
-            if max_side > 1600:
-                ratio = 1600 / max_side
+            if max_side > GROQ_MAX_LADO:
+                ratio = GROQ_MAX_LADO / max_side
                 new_w = int(w * ratio)
                 new_h = int(h * ratio)
                 img = img.resize((new_w, new_h), PILImage.LANCZOS)
                 buf = io.BytesIO()
-                img.save(buf, format="JPEG", quality=85)
+                img.save(buf, format="JPEG", quality=GROQ_JPEG_QUALITY)
                 raw = buf.getvalue()
                 mime = "image/jpeg"
         except Exception:

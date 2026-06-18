@@ -110,6 +110,7 @@ def compute_dimension_conexion(posts: List[Dict]) -> float:
 
 def compute_dimension_tranquilidad(posts: List[Dict]) -> float:
     total_reactions = sum(p.get("total_reactions", 0) for p in posts)
+    cares = sum(p.get("cares_count", 0) for p in posts)
     angrys = sum(p.get("angrys_count", 0) for p in posts)
     sads = sum(p.get("sads_count", 0) for p in posts)
     if total_reactions == 0:
@@ -271,6 +272,7 @@ def compute_cambridge_alerts(posts: List[Dict]) -> Dict:
         fb_posts_dicts.append({
             "likes_count": p.get("likes_count", 0),
             "loves_count": p.get("loves_count", 0),
+            "cares_count": p.get("cares_count", 0),
             "hahas_count": p.get("hahas_count", 0),
             "wows_count": p.get("wows_count", 0),
             "sads_count": p.get("sads_count", 0),

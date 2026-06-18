@@ -93,7 +93,7 @@ class TrendAnalyzer:
 
         total_posts = len(rows)
         total_reactions = sum(
-            r.likes_count + getattr(r, "loves_count", 0) + getattr(r, "hahas_count", 0)
+            r.likes_count + getattr(r, "loves_count", 0) + getattr(r, "cares_count", 0) + getattr(r, "hahas_count", 0)
             + getattr(r, "wows_count", 0) + getattr(r, "sads_count", 0)
             + getattr(r, "angrys_count", 0)
             for r in rows
@@ -164,12 +164,13 @@ class TrendAnalyzer:
         total = len(rows)
         likes = sum(r.likes_count for r in rows)
         loves = sum(r.loves_count for r in rows)
+        cares = sum(r.cares_count for r in rows)
         hahas = sum(r.hahas_count for r in rows)
         wows = sum(r.wows_count for r in rows)
         sads = sum(r.sads_count for r in rows)
         angrys = sum(r.angrys_count for r in rows)
 
-        all_reactions = likes + loves + hahas + wows + sads + angrys
+        all_reactions = likes + loves + cares + hahas + wows + sads + angrys
 
         return {
             "total_reactions": all_reactions,

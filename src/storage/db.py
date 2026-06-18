@@ -24,6 +24,7 @@ class FBPost(Base):
     created_time = sa.Column(sa.DateTime, nullable=True)
     likes_count = sa.Column(sa.Integer, default=0)
     loves_count = sa.Column(sa.Integer, default=0)
+    cares_count = sa.Column(sa.Integer, default=0)
     hahas_count = sa.Column(sa.Integer, default=0)
     wows_count = sa.Column(sa.Integer, default=0)
     sads_count = sa.Column(sa.Integer, default=0)
@@ -156,6 +157,7 @@ class LocalStorage:
                 created_time=self._parse_dt(post.get("created_time")),
                 likes_count=post.get("likes_count", 0),
                 loves_count=post.get("loves_count", 0),
+                cares_count=post.get("cares_count", 0),
                 hahas_count=post.get("hahas_count", 0),
                 wows_count=post.get("wows_count", 0),
                 sads_count=post.get("sads_count", 0),
@@ -501,6 +503,7 @@ class LocalStorage:
                     "created_time": r.created_time.isoformat() if r.created_time else None,
                     "likes_count": r.likes_count,
                     "loves_count": r.loves_count,
+                    "cares_count": r.cares_count,
                     "hahas_count": r.hahas_count,
                     "wows_count": r.wows_count,
                     "sads_count": r.sads_count,

@@ -1370,7 +1370,7 @@ def calcular_score_emocional_neto(min_reacciones: int = 10) -> pd.DataFrame:
     Lee fb_posts (reacciones/shares/views reales) + fb_sentimiento (sentimiento por post)."""
     posts = safe_query("""
         SELECT post_id, page_name, message, created_time,
-               likes_count, loves_count, hahas_count, wows_count,
+               likes_count, loves_count, cares_count, hahas_count, wows_count,
                sads_count, angrys_count, shares_count, views_count,
                comments_count, topic_category, zona
         FROM fb_posts
@@ -1378,20 +1378,20 @@ def calcular_score_emocional_neto(min_reacciones: int = 10) -> pd.DataFrame:
     if posts.empty:
         return pd.DataFrame()
 
-    num_cols = ["likes_count", "loves_count", "hahas_count", "wows_count",
+    num_cols = ["likes_count", "loves_count", "cares_count", "hahas_count", "wows_count",
                 "sads_count", "angrys_count", "shares_count", "views_count", "comments_count"]
     for c in num_cols:
         posts[c] = pd.to_numeric(posts[c], errors="coerce").fillna(0)
 
-    # engagement_total (blueprint): like + encanta + divierte + asombra + entristece + enoja + compartidos
+    # engagement_total (blueprint): like + encanta + importa + divierte + asombra + entristece + enoja + compartidos
     posts["engagement_total"] = (
-        posts["likes_count"] + posts["loves_count"] + posts["hahas_count"]
+        posts["likes_count"] + posts["loves_count"] + posts["cares_count"] + posts["hahas_count"]
         + posts["wows_count"] + posts["sads_count"] + posts["angrys_count"]
         + posts["shares_count"]
     )
     # total reacciones (sin shares) para la regla de exclusión <10
     posts["total_reacciones"] = (
-        posts["likes_count"] + posts["loves_count"] + posts["hahas_count"]
+        posts["likes_count"] + posts["loves_count"] + posts["cares_count"] + posts["hahas_count"]
         + posts["wows_count"] + posts["sads_count"] + posts["angrys_count"]
     )
 
@@ -1454,14 +1454,14 @@ def calcular_correlacion_noticias_picos(z_umbral: float = 1.0, ventana_dias: int
     """Cruza picos de engagement de FB (alcaldía) con noticias externas que coinciden en el tiempo.
     Es correlación TEMPORAL, no causalidad."""
     posts = safe_query("""
-        SELECT created_time, likes_count, loves_count, hahas_count, wows_count,
+        SELECT created_time, likes_count, loves_count, cares_count, hahas_count, wows_count,
                sads_count, angrys_count, shares_count, comments_count
         FROM fb_posts
         WHERE created_time IS NOT NULL AND TRIM(created_time) <> ''
     """, FACEBOOK_DB_ACTIVA)
     if posts.empty:
         return {}
-    react = ["likes_count", "loves_count", "hahas_count", "wows_count",
+    react = ["likes_count", "loves_count", "cares_count", "hahas_count", "wows_count",
              "sads_count", "angrys_count", "shares_count", "comments_count"]
     for c in react:
         posts[c] = pd.to_numeric(posts[c], errors="coerce").fillna(0)
@@ -1597,7 +1597,7 @@ def _contrato_vacio(plataforma: str) -> dict:
             "fecha": {"valor": None, "confianza": "no_detectado"},
             "autor_pagina": None,
             "reacciones": {k: dict(vacio) for k in (
-                "likes", "loves", "hahas", "sads", "wows", "angrys", "total"
+                "likes", "loves", "cares", "hahas", "sads", "wows", "angrys", "total"
             )},
             "comentarios_count": dict(vacio),
             "compartidos": {"valor": None, "confianza": "manual"},
@@ -1755,7 +1755,7 @@ def seccion_revisar_lote() -> None:
                         st.markdown("**Reacciones**")
                         cols = st.columns(3)
                         fb_order = [
-                            ("likes", "Likes"), ("loves", "Me encanta"),
+                            ("likes", "Likes"), ("loves", "Me encanta"), ("cares", "Me importa"),
                             ("hahas", "Me divierte"), ("sads", "Me entristece"),
                             ("wows", "Me asombra"), ("angrys", "Me enoja"),
                         ]
@@ -1900,6 +1900,7 @@ def _confirmar_post(item: dict, texto_key: str, fecha_key: str, df_comentarios: 
             "created_time": created,
             "likes_count": _r("fb_likes"),
             "loves_count": _r("fb_loves"),
+            "cares_count": _r("fb_cares"),
             "hahas_count": _r("fb_hahas"),
             "sads_count": _r("fb_sads"),
             "wows_count": _r("fb_wows"),

@@ -158,6 +158,7 @@ class TestAplicarContratoFacebook:
             "reacciones": {
                 "likes": {"valor": "1.2K", "confianza": "dudoso"},
                 "loves": {"valor": 500, "confianza": "seguro"},
+                "cares": None,
                 "hahas": None,
                 "sads": None,
                 "wows": None,
@@ -187,7 +188,7 @@ class TestAplicarContratoFacebook:
             "fecha": "2024-06-01",
             "autor_pagina": None,
             "reacciones": {
-                "likes": 100, "loves": None, "hahas": None,
+                "likes": 100, "loves": None, "cares": None, "hahas": None,
                 "sads": None, "wows": None, "angrys": None, "total": None,
             },
             "comentarios_count": None,

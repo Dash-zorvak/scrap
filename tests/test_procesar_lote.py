@@ -27,21 +27,21 @@ def temp_dbs():
     conn = sqlite3.connect(fb_db)
     conn.execute("""CREATE TABLE IF NOT EXISTS fb_posts (
         post_id TEXT PRIMARY KEY, page_name TEXT, created_time TEXT,
-        message TEXT, likes_count INTEGER, loves_count INTEGER,
+        message TEXT, likes_count INTEGER, loves_count INTEGER, cares_count INTEGER,
         hahas_count INTEGER, wows_count INTEGER, sads_count INTEGER,
         angrys_count INTEGER, comments_count INTEGER
     )""")
     conn.execute("""CREATE TABLE IF NOT EXISTS fb_comments (
         comment_id TEXT PRIMARY KEY, post_id TEXT, message TEXT
     )""")
-    # Columnas: post_id, page_name, created_time, message, likes, loves, hahas,
+    # Columnas: post_id, page_name, created_time, message, likes, loves, cares, hahas,
     #           wows, sads, angrys, comments
     conn.execute("INSERT INTO fb_posts VALUES "
                  "('fb_1', 'Alcaldía de Santa Ana', '2026-05-01T00:00:00', "
-                 "'Texto del post', 50, 10, 5, 3, 2, 4, 8)")
+                 "'Texto del post', 50, 10, 0, 5, 3, 2, 4, 8)")
     conn.execute("INSERT INTO fb_posts VALUES "
                  "('fb_2', 'Jose Chicas', '2026-05-05T00:00:00', "
-                 "'Otro post', 30, 5, 2, 1, 1, 1, 3)")
+                 "'Otro post', 30, 5, 0, 2, 1, 1, 1, 3)")
     conn.execute("INSERT INTO fb_comments VALUES "
                  "('c1', 'fb_1', 'excelente trabajo gracias')")
     conn.execute("INSERT INTO fb_comments VALUES "

@@ -14,7 +14,11 @@ def series_facebook(fb_db=None):
     df = pd.read_sql_query("SELECT * FROM fb_engagement", conn)
 
     df["created_time"] = pd.to_datetime(df["created_time"], errors="coerce")
+    antes = len(df)
     df = df.dropna(subset=["created_time"])
+    despues = len(df)
+    if antes > despues:
+        print(f"  Facebook: se descartaron {antes - despues} posts sin fecha")
 
     df["semana"] = df["created_time"] - pd.to_timedelta(df["created_time"].dt.dayofweek, unit="D")
     df["semana"] = df["semana"].dt.floor("D")
@@ -55,7 +59,11 @@ def series_tiktok(tk_db=None):
     df = pd.read_sql_query("SELECT * FROM tiktok_engagement", conn)
 
     df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
+    antes = len(df)
     df = df.dropna(subset=["created_at"])
+    despues = len(df)
+    if antes > despues:
+        print(f"  TikTok: se descartaron {antes - despues} videos sin fecha")
 
     df["semana"] = df["created_at"] - pd.to_timedelta(df["created_at"].dt.dayofweek, unit="D")
     df["semana"] = df["semana"].dt.floor("D")

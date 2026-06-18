@@ -51,5 +51,8 @@ python-dotenv>=1.0.0
 tqdm>=4.66.0
 rich>=13.7.0
 
+# PDF rendering (extracción por páginas con Gemini Vision)
+pymupdf>=1.24.0
+
 # Tests (necesario para el job de CI)
 pytest>=8.0.0

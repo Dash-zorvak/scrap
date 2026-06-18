@@ -1641,8 +1641,9 @@ def seccion_revisar_lote() -> None:
     lote = st.session_state["lote_ingreso"]
     pendientes = [p for p in lote if p["estado"] == "pendiente"]
     extraidos = [p for p in lote if p["estado"] in ("extraido", "revisado")]
+    errores = [p for p in lote if p["estado"] == "error"]
 
-    if not pendientes and not extraidos:
+    if not pendientes and not extraidos and not errores:
         return
 
     # ── Paso 1: Botón de extracción ──
@@ -1842,6 +1843,18 @@ def seccion_revisar_lote() -> None:
 
                     if confirmado:
                         _confirmar_post(item, texto_key, fecha_key, edited_df)
+
+    # ── Paso 3: Items en error ──
+    errores = [p for p in lote if p["estado"] == "error"]
+    if errores:
+        st.markdown("### ❌ Errores de extracción")
+        st.caption("Estos archivos no pudieron procesarse. Revisa el motivo y reintenta.")
+        for item in errores:
+            st.error(f"**{item.get('fuente', '?')}** — {item.get('error_msg', 'Error desconocido')}")
+            if st.button("🔁 Reintentar extracción", key=f"retry_{item['id_temporal']}"):
+                item["estado"] = "pendiente"
+                item.pop("error_msg", None)
+                st.rerun()
 
 
 def _confirmar_post(item: dict, texto_key: str, fecha_key: str, df_comentarios: pd.DataFrame) -> None:

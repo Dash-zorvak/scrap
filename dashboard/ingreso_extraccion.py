@@ -1,5 +1,5 @@
 """
-Módulo de extracción desde capturas/PDF con Gemini Vision.
+Módulo de extracción desde capturas/PDF con Groq (Llama 4 Scout visión).
 
 Fase 2 — no toca UI ni DB.
 Funciones públicas:
@@ -7,14 +7,6 @@ Funciones públicas:
   - extraer_posts_desde_archivos(archivos, plataforma) -> dict  (N posts; PDF/img)
   - normalizar_numero(texto) -> int | None
   - resolver_fecha_relativa(texto, hoy=None) -> str | None
-
-Novedades:
-  - Soporta PDF nativo (Gemini procesa PDF multipágina como inline_data).
-  - Un mismo archivo (p.ej. un PDF) puede contener VARIOS posts: el motor los
-    segmenta y devuelve una lista bajo la clave 'posts'.
-  - Extrae automáticamente el ENLACE del post (post_url) visible en el archivo,
-    con marca de confianza (seguro|dudoso|no_detectado).
-  - Resuelve fechas relativas ('hace 2 h', 'ayer', 'hace 3 días') a 'YYYY-MM-DD'.
 """
 
 import json
@@ -23,7 +15,12 @@ import unicodedata
 from datetime import date, datetime, timedelta
 from typing import Any
 
-GEMINI_MODEL = "gemini-2.0-flash"
+from dashboard.llm_groq import (
+    chat_vision,
+    groq_disponible,
+    VENTANA,
+    SOLAPE,
+)
 
 
 # ═══════════════════════════════════
@@ -40,22 +37,11 @@ _SUFIJOS = [
 
 
 def normalizar_numero(texto: str | None) -> int | None:
-    """Normaliza un string numérico a entero.
-
-    "1.234" / "1,234" → 1234
-    "1.2 K" / "1.2k" → 1200
-    "34 mil"           → 34000
-    "2 millones" / "2 M" → 2_000_000
-    "1,2 mil"          → 1200
-    "" / "—" / None    → None
-    """
     if not texto or not isinstance(texto, str):
         return None
     texto = texto.strip()
     if not texto or texto in ("—", "-", "N/A", "n/a"):
         return None
-
-    # --- extraer sufijo multiplicador ---
     texto_plano = texto.lower().replace(" ", "")
     factor = 1
     for sufijo, mult in _SUFIJOS:
@@ -65,20 +51,15 @@ def normalizar_numero(texto: str | None) -> int | None:
                 factor = mult
                 texto = resto
                 break
-
     if not texto or texto in ("—", "-"):
         return None
-
-    # --- determinar separador decimal vs. de miles ---
     partes = re.split(r"[,.]", texto)
-
     if len(partes) == 1:
         try:
             v = int(partes[0])
             return max(v, 0) * factor if v >= 0 else None
         except ValueError:
             return None
-
     if len(partes) >= 3:
         seps = re.findall(r"[,.]", texto)
         if len(set(seps)) == 1:
@@ -88,7 +69,7 @@ def normalizar_numero(texto: str | None) -> int | None:
     else:
         izq, der = partes
         if len(der) == 3 and len(izq) <= 3:
-            limpio = izq + der  # separador de miles
+            limpio = izq + der
         elif der == "":
             try:
                 v = int(izq)
@@ -96,8 +77,7 @@ def normalizar_numero(texto: str | None) -> int | None:
             except ValueError:
                 return None
         else:
-            limpio = izq + "." + der  # separador decimal
-
+            limpio = izq + "." + der
     try:
         v = float(limpio)
         v_total = int(v * factor)
@@ -133,52 +113,31 @@ def _quitar_acentos(s: str) -> str:
 
 
 def resolver_fecha_relativa(texto, hoy=None):
-    """Convierte una fecha relativa o absoluta (texto) a 'YYYY-MM-DD'.
-
-    Ejemplos (con hoy = 2026-06-18):
-      '2026-05-01'      -> '2026-05-01'   (ya es ISO, passthrough)
-      'hace 2 h' / '2h' -> '2026-06-18'   (segundos/minutos/horas = hoy)
-      'ayer'            -> '2026-06-17'
-      'anteayer'        -> '2026-06-16'
-      'hace 3 dias'     -> '2026-06-15'
-      'hace 2 semanas'  -> '2026-06-04'
-      'hace 2 meses'    -> '2026-04-19'
-      '17 de junio'     -> '2026-06-17'
-    Devuelve None si el texto está vacío o no se puede interpretar.
-    """
     if not texto or not isinstance(texto, str):
         return None
     t = texto.strip()
     if not t:
         return None
-
-    # Ya es una fecha ISO -> passthrough (primeros 10 caracteres)
     if _FECHA_ISO_RE.match(t):
         return t[:10]
-
     if hoy is None:
         hoy = date.today()
     elif isinstance(hoy, datetime):
         hoy = hoy.date()
-
     base = _quitar_acentos(t.lower())
-
-    # Palabras clave
     if "anteayer" in base or "antier" in base:
         return (hoy - timedelta(days=2)).isoformat()
     if "ayer" in base:
         return (hoy - timedelta(days=1)).isoformat()
     if "hoy" in base or "ahora" in base or "recien" in base:
         return hoy.isoformat()
-
-    # "hace N <unidad>" o "N<unidad>"
     m = _UNIDAD_RE.search(base)
     if m:
         n = int(m.group(1))
         u = m.group(2)
         if u in ("s", "seg", "segs", "segundos", "min", "mins", "minuto",
                  "minutos", "m", "h", "hr", "hrs", "hora", "horas"):
-            return hoy.isoformat()  # segundos/minutos/horas -> hoy
+            return hoy.isoformat()
         if u in ("d", "dia", "dias"):
             return (hoy - timedelta(days=n)).isoformat()
         if u in ("sem", "semana", "semanas"):
@@ -187,8 +146,6 @@ def resolver_fecha_relativa(texto, hoy=None):
             return (hoy - timedelta(days=30 * n)).isoformat()
         if u in ("a", "ano", "anos"):
             return (hoy - timedelta(days=365 * n)).isoformat()
-
-    # "17 de junio" / "5 de enero de 2025" / "5 ene"
     m = re.search(r"(\d{1,2})\s*(?:de\s+)?([a-z]+)\.?(?:\s+(?:de\s+)?(\d{4}))?", base)
     if m:
         dia = int(m.group(1))
@@ -204,14 +161,12 @@ def resolver_fecha_relativa(texto, hoy=None):
                 d = date(anio, mes_num, dia)
             except ValueError:
                 return None
-            # Sin año explícito y fecha futura -> asumir año anterior
             if not m.group(3) and d > hoy:
                 try:
                     d = date(anio - 1, mes_num, dia)
                 except ValueError:
                     return None
             return d.isoformat()
-
     return None
 
 
@@ -220,10 +175,6 @@ def resolver_fecha_relativa(texto, hoy=None):
 # ═══════════════════════════════════
 
 def _detectar_mime(data: bytes, declarado: str | None = None) -> str:
-    """Detecta el mime real del archivo. Respeta el declarado si es image/* o PDF.
-
-    Soporta: JPEG, PNG, WEBP y PDF (application/pdf). Fallback: image/png.
-    """
     if declarado and (declarado.startswith("image/") or declarado == "application/pdf"):
         return declarado
     if data[:4] == b"%PDF":
@@ -242,7 +193,6 @@ def _detectar_mime(data: bytes, declarado: str | None = None) -> str:
 # ═══════════════════════════════════
 
 def _pdf_a_imagenes(data: bytes, dpi: int = 150) -> list[bytes]:
-    """Abre un PDF con PyMuPDF y devuelve una lista de PNG (bytes), uno por página."""
     try:
         import fitz
     except ImportError:
@@ -257,31 +207,6 @@ def _pdf_a_imagenes(data: bytes, dpi: int = 150) -> list[bytes]:
         return paginas
     except Exception:
         return []
-
-
-# ═══════════════════════════════════
-# Configuración de Gemini (diferida)
-# ═══════════════════════════════════
-
-def _configurar_gemini() -> bool:
-    """Lee la clave de st.secrets o variable de entorno y configura la API.
-
-    Retorna True si ok, False si no hay clave disponible.
-    """
-    import os
-    import streamlit as st
-    import google.generativeai as genai
-
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        try:
-            api_key = st.secrets.get("GOOGLE_API_KEY")
-        except Exception:
-            api_key = None
-    if api_key:
-        genai.configure(api_key=api_key)
-        return True
-    return False
 
 
 # ═══════════════════════════════════
@@ -426,7 +351,7 @@ _PROMPT_TIKTOK_MULTI = """
 Eres un extractor de datos. Analiza el documento adjunto (puede ser un PDF de varias
 páginas o varias imágenes) con capturas de pantalla de TikTok.
 
-IMPORTANTE: el documento puede contener VARIOS posts DISTINTOS. Debes SEGMENTARLO e
+IMPORTANTE: el documento puede contener VARIos posts DISTINTOS. Debes SEGMENTARLO e
 identificar cada post por separado. Cada post suele incluir su descripción, sus métricas,
 sus comentarios y, frecuentemente, su ENLACE (URL) pegado junto a la captura.
 
@@ -479,18 +404,12 @@ def _construir_prompt_multi(plataforma: str) -> str:
 # ═══════════════════════════════════
 
 def _norm(v: Any) -> int | None:
-    """Normaliza un valor numérico crudo de Gemini via normalizar_numero.
-
-    None → None; int → int; str como '1.2K' → 1200; ilegible → None.
-    """
     if v is None:
         return None
     return normalizar_numero(str(v))
 
 
 def _num_confianza(raw: Any, predeterminado: str = "no_detectado") -> dict:
-    """Procesa un campo numérico que Gemini devuelve como {valor, confianza}
-    o como número suelto (compat). Normaliza el valor con _norm."""
     if isinstance(raw, dict):
         valor = _norm(raw.get("valor"))
         conf = raw.get("confianza")
@@ -505,13 +424,6 @@ def _num_confianza(raw: Any, predeterminado: str = "no_detectado") -> dict:
 
 
 def _fecha_confianza(raw: Any, hoy=None) -> dict:
-    """Procesa la fecha que Gemini devuelve como {valor, confianza} o string.
-
-    Resuelve fechas relativas ('hace 2 h', 'ayer', ...) y absolutas no-ISO a
-    'YYYY-MM-DD' usando `hoy` (por defecto, la fecha actual). Si el valor fue
-    inferido de una expresión relativa/natural, la confianza se degrada a
-    'dudoso'. Si no se puede interpretar, se marca como no_detectado.
-    """
     if isinstance(raw, dict):
         valor = raw.get("valor") or None
         conf = raw.get("confianza")
@@ -520,25 +432,19 @@ def _fecha_confianza(raw: Any, hoy=None) -> dict:
         conf = None
     if valor is None:
         return {"valor": None, "confianza": "no_detectado"}
-
     texto = str(valor).strip()
     era_iso = bool(_FECHA_ISO_RE.match(texto))
     resuelta = resolver_fecha_relativa(texto, hoy=hoy)
     if resuelta is None:
-        # No interpretable -> mejor no_detectado que guardar basura
         return {"valor": None, "confianza": "no_detectado"}
-
     if conf not in ("seguro", "dudoso"):
         conf = "seguro"
     if not era_iso:
-        # Fecha inferida de texto relativo/natural -> degradar confianza
         conf = "dudoso"
     return {"valor": resuelta, "confianza": conf}
 
 
 def _enlace_confianza(raw: Any) -> dict:
-    """Procesa el enlace (post_url) que Gemini devuelve como {valor, confianza}
-    o como string suelto. No normaliza (es una URL)."""
     if isinstance(raw, dict):
         valor = raw.get("valor") or None
         conf = raw.get("confianza")
@@ -556,11 +462,6 @@ def _enlace_confianza(raw: Any) -> dict:
 
 
 def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
-    """Rellena la plantilla del contrato con lo que devolvió Gemini.
-
-    compartidos/vistas siempre null + "manual".
-    enlace: {valor, confianza} (no_detectado si no vino).
-    """
     if plataforma == "facebook":
         reacs = respuesta.get("reacciones", {})
         return {
@@ -620,105 +521,48 @@ def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
 
 
 # ═══════════════════════════════════
-# Parseo de la respuesta de Gemini
+# Parseo de la respuesta de IA
 # ═══════════════════════════════════
 
 def _parsear_respuesta(texto_respuesta: str) -> dict | None:
-    """Extrae el primer JSON válido de la respuesta de Gemini."""
     if not texto_respuesta or not texto_respuesta.strip():
         return None
-
     texto = texto_respuesta.strip()
-
-    # Intento 1: parse directo
     try:
         return json.loads(texto)
     except json.JSONDecodeError:
         pass
-
-    # Intento 2: bloque ```json ... ```
     m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", texto, re.DOTALL)
     if m:
         try:
             return json.loads(m.group(1))
         except json.JSONDecodeError:
             pass
-
-    # Intento 3: primer { ... }
     m = re.search(r"(\{.*\})", texto, re.DOTALL)
     if m:
         try:
             return json.loads(m.group(1))
         except json.JSONDecodeError:
             pass
-
     return None
 
 
 def _extraer_lista_posts(parsed: Any) -> list:
-    """Normaliza la respuesta multi-post a una lista de dicts de post.
-
-    Acepta: {"posts": [...]} | [ ... ] | un solo post suelto.
-    """
     if isinstance(parsed, list):
         return [p for p in parsed if isinstance(p, dict)]
     if isinstance(parsed, dict):
         if isinstance(parsed.get("posts"), list):
             return [p for p in parsed["posts"] if isinstance(p, dict)]
-        # Fallback: respuesta de un solo post sin envoltura
         if any(k in parsed for k in ("texto_post", "reacciones", "metricas", "comentarios")):
             return [parsed]
     return []
 
 
 # ═══════════════════════════════════
-# Segmentación (pasada 1 del flujo de dos pasadas)
-# ═══════════════════════════════════
-
-_PROMPT_SEGMENTACION_TEMPLATE = (
-    "Eres un segmentador de documentos. Te paso N imágenes que son páginas CONSECUTIVAS "
-    "de capturas de pantalla de {platform}. Varias páginas seguidas pueden pertenecer al "
-    "MISMO post (la publicación y sus comentarios). Agrupa las páginas en posts distintos.\n\n"
-    "Devuelve SOLO JSON, sin texto extra:\n"
-    '{{"posts": [{{"paginas": [1, 2], "enlace": "https://... o null"}}]}}\n\n'
-    "Reglas: numeración 1-based en el mismo orden recibido; cada página pertenece a UN solo "
-    "post; las páginas de un post son consecutivas; si una página tiene una URL pegada "
-    "normalmente marca el inicio de un post; enlace = la URL del post si aparece, si no null."
-)
-
-
-def _extraer_grupos(parsed: Any) -> list | None:
-    """Extrae grupos de páginas de la respuesta de segmentación.
-
-    Acepta: {"posts": [{"paginas": [1,2], "enlace": "..."}]}
-    Devuelve None si no se puede extraer nada.
-    """
-    if not isinstance(parsed, dict):
-        return None
-    posts = parsed.get("posts")
-    if not isinstance(posts, list):
-        return None
-    grupos = []
-    for p in posts:
-        if not isinstance(p, dict):
-            continue
-        paginas = p.get("paginas")
-        if not isinstance(paginas, list) or not paginas:
-            continue
-        enlace = p.get("enlace")
-        grupos.append({"paginas": paginas, "enlace": enlace})
-    return grupos if grupos else None
-
-
-# ═══════════════════════════════════
-# Conversión de archivos a partes inline para Gemini
+# Conversión de archivos a partes inline para IA
 # ═══════════════════════════════════
 
 def _archivos_a_partes(archivos: list) -> list:
-    """Convierte UploadedFile/bytes/PIL a partes inline_data {mime_type, data}.
-
-    Soporta PDF e imágenes. Los archivos corruptos se saltan.
-    """
     partes = []
     for arch in archivos:
         try:
@@ -740,21 +584,11 @@ def _archivos_a_partes(archivos: list) -> list:
                 mime = "image/png"
             partes.append({"mime_type": mime, "data": data})
         except Exception:
-            continue  # archivo corrupto → saltar
+            continue
     return partes
 
 
-# ═══════════════════════════════════
-# Conversión de archivos a páginas (imágenes individuales por página)
-# ═══════════════════════════════════
-
 def _archivos_a_paginas(archivos: list) -> list[dict]:
-    """Convierte archivos (UploadedFile/bytes/PIL/Pdf) a partes inline UNA POR PÁGINA.
-
-    Un PDF se rasteriza → tantas partes image/png como páginas.
-    Una imagen → una parte con su mime original.
-    Archivos corruptos → se saltan.
-    """
     partes = []
     for arch in archivos:
         try:
@@ -786,11 +620,50 @@ def _archivos_a_paginas(archivos: list) -> list[dict]:
 
 
 # ═══════════════════════════════════
+# Deduplicación de posts
+# ═══════════════════════════════════
+
+def _deduplicar_posts(posts: list) -> list:
+    seen = {}
+    result = []
+    for post in posts:
+        enlace = ((post.get("enlace") or {}).get("valor") or "").strip().lower()
+        if enlace:
+            key = enlace
+        else:
+            texto = (post.get("texto_post") or "").strip()
+            texto = re.sub(r"\s+", " ", texto).lower()[:80]
+            if texto:
+                key = "txt:" + texto
+            else:
+                key = None
+
+        if key is None:
+            result.append(post)
+        elif key not in seen:
+            seen[key] = len(result)
+            result.append(post)
+        else:
+            idx = seen[key]
+            existing = result[idx]
+            existing_comments = (existing.get("comentarios_count") or {}).get("valor") or 0
+            current_comments = (post.get("comentarios_count") or {}).get("valor") or 0
+            if current_comments > existing_comments:
+                result[idx] = post
+
+    return result
+
+
+# ═══════════════════════════════════
 # Función principal MULTI-POST (PDF/imágenes)
 # ═══════════════════════════════════
 
 def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
-    """Extrae UNO O VARIOS posts desde archivos (PDF o imágenes) con Gemini Vision.
+    """Extrae UNO O VARIOS posts desde archivos (PDF o imágenes) con Groq Visión.
+
+    Para pocas páginas (≤ VENTANA): una sola llamada con prompt multi-post.
+    Para muchas páginas (> VENTANA): extracción por ventanas con solape + deduplicación
+    por enlace (o texto truncado a 80 chars si no hay enlace).
 
     Args:
         archivos: Lista de UploadedFile de Streamlit, bytes o imágenes PIL.
@@ -800,8 +673,8 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
         {"posts": [contrato, ...]} con un contrato por post detectado.
         En error grave: {"error": "<motivo>"}.
     """
-    if not _configurar_gemini():
-        return {"error": "GOOGLE_API_KEY no configurada en st.secrets ni variable de entorno"}
+    if not groq_disponible():
+        return {"error": "GROQ_API_KEY no configurada en variable de entorno ni st.secrets"}
 
     if not archivos:
         return {"error": "No se recibieron archivos"}
@@ -813,40 +686,31 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
     if not paginas:
         return {"error": "Ningún archivo pudo procesarse"}
 
-    import google.generativeai as genai
+    prompt_multi = _construir_prompt_multi(plataforma)
 
-    modelo = genai.GenerativeModel(
-        GEMINI_MODEL,
-        generation_config={"response_mime_type": "application/json", "max_output_tokens": 8192},
-    )
-
-    # ── Una sola página → ruta tradicional (compat) ──
-    if len(paginas) <= 1:
-        prompt = _construir_prompt_multi(plataforma)
-        contenido = [prompt] + paginas
+    # ── Pocas páginas (≤ VENTANA) → una sola llamada ──
+    if len(paginas) <= VENTANA:
         ultimo_error = None
-
         for intento in range(2):
             try:
-                respuesta = modelo.generate_content(contenido)
-
-                if not respuesta or not respuesta.text:
-                    ultimo_error = "Gemini devolvió respuesta vacía"
+                texto_respuesta = chat_vision(prompt_multi, paginas)
+                if not texto_respuesta or not texto_respuesta.strip():
+                    ultimo_error = "Groq devolvió respuesta vacía"
                     if intento == 0:
-                        contenido[0] = (
-                            prompt
+                        prompt_multi = (
+                            prompt_multi
                             + "\n\nADVERTENCIA: la respuesta anterior fue inválida. "
                             'Devuelve SOLO JSON con la forma {"posts": [...]}, sin markdown.'
                         )
                     continue
 
-                parsed = _parsear_respuesta(respuesta.text)
+                parsed = _parsear_respuesta(texto_respuesta)
                 posts_raw = _extraer_lista_posts(parsed) if parsed is not None else []
                 if not posts_raw:
                     ultimo_error = "No se detectaron posts en los archivos"
                     if intento == 0:
-                        contenido[0] = (
-                            prompt
+                        prompt_multi = (
+                            prompt_multi
                             + "\n\nADVERTENCIA: la respuesta anterior no fue JSON válido o no "
                             'traía posts. Devuelve SOLO JSON con la forma {"posts": [...]}.'
                         )
@@ -856,83 +720,56 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
                 return {"posts": posts}
 
             except Exception as e:
-                ultimo_error = f"Error en llamada a Gemini: {e}"
+                ultimo_error = f"Error en llamada a Groq: {e}"
                 continue
 
         return {"error": ultimo_error or "Error desconocido"}
 
-    # ── Múltiples páginas → dos pasadas ──
-    # PASADA 1: segmentación
-    prompt_seg = _PROMPT_SEGMENTACION_TEMPLATE.format(platform=plataforma)
+    # ── Muchas páginas (> VENTANA) → extracción por ventanas + dedupe ──
+    paso = max(1, VENTANA - SOLAPE)
     ultimo_error = None
-    grupos = None
+    posts_raw = []
 
-    try:
-        respuesta_seg = modelo.generate_content([prompt_seg] + paginas)
-        if respuesta_seg and respuesta_seg.text:
-            parsed_seg = _parsear_respuesta(respuesta_seg.text)
-            grupos = _extraer_grupos(parsed_seg)
-    except Exception as e:
-        ultimo_error = f"Error en segmentación: {e}"
-
-    if not grupos:
-        # Fallback: tratar todo como un solo grupo
-        grupos = [{"paginas": list(range(1, len(paginas) + 1)), "enlace": None}]
-
-    # PASADA 2: extraer cada post por separado
-    prompt_unico = _construir_prompt(plataforma)
-    posts = []
-
-    for grupo in grupos:
-        idxs = [i - 1 for i in grupo.get("paginas", [])]
-        idxs = [i for i in idxs if 0 <= i < len(paginas)]
-        if not idxs:
-            continue
-
-        paginas_grupo = [paginas[i] for i in idxs]
-        contrato = None
+    for i in range(0, len(paginas), paso):
+        ventana = paginas[i:i + VENTANA]
+        extraido = False
 
         for intento in range(2):
             try:
-                contenido = [prompt_unico] + paginas_grupo
-                respuesta = modelo.generate_content(contenido)
-
-                if not respuesta or not respuesta.text:
+                texto_respuesta = chat_vision(prompt_multi, ventana)
+                if not texto_respuesta or not texto_respuesta.strip():
+                    ultimo_error = "Groq devolvió respuesta vacía"
                     if intento == 0:
                         continue
-                    ultimo_error = "Gemini devolvió respuesta vacía"
-                    continue
+                    break
 
-                parsed = _parsear_respuesta(respuesta.text)
-                if parsed is None:
+                parsed = _parsear_respuesta(texto_respuesta)
+                batch = _extraer_lista_posts(parsed) if parsed is not None else []
+                if batch:
+                    posts_raw.extend(batch)
+                    extraido = True
+                    break
+                else:
+                    ultimo_error = "No se detectaron posts en la ventana"
                     if intento == 0:
                         continue
-                    ultimo_error = "No se pudo parsear el JSON"
-                    continue
-
-                contrato = _aplicar_contrato(parsed, plataforma)
-
-                # Inyectar enlace de la pasada 1 si el contrato no detectó uno
-                enlace_grupo = grupo.get("enlace")
-                if enlace_grupo:
-                    enlace_actual = (contrato.get("enlace") or {}).get("valor")
-                    if not enlace_actual:
-                        contrato["enlace"] = _enlace_confianza(enlace_grupo)
-
-                posts.append(contrato)
-                break
+                    break
 
             except Exception as e:
-                ultimo_error = f"Error en llamada a Gemini: {e}"
-                continue
+                ultimo_error = f"Error en extracción: {e}"
+                if intento == 0:
+                    continue
+                break
 
-        if contrato is None:
-            # Si un grupo falla, continuamos con los demás
+        if not extraido:
             continue
 
-    if not posts:
+    if not posts_raw:
         return {"error": ultimo_error or "No se pudo extraer ningún post"}
-    return {"posts": posts}
+
+    posts_contratos = [_aplicar_contrato(p, plataforma) for p in posts_raw]
+    posts_dedupe = _deduplicar_posts(posts_contratos)
+    return {"posts": posts_dedupe}
 
 
 # ═══════════════════════════════════
@@ -940,7 +777,7 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
 # ═══════════════════════════════════
 
 def extraer_post_desde_capturas(imagenes: list, plataforma: str) -> dict:
-    """Extrae datos de UN post desde capturas con Gemini Vision (compat).
+    """Extrae datos de UN post desde capturas con Groq Visión (compat).
 
     Args:
         imagenes: Lista de UploadedFile de Streamlit o bytes.
@@ -950,9 +787,8 @@ def extraer_post_desde_capturas(imagenes: list, plataforma: str) -> dict:
         Dict con el contrato JSON estructurado.
         En error grave retorna {"error": "<motivo>"}.
     """
-    # ── Validaciones tempranas ──
-    if not _configurar_gemini():
-        return {"error": "GOOGLE_API_KEY no configurada en st.secrets ni variable de entorno"}
+    if not groq_disponible():
+        return {"error": "GROQ_API_KEY no configurada en variable de entorno ni st.secrets"}
 
     if not imagenes:
         return {"error": "No se recibieron imágenes"}
@@ -964,37 +800,27 @@ def extraer_post_desde_capturas(imagenes: list, plataforma: str) -> dict:
     if not image_parts:
         return {"error": "Ninguna imagen pudo procesarse"}
 
-    # ── Llamada a Gemini ──
-    import google.generativeai as genai
-
     prompt = _construir_prompt(plataforma)
-    modelo = genai.GenerativeModel(
-        GEMINI_MODEL,
-        generation_config={"response_mime_type": "application/json", "max_output_tokens": 8192},
-    )
-
-    contenido = [prompt] + image_parts
     ultimo_error = None
 
     for intento in range(2):
         try:
-            respuesta = modelo.generate_content(contenido)
-
-            if not respuesta or not respuesta.text:
-                ultimo_error = "Gemini devolvió respuesta vacía"
+            texto_respuesta = chat_vision(prompt, image_parts)
+            if not texto_respuesta or not texto_respuesta.strip():
+                ultimo_error = "Groq devolvió respuesta vacía"
                 if intento == 0:
-                    contenido[0] = (
+                    prompt = (
                         prompt
                         + "\n\nADVERTENCIA: la respuesta anterior fue inválida. "
                         "Devuelve SOLO JSON, sin markdown, sin texto extra."
                     )
                 continue
 
-            parsed = _parsear_respuesta(respuesta.text)
+            parsed = _parsear_respuesta(texto_respuesta)
             if parsed is None:
-                ultimo_error = "No se pudo parsear el JSON de Gemini"
+                ultimo_error = "No se pudo parsear el JSON de Groq"
                 if intento == 0:
-                    contenido[0] = (
+                    prompt = (
                         prompt
                         + "\n\nADVERTENCIA: la respuesta anterior no fue JSON válido. "
                         "Devuelve SOLO JSON, sin markdown, sin texto extra."
@@ -1004,7 +830,7 @@ def extraer_post_desde_capturas(imagenes: list, plataforma: str) -> dict:
             return _aplicar_contrato(parsed, plataforma)
 
         except Exception as e:
-            ultimo_error = f"Error en llamada a Gemini: {e}"
+            ultimo_error = f"Error en llamada a Groq: {e}"
             continue
 
     return {"error": ultimo_error or "Error desconocido"}

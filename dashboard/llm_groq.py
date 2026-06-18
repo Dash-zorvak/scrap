@@ -56,7 +56,9 @@ def _get_groq_client() -> OpenAI | None:
     base_url = os.environ.get(
         "GROQ_BASE_URL", "https://api.groq.com/openai/v1"
     )
-    _cliente = OpenAI(api_key=api_key, base_url=base_url)
+    _cliente = OpenAI(
+        api_key=api_key, base_url=base_url, timeout=90.0, max_retries=0
+    )
     return _cliente
 
 
@@ -89,6 +91,25 @@ def _paginas_a_contenido(prompt: str, paginas: list) -> list:
     for pagina in paginas:
         mime = pagina.get("mime_type", "image/png")
         raw = pagina.get("data", b"")
+        try:
+            from PIL import Image as PILImage
+
+            import io
+
+            img = PILImage.open(io.BytesIO(raw))
+            w, h = img.size
+            max_side = max(w, h)
+            if max_side > 1600:
+                ratio = 1600 / max_side
+                new_w = int(w * ratio)
+                new_h = int(h * ratio)
+                img = img.resize((new_w, new_h), PILImage.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=85)
+                raw = buf.getvalue()
+                mime = "image/jpeg"
+        except Exception:
+            pass
         b64 = base64.b64encode(raw).decode("utf-8")
         contenido.append({
             "type": "image_url",

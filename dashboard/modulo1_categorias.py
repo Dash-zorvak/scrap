@@ -97,13 +97,23 @@ def categorizar_posts(fb_db=None, tk_db=None):
     df = df[df["texto_limpio"].notna()].copy()
     print(f"  Después de limpieza: {len(df)}")
 
+    if len(df) == 0:
+        print("  ⚠️ No hay textos válidos para categorizar; se omite KMeans.")
+        conn = sqlite3.connect(fb_db)
+        pd.DataFrame(columns=["item_id", "plataforma", "cluster_id", "texto_limpio"]).to_sql(
+            "post_categorias", conn, if_exists="replace", index=False
+        )
+        conn.close()
+        return
+
     textos = df["texto_limpio"].tolist()
     print("  Generando embeddings...")
     X = generar_embeddings(textos)
     X = normalize(X)
 
-    print("  Corriendo KMeans con k=8...")
-    km = KMeans(n_clusters=8, random_state=42, n_init=10)
+    k = min(8, len(df))
+    print(f"  Corriendo KMeans con k={k}...")
+    km = KMeans(n_clusters=k, random_state=42, n_init=10)
     df["cluster_id"] = km.fit_predict(X)
     centroides = km.cluster_centers_
 
@@ -113,7 +123,7 @@ def categorizar_posts(fb_db=None, tk_db=None):
 
     distancias = km.transform(X)
 
-    for c in range(8):
+    for c in range(k):
         mask = df["cluster_id"] == c
         n_items = mask.sum()
         print(f"\n--- Cluster {c} ({n_items} items) ---")

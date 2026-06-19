@@ -2073,12 +2073,25 @@ def seccion_cargar_contenido():
                 partes.append(f"{resumen['tk_videos']} videos TikTok")
             if resumen["tk_comments"]:
                 partes.append(f"{resumen['tk_comments']} comentarios TikTok")
-            msg = "✅ Guardado: " + ", ".join(partes) if partes else "⚠️ No se guardó nada."
-            if resumen["errores"]:
-                msg += "  \n".join(f"❌ {e}" for e in resumen["errores"][:5])
+            if partes and not resumen["errores"]:
+                msg = "✅ Guardado: " + ", ".join(partes)
+                st.success(msg)
+            elif partes and resumen["errores"]:
+                msg = "⚠️ Guardado parcial: " + ", ".join(partes)
+                for e in resumen["errores"][:5]:
+                    msg += f"\n❌ {e}"
                 if len(resumen["errores"]) > 5:
                     msg += f"\n... y {len(resumen['errores'])-5} error(es) más."
-            st.success(msg)
+                st.warning(msg)
+            elif resumen["errores"]:
+                msg = "❌ Error al guardar:"
+                for e in resumen["errores"][:5]:
+                    msg += f"\n❌ {e}"
+                if len(resumen["errores"]) > 5:
+                    msg += f"\n... y {len(resumen['errores'])-5} error(es) más."
+                st.error(msg)
+            else:
+                st.warning("⚠️ No se guardó nada.")
             st.rerun()
     if guardados:
         st.info(f"✅ {len(guardados)} post(s) ya guardados en la base de datos.")

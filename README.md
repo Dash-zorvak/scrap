@@ -7,7 +7,7 @@ Analítica de percepción pública para Facebook de la Alcaldía de Santa Ana.
 - **Scraping**: Facebook Graph API
 - **Almacenamiento**: SQLite (SQLAlchemy)
 - **Dashboard HTML**: Estático, generado desde SQLite
-- **Dashboard Ciencia de Datos**: Streamlit (7 tabs)
+- **Dashboard Ciencia de Datos**: Streamlit (4 bloques)
 - **NLP**: Sentimiento español (3 niveles), emociones (6 categorías), entidades (spaCy + gazetteer), colocaciones, tópicos latentes (LDA)
 - **Alertas**: Cambridge Index — 5 tipos de alertas predictivas con supresión
 
@@ -25,7 +25,7 @@ Analítica de percepción pública para Facebook de la Alcaldía de Santa Ana.
 open dashboard/index.html
 
 # Dashboard Streamlit:
-streamlit run dashboard/streamlit_app.py
+streamlit run dashboard/app.py
 ```
 
 ## Setup
@@ -39,6 +39,25 @@ cp .env.example .env  # Editar con FB_ACCESS_TOKEN
 ```
 
 Requiere `FB_ACCESS_TOKEN` con permisos `pages_read_engagement`, `pages_read_user_content`, `pages_manage_posts`, `read_insights`.
+
+## Dashboard Streamlit — Bloques
+
+El dashboard se compone de cuatro bloques principales:
+
+| Bloque | Contenido |
+|--------|-----------|
+| **I — Pulso General** | Engagement, sentimiento, emociones, nube de palabras, tendencias semanales, volumen diario de comentarios |
+| **II — Segmentación de Audiencia** | Distribución por tópicos y zonas, análisis por tipo de post, polaridad por zona, emergencias |
+| **III — Riesgo y Autenticidad** | Controversia (predicción), anomalías en engagement, sentimiento vs. engagement, viralidad vs. sentimiento |
+| **IV — Memoria e Inteligencia Aplicada** | Insight Engine — alertas del Cambridge Index, análisis de narrativas, detección temprana de contagio |
+
+## Guía del operador (carga PDF)
+
+1. **Subir PDF** desde la barra lateral → se extraen posts vía Groq Vision.
+2. **Revisar extracción 1→N**: cada post subido se muestra como tarjeta; editar si la IA omitió/alucinó datos.
+3. **Guardar lote**: los posts revisados se persisten en SQLite.
+4. **Procesar lote**: reconstruye tablas agregadas (sentimiento, categorías, engagement, series).
+5. **Validar en dashboard**: navegar los bloques para ver los resultados.
 
 ## Despliegue en Railway
 

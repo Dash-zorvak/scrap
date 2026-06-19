@@ -4,25 +4,24 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
-from config import FACEBOOK_DB, TIKTOK_DB, FACEBOOK_TEST_DB, TIKTOK_TEST_DB
+from config import FACEBOOK_DB, TIKTOK_DB
 from modulo2_sentimiento import analizar_sentimiento_facebook, analizar_sentimiento_tiktok
 from modulo1_categorias import categorizar_posts, guardar_nombres_clusters
 from modulo3_engagement import procesar_facebook, procesar_tiktok
 from modulo4_series import series_facebook, series_tiktok
 
 
-def procesar_pipeline(modo_prueba=False, progreso_cb=None):
+def procesar_pipeline(progreso_cb=None):
     """Ejecuta el pipeline completo en orden.
 
     Args:
-        modo_prueba: Si True, usa BD de prueba (*_test.db).
         progreso_cb: Callable(paso_actual, total, etiqueta) para UI.
 
     Returns:
         dict con motor_sentimiento, pasos_ok, errores, resumen.
     """
-    fb_db = FACEBOOK_TEST_DB if modo_prueba else FACEBOOK_DB
-    tk_db = TIKTOK_TEST_DB if modo_prueba else TIKTOK_DB
+    fb_db = FACEBOOK_DB
+    tk_db = TIKTOK_DB
     total_pasos = 6
     pasos_ok = []
     errores = []

@@ -283,12 +283,3 @@ def clasificar_lote(textos):
             idx += 1
 
     return resultados, motor
-
-
-def get_diagnostico_sentimiento():
-    return {
-        "ultimo_error_bert": ULTIMO_ERROR_BERT,
-        "ultimo_error_groq": ULTIMO_ERROR_GROQ,
-        "bert_fallo": _BERT_FALLO,
-        "motor_forzado": os.environ.get("MOTOR_SENTIMIENTO", "auto"),
-    }

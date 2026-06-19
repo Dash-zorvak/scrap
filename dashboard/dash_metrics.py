@@ -3,7 +3,7 @@
 Contiene consultas SQL seguras, carga de engagement/sentimiento/series,
 clculos (semaforo, patrones, confianza, narrativas, contagio, viralidad,
 correlacion) y la capa de narrativa IA (Groq). Las rutas de BD activas se
-resuelven en tiempo de ejecucion via _activas() segun modo_prueba.
+resuelven en tiempo de ejecucion via _activas().
 """
 
 import streamlit as st
@@ -17,19 +17,13 @@ import json
 
 from config import (
     FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB,
-    FACEBOOK_TEST_DB, TIKTOK_TEST_DB, EXTERNOS_TEST_DB,
 )
 from dashboard.llm_groq import chat_texto, groq_disponible
 
 
 def _activas():
-    """Devuelve (FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA, EXTERNOS_DB_ACTIVA) segun modo_prueba."""
-    mp = st.session_state.get("modo_prueba", False)
-    return (
-        FACEBOOK_TEST_DB if mp else FACEBOOK_DB,
-        TIKTOK_TEST_DB if mp else TIKTOK_DB,
-        EXTERNOS_TEST_DB if mp else EXTERNOS_DB,
-    )
+    """Devuelve (FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB)."""
+    return (FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)

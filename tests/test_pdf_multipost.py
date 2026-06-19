@@ -239,7 +239,42 @@ class TestGroqFlow:
         assert result["posts"][0]["texto_post"] == "solo post"
 
     def test_two_images_two_posts(self):
-        """2 páginas (<= VENTANA) → una sola llamada, devuelve 2 posts."""
+        """2 posts con URLs DISTINTAS → se conservan como 2 posts.
+
+        Bajo la lógica de fusión (_fusionar_posts), dos posts permanecen
+        separados solo si tienen enlaces distintos: cada URL marca la frontera
+        de un post.
+        """
+        from unittest.mock import patch
+
+        png1 = self._crear_png()
+        png2 = self._crear_png()
+
+        resp_json = (
+            '{"posts": ['
+            '{"texto_post": "post 1", "fecha": "2024-01-01", "enlace": {"valor": "https://fb.com/1"}, "reacciones": {"likes": 10}, "comentarios": []},'
+            '{"texto_post": "post 2", "fecha": "2024-01-02", "enlace": {"valor": "https://fb.com/2"}, "reacciones": {"likes": 20}, "comentarios": []}'
+            "]}"
+        )
+
+        with patch("dashboard.ingreso_extraccion.groq_disponible", return_value=True), \
+             patch("dashboard.ingreso_extraccion.chat_vision", return_value=resp_json):
+            result = extraer_posts_desde_archivos([png1, png2], "facebook")
+
+        assert "error" not in result, result.get("error")
+        assert len(result["posts"]) == 2
+        assert result["posts"][0]["texto_post"] == "post 1"
+        assert result["posts"][1]["texto_post"] == "post 2"
+        assert result["posts"][0]["enlace"]["valor"] == "https://fb.com/1"
+        assert result["posts"][1]["enlace"]["valor"] == "https://fb.com/2"
+
+    def test_dos_posts_uno_sin_url_se_fusionan(self):
+        """2 posts donde solo UNO tiene URL → la fusión los une en 1.
+
+        Regla de _fusionar_posts: con 0 o 1 URL distinta en todo el documento,
+        los fragmentos pertenecen a un mismo post (la URL marca su frontera),
+        así que se fusionan en un único contrato.
+        """
         from unittest.mock import patch
 
         png1 = self._crear_png()
@@ -257,9 +292,7 @@ class TestGroqFlow:
             result = extraer_posts_desde_archivos([png1, png2], "facebook")
 
         assert "error" not in result, result.get("error")
-        assert len(result["posts"]) == 2
-        assert result["posts"][0]["texto_post"] == "post 1"
-        assert result["posts"][1]["texto_post"] == "post 2"
+        assert len(result["posts"]) == 1
         assert result["posts"][0]["enlace"]["valor"] == "https://fb.com/1"
 
     def test_windowed_dedupe_by_link(self):

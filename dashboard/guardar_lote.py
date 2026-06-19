@@ -5,6 +5,13 @@ from src.storage.db import LocalStorage
 from dashboard import config as _cfg
 from dashboard._generar_id import generar_id_post, generar_id_comentario, _base_para_hash
 from dashboard.escritura_tiktok import insertar_video, insertar_comentario_tiktok, obtener_ids_videos
+from dashboard.externos_store import (
+    asegurar_tablas_externas,
+    obtener_ids_posts_externos,
+    insertar_post_externo,
+    insertar_comentario_externo,
+    agregar_pagina_externa,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +50,14 @@ def _fb_comment_insert_dict(comentario: dict, comment_id: str, post_id: str) -> 
 def guardar_lote(lote: list, modo_prueba: bool = False) -> dict:
     ruta_fb = _cfg.FACEBOOK_TEST_DB if modo_prueba else _cfg.FACEBOOK_DB
     ruta_tk = _cfg.TIKTOK_TEST_DB if modo_prueba else _cfg.TIKTOK_DB
+    ruta_ext = _cfg.EXTERNOS_TEST_DB if modo_prueba else _cfg.EXTERNOS_DB
 
-    resumen = {"fb_posts": 0, "fb_comments": 0, "tk_videos": 0, "tk_comments": 0, "errores": []}
+    resumen = {
+        "fb_posts": 0, "fb_comments": 0,
+        "tk_videos": 0, "tk_comments": 0,
+        "ext_posts": 0, "ext_comments": 0,
+        "errores": [],
+    }
 
     revisados = [item for item in lote if item.get("estado") == "revisado"]
     if not revisados:
@@ -58,6 +71,13 @@ def guardar_lote(lote: list, modo_prueba: bool = False) -> dict:
         tk_ids_existentes = obtener_ids_videos(conn_tk)
     except Exception:
         tk_ids_existentes = set()
+
+    asegurar_tablas_externas(ruta_ext)
+    conn_ext = sqlite3.connect(ruta_ext)
+    try:
+        ext_ids_existentes = obtener_ids_posts_externos(conn_ext)
+    except Exception:
+        ext_ids_existentes = set()
 
     for item in revisados:
         datos = item.get("datos_revisados", {})
@@ -116,6 +136,37 @@ def guardar_lote(lote: list, modo_prueba: bool = False) -> dict:
                 item["video_id"] = video_id
                 item["estado"] = "guardado"
 
+            elif plataforma == "externos":
+                base = _base_para_hash(datos)
+                post_id = generar_id_post(base, ext_ids_existentes)
+                ext_ids_existentes.add(post_id)
+                ok = insertar_post_externo(conn_ext, datos, post_id)
+                if not ok:
+                    resumen["errores"].append(f"Error insertando post externo: {post_id}")
+                    continue
+                resumen["ext_posts"] += 1
+
+                comentarios = datos.get("comentarios") or []
+                for idx, c in enumerate(comentarios):
+                    texto = c.get("texto", "")
+                    if not texto:
+                        continue
+                    cid = generar_id_comentario(post_id, texto, idx)
+                    try:
+                        insertar_comentario_externo(conn_ext, cid, post_id, texto, c.get("autor"))
+                        resumen["ext_comments"] += 1
+                    except Exception:
+                        resumen["errores"].append(f"Error insertando comentario externo: {cid}")
+
+                conn_ext.commit()
+                try:
+                    agregar_pagina_externa(datos.get("page_name", ""), ruta_ext)
+                except Exception:
+                    pass
+
+                item["post_id"] = post_id
+                item["estado"] = "guardado"
+
             else:
                 raise ValueError(f"Plataforma no soportada: {plataforma}")
 
@@ -124,4 +175,5 @@ def guardar_lote(lote: list, modo_prueba: bool = False) -> dict:
             logger.exception(f"Error en guardar_lote para item {item.get('id_temporal')}")
 
     conn_tk.close()
+    conn_ext.close()
     return resumen

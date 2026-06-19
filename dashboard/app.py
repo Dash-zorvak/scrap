@@ -75,13 +75,12 @@ def leyenda_grafica(elementos):
         'padding:12px 16px;margin-bottom:10px">'
         '<p style="font-size:9px;color:var(--fg-muted);margin:0 0 8px 0;'
         'font-weight:600;letter-spacing:1.5px;text-transform:uppercase;font-family:\'IBM Plex Mono\',monospace">'
-        '◈ QUÉ ESTÁS VIENDO</p>{}</div>'
+        'QUÉ ESTÁS VIENDO</p>{}</div>'
     ).format(items_html)
 
 
 st.set_page_config(
     page_title="PANEL·SANTA ANA — Inteligencia Ciudadana",
-    page_icon="\u2696",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -90,12 +89,9 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 # ── SIDEBAR ──
 
-st.sidebar.markdown("""
-<div style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px">
-  <div style="font-size:9px;letter-spacing:2px;color:var(--accent);font-weight:600;font-family:'IBM Plex Mono',monospace;text-transform:uppercase">PANEL·SANTA ANA</div>
-  <div style="font-size:11px;color:var(--fg-muted);margin-top:2px;font-family:'Inter',sans-serif">Inteligencia Ciudadana</div>
-</div>
-""", unsafe_allow_html=True)
+st.sidebar.markdown('<div class="sys-header"><div class="sys-brand">PANEL·SANTA ANA</div><div class="sys-brand-sub">Inteligencia Ciudadana</div></div>', unsafe_allow_html=True)
+
+st.sidebar.markdown('<div class="sys-section-label">FILTROS</div>', unsafe_allow_html=True)
 
 periodo = st.sidebar.selectbox("PERÍODO", [
     "Esta semana",
@@ -109,11 +105,15 @@ plataforma = st.sidebar.selectbox("PLATAFORMA", [
     "Ambas", "Facebook", "TikTok"
 ])
 
+st.sidebar.markdown('<div class="sys-section-label">NAVEGACIÓN</div>', unsafe_allow_html=True)
+
 vista = st.sidebar.radio("VISTA", [
-    "📊 Dashboard", "📥 Cargar contenido", "📋 Notas metodológicas"
+    "Dashboard", "Cargar contenido", "Notas metodológicas"
 ])
 
-st.sidebar.markdown("---")
+st.sidebar.markdown('<hr class="sys-divider">')
+st.sidebar.markdown('<div class="sys-section-label">SISTEMA</div>', unsafe_allow_html=True)
+
 modo_prueba = st.sidebar.toggle(
     "MODO PRUEBA",
     value=st.session_state.modo_prueba,
@@ -126,8 +126,7 @@ if modo_prueba != st.session_state.modo_prueba:
 
 if st.session_state.modo_prueba:
     st.sidebar.markdown(
-        '<p style="color:var(--amber);font-size:10px;font-family:\'IBM Plex Mono\',monospace;letter-spacing:0.5px">'
-        'TEST MODE</p>',
+        '<div class="sys-footer" style="color:var(--amber);">MODO PRUEBA ACTIVO</div>',
         unsafe_allow_html=True
     )
 
@@ -149,14 +148,13 @@ except Exception:
     fecha_str = "No disponible"
 
 st.sidebar.markdown(
-    f'<p style="font-size:9px;color:var(--fg-muted);font-family:\'IBM Plex Mono\',monospace;letter-spacing:0.5px">'
-    f'UPD: {fecha_str}</p>',
+    f'<div class="sys-footer">ACTUALIZADO: {fecha_str}</div>',
     unsafe_allow_html=True
 )
 
-st.sidebar.markdown("---")
+st.sidebar.markdown('<hr class="sys-divider">')
 
-with st.sidebar.expander("🔧 Diagnóstico"):
+with st.sidebar.expander("DIAGNÓSTICO DEL SISTEMA"):
     st.caption("GROQ_API_KEY (visión + texto)")
     api_key_env = os.environ.get("GROQ_API_KEY")
     api_key_secrets = None
@@ -209,7 +207,10 @@ def _warn_dropped_null_dates():
                     conn
                 ).iloc[0]['c']
                 if n > 0:
-                    st.warning(f"Se descartaron {n} {label} sin fecha.")
+                    st.markdown(
+                        f'<div class="status-info">Se descartaron {n} {label} sin fecha.</div>',
+                        unsafe_allow_html=True
+                    )
         except Exception:
             pass
 
@@ -217,7 +218,7 @@ def _warn_dropped_null_dates():
 def hay_datos(df, mensaje: str = "Aún no hay datos suficientes para esta sección.") -> bool:
     if df is None or len(df) == 0:
         st.markdown(
-            f'<div class="bloom-status-info"><span class="bloom-status-marker">●</span> {mensaje}</div>',
+            f'<div class="status-info">{mensaje}</div>',
             unsafe_allow_html=True
         )
         return False
@@ -227,14 +228,14 @@ def hay_datos(df, mensaje: str = "Aún no hay datos suficientes para esta secci�
 def card_explicativa(que_es: str, como_leerlo: str, ojo=None):
     ojo_html = (
         f'<div style="margin-top:8px;font-size:11px;color:var(--amber);font-family:\'Inter\',sans-serif;border-top:1px solid var(--border);padding-top:6px">'
-        f'<span style="font-weight:600">◈</span> {ojo}</div>'
+        f'{ojo}</div>'
         if ojo else ""
     )
     st.markdown(
         f"""
-        <div class="interpretacion-box" style="margin:4px 0 16px 0">
-            <div class="interpretacion-label">◈ CÓMO LEER ESTO</div>
-            <div class="interpretacion-texto">
+        <div class="interpretation" style="margin:4px 0 16px 0">
+            <div class="interpretation-label">CÓMO LEER ESTO</div>
+            <div class="interpretation-texto">
                 <strong style="color:var(--accent)">Qué muestra:</strong> {que_es}<br>
                 <strong style="color:var(--accent)">Cómo leerlo:</strong> {como_leerlo}
             </div>
@@ -247,27 +248,27 @@ def card_explicativa(que_es: str, como_leerlo: str, ojo=None):
 
 def que_ves_box(texto: str):
     st.markdown(
-        f'<div class="que-ves-box"><span class="que-ves-label">◈ QUÉ ESTÁS VIENDO</span>'
-        f'<p class="que-ves-texto">{texto}</p></div>',
+        f'<div class="wys-box"><span class="wys-label">QUÉ ESTÁS VIENDO</span>'
+        f'<p class="wys-text">{texto}</p></div>',
         unsafe_allow_html=True,
     )
 
 
 def bloom_subheader(texto: str):
-    st.markdown(f'<p class="bloom-subheader">{texto}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="exec-subheader">{texto}</p>', unsafe_allow_html=True)
 
 
 def bloom_caption(texto: str):
-    st.markdown(f'<p class="bloom-caption">{texto}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="exec-caption">{texto}</p>', unsafe_allow_html=True)
 
 
 def bloom_metric(label: str, value: str, delta=None, color=None):
     val_color = f'color:{color};' if color else ''
-    delta_html = f'<div class="bloom-card-sub">{delta}</div>' if delta else ''
+    delta_html = f'<div class="exec-card-sub">{delta}</div>' if delta else ''
     st.markdown(
-        f'<div class="bloom-card { "bloom-border-accent" if color else "" }">'
-        f'<div class="bloom-card-title">{label}</div>'
-        f'<div class="bloom-card-value" style="{val_color}font-size:28px">{value}</div>'
+        f'<div class="exec-card">'
+        f'<div class="exec-card-title">{label}</div>'
+        f'<div class="exec-card-value" style="{val_color}">{value}</div>'
         f'{delta_html}</div>',
         unsafe_allow_html=True,
     )
@@ -296,34 +297,34 @@ def render_notas_metodologicas():
         "colectiva, no un oráculo. Sus límites:"
     )
     st.markdown(
-        '<div class="bloom-status-warning"><span class="bloom-status-label">LIMITACIÓN</span> '
+        '<div class="status-warning"><span class="status-label status-label-warning">LIMITACIÓN</span> '
         'No predice votos individuales. Mide qué temas generan qué emociones en '
         'conjunto, no el comportamiento de personas concretas.</div>',
         unsafe_allow_html=True
     )
     st.markdown(
-        '<div class="bloom-status-info">Las reacciones son un proxy emocional, no un test psicológico validado. '
+        '<div class="status-info">Las reacciones son un proxy emocional, no un test psicológico validado. '
         'Úsalas como señal de tono colectivo, no como diagnóstico.</div>',
         unsafe_allow_html=True
     )
     st.markdown(
-        '<div class="bloom-status-info">El sentimiento de comentarios tiene ~85% de precisión en español. '
+        '<div class="status-info">El sentimiento de comentarios tiene ~85% de precisión en español. '
         'Alrededor de 1 de cada 7 comentarios puede estar mal clasificado.</div>',
         unsafe_allow_html=True
     )
     st.markdown(
-        '<div class="bloom-status-warning"><span class="bloom-status-label">LIMITACIÓN</span> '
-        'Correlación ≠ causalidad. Que un pico de engagement coincida con una noticia '
+        '<div class="status-warning"><span class="status-label status-label-warning">LIMITACIÓN</span> '
+        'Correlación no implica causalidad. Que un pico de engagement coincida con una noticia '
         'externa no prueba que una haya causado la otra; pueden influir terceros factores.</div>',
         unsafe_allow_html=True
     )
     st.markdown(
-        '<div class="bloom-status-info">TikTok no tiene reacciones diferenciadas (solo "me gusta"). Su lectura emocional '
+        '<div class="status-info">TikTok no tiene reacciones diferenciadas (solo "me gusta"). Su lectura emocional '
         'depende 100% de los comentarios.</div>',
         unsafe_allow_html=True
     )
     st.markdown(
-        '<div class="bloom-status-info">En Facebook, las reacciones con datos sólidos son "Me gusta", "Me encanta", '
+        '<div class="status-info">En Facebook, las reacciones con datos sólidos son "Me gusta", "Me encanta", '
         '"Me divierte" y "Me enoja". "Me asombra" y "Me entristece" aparecen en volúmenes '
         'mínimos (decenas de casos), así que las métricas de afecto/controversia se apoyan '
         'sobre todo en las primeras.</div>',
@@ -391,9 +392,9 @@ def render_bloque1_pulso():
     df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
 
     st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">📊 PULSO GENERAL</div>
-        <div class="seccion-subtitulo">Panorama completo — 3 indicadores clave</div>
+    <div class="section-header">
+        <div class="section-title">PULSO GENERAL</div>
+        <div class="section-subtitle">Resumen ejecutivo · 3 indicadores clave</div>
     </div>""", unsafe_allow_html=True)
 
     if df_fb.empty and df_tk.empty:
@@ -401,9 +402,10 @@ def render_bloque1_pulso():
         return
 
     # ── 1. CLIMA NARRATIVO ──
-    st.markdown("### 1. Clima Narrativo")
+    st.markdown("""<div class="exec-subheader" style="margin-top:4px">01 · Clima Narrativo</div>""", unsafe_allow_html=True)
     color_sem, texto_sem = calcular_semaforo(df_fb)
-    st.markdown(f'<div class="semaforo-{color_sem}"><p class="semaforo-texto">{texto_sem}</p></div>', unsafe_allow_html=True)
+    sem_class = {'verde':'positive','amarillo':'warning','rojo':'critical'}.get(color_sem, 'positive')
+    st.markdown(f'<div class="indicator indicator-{sem_class}"><div class="indicator-dot"></div><div class="indicator-text">{texto_sem}</div></div>', unsafe_allow_html=True)
 
     df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
     score_val = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
@@ -415,22 +417,22 @@ def render_bloque1_pulso():
         'score': score_val, 'pct_negativo': pct_neg_val,
         'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val
     })
-    st.markdown(f'<div class="interpretacion-box"><div class="interpretacion-label">◈ LO QUE ESTO SIGNIFICA</div><div class="interpretacion-texto">{interp}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="interpretation"><div class="interpretation-label">LO QUE ESTO SIGNIFICA</div><div class="interpretation-texto">{interp}</div></div>', unsafe_allow_html=True)
 
     total_comentarios = df_sent['total_comentarios'].sum() if not df_sent.empty else 0
     m = evaluar_muestra(total_comentarios)
-    st.markdown(f'<p style="font-size:12px;color:var(--fg-muted)">{m["emoji"]} {m["etiqueta"]} en total</p>', unsafe_allow_html=True)
+    st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">{m["etiqueta"]}</p>', unsafe_allow_html=True)
 
     # ── 2. INTENSIDAD ──
-    st.markdown("### 2. Intensidad de la Conversación")
+    st.markdown("""<div class="exec-subheader" style="margin-top:4px">02 · Intensidad de la Conversación</div>""", unsafe_allow_html=True)
     total_eng = (int(df_fb['engagement_total'].sum()) if not df_fb.empty else 0) + (int(df_tk['engagement_total'].sum()) if not df_tk.empty else 0)
     total_posts = len(df_fb) + len(df_tk)
     total_reacciones = (int(df_fb['total_reacciones'].sum()) if not df_fb.empty else 0) + (int(df_tk['likes'].sum()) if not df_tk.empty else 0)
 
     c1, c2, c3 = st.columns(3)
-    c1.markdown(f'<div class="bloom-card"><div class="bloom-card-title">Interacciones totales</div><div class="bloom-card-value">{total_eng:,}</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="bloom-card"><div class="bloom-card-title">Contenido publicado</div><div class="bloom-card-value">{total_posts}</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="bloom-card"><div class="bloom-card-title">Reacciones totales</div><div class="bloom-card-value">{total_reacciones:,}</div></div>', unsafe_allow_html=True)
+    c1.markdown(f'<div class="exec-card"><div class="exec-card-title">Interacciones totales</div><div class="exec-card-value">{total_eng:,}</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="exec-card"><div class="exec-card-title">Contenido publicado</div><div class="exec-card-value">{total_posts}</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="exec-card"><div class="exec-card-title">Reacciones totales</div><div class="exec-card-value">{total_reacciones:,}</div></div>', unsafe_allow_html=True)
 
     df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA)
     fig = _build_serie_chart(df_fb_s, df_tk_s, periodo)
@@ -439,7 +441,7 @@ def render_bloque1_pulso():
         st.plotly_chart(fig, width='stretch')
 
     # ── 3. CONCENTRACIÓN TEMÁTICA ──
-    st.markdown("### 3. Concentración Temática")
+    st.markdown("""<div class="exec-subheader" style="margin-top:4px">03 · Concentración Temática</div>""", unsafe_allow_html=True)
     df_cat = safe_query("SELECT item_id, categoria_nombre FROM post_categorias", FACEBOOK_DB_ACTIVA)
     if not df_cat.empty:
         conteo = df_cat['categoria_nombre'].value_counts()
@@ -453,9 +455,9 @@ def render_bloque1_pulso():
         if otros:
             st.markdown(f'<p style="font-size:11px;color:var(--fg-muted);margin-top:6px">Otros temas: {", ".join(str(t) for t in otros)}</p>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="bloom-status-info">Clasificación de temas requiere sentence-transformers (no instalado).</div>', unsafe_allow_html=True)
+        st.markdown('<div class="status-info">Clasificación de temas requiere sentence-transformers (no instalado).</div>', unsafe_allow_html=True)
 
-    st.info("El análisis de sentimiento se basa en los comentarios capturados, no en el 100% de la conversación. Los % son un proxy, no medición exhaustiva.")
+    st.markdown('<div class="status-info">El análisis de sentimiento se basa en los comentarios capturados, no en el 100% de la conversación. Los porcentajes son un proxy, no una medición exhaustiva.</div>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════
@@ -464,9 +466,9 @@ def render_bloque1_pulso():
 
 def render_bloque2_audiencia():
     st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">👥 SEGMENTACIÓN DE AUDIENCIA</div>
-        <div class="seccion-subtitulo">¿Quién reacciona, quién critica y quién impulsa la conversación?</div>
+    <div class="section-header">
+        <div class="section-title">SEGMENTACIÓN DE AUDIENCIA</div>
+        <div class="section-subtitle">Estructura de públicos · polarización · voces de influencia</div>
     </div>""", unsafe_allow_html=True)
 
     df_comentarios = cargar_comentarios_fb(FACEBOOK_DB_ACTIVA)
@@ -474,7 +476,7 @@ def render_bloque2_audiencia():
         return
 
     # ── 1. MAPA DE PÚBLICOS ──
-    st.markdown("### 1. Mapa de Públicos")
+    st.markdown("""<div class="exec-subheader" style="margin-top:4px">01 · Mapa de Públicos</div>""", unsafe_allow_html=True)
     df_tmp = df_comentarios.dropna(subset=['score_sentimiento'])
     if not df_tmp.empty:
         n_pos = (df_tmp['score_sentimiento'] > 0.1).sum()
@@ -494,13 +496,13 @@ def render_bloque2_audiencia():
             font=dict(color='var(--fg-secondary)', size=10, family='IBM Plex Mono, monospace'),
             legend=dict(orientation='h', y=1.1))
         st.plotly_chart(fig_pub, width='stretch')
-        st.markdown('<p style="font-size:12px;color:var(--fg-muted)">⚠️ Proxy: la base son comentarios, no personas individuales.</p>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Proxy: la base son comentarios, no personas individuales.</p>', unsafe_allow_html=True)
 
         m = evaluar_muestra(len(df_comentarios))
-        st.markdown(f'<p style="font-size:12px;color:var(--fg-muted)">{m["emoji"]} {m["etiqueta"]}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">{m["etiqueta"]}</p>', unsafe_allow_html=True)
 
     # ── 2. POLARIZACIÓN ──
-    st.markdown("### 2. Polarización")
+    st.markdown("""<div class="exec-subheader" style="margin-top:4px">02 · Polarización</div>""", unsafe_allow_html=True)
     if not df_tmp.empty:
         p_extremos = ((df_tmp['score_sentimiento'].abs() > 0.5).sum() / len(df_tmp) * 100)
         p_centro = 100 - p_extremos
@@ -515,7 +517,7 @@ def render_bloque2_audiencia():
         st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Extremos = comentarios con |score| > 0.5 (muy positivos o muy negativos). Alto % indica audiencia polarizada.</p>', unsafe_allow_html=True)
 
     # ── 3. VOCES DE INFLUENCIA ──
-    st.markdown("### 3. Voces de Influencia (proxy)")
+    st.markdown("""<div class="exec-subheader" style="margin-top:4px">03 · Voces de Influencia (proxy)</div>""", unsafe_allow_html=True)
     df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
     if not df_fb_raw.empty:
         top_pages = df_fb_raw.groupby('page_name').agg(
@@ -523,10 +525,10 @@ def render_bloque2_audiencia():
             posts=('post_id', 'count')
         ).reset_index().sort_values('engagement', ascending=False).head(5)
         for _, r in top_pages.iterrows():
-            st.markdown(f'<div class="bloom-card" style="padding:8px 14px"><span style="font-size:13px;color:var(--fg-primary)"><strong>{r["page_name"]}</strong></span><span style="float:right;color:var(--fg-secondary)">{int(r["engagement"]):,} interacciones · {int(r["posts"])} posts</span></div>', unsafe_allow_html=True)
-        st.markdown('<p style="font-size:11px;color:var(--fg-muted)">⚠️ Son páginas/cuentas oficiales, no ciudadanos individuales.</p>', unsafe_allow_html=True)
+            st.markdown(f'<div class="exec-card" style="padding:8px 14px"><span style="font-size:13px;color:var(--fg-primary)"><strong>{r["page_name"]}</strong></span><span style="float:right;color:var(--fg-secondary)">{int(r["engagement"]):,} interacciones · {int(r["posts"])} posts</span></div>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Son páginas y cuentas oficiales, no ciudadanos individuales.</p>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="bloom-status-info">Sin datos de engagement para identificar voces.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="status-info">Sin datos de engagement para identificar voces.</div>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════
@@ -535,9 +537,9 @@ def render_bloque2_audiencia():
 
 def render_bloque3_riesgo():
     st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">⚠️ RIESGO Y AUTENTICIDAD</div>
-        <div class="seccion-subtitulo">Señales de alerta temprana y calidad de la interacción</div>
+    <div class="section-header">
+        <div class="section-title">RIESGO Y AUTENTICIDAD</div>
+        <div class="section-subtitle">Alertas tempranas · autenticidad · velocidad de propagación</div>
     </div>""", unsafe_allow_html=True)
 
     df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
@@ -551,7 +553,7 @@ def render_bloque3_riesgo():
         return
 
     # ── 1. AUTENTICIDAD (heurística) ──
-    st.markdown("### 1. Índice de Autenticidad (heurística)")
+    st.markdown("""<div class="exec-subheader" style="margin-top:4px">01 · Índice de Autenticidad (heurística)</div>""", unsafe_allow_html=True)
     if not df_fb.empty and 'created_time' in df_fb.columns:
         daily = df_fb.copy()
         daily['fecha'] = daily['created_time'].dt.date
@@ -566,11 +568,11 @@ def render_bloque3_riesgo():
         else:
             label_aut = "VOLÁTIL (posible coordinación)"
             color_aut = "#ef4444"
-        st.markdown(f'<div class="bloom-card" style="border-left:4px solid {color_aut}"><div class="bloom-card-title">Coeficiente de variación: {cv:.2f}</div><div class="bloom-card-value" style="color:{color_aut};font-size:18px">{label_aut}</div></div>', unsafe_allow_html=True)
-        st.markdown('<p style="font-size:11px;color:var(--fg-muted)">⚠️ Heurística: CV bajo = volumen diario estable (más orgánico). CV alto = picos súbitos (posible coordinación). No es detección de bots.</p>', unsafe_allow_html=True)
+        st.markdown(f'<div class="exec-card" style="border-left:3px solid {color_aut}"><div class="exec-card-title">Coeficiente de variación: {cv:.2f}</div><div class="exec-card-value" style="color:{color_aut};font-size:18px">{label_aut}</div></div>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Heurística: CV bajo indica volumen diario estable (más orgánico). CV alto sugiere picos súbitos (posible coordinación). No es detección de bots.</p>', unsafe_allow_html=True)
 
     # ── 2. NIVEL DE ALERTA ──
-    st.markdown("### 2. Nivel de Alerta")
+    st.markdown("""<div class="exec-subheader" style="margin-top:4px">02 · Nivel de Alerta</div>""", unsafe_allow_html=True)
     color_sem, texto_sem = calcular_semaforo(df_fb)
     score_val = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
     pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
@@ -580,11 +582,12 @@ def render_bloque3_riesgo():
         'score': score_val, 'pct_negativo': pct_neg_val,
         'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val
     })
-    st.markdown(f'<div class="semaforo-{color_sem}"><p class="semaforo-texto">{texto_sem}</p></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="interpretacion-box"><div class="interpretacion-texto">{interp}</div></div>', unsafe_allow_html=True)
+    sem_class = {'verde':'positive','amarillo':'warning','rojo':'critical'}.get(color_sem, 'positive')
+    st.markdown(f'<div class="indicator indicator-{sem_class}"><div class="indicator-dot"></div><div class="indicator-text">{texto_sem}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="interpretation"><div class="interpretation-texto">{interp}</div></div>', unsafe_allow_html=True)
 
     # ── 3. VELOCIDAD DE PROPAGACIÓN ──
-    st.markdown("### 3. Velocidad de Propagación")
+    st.markdown("""<div class="exec-subheader" style="margin-top:4px">03 · Velocidad de Propagación</div>""", unsafe_allow_html=True)
     df_series = pd.concat([df_fb_s, df_tk_s], ignore_index=True) if not df_fb_s.empty or not df_tk_s.empty else pd.DataFrame()
     if not df_series.empty and 'engagement' in df_series.columns:
         df_series = df_series.sort_values('semana')
@@ -605,18 +608,18 @@ def render_bloque3_riesgo():
             else:
                 flecha, color_v = "→", "#6b7280"
                 nota = "Volumen estable respecto a la semana anterior."
-            st.markdown(f'<div class="bloom-card"><span style="font-size:28px;color:{color_v};font-weight:700">{flecha}</span><span style="font-size:14px;color:var(--fg-secondary);margin-left:12px">{nota}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="exec-card"><span style="font-size:28px;color:{color_v};font-weight:700">{flecha}</span><span style="font-size:14px;color:var(--fg-secondary);margin-left:12px">{nota}</span></div>', unsafe_allow_html=True)
 
     # ── 4. PUNTOS DE FRICCIÓN ──
-    st.markdown("### 4. Puntos de Fricción")
+    st.markdown("""<div class="exec-subheader" style="margin-top:4px">04 · Puntos de Fricción</div>""", unsafe_allow_html=True)
     df_neg = cargar_comentarios_negativos()
     if not df_neg.empty:
         top_neg = df_neg.nsmallest(3, 'sentiment_score') if 'sentiment_score' in df_neg.columns else df_neg.head(3)
         for _, r in top_neg.iterrows():
             msg = str(r.get('message', ''))[:120]
-            st.markdown(f'<div class="patron-rechazo"><p style="font-size:13px;color:#d1d5db">"{msg}"</p></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="pattern-card pattern-card-critical"><p style="font-size:13px;color:#d1d5db">"{msg}"</p></div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="bloom-status-info">Sin comentarios negativos destacados.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="status-info">Sin comentarios negativos destacados.</div>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════
@@ -635,11 +638,9 @@ def render_bloque3_riesgo():
 # ═══════════════════════════════════════════
 
 def _b4_header(num: int, titulo: str, subtitulo: str = ""):
-    sub_html = f'<div class="seccion-subtitulo">{subtitulo}</div>' if subtitulo else ""
     st.markdown(
-        f'<div class="seccion-header" style="margin-top:14px;padding-bottom:6px;margin-bottom:10px">'
-        f'<div class="seccion-titulo" style="font-size:14px">{num:02d} · {titulo}</div>'
-        f'{sub_html}</div>',
+        f'<div class="memo-section"><div class="memo-section-number">{num:02d}</div>'
+        f'<div class="memo-section-title">{titulo}</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -648,18 +649,17 @@ def _b4_card_ia(num: int, titulo: str, tipo: str, ctx: dict):
     _b4_header(num, titulo)
     with st.spinner(f"Generando {titulo}…"):
         narrativa = generar_narrativa_ia(tipo, ctx)
-    st.markdown(
-        f'<div class="bloom-card"><p style="font-size:13px;color:var(--fg-primary);line-height:1.6;margin:0">{narrativa}</p></div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'<p class="memo-body">{narrativa}</p>', unsafe_allow_html=True)
 
 
 def render_bloque4_inteligencia():
     st.markdown("""
-    <div class="seccion-header">
-        <div class="seccion-titulo">🧠 MEMORIA E INTELIGENCIA APLICADA</div>
-        <div class="seccion-subtitulo">10 tarjetas — análisis profundo con datos e IA</div>
-    </div>""", unsafe_allow_html=True)
+    <div class="memo-container">
+        <div class="memo-header">
+            <div class="memo-title">MEMORÁNDUM EJECUTIVO</div>
+            <div class="memo-ref">PANEL·SANTA ANA · Inteligencia Ciudadana · Análisis Estratégico</div>
+        </div>
+    """, unsafe_allow_html=True)
 
     df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
     df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
@@ -716,27 +716,27 @@ def render_bloque4_inteligencia():
     if temas_disponibles:
         if emergentes:
             html_e = "".join(
-                f'<p style="font-size:13px;color:#22c55e;margin:4px 0">+ {t}</p>'
+                f'<div class="memo-item memo-item-positivo">+ {t}</div>'
                 for t in emergentes[:8]
             )
         else:
-            html_e = '<p style="font-size:12px;color:var(--fg-muted);margin:0">Sin temas nuevos esta semana.</p>'
-        st.markdown(f'<div class="bloom-card">{html_e}</div>', unsafe_allow_html=True)
+            html_e = '<div class="memo-item memo-item-neutral">Sin temas nuevos esta semana.</div>'
+        st.markdown(html_e, unsafe_allow_html=True)
     else:
-        st.markdown('<div class="bloom-status-info">Clasificación de temas requiere sentence-transformers.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="memo-item memo-item-neutral">Clasificación de temas requiere sentence-transformers.</div>', unsafe_allow_html=True)
 
     _b4_header(5, "Temas en Extinción")
     if temas_disponibles:
         if extintos:
             html_x = "".join(
-                f'<p style="font-size:13px;color:#ef4444;margin:4px 0">- {t}</p>'
+                f'<div class="memo-item memo-item-negativo">- {t}</div>'
                 for t in extintos[:8]
             )
         else:
-            html_x = '<p style="font-size:12px;color:var(--fg-muted);margin:0">Sin temas en extinción esta semana.</p>'
-        st.markdown(f'<div class="bloom-card">{html_x}</div>', unsafe_allow_html=True)
+            html_x = '<div class="memo-item memo-item-neutral">Sin temas en extinción esta semana.</div>'
+        st.markdown(html_x, unsafe_allow_html=True)
     else:
-        st.markdown('<div class="bloom-status-info">Clasificación de temas requiere sentence-transformers.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="memo-item memo-item-neutral">Clasificación de temas requiere sentence-transformers.</div>', unsafe_allow_html=True)
 
     # ── 06 Contexto No Visible ──
     _b4_card_ia(6, "Contexto No Visible", "contexto", ctx)
@@ -749,22 +749,20 @@ def render_bloque4_inteligencia():
         rechazo = int(conteo_tipos.get('rechazo_a_positivo', 0))
         total_p = len(df_posts)
         st.markdown(
-            f'<div class="bloom-card"><p style="font-size:13px;margin:0">'
-            f'Resonancia positiva: <strong style="color:#22c55e">{resonancia_pos}/{total_p}</strong> · '
-            f'Rechazo a positivo: <strong style="color:#ef4444">{rechazo}/{total_p}</strong>'
-            f'</p></div>',
+            f'<div class="memo-item memo-item-positivo">Resonancia positiva: {resonancia_pos}/{total_p}</div>'
+            f'<div class="memo-item memo-item-negativo">Rechazo a positivo: {rechazo}/{total_p}</div>',
             unsafe_allow_html=True,
         )
         if not distorsion_alta.empty:
-            st.markdown("**Posts con mayor distorsión (brecha reacción vs comentarios):**")
+            st.markdown('<div class="memo-section-number" style="margin-top:8px">DISTORSIÓN ALTA</div>')
             for _, r in distorsion_alta.head(3).iterrows():
                 msg = str(r.get('message', '') or '')[:100]
                 st.markdown(
-                    f'<div class="patron-rechazo"><p style="font-size:12px;margin:0">"{msg}"</p></div>',
+                    f'<div class="memo-item memo-item-negativo">"{msg}"</div>',
                     unsafe_allow_html=True,
                 )
     else:
-        st.markdown('<div class="bloom-status-info">Sin datos suficientes para correlación contenido-reacción.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="memo-item memo-item-neutral">Sin datos suficientes para correlación contenido-reacción.</div>', unsafe_allow_html=True)
 
     # ── 08 Comparativa Sectorial ──
     _b4_header(8, "Comparativa Sectorial")
@@ -776,40 +774,31 @@ def render_bloque4_inteligencia():
         score_ext = float(df_ext['score_sentimiento'].mean()) if 'score_sentimiento' in df_ext.columns else 0.0
         tono_ext = "POSITIVO" if score_ext > 0.1 else ("MIXTO" if score_ext > -0.1 else "CRÍTICO")
         color_t = "#22c55e" if score_ext > 0.1 else ("#eab308" if score_ext > -0.1 else "#ef4444")
-        c_cs1, c_cs2, c_cs3 = st.columns(3)
-        c_cs1.markdown(
-            f'<div class="bloom-card"><div class="bloom-card-title">Fuentes</div>'
-            f'<div class="bloom-card-value">{n_fuentes}</div></div>',
-            unsafe_allow_html=True,
-        )
-        c_cs2.markdown(
-            f'<div class="bloom-card"><div class="bloom-card-title">Menciones</div>'
-            f'<div class="bloom-card-value">{n_menciones}</div></div>',
-            unsafe_allow_html=True,
-        )
-        c_cs3.markdown(
-            f'<div class="bloom-card"><div class="bloom-card-title">Tono externo</div>'
-            f'<div class="bloom-card-value" style="color:{color_t};font-size:20px">{tono_ext}</div></div>',
+        st.markdown(
+            f'<div class="memo-item memo-item-neutral">Fuentes externas: {n_fuentes}</div>'
+            f'<div class="memo-item memo-item-neutral">Menciones totales: {n_menciones}</div>'
+            f'<div class="memo-item memo-item-positivo" style="border-left-color:{color_t}">Tono externo: {tono_ext}</div>',
             unsafe_allow_html=True,
         )
     else:
-        st.markdown('<div class="bloom-status-info">Sin datos externos para comparativa sectorial.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="memo-item memo-item-neutral">Sin datos externos para comparativa sectorial.</div>', unsafe_allow_html=True)
 
     # ── 09 Proyección de Escenario ──
     _b4_card_ia(9, "Proyección de Escenario", "proyeccion", ctx)
 
     # ── 10 Recomendación Estratégica ──
     _b4_card_ia(10, "Recomendación Estratégica", "recomendacion", ctx)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════
 # DISPATCH PRINCIPAL
 # ═══════════════════════════════════════════
 
-if vista == "📊 Dashboard":
+if vista == "Dashboard":
     tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs([
-        "📊 Pulso General", "👥 Segmentación de Audiencia",
-        "⚠️ Riesgo y Autenticidad", "🧠 Memoria e Inteligencia Aplicada"
+        "RESUMEN EJECUTIVO", "AUDIENCIA",
+        "ALERTAS", "MEMO ESTRATÉGICO"
     ])
     with tab_pulso:
         render_bloque1_pulso()
@@ -819,7 +808,21 @@ if vista == "📊 Dashboard":
         render_bloque3_riesgo()
     with tab_inteligencia:
         render_bloque4_inteligencia()
-elif vista == "📥 Cargar contenido":
+elif vista == "Cargar contenido":
+    st.markdown("""
+    <div class="doc-center">
+        <div class="doc-label">
+            <div class="doc-icon-box">PDF</div>
+            <div class="doc-info">
+                <div class="doc-filename">Informe Consolidado del Dia</div>
+                <div class="doc-meta">Centro de documentacion ejecutiva · Briefing diario corporativo</div>
+            </div>
+        </div>
+        <div class="doc-empty">
+            <div class="doc-empty-label">Sin documento disponible. El informe consolidado se genera automaticamente al procesar los datos del dia.</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     seccion_cargar_contenido()
-elif vista == "📋 Notas metodológicas":
+elif vista == "Notas metodológicas":
     render_notas_metodologicas()

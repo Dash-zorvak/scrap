@@ -1,28 +1,30 @@
 """Tests for Fase 5: procesar_pipeline orchestrator."""
 import os
 import sqlite3
-import shutil
+import tempfile
 
 import pytest
 
-from dashboard import config as _cfg
 from dashboard.procesar_lote import procesar_pipeline
+import dashboard.procesar_lote as _pl
 
 
 @pytest.fixture
-def temp_dbs():
-    """Create seed data in actual test DB paths (facebook_test.db / tiktok_test.db).
+def temp_dbs(monkeypatch):
+    """Create seed data in temp DBs and point procesar_lote at them.
 
-    These paths are what the modules read when modo_prueba=True.
-    Conftest does NOT block *_test.db paths, only production *.db.
+    El pipeline ya no usa modo_prueba: lee FACEBOOK_DB / TIKTOK_DB del modulo
+    procesar_lote, asi que parcheamos esos nombres hacia archivos temporales.
     """
-    fb_db = os.path.join(_cfg.BASE_DIR, "data", "facebook_test.db")
-    tk_db = os.path.join(_cfg.BASE_DIR, "data", "tiktok_test.db")
+    fb_fd = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    fb_fd.close()
+    tk_fd = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tk_fd.close()
+    fb_db = fb_fd.name
+    tk_db = tk_fd.name
 
-    # Remove any leftover from previous runs
-    for p in [fb_db, tk_db]:
-        if os.path.exists(p):
-            os.remove(p)
+    monkeypatch.setattr(_pl, "FACEBOOK_DB", fb_db)
+    monkeypatch.setattr(_pl, "TIKTOK_DB", tk_db)
 
     conn = sqlite3.connect(fb_db)
     conn.execute("""CREATE TABLE IF NOT EXISTS fb_posts (
@@ -78,23 +80,6 @@ def temp_dbs():
     for p in [fb_db, tk_db]:
         if os.path.exists(p):
             os.remove(p)
-    # Also remove any aggregate tables written during test
-    aux_tables = [
-        "fb_sentimiento", "post_categorias", "fb_engagement", "series_facebook",
-        "tiktok_sentimiento", "tiktok_engagement", "series_tiktok",
-    ]
-    for p in [fb_db, tk_db]:
-        if os.path.exists(p):
-            try:
-                conn = sqlite3.connect(p)
-                for tbl in aux_tables:
-                    conn.execute(f"DROP TABLE IF EXISTS {tbl}")
-                conn.commit()
-                conn.close()
-            except Exception:
-                pass
-        if os.path.exists(p):
-            os.remove(p)
 
 
 def _mock_heavy_modules(monkeypatch):
@@ -147,7 +132,7 @@ class TestProcesarPipeline:
         _mock_heavy_modules(monkeypatch)
         fb_db, tk_db = temp_dbs
 
-        result = procesar_pipeline(modo_prueba=True)
+        result = procesar_pipeline()
 
         assert len(result["pasos_ok"]) == 6
         assert "sentimiento_facebook" in result["pasos_ok"]
@@ -175,9 +160,9 @@ class TestProcesarPipeline:
         for tbl in ["tiktok_sentimiento", "tiktok_engagement", "series_tiktok"]:
             assert tbl in tables, f"Missing table: {tbl}"
 
-    def test_modo_prueba_flag(self, temp_dbs, monkeypatch):
+    def test_motor_reglas_fallback(self, temp_dbs, monkeypatch):
         _mock_heavy_modules(monkeypatch)
-        result = procesar_pipeline(modo_prueba=True)
+        result = procesar_pipeline()
         assert result["motor_sentimiento"] == "reglas"
 
     def test_error_isolation(self, temp_dbs, monkeypatch):
@@ -190,7 +175,7 @@ class TestProcesarPipeline:
             "dashboard.procesar_lote.analizar_sentimiento_facebook", broken_sentiment
         )
 
-        result = procesar_pipeline(modo_prueba=True)
+        result = procesar_pipeline()
 
         assert "sentimiento_facebook" not in result["pasos_ok"]
         assert len(result["errores"]) >= 1
@@ -204,6 +189,6 @@ class TestProcesarPipeline:
         def cb(paso, total, etiqueta):
             steps.append((paso, total, etiqueta))
 
-        procesar_pipeline(modo_prueba=True, progreso_cb=cb)
+        procesar_pipeline(progreso_cb=cb)
         assert len(steps) == 7  # 6 steps + "Pipeline completado"
         assert steps[-1] == (6, 6, "Pipeline completado")

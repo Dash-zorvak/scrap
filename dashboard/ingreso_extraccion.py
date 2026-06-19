@@ -680,7 +680,7 @@ def _archivos_a_paginas(archivos: list) -> list[dict]:
 
 
 # ═══════════════════════════════════
-# Deduplicación y filtrado de posts
+# Deduplicación, fusión y filtrado de posts
 # ═══════════════════════════════════
 
 def _post_no_vacio(contrato: dict) -> bool:
@@ -739,9 +739,156 @@ def _deduplicar_posts(posts: list) -> list:
     return result
 
 
+def _valor_de(campo: Any):
+    if isinstance(campo, dict):
+        return campo.get("valor")
+    return None
+
+
+def _mejor_campo_num(a: Any, b: Any) -> dict:
+    """Devuelve el campo {valor, confianza} con el mayor valor no nulo."""
+    a = a if isinstance(a, dict) else {"valor": None, "confianza": "no_detectado"}
+    b = b if isinstance(b, dict) else {"valor": None, "confianza": "no_detectado"}
+    va = a.get("valor")
+    vb = b.get("valor")
+    if va is None:
+        return b
+    if vb is None:
+        return a
+    return a if va >= vb else b
+
+
+def _fusionar_dos(a: dict, b: dict) -> dict:
+    """Combina dos fragmentos del MISMO post en un único contrato."""
+    plataforma = a.get("plataforma") or b.get("plataforma")
+
+    ta = (a.get("texto_post") or "").strip()
+    tb = (b.get("texto_post") or "").strip()
+    texto = ta if len(ta) >= len(tb) else tb
+
+    fa = a.get("fecha") or {}
+    fb = b.get("fecha") or {}
+    if fa.get("valor"):
+        fecha = fa
+    elif fb.get("valor"):
+        fecha = fb
+    else:
+        fecha = fa or {"valor": None, "confianza": "no_detectado"}
+
+    ea = a.get("enlace") or {}
+    eb = b.get("enlace") or {}
+    if ea.get("valor"):
+        enlace = ea
+    elif eb.get("valor"):
+        enlace = eb
+    else:
+        enlace = ea or {"valor": None, "confianza": "no_detectado"}
+
+    comentarios = list(a.get("comentarios") or [])
+    vistos = {(c.get("texto"), c.get("autor")) for c in comentarios}
+    for c in (b.get("comentarios") or []):
+        clave = (c.get("texto"), c.get("autor"))
+        if clave not in vistos:
+            vistos.add(clave)
+            comentarios.append(c)
+
+    fusion = {
+        "plataforma": plataforma,
+        "texto_post": texto,
+        "fecha": fecha,
+        "enlace": enlace,
+        "comentarios": comentarios,
+    }
+
+    if plataforma == "tiktok":
+        ma = a.get("metricas") or {}
+        mb = b.get("metricas") or {}
+        fusion["autor_cuenta"] = a.get("autor_cuenta") or b.get("autor_cuenta")
+        fusion["metricas"] = {
+            "likes": _mejor_campo_num(ma.get("likes"), mb.get("likes")),
+            "favoritos": _mejor_campo_num(ma.get("favoritos"), mb.get("favoritos")),
+            "comentarios_count": _mejor_campo_num(
+                ma.get("comentarios_count"), mb.get("comentarios_count")
+            ),
+            "compartidos": {"valor": None, "confianza": "manual"},
+            "vistas": {"valor": None, "confianza": "manual"},
+        }
+    else:
+        ra = a.get("reacciones") or {}
+        rb = b.get("reacciones") or {}
+        fusion["autor_pagina"] = a.get("autor_pagina") or b.get("autor_pagina")
+        fusion["reacciones"] = {
+            k: _mejor_campo_num(ra.get(k), rb.get(k))
+            for k in ("likes", "loves", "cares", "hahas", "sads", "wows", "angrys", "total")
+        }
+        fusion["comentarios_count"] = _mejor_campo_num(
+            a.get("comentarios_count"), b.get("comentarios_count")
+        )
+        fusion["compartidos"] = {"valor": None, "confianza": "manual"}
+        fusion["vistas"] = {"valor": None, "confianza": "manual"}
+
+    return fusion
+
+
+def _fusionar_posts(posts: list) -> list:
+    """Fusiona fragmentos del mismo post de forma determinista.
+
+    La URL del post marca su frontera:
+    - Si en TODO el documento hay 0 o 1 URL distinta → es UN SOLO post: se
+      fusionan todos los fragmentos. (Caso típico: un PDF de un post repartido
+      en página de enlace + página de captura + página de comentarios.)
+    - Con 2+ URLs distintas → se agrupa respetando el orden de aparición: cada
+      URL abre un post y los fragmentos sin URL que la siguen pertenecen a esa
+      URL (hasta la siguiente).
+    """
+    if not posts:
+        return posts
+
+    enlaces = set()
+    for p in posts:
+        e = ((p.get("enlace") or {}).get("valor") or "").strip().lower()
+        if e:
+            enlaces.add(e)
+
+    # 0 o 1 URL distinta en todo el documento → un solo post
+    if len(enlaces) <= 1:
+        fusion = posts[0]
+        for p in posts[1:]:
+            fusion = _fusionar_dos(fusion, p)
+        return [fusion]
+
+    # 2+ URLs → agrupar por URL respetando el orden de aparición
+    grupos: list = []
+    indice: dict = {}
+    actual = None
+    for p in posts:
+        e = ((p.get("enlace") or {}).get("valor") or "").strip().lower()
+        if e:
+            if e in indice:
+                idx = indice[e]
+                grupos[idx] = _fusionar_dos(grupos[idx], p)
+                actual = idx
+            else:
+                indice[e] = len(grupos)
+                actual = len(grupos)
+                grupos.append(p)
+        else:
+            if actual is not None:
+                grupos[actual] = _fusionar_dos(grupos[actual], p)
+            else:
+                actual = len(grupos)
+                grupos.append(p)
+    return grupos
+
+
 def _depurar_posts(posts: list) -> list:
-    """Filtra posts vacíos y deduplica (por enlace o texto)."""
-    return _deduplicar_posts([p for p in posts if _post_no_vacio(p)])
+    """Filtra posts vacíos y fusiona los fragmentos de un mismo post.
+
+    La fusión sustituye a la deduplicación simple: además de unir posts con el
+    mismo enlace, junta los fragmentos de un único post repartido en varias
+    páginas (página de URL, página de captura, página de comentarios).
+    """
+    return _fusionar_posts([p for p in posts if _post_no_vacio(p)])
 
 
 # ═══════════════════════════════════
@@ -752,12 +899,11 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
     """Extrae UNO O VARIOS posts desde archivos (PDF o imágenes) con Groq Visión.
 
     Para pocas páginas (≤ VENTANA): una sola llamada con prompt multi-post.
-    Para muchas páginas (> VENTANA): extracción por ventanas con solape + deduplicación
-    por enlace (o texto truncado a 80 chars si no hay enlace).
+    Para muchas páginas (> VENTANA): extracción por ventanas con solape.
 
-    En ambos caminos se filtran posts vacíos y se deduplica, de modo que un mismo
-    post repartido en varias páginas (enlace + captura + comentarios) NO se divida
-    en varios.
+    En ambos caminos se filtran posts vacíos y se fusionan los fragmentos del
+    mismo post (ver _fusionar_posts), de modo que un mismo post repartido en
+    varias páginas (enlace + captura + comentarios) NO se divida en varios.
 
     Args:
         archivos: Lista de UploadedFile de Streamlit, bytes o imágenes PIL.
@@ -830,7 +976,7 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
 
         return {"error": ultimo_error or "Error desconocido"}
 
-    # ── Muchas páginas (> VENTANA) → extracción por ventanas + dedupe ──
+    # ── Muchas páginas (> VENTANA) → extracción por ventanas + fusión ──
     paso = max(1, VENTANA - SOLAPE)
     ultimo_error = None
     posts_raw = []
@@ -873,10 +1019,10 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
         return {"error": ultimo_error or "No se pudo extraer ningún post"}
 
     posts_contratos = [_aplicar_contrato(p, plataforma) for p in posts_raw]
-    posts_dedupe = _depurar_posts(posts_contratos)
-    if not posts_dedupe:
+    posts_finales = _depurar_posts(posts_contratos)
+    if not posts_finales:
         return {"error": ultimo_error or "No se pudo extraer ningún post con contenido"}
-    return {"posts": posts_dedupe}
+    return {"posts": posts_finales}
 
 
 # ═══════════════════════════════════

@@ -1,3 +1,13 @@
+---
+title: Panel Santa Ana
+emoji: 📊
+colorFrom: blue
+colorTo: gray
+sdk: streamlit
+app_file: dashboard/app.py
+pinned: false
+---
+
 # Scrapeo Social
 
 Analítica de percepción pública para Facebook de la Alcaldía de Santa Ana.
@@ -58,6 +68,27 @@ El dashboard se compone de cuatro bloques principales:
 3. **Guardar lote**: los posts revisados se persisten en SQLite.
 4. **Procesar lote**: reconstruye tablas agregadas (sentimiento, categorías, engagement, series).
 5. **Validar en dashboard**: navegar los bloques para ver los resultados.
+
+## Despliegue en Hugging Face Spaces
+
+El host por defecto. El disco de un Space es **efímero** (se borra al reiniciar o
+reconstruir), por lo que las bases SQLite se persisten en un **Dataset privado**
+de Hugging Face mediante `dashboard/hf_sync.py`.
+
+1. Crear un **Space** (SDK *Streamlit*, hardware *CPU basic*, gratis). El
+   frontmatter de este README ya define `sdk: streamlit` y
+   `app_file: dashboard/app.py`.
+2. Subir el código del repo al Space (o conectarlo a GitHub).
+3. Crear un **Access Token** con permiso de escritura en
+   *Settings → Access Tokens*.
+4. Configurar los **Secrets** del Space (*Settings → Variables and secrets*):
+   - `GROQ_API_KEY` (obligatoria) — clave de Groq para visión y sentimiento.
+   - `HF_DATASET_REPO` — repo del Dataset persistente, formato `usuario/panel-santa-ana-data`.
+   - `HF_TOKEN` — el token de escritura del paso 3.
+   - `MOTOR_SENTIMIENTO=groq` (opcional) — evita cargar torch/BERT y ahorra RAM.
+5. El Dataset privado se crea automáticamente en el primer guardado si no existe.
+6. Sin `HF_DATASET_REPO`/`HF_TOKEN` la app funciona igual, pero los datos **no**
+   sobreviven a un reinicio del Space.
 
 ## Despliegue en Railway
 

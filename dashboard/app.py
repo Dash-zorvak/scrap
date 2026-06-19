@@ -13,12 +13,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from config import (
     FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB,
-    FACEBOOK_TEST_DB, TIKTOK_TEST_DB, EXTERNOS_TEST_DB,
     FB_PAGES_OFICIALES, FB_REACTIONS, TK_ENGAGEMENT,
     TK_ACCOUNTS, OUTPUT_DIR, MIN_COMENTARIOS_MUESTRA,
 )
 from dashboard.muestra import evaluar_muestra
-from dashboard.sentimiento_engine import get_diagnostico_sentimiento
 from dashboard.estilos import CSS
 from dashboard.dash_ingesta import seccion_cargar_contenido
 from dashboard.dash_metrics import (
@@ -38,22 +36,9 @@ from dashboard.dash_metrics import (
     generar_interpretacion,
 )
 
-# ─── Estado de sesión (intacto) ─────────────────────────────
-if "modo_prueba" not in st.session_state:
-    st.session_state.modo_prueba = False
-
+# ─── Estado de sesión ───────────────────────────────────────
 if "lote_ingreso" not in st.session_state:
     st.session_state["lote_ingreso"] = []
-
-FACEBOOK_DB_ACTIVA = (
-    FACEBOOK_TEST_DB if st.session_state.get("modo_prueba", False) else FACEBOOK_DB
-)
-TIKTOK_DB_ACTIVA = (
-    TIKTOK_TEST_DB if st.session_state.get("modo_prueba", False) else TIKTOK_DB
-)
-EXTERNOS_DB_ACTIVA = (
-    EXTERNOS_TEST_DB if st.session_state.get("modo_prueba", False) else EXTERNOS_DB
-)
 
 
 def leyenda_grafica(elementos):
@@ -89,10 +74,10 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 # ─── Fecha de actualización (usada en topbar y sidebar) ─────
 try:
-    conn = sqlite3.connect(FACEBOOK_DB_ACTIVA)
+    conn = sqlite3.connect(FACEBOOK_DB)
     max_fb = pd.read_sql("SELECT MAX(created_time) as m FROM fb_engagement", conn).iloc[0]['m']
     conn.close()
-    conn = sqlite3.connect(TIKTOK_DB_ACTIVA)
+    conn = sqlite3.connect(TIKTOK_DB)
     max_tk = pd.read_sql("SELECT MAX(created_at) as m FROM tiktok_engagement", conn).iloc[0]['m']
     conn.close()
     fechas = []
@@ -101,9 +86,12 @@ try:
     ultima_fecha = max(fechas) if fechas else datetime.now()
     dias = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']
     meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+    meses_short = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC']
     fecha_str = f"{dias[ultima_fecha.weekday()]} {ultima_fecha.day} de {meses[ultima_fecha.month-1]}, {ultima_fecha.year}"
+    fecha_corta = f"{ultima_fecha.day:02d} {meses_short[ultima_fecha.month-1]} {ultima_fecha.year}"
 except Exception:
     fecha_str = "No disponible"
+    fecha_corta = "N/D"
 
 # ─── Topbar institucional ───────────────────────────────────
 st.markdown(f"""
@@ -113,11 +101,35 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ─── SIDEBAR ────────────────────────────────────────────────
+# ─── SIDEBAR · CONSOLA EJECUTIVA ────────────────────────────
 
-st.sidebar.markdown('<div class="sys-header"><div class="sys-brand">PANEL·SANTA ANA</div><div class="sys-brand-sub">Inteligencia Ciudadana</div></div>', unsafe_allow_html=True)
+# Header institucional
+st.sidebar.markdown("""
+<div class="sys-header">
+    <div class="sys-brand">PANEL·SANTA ANA</div>
+    <div class="sys-brand-sub">INTELIGENCIA CIUDADANA</div>
+</div>
+""", unsafe_allow_html=True)
 
-st.sidebar.markdown('<div class="sys-section-label">FILTROS</div>', unsafe_allow_html=True)
+# Ticker de sistema · estado operacional + feed
+st.sidebar.markdown(f"""
+<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-sm);padding:11px 13px;margin-bottom:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:1.4px;color:var(--fg-muted);font-weight:600;text-transform:uppercase">
+        <span>SYS</span>
+        <span style="display:flex;align-items:center;gap:6px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,0.18);display:inline-block"></span>
+            <span style="color:var(--green);letter-spacing:1.2px">OPERACIONAL</span>
+        </span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:1.2px;color:var(--fg-muted);font-weight:600;margin-top:9px;text-transform:uppercase">
+        <span>FEED</span>
+        <span style="color:var(--accent)">{fecha_corta}</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Sección · Parámetros
+st.sidebar.markdown('<div class="sys-section-label" style="color:var(--accent);display:flex;align-items:center;gap:6px"><span style="font-size:8px">▣</span><span>PARÁMETROS</span></div>', unsafe_allow_html=True)
 
 periodo = st.sidebar.selectbox("PERÍODO", [
     "Esta semana",
@@ -131,61 +143,24 @@ plataforma = st.sidebar.selectbox("PLATAFORMA", [
     "Ambas", "Facebook", "TikTok"
 ])
 
-st.sidebar.markdown('<div class="sys-section-label">NAVEGACIÓN</div>', unsafe_allow_html=True)
+# Sección · Consola
+st.sidebar.markdown('<div class="sys-section-label" style="color:var(--accent);margin-top:18px;display:flex;align-items:center;gap:6px"><span style="font-size:8px">▣</span><span>CONSOLA</span></div>', unsafe_allow_html=True)
 
 vista = st.sidebar.radio("VISTA", [
     "Dashboard", "Cargar contenido", "Notas metodológicas"
 ])
 
-st.sidebar.markdown('<hr class="sys-divider">', unsafe_allow_html=True)
-st.sidebar.markdown('<div class="sys-section-label">SISTEMA</div>', unsafe_allow_html=True)
-
-modo_prueba = st.sidebar.toggle(
-    "MODO PRUEBA",
-    value=st.session_state.modo_prueba,
-    help="Activa datos de prueba con alta negatividad para testear el semáforo rojo"
-)
-if modo_prueba != st.session_state.modo_prueba:
-    st.session_state.modo_prueba = modo_prueba
-    st.cache_data.clear()
-    st.rerun()
-
-if st.session_state.modo_prueba:
-    st.sidebar.markdown(
-        '<div class="sys-footer" style="color:var(--amber);">MODO PRUEBA ACTIVO</div>',
-        unsafe_allow_html=True
-    )
-
-st.sidebar.markdown(
-    f'<div class="sys-footer">ACTUALIZADO: {fecha_str}</div>',
-    unsafe_allow_html=True
-)
-
-st.sidebar.markdown('<hr class="sys-divider">', unsafe_allow_html=True)
-
-with st.sidebar.expander("DIAGNÓSTICO DEL SISTEMA"):
-    st.caption("GROQ_API_KEY (visión + texto)")
-    api_key_env = os.environ.get("GROQ_API_KEY")
-    api_key_secrets = None
-    try:
-        api_key_secrets = st.secrets.get("GROQ_API_KEY")
-    except Exception:
-        pass
-    if api_key_env:
-        st.code("detectada (env)", language="text")
-    elif api_key_secrets:
-        st.code("detectada (secrets)", language="text")
-    else:
-        st.code("NO detectada", language="text")
-
-    diag = get_diagnostico_sentimiento()
-    st.caption("Motor de sentimiento")
-    st.code(f"forzado: {diag['motor_forzado']}", language="text")
-    st.code(f"bert_fallo: {diag['bert_fallo']}", language="text")
-    if diag["ultimo_error_bert"]:
-        st.code(f"último error BERT: {diag['ultimo_error_bert']}", language="text")
-    if diag["ultimo_error_groq"]:
-        st.code(f"último error Groq (sentimiento): {diag['ultimo_error_groq']}", language="text")
+# Footer institucional
+st.sidebar.markdown(f"""
+<div style="margin-top:26px;padding-top:14px;border-top:1px solid var(--border);font-family:var(--font-mono);color:var(--fg-muted);letter-spacing:0.4px;line-height:1.6">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:9px;text-transform:uppercase;letter-spacing:1.4px;font-weight:600">
+        <span>ACTUALIZADO</span>
+        <span style="color:var(--accent)">{fecha_corta}</span>
+    </div>
+    <div style="color:var(--fg-secondary);font-size:9px;line-height:1.5">{fecha_str}</div>
+    <div style="color:var(--fg-dim);font-size:8.5px;margin-top:12px;letter-spacing:1px;text-transform:uppercase;border-top:1px solid var(--border-soft);padding-top:8px">PANEL·SANTA ANA <span style="color:var(--accent-2)">·</span> v1.0 <span style="color:var(--accent-2)">·</span> CONFIDENCIAL</div>
+</div>
+""", unsafe_allow_html=True)
 
 # ─── HELPERS UI ─────────────────────────────────────────────
 
@@ -207,7 +182,7 @@ def _warn_dropped_null_dates():
         ("videos", "created_at", "videos de TikTok"),
     ]:
         try:
-            db = FACEBOOK_DB_ACTIVA if table == "fb_posts" else TIKTOK_DB_ACTIVA
+            db = FACEBOOK_DB if table == "fb_posts" else TIKTOK_DB
             if not os.path.exists(db):
                 continue
             with sqlite3.connect(db) as conn:
@@ -306,13 +281,12 @@ def _page_head(overline: str, title: str, sub: str, stats: str = ""):
     """, unsafe_allow_html=True)
 
 
-def _docstrip(periodo_lbl: str, plataforma_lbl: str, fecha_lbl: str, modo_lbl: str = ""):
+def _docstrip(periodo_lbl: str, plataforma_lbl: str, fecha_lbl: str):
     """Pie ejecutivo con metadatos de la consulta."""
-    modo_html = f'<span class="sep">·</span> <span class="acc">{modo_lbl}</span>' if modo_lbl else ''
     st.markdown(f"""
     <div class="docstrip-footer">
         <div>PANEL·SANTA ANA <span class="sep">·</span> INTELIGENCIA CIUDADANA</div>
-        <div>PERÍODO <span class="acc">{periodo_lbl.upper()}</span> <span class="sep">·</span> FUENTE <span class="acc">{plataforma_lbl.upper()}</span> <span class="sep">·</span> {fecha_lbl.upper()} {modo_html}</div>
+        <div>PERÍODO <span class="acc">{periodo_lbl.upper()}</span> <span class="sep">·</span> FUENTE <span class="acc">{plataforma_lbl.upper()}</span> <span class="sep">·</span> {fecha_lbl.upper()}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -423,8 +397,8 @@ def _build_serie_chart(df_fb_s, df_tk_s, periodo):
 
 def render_bloque1_pulso():
     _warn_dropped_null_dates()
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
+    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB)
+    df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB)
     df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
 
     _page_head(
@@ -444,7 +418,7 @@ def render_bloque1_pulso():
     sem_class = {'verde':'positive','amarillo':'warning','rojo':'critical'}.get(color_sem, 'positive')
     st.markdown(f'<div class="indicator indicator-{sem_class}"><div class="indicator-dot"></div><div class="indicator-text">{texto_sem}</div></div>', unsafe_allow_html=True)
 
-    df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
+    df_sent = cargar_sentimiento_fb(FACEBOOK_DB)
     score_val = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
     pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
     pct_pos_val = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
@@ -487,7 +461,7 @@ def render_bloque1_pulso():
     </div>
     """, unsafe_allow_html=True)
 
-    df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA)
+    df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB, TIKTOK_DB)
     fig = _build_serie_chart(df_fb_s, df_tk_s, periodo)
     if fig:
         card_explicativa("Qué tanto la gente reacciona, comenta y comparte.", "Más alto: más gente se involucra. Más bajo: la gente lo ve pero no responde.")
@@ -495,7 +469,7 @@ def render_bloque1_pulso():
 
     # ── 3. CONCENTRACIÓN TEMÁTICA ──
     st.markdown('<div class="section-header"><div class="section-title">03 · Concentración Temática</div><div class="section-subtitle">Distribución del contenido por categoría — concentración vs. diversidad.</div></div>', unsafe_allow_html=True)
-    df_cat = safe_query("SELECT item_id, categoria_nombre FROM post_categorias", FACEBOOK_DB_ACTIVA)
+    df_cat = safe_query("SELECT item_id, categoria_nombre FROM post_categorias", FACEBOOK_DB)
     if not df_cat.empty:
         conteo = df_cat['categoria_nombre'].value_counts()
         total_cat = conteo.sum()
@@ -524,7 +498,7 @@ def render_bloque2_audiencia():
         f'PERÍODO <span class="acc">{periodo.upper()}</span> <span class="sep">·</span> PLATAFORMA <span class="acc">{plataforma.upper()}</span>'
     )
 
-    df_comentarios = cargar_comentarios_fb(FACEBOOK_DB_ACTIVA)
+    df_comentarios = cargar_comentarios_fb(FACEBOOK_DB)
     if not hay_datos(df_comentarios, "Aún no hay comentarios procesados."):
         return
 
@@ -590,7 +564,7 @@ def render_bloque2_audiencia():
 
     # ── 3. VOCES DE INFLUENCIA ──
     st.markdown('<div class="section-header"><div class="section-title">03 · Voces de Influencia (proxy)</div><div class="section-subtitle">Páginas oficiales con mayor concentración de interacción.</div></div>', unsafe_allow_html=True)
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
+    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB)
     if not df_fb_raw.empty:
         top_pages = df_fb_raw.groupby('page_name').agg(
             engagement=('engagement_total', 'sum'),
@@ -619,11 +593,11 @@ def render_bloque3_riesgo():
         f'PERÍODO <span class="acc">{periodo.upper()}</span> <span class="sep">·</span> PLATAFORMA <span class="acc">{plataforma.upper()}</span>'
     )
 
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
+    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB)
+    df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB)
     df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
-    df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
-    df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA)
+    df_sent = cargar_sentimiento_fb(FACEBOOK_DB)
+    df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB, TIKTOK_DB)
 
     if df_fb.empty and df_tk.empty:
         hay_datos(df_fb, "No hay datos para este período.")
@@ -753,9 +727,9 @@ def render_bloque4_inteligencia():
         </div>
     """, unsafe_allow_html=True)
 
-    df_sent = cargar_sentimiento_fb(FACEBOOK_DB_ACTIVA)
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB_ACTIVA)
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB_ACTIVA, FACEBOOK_DB_ACTIVA)
+    df_sent = cargar_sentimiento_fb(FACEBOOK_DB)
+    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB)
+    df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB)
     df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
 
     score = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
@@ -783,7 +757,7 @@ def render_bloque4_inteligencia():
     df_cat = safe_query(
         "SELECT item_id, categoria_nombre, created_time FROM fb_posts "
         "LEFT JOIN post_categorias ON fb_posts.post_id = post_categorias.item_id",
-        FACEBOOK_DB_ACTIVA,
+        FACEBOOK_DB,
     )
     if not df_cat.empty and 'created_time' in df_cat.columns and 'categoria_nombre' in df_cat.columns:
         df_cat['created_time'] = pd.to_datetime(df_cat['created_time'], errors='coerce')
@@ -850,7 +824,7 @@ def render_bloque4_inteligencia():
         st.markdown('<div class="memo-item memo-item-neutral">Sin datos suficientes para correlación contenido-reacción.</div>', unsafe_allow_html=True)
 
     _b4_header(8, "Comparativa Sectorial")
-    df_ext = cargar_externos(EXTERNOS_DB_ACTIVA)
+    df_ext = cargar_externos(EXTERNOS_DB)
     if df_ext is not None and not df_ext.empty:
         col_fuente = 'page_name' if 'page_name' in df_ext.columns else ('source' if 'source' in df_ext.columns else None)
         n_fuentes = int(df_ext[col_fuente].nunique()) if col_fuente else 0
@@ -891,8 +865,7 @@ if vista == "Dashboard":
         render_bloque4_inteligencia()
 
     # Docstrip footer ejecutivo
-    modo_lbl = "MODO PRUEBA" if st.session_state.modo_prueba else ""
-    _docstrip(periodo, plataforma, fecha_str, modo_lbl)
+    _docstrip(periodo, plataforma, fecha_str)
 
 elif vista == "Cargar contenido":
     _page_head(

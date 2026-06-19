@@ -36,49 +36,61 @@ def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
     if not groq_disponible():
         return "Análisis IA no disponible en este momento (falta GROQ_API_KEY en .streamlit/secrets.toml o variable de entorno)"
 
+    reglas_comunes = (
+        " REGLAS OBLIGATORIAS DE SALIDA: "
+        "(1) Tono crudo y directo, sin eufemismos, sin adjetivos vacíos y sin frases de relleno. "
+        "(2) PROHIBIDO mencionar 'reelección', 'campaña', 'propaganda', 'voto', 'candidato' o sugerir "
+        "cualquier estrategia electoral o de propaganda; esto es un análisis de gestión y percepción "
+        "ciudadana, NO de campaña. No recomiendes 'publicar más obras' ni acciones de imagen. "
+        "(3) Cada afirmación debe respaldarse con cifras concretas del contexto (porcentajes, conteos, "
+        "reacciones, comentarios, vistas). No escribas generalidades sin un número que las sostenga. "
+        "(4) Cuando el dato exista, nombra zonas, colonias, cantones o categorías concretas. "
+        "No inventes datos que no estén en el contexto."
+    )
+
     prompts = {
         "eco_historico": (
-            "Eres analista político senior para Alcaldía de Santa Ana. "
+            "Eres analista de percepción ciudadana para la Alcaldía de Santa Ana. "
             "Dado el contexto de métricas de percepción de la semana, escribe un párrafo ejecutivo "
             "(máx 120 palabras) que explique qué patrón histórico o 'eco' del pasado "
-            "resuena con la situación actual. Tono: directo, sin adjetivos vacíos, "
-            "orientado a decisión de reelección. Español."
+            "resuena con la situación actual y qué implica para la gestión. Español."
         ),
         "leccion": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
+            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
             "sintetizando la lección operativa clara que deja esta semana de datos. "
-            "Qué NO repetir, qué replicar. Tono: brutal honestidad, acción inmediata. Español."
+            "Qué NO repetir, qué replicar, sustentado en las cifras. Español."
         ),
         "brecha": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
+            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
             "sobre la brecha entre lo que la ciudadanía PERCIBE (sentimiento, temas, enojo) "
             "y la GESTIÓN REAL (obras, servicios, indicadores municipales — dato no disponible en BD, "
-            "asume que existe). Tono: confronta percepción vs realidad sin suavizar. Español."
+            "asume que existe). Confronta percepción vs realidad sin suavizar. Español."
         ),
         "contexto": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "explicando qué está pasando FUERA de las redes (eventos municipales, opositores, "
+            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
+            "explicando qué está pasando FUERA de las redes (eventos municipales, "
             "economía local, clima, noticias) que explica el sentimiento negativo detectado "
-            "en comentarios. Usa solo el contexto implícito en los datos. Tono: discreto, informado. Español."
+            "en comentarios. Usa solo el contexto implícito en los datos. Español."
         ),
         "correlacion": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
+            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
             "sobre la correlación entre TIPO DE CONTENIDO publicado y REACCIÓN CIUDADANA "
-            "(brecha reacción vs comentario). Qué contenido genera desconexión. Tono: diagnóstico preciso. Español."
+            "(brecha reacción vs comentario). Qué contenido genera desconexión. Diagnóstico preciso. Español."
         ),
         "proyeccion": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
+            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
             "proyectando el escenario a 2 semanas si la tendencia actual de sentimiento, "
-            "engagement y narrativas se mantiene. Tono: alerta temprana, sin alarmismo. Español."
+            "engagement y narrativas se mantiene. Alerta temprana, sin alarmismo. Español."
         ),
         "recomendacion": (
-            "Eres analista político senior. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "con LA recomendación estratégica única de la semana, sintetizando TODOS los indicadores: "
-            "Pulso, Audiencia, Riesgo, Memoria. Qué hacer el lunes. Tono: orden directa, ejecutable. Español."
+            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
+            "con LA recomendación operativa única de la semana, sintetizando TODOS los indicadores: "
+            "Pulso, Audiencia, Riesgo, Memoria. Qué hacer el lunes en términos de gestión y servicios "
+            "concretos. Orden directa y ejecutable. Español."
         ),
     }
 
-    prompt_base = prompts.get(tipo, prompts["recomendacion"])
+    prompt_base = prompts.get(tipo, prompts["recomendacion"]) + reglas_comunes
     ctx_str = json.dumps(contexto, ensure_ascii=False, default=str)[:3000]
 
     try:
@@ -100,60 +112,60 @@ def generar_interpretacion(tipo, datos):
 
     if tipo == "semaforo":
         if score >= 0.25:
-            return f"La ciudadanía te respalda. El {pct_pos:.0f}% de los comentarios son de apoyo — la gente está contenta con lo que ve en tus redes. Este es el momento de publicar más contenido de obras y logros."
+            return f"La ciudadanía te respalda esta semana: el {pct_pos:.0f}% de los comentarios son de apoyo. Es el dato, no un mérito garantizado. Documenta qué temas y zonas concretas generan ese respaldo, porque puede revertirse en cuanto un servicio falle."
         elif score >= 0.10:
-            return f"Hay señales mixtas. Algunos te apoyan, otros empiezan a cuestionar. El {pct_neg:.0f}% de los comentarios son negativos — no es crisis todavía, pero la tendencia importa. Revisa qué temas generan más críticas esta semana."
+            return f"Señales mixtas. Una parte apoya y otra ya cuestiona: el {pct_neg:.0f}% de los comentarios son negativos. No es crisis, pero la tendencia manda. Identifica qué temas concentran las críticas esta semana."
         elif score >= 0:
-            return f"Atención. El equilibrio entre apoyo y rechazo es frágil. El {pct_neg:.0f}% de los comentarios son negativos y el enojo representa el {enojo*100:.0f}% de las reacciones. La ciudadanía está observando — cualquier error se amplifica ahora."
+            return f"Equilibrio frágil entre apoyo y rechazo. El {pct_neg:.0f}% de los comentarios son negativos y el enojo es el {enojo*100:.0f}% de las reacciones. La ciudadanía está observando y cualquier error se amplifica de inmediato."
         else:
-            return f"ALERTA. La ciudadanía está en modo crítico. El enojo representa el {enojo*100:.0f}% de TODAS las reacciones — eso significa que por cada persona que apoya, hay varias que reaccionan con rechazo activo. El {pct_neg:.0f}% de los comentarios son negativos. Esto no es ruido — es una señal que históricamente precede pérdida de confianza electoral."
+            return f"ALERTA. La ciudadanía está en modo crítico. El enojo es el {enojo*100:.0f}% de TODAS las reacciones: por cada persona que apoya hay varias que reaccionan con rechazo activo. El {pct_neg:.0f}% de los comentarios son negativos. No es ruido: es deterioro de confianza ciudadana, y se sostiene en los números, no en una percepción."
 
     elif tipo == "tema_critico":
         tema = datos.get('tema', '')
         reacciones = datos.get('reacciones', 0)
-        return f"Aquí está el problema. '{tema}' concentra {reacciones:,} reacciones con {pct_neg:.0f}% de comentarios negativos. Cuando publicas sobre este tema, la ciudadanía responde principalmente con burla y enojo — no con apoyo. Esto indica una brecha entre lo que comunicas y lo que la gente experimenta en su colonia."
+        return f"Aquí está el problema. '{tema}' concentra {reacciones:,} reacciones con {pct_neg:.0f}% de comentarios negativos. Cuando publicas sobre este tema, la ciudadanía responde con burla y enojo, no con apoyo. Hay una brecha entre lo que comunicas y lo que la gente vive en su colonia."
 
     elif tipo == "tema_positivo":
         tema = datos.get('tema', '')
-        return f"'{tema}' es tu contenido más fuerte. El {pct_pos:.0f}% de comentarios son positivos — la gente comparte este tipo de contenido espontáneamente. Aquí la ciudadanía se identifica contigo, no solo consume lo que publicas."
+        return f"'{tema}' es tu contenido más fuerte: el {pct_pos:.0f}% de comentarios son positivos y la gente lo comparte por cuenta propia. Aquí la ciudadanía se identifica, no solo consume lo que publicas."
 
     elif tipo == "anomalia":
         fecha = datos.get('fecha', '')
         views = datos.get('views', 0)
         tipo_pico = datos.get('tipo', 'positivo')
         if tipo_pico == 'positivo':
-            return f"La semana del {fecha} fue inusual — {views:,} interacciones, muy por encima de tu promedio. Algo pasó esa semana que movilizó a la ciudadanía a tu favor. Identifica qué publicaste o qué evento ocurrió — ese es el tipo de contenido que debes replicar."
+            return f"La semana del {fecha} fue inusual: {views:,} interacciones, muy por encima del promedio. Algo movilizó a la ciudadanía a tu favor. Identifica qué se publicó o qué evento ocurrió: ese es el contenido que conviene replicar."
         else:
-            return f"La semana del {fecha} tuvo una caída inusual. La ciudadanía reaccionó con más rechazo del habitual. Revisa qué comunicaste esa semana y qué pasó en el municipio en esas fechas."
+            return f"La semana del {fecha} tuvo una caída inusual: más rechazo del habitual. Revisa qué se comunicó esa semana y qué pasó en el municipio en esas fechas."
 
     elif tipo == "patron_rechazo":
         nombre = datos.get('nombre', '')
         count = datos.get('count', 0)
         tendencia = datos.get('tendencia', '')
-        return f"{count} personas expresaron este patrón con sus propias palabras. No es un comentario aislado — es una narrativa colectiva. Tendencia: {tendencia}. Cuando un patrón de rechazo crece semana a semana, eventualmente se convierte en el tema central que la oposición usará en campaña."
+        return f"{count} personas expresaron este patrón con sus propias palabras. No es un comentario aislado: es una narrativa colectiva. Tendencia: {tendencia}. Cuando un patrón de rechazo crece semana a semana, se vuelve el reclamo dominante de la ciudadanía sobre tu gestión."
 
     elif tipo == "patron_respaldo":
         nombre = datos.get('nombre', '')
         count = datos.get('count', 0)
-        return f"{count} personas expresaron apoyo genuino — no por obligación, sino porque algo resonó. Este es tu capital político real en redes. La diferencia entre apoyo genuino y apoyo vacío: el genuino se comparte, el vacío solo existe en el conteo."
+        return f"{count} personas expresaron apoyo genuino: no por obligación, sino porque algo resonó. Este es tu respaldo ciudadano real en redes. La diferencia entre apoyo genuino y apoyo vacío: el genuino se comparte, el vacío solo existe en el conteo."
 
     elif tipo == "microsegmentacion":
         tipo_contenido = datos.get('tipo', '')
         eng = datos.get('engagement', 0)
         patron = datos.get('patron', '')
         if patron == 'ALTO IMPACTO':
-            return f"'{tipo_contenido}' es tu contenido más efectivo. Genera {eng:,.0f} interacciones en promedio — por encima del resto. Cuando publicas esto, la ciudadanía responde. Más de este contenido."
+            return f"'{tipo_contenido}' es tu contenido más efectivo: genera {eng:,.0f} interacciones en promedio, por encima del resto. Cuando publicas esto, la ciudadanía responde."
         elif patron == 'BAJO IMPACTO':
-            return f"'{tipo_contenido}' no está funcionando. Solo {eng:,.0f} interacciones en promedio. La ciudadanía lo ignora o lo rechaza. Replantear cómo comunicas este tema."
+            return f"'{tipo_contenido}' no está funcionando: solo {eng:,.0f} interacciones en promedio. La ciudadanía lo ignora o lo rechaza. Replantea cómo comunicas este tema."
         else:
-            return f"'{tipo_contenido}' tiene impacto moderado. Hay potencial pero algo en el mensaje no termina de conectar con la ciudadanía."
+            return f"'{tipo_contenido}' tiene impacto moderado ({eng:,.0f} interacciones en promedio). Hay potencial, pero algo en el mensaje no termina de conectar con la ciudadanía."
 
     elif tipo == "contexto_externo":
         n_neg = datos.get('negativas', 0)
         n_total = datos.get('total', 0)
         fuente_top = datos.get('fuente_top', '')
         pct_neg_ext = (n_neg/n_total*100) if n_total > 0 else 0
-        return f"Fuera de tus redes, {pct_neg_ext:.0f}% de las menciones sobre ti son negativas. La fuente más activa es '{fuente_top}'. Lo que dicen fuera de tus páginas es lo que la ciudadanía lee cuando busca tu nombre — no lo que tú publicas."
+        return f"Fuera de tus redes, {pct_neg_ext:.0f}% de las menciones sobre ti son negativas. La fuente más activa es '{fuente_top}'. Lo que se dice fuera de tus páginas es lo que la ciudadanía lee cuando busca tu nombre, no lo que tú publicas."
 
     return ""
 

@@ -49,11 +49,6 @@ TK_ACCOUNTS = {
     3: "Gustavo Acevedo"
 }
 
-# Test DBs
-FACEBOOK_TEST_DB = os.path.join(DATA_DIR, "facebook_test.db")
-TIKTOK_TEST_DB   = os.path.join(DATA_DIR, "tiktok_test.db")
-EXTERNOS_TEST_DB = os.path.join(DATA_DIR, "externos_test.db")
-
 # Crear carpetas necesarias si no existen
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)

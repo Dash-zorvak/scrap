@@ -55,6 +55,9 @@ pymupdf>=1.24.0
 # NLP (spaCy para detección de entidades — usado en src/analyzer/)
 # Pin <3.8 por compatibilidad con numpy<2.0.0
 spacy>=3.7.0,<3.8.0
+# Modelo de spaCy como dependencia directa: en HF Spaces no se ejecuta
+# 'python -m spacy download' durante el build. Wheel 3.7.0 = compatible con spacy 3.7.x.
+es_core_news_sm @ https://github.com/explosion/spacy-models/releases/download/es_core_news_sm-3.7.0/es_core_news_sm-3.7.0-py3-none-any.whl
 
 # Tests (necesario para el job de CI)
 pytest>=8.0.0

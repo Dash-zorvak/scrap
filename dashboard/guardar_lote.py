@@ -47,10 +47,10 @@ def _fb_comment_insert_dict(comentario: dict, comment_id: str, post_id: str) -> 
     }
 
 
-def guardar_lote(lote: list, modo_prueba: bool = False) -> dict:
-    ruta_fb = _cfg.FACEBOOK_TEST_DB if modo_prueba else _cfg.FACEBOOK_DB
-    ruta_tk = _cfg.TIKTOK_TEST_DB if modo_prueba else _cfg.TIKTOK_DB
-    ruta_ext = _cfg.EXTERNOS_TEST_DB if modo_prueba else _cfg.EXTERNOS_DB
+def guardar_lote(lote: list) -> dict:
+    ruta_fb = _cfg.FACEBOOK_DB
+    ruta_tk = _cfg.TIKTOK_DB
+    ruta_ext = _cfg.EXTERNOS_DB
 
     resumen = {
         "fb_posts": 0, "fb_comments": 0,

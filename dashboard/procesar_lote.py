@@ -85,6 +85,14 @@ def procesar_pipeline(progreso_cb=None):
 
     _notificar(total_pasos, "Pipeline completado")
 
+    # Persistir tablas agregadas en HF Dataset si la sincronización está activa
+    # (no-op en local/Railway).
+    try:
+        from dashboard.hf_sync import push_dbs as _hf_push_dbs
+        _hf_push_dbs()
+    except Exception:
+        pass
+
     return {
         "motor_sentimiento": motor_sentimiento,
         "pasos_ok": pasos_ok,

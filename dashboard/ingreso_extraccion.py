@@ -559,27 +559,52 @@ def _aplicar_contrato(respuesta: dict, plataforma: str) -> dict:
 # Parseo de la respuesta de IA
 # ═══════════════════════════════════
 
+def _limpiar_surrogates(obj: Any) -> Any:
+    """Elimina caracteres surrogate sueltos del JSON parseado.
+
+    Los modelos a veces devuelven emojis como escapes \\uXXXX que, al parsear,
+    dejan medios-emoji (surrogates sin pareja, U+D800–U+DFFF) dentro de las
+    cadenas. En un str de Python 3 los emojis válidos son un único code point,
+    así que cualquier surrogate presente está "roto": al exportarlo a UTF-8
+    (pandas/pyarrow al construir el DataFrame del lote) lanza
+    UnicodeEncodeError ('surrogates not allowed'). Aquí los quitamos de forma
+    recursiva en todas las cadenas (str, list y dict).
+    """
+    if isinstance(obj, str):
+        if any(0xD800 <= ord(c) <= 0xDFFF for c in obj):
+            return "".join(c for c in obj if not 0xD800 <= ord(c) <= 0xDFFF)
+        return obj
+    if isinstance(obj, list):
+        return [_limpiar_surrogates(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _limpiar_surrogates(v) for k, v in obj.items()}
+    return obj
+
+
 def _parsear_respuesta(texto_respuesta: str) -> dict | None:
     if not texto_respuesta or not texto_respuesta.strip():
         return None
     texto = texto_respuesta.strip()
+    parsed = None
     try:
-        return json.loads(texto)
+        parsed = json.loads(texto)
     except json.JSONDecodeError:
-        pass
-    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", texto, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(1))
-        except json.JSONDecodeError:
-            pass
-    m = re.search(r"(\{.*\})", texto, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(1))
-        except json.JSONDecodeError:
-            pass
-    return None
+        m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", texto, re.DOTALL)
+        if m:
+            try:
+                parsed = json.loads(m.group(1))
+            except json.JSONDecodeError:
+                parsed = None
+        if parsed is None:
+            m = re.search(r"(\{.*\})", texto, re.DOTALL)
+            if m:
+                try:
+                    parsed = json.loads(m.group(1))
+                except json.JSONDecodeError:
+                    parsed = None
+    if parsed is None:
+        return None
+    return _limpiar_surrogates(parsed)
 
 
 def _extraer_lista_posts(parsed: Any) -> list:

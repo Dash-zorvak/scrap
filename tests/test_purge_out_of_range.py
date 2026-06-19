@@ -366,6 +366,7 @@ def _build_fb_fixture_file(db_path: str) -> sqlite3.Connection:
     """Same fixture as _build_fb_fixture but writes to a file path.
     
     Drops + recreates tables to ensure clean slate across test runs.
+    Uses far-future date so posts remain in-range regardless of .env SCRAPE_SINCE.
     """
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
@@ -432,16 +433,16 @@ def _build_fb_fixture_file(db_path: str) -> sqlite3.Connection:
         );
     """)
 
-    # 3 posts IN range (2025+)
+    # 3 posts IN range (date > any realistic SCRAPE_SINCE)
     for i in range(3):
         pid = f"inrange_p_{i}"
         cur.execute(
             "INSERT INTO fb_posts (post_id, message, created_time) VALUES (?, ?, ?)",
-            (pid, f"In-range post {i}", "2026-01-15"),
+            (pid, f"In-range post {i}", "2099-01-15"),
         )
         cur.execute(
             "INSERT INTO fb_comments (comment_id, post_id, message, created_time) VALUES (?, ?, ?, ?)",
-            (f"inrange_c_{i}", pid, f"In-range comment {i}", "2026-01-16"),
+            (f"inrange_c_{i}", pid, f"In-range comment {i}", "2099-01-16"),
         )
         cur.execute(
             "INSERT INTO fb_engagement (post_id, page_name, message, total_reacciones) VALUES (?, ?, ?, ?)",
@@ -452,16 +453,16 @@ def _build_fb_fixture_file(db_path: str) -> sqlite3.Connection:
             (pid, 5, 0.8),
         )
 
-    # 2 posts OUT of range (pre-2025)
+    # 2 posts OUT of range (far past, always < any realistic SCRAPE_SINCE)
     for i in range(2):
         pid = f"oor_p_{i}"
         cur.execute(
             "INSERT INTO fb_posts (post_id, message, created_time) VALUES (?, ?, ?)",
-            (pid, f"OOR post {i}", "2024-06-15"),
+            (pid, f"OOR post {i}", "2020-06-15"),
         )
         cur.execute(
             "INSERT INTO fb_comments (comment_id, post_id, message, created_time) VALUES (?, ?, ?, ?)",
-            (f"oor_c_{i}", pid, f"OOR comment {i}", "2024-06-16"),
+            (f"oor_c_{i}", pid, f"OOR comment {i}", "2020-06-16"),
         )
         cur.execute(
             "INSERT INTO fb_engagement (post_id, page_name, message, total_reacciones) VALUES (?, ?, ?, ?)",

@@ -14,12 +14,13 @@ EXTERNOS_DB = os.path.join(DATA_DIR, "externos.db")
 
 OUTPUT_DIR  = os.environ.get("OUTPUT_DIR", os.path.join(BASE_DIR, "dashboard", "outputs"))
 
-# Páginas oficiales a incluir (filtro para fb_posts)
+# Páginas oficiales del sujeto del dashboard (filtro/origen para fb_posts).
+# El tablero analiza al alcalde de Santa Ana (Gustavo Acevedo) y a la Alcaldía:
+# son las dos fuentes oficiales que se monitorean para saber qué dice la gente de él.
+# Las páginas de terceros que hablan del alcalde se analizan aparte como EXTERNOS.
 FB_PAGES_OFICIALES = [
-    "Jose Chicas",
     "Alcaldía de Santa Ana",
-    "Alcaldia de Santa Ana",
-    "Gustavo Acevedo"
+    "Gustavo Acevedo",
 ]
 
 # Tablas
@@ -42,9 +43,9 @@ FB_REACTIONS = [
 # Columnas TikTok
 TK_ENGAGEMENT = ["views", "likes", "shares", "favorites_count", "comments_count"]
 
-# Cuentas TikTok
+# Cuentas TikTok (account_id -> etiqueta de UI). Nombres alineados con FB.
 TK_ACCOUNTS = {
-    1: "Alcaldía Santa Ana",
+    1: "Alcaldía de Santa Ana",
     3: "Gustavo Acevedo"
 }
 

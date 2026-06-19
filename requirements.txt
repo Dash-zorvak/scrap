@@ -52,5 +52,9 @@ rich>=13.7.0
 # PDF rendering (extracción por páginas con Groq Vision)
 pymupdf>=1.24.0
 
+# NLP (spaCy para detección de entidades — usado en src/analyzer/)
+# Pin <3.8 por compatibilidad con numpy<2.0.0
+spacy>=3.7.0,<3.8.0
+
 # Tests (necesario para el job de CI)
 pytest>=8.0.0

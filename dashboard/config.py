@@ -3,11 +3,16 @@ import os
 # Rutas relativas al proyecto
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Bases de datos
-FACEBOOK_DB = os.path.join(BASE_DIR, "data", "facebook.db")
-TIKTOK_DB   = os.path.join(BASE_DIR, "data", "tiktok.db")
-EXTERNOS_DB = os.path.join(BASE_DIR, "data", "externos.db")
-OUTPUT_DIR  = os.path.join(BASE_DIR, "dashboard", "outputs")
+# DATA_DIR configurable via env var (Railway: montar volumen persistente aquí)
+# Por defecto = BASE_DIR/data (comportamiento actual)
+DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
+
+# Bases de datos — todas derivadas de DATA_DIR
+FACEBOOK_DB = os.path.join(DATA_DIR, "facebook.db")
+TIKTOK_DB   = os.path.join(DATA_DIR, "tiktok.db")
+EXTERNOS_DB = os.path.join(DATA_DIR, "externos.db")
+
+OUTPUT_DIR  = os.environ.get("OUTPUT_DIR", os.path.join(BASE_DIR, "dashboard", "outputs"))
 
 # Páginas oficiales a incluir (filtro para fb_posts)
 FB_PAGES_OFICIALES = [
@@ -44,11 +49,12 @@ TK_ACCOUNTS = {
 }
 
 # Test DBs
-FACEBOOK_TEST_DB = os.path.join(BASE_DIR, "data", "facebook_test.db")
-TIKTOK_TEST_DB   = os.path.join(BASE_DIR, "data", "tiktok_test.db")
-EXTERNOS_TEST_DB = os.path.join(BASE_DIR, "data", "externos_test.db")
+FACEBOOK_TEST_DB = os.path.join(DATA_DIR, "facebook_test.db")
+TIKTOK_TEST_DB   = os.path.join(DATA_DIR, "tiktok_test.db")
+EXTERNOS_TEST_DB = os.path.join(DATA_DIR, "externos_test.db")
 
-# Crear carpeta outputs si no existe
+# Crear carpetas necesarias si no existen
+os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Mínimo de comentarios analizados para considerar la muestra "suficiente" (Decisión #1)

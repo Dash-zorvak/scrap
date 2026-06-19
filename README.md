@@ -3,8 +3,8 @@ title: Panel Santa Ana
 emoji: 📊
 colorFrom: blue
 colorTo: gray
-sdk: streamlit
-app_file: dashboard/app.py
+sdk: docker
+app_port: 7860
 pinned: false
 ---
 
@@ -69,16 +69,19 @@ El dashboard se compone de cuatro bloques principales:
 4. **Procesar lote**: reconstruye tablas agregadas (sentimiento, categorías, engagement, series).
 5. **Validar en dashboard**: navegar los bloques para ver los resultados.
 
-## Despliegue en Hugging Face Spaces
+## Despliegue en Hugging Face Spaces (SDK Docker)
 
-El host por defecto. El disco de un Space es **efímero** (se borra al reiniciar o
+El host por defecto. HF ya no ofrece *Streamlit* como SDK en la UI, así que el
+Space usa **SDK Docker** con el `Dockerfile` del repo (arranca Streamlit en el
+puerto 7860). El disco de un Space es **efímero** (se borra al reiniciar o
 reconstruir), por lo que las bases SQLite se persisten en un **Dataset privado**
 de Hugging Face mediante `dashboard/hf_sync.py`.
 
-1. Crear un **Space** (SDK *Streamlit*, hardware *CPU basic*, gratis). El
-   frontmatter de este README ya define `sdk: streamlit` y
-   `app_file: dashboard/app.py`.
-2. Subir el código del repo al Space (o conectarlo a GitHub).
+1. Crear un **Space** → SDK **Docker** (plantilla *Blank*), hardware *CPU basic*
+   (gratis). El frontmatter de este README ya define `sdk: docker` y
+   `app_port: 7860`.
+2. Subir el código del repo al Space (o conectarlo a GitHub). HF construirá la
+   imagen a partir del `Dockerfile`.
 3. Crear un **Access Token** con permiso de escritura en
    *Settings → Access Tokens*.
 4. Configurar los **Secrets** del Space (*Settings → Variables and secrets*):

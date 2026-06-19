@@ -98,7 +98,7 @@ def temp_dbs():
 
 
 def _mock_heavy_modules(monkeypatch):
-    """Mock BERT, Gemini, sentence-transformers, and KMeans so CI stays fast."""
+    """Mock BERT, Groq, sentence-transformers, and KMeans so CI stays fast."""
     import modulo1_categorias as _m1
 
     class MockKMeans:
@@ -138,8 +138,8 @@ def _mock_heavy_modules(monkeypatch):
 
     monkeypatch.setattr(_sent_mod, "_cargar_bert", mock_cargar_bert)
 
-    # Prevent Gemini from trying API calls
-    monkeypatch.setattr(_sent_mod, "_configurar_gemini", lambda: False)
+    # Prevent Groq from trying API calls
+    monkeypatch.setattr(_sent_mod, "groq_disponible", lambda: False)
 
 
 class TestProcesarPipeline:

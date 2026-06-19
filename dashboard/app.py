@@ -751,8 +751,8 @@ with st.sidebar.expander("🔧 Diagnóstico"):
     st.code(f"bert_fallo: {diag['bert_fallo']}", language="text")
     if diag["ultimo_error_bert"]:
         st.code(f"último error BERT: {diag['ultimo_error_bert']}", language="text")
-    if diag["ultimo_error_gemini"]:
-        st.code(f"último error Gemini (sentimiento): {diag['ultimo_error_gemini']}", language="text")
+    if diag["ultimo_error_groq"]:
+        st.code(f"último error Groq (sentimiento): {diag['ultimo_error_groq']}", language="text")
 
 # ── HELPERS ──
 
@@ -2124,10 +2124,10 @@ def seccion_cargar_contenido():
             st.success("✅ Pipeline completado sin errores.")
         if motor == "bert":
             st.info("🧠 Sentimiento analizado con BERT local (modelo principal).")
-        elif motor == "gemini":
-            st.warning("⚠️ BERT no se pudo cargar; se usó Gemini como respaldo.")
+        elif motor == "groq":
+            st.warning("⚠️ BERT no se pudo cargar; se usó Groq como respaldo.")
         else:
-            st.warning("⚠️ Ni BERT ni Gemini disponibles; se usó clasificador de reglas (último recurso).")
+            st.warning("⚠️ Ni BERT ni Groq disponibles; se usó clasificador de reglas (último recurso).")
         if result["pasos_ok"]:
             st.info(f"✅ Pasos completados: {', '.join(result['pasos_ok'])}")
 

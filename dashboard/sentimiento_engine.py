@@ -1,4 +1,4 @@
-"""Motor de sentimiento enchufable: BERT (pysentimiento) → Gemini → reglas."""
+"""Motor de sentimiento enchufable: BERT (pysentimiento) → Groq → reglas."""
 
 import logging
 import os
@@ -7,10 +7,12 @@ import time
 import unicodedata
 import re
 
+from dashboard.llm_groq import chat_texto, groq_disponible
+
 logger = logging.getLogger("sentimiento")
 
 ULTIMO_ERROR_BERT = None
-ULTIMO_ERROR_GEMINI = None
+ULTIMO_ERROR_GROQ = None
 _BERT_FALLO = False
 
 BERT_LOAD_TIMEOUT_S = int(os.environ.get("BERT_LOAD_TIMEOUT_S", "120"))
@@ -152,23 +154,6 @@ def _clasificar_bert(textos):
     return resultados
 
 
-def _configurar_gemini():
-    import google.generativeai as genai
-    key = os.environ.get("GOOGLE_API_KEY")
-    if not key:
-        try:
-            import streamlit as st
-            key = st.secrets.get("GOOGLE_API_KEY")
-        except Exception:
-            pass
-    if key:
-        genai.configure(api_key=key)
-        return True
-    return False
-
-
-_GEMINI_MODEL_NAME = "gemini-2.0-flash"
-
 _PROMPT_SENTIMIENTO = (
     "Eres un clasificador de sentimiento en español. "
     "Clasifica cada texto como POS (positivo), NEG (negativo) o NEU (neutral). "
@@ -179,27 +164,14 @@ _PROMPT_SENTIMIENTO = (
 )
 
 
-def _clasificar_gemini_lote(textos):
-    import google.generativeai as genai
-    model = genai.GenerativeModel(
-        _GEMINI_MODEL_NAME,
-        generation_config={"response_mime_type": "application/json"},
-    )
+def _clasificar_groq_lote(textos):
     import json
     items = "\n".join(f"{i}. {t}" for i, t in enumerate(textos))
-    ultimo_error = None
-    for intento in range(2):
-        try:
-            respuesta = model.generate_content(_PROMPT_SENTIMIENTO + items)
-            parsed = json.loads(respuesta.text)
-            break
-        except Exception as e:
-            ultimo_error = e
-            if intento == 0:
-                logger.warning("Gemini rate limit / error en intento 1: %r — reintentando en 2s", e)
-                time.sleep(2)
-            else:
-                raise ultimo_error
+    try:
+        raw_resp = chat_texto(_PROMPT_SENTIMIENTO + items, json=True, temperature=0, max_tokens=4096)
+        parsed = json.loads(raw_resp)
+    except Exception as e:
+        raise e
     raw = parsed.get("resultados", parsed if isinstance(parsed, list) else [])
     resultados = []
     for i, texto in enumerate(textos):
@@ -217,7 +189,7 @@ def _clasificar_reglas(textos):
 
 
 def clasificar_lote(textos):
-    global ULTIMO_ERROR_BERT, ULTIMO_ERROR_GEMINI, _BERT_FALLO
+    global ULTIMO_ERROR_BERT, ULTIMO_ERROR_GROQ, _BERT_FALLO
 
     if not textos:
         return [], "reglas"
@@ -273,29 +245,29 @@ def clasificar_lote(textos):
             return True
         return False
 
-    def _intentar_gemini():
+    def _intentar_groq():
         nonlocal motor, resultados_non_empty
-        global ULTIMO_ERROR_GEMINI
+        global ULTIMO_ERROR_GROQ
         try:
-            if _configurar_gemini():
-                gemini_resultados = _clasificar_gemini_lote(non_empty_texts)
-                resultados_non_empty = gemini_resultados
-                motor = "gemini"
+            if groq_disponible():
+                groq_resultados = _clasificar_groq_lote(non_empty_texts)
+                resultados_non_empty = groq_resultados
+                motor = "groq"
                 return True
         except Exception as e:
-            ULTIMO_ERROR_GEMINI = repr(e)
-            logger.warning("Gemini sentiment falló: %r", e)
+            ULTIMO_ERROR_GROQ = repr(e)
+            logger.warning("Groq sentiment falló: %r", e)
         return False
 
     if motor_forzado == "bert":
         _intentar_bert()
-    elif motor_forzado == "gemini":
-        _intentar_gemini()
+    elif motor_forzado == "groq":
+        _intentar_groq()
     elif motor_forzado == "reglas":
         pass
     else:
         if not _intentar_bert():
-            _intentar_gemini()
+            _intentar_groq()
 
     if resultados_non_empty is None:
         motor = "reglas"
@@ -316,7 +288,7 @@ def clasificar_lote(textos):
 def get_diagnostico_sentimiento():
     return {
         "ultimo_error_bert": ULTIMO_ERROR_BERT,
-        "ultimo_error_gemini": ULTIMO_ERROR_GEMINI,
+        "ultimo_error_groq": ULTIMO_ERROR_GROQ,
         "bert_fallo": _BERT_FALLO,
         "motor_forzado": os.environ.get("MOTOR_SENTIMIENTO", "auto"),
     }

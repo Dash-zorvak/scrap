@@ -303,9 +303,22 @@ _PROMPT_FACEBOOK_MULTI = """
 Eres un extractor de datos. Analiza el documento adjunto (puede ser un PDF de varias
 páginas o varias imágenes) con capturas de pantalla de Facebook.
 
-IMPORTANTE: el documento puede contener VARIOS posts DISTINTOS. Debes SEGMENTARLO e
-identificar cada post por separado. Cada post suele incluir su propio texto, sus
-reacciones, sus comentarios y, frecuentemente, su ENLACE (URL) pegado junto a la captura.
+IMPORTANTE — CÓMO SEGMENTAR: el documento puede contener UNO o VARIOS posts. Un MISMO
+post casi siempre ocupa VARIAS páginas (su enlace en una página, la captura del post en
+otra, y sus reacciones/comentarios en una o más páginas siguientes). NO confundas
+"una página" con "un post".
+
+REGLA DE SEGMENTACIÓN (críticamente importante):
+- Un post NUEVO empieza ÚNICAMENTE donde aparece una URL/enlace del post
+  (por ejemplo una línea con "facebook.com/..."). Esa URL marca el inicio del post.
+- TODAS las páginas que vienen DESPUÉS de esa URL (la captura del post, el panel de
+  reacciones y los comentarios, aunque ocupen varias páginas) pertenecen a ESE MISMO
+  post, hasta que aparezca la SIGUIENTE URL.
+- La URL que inicia el post es el "enlace" de ese post.
+- IGNORA por completo las páginas en blanco o casi vacías; no son posts.
+- Si en TODO el documento NO hay ninguna URL, trátalo como UN SOLO post (salvo que se
+  vea con total claridad otro autor o cabecera de un post claramente distinto).
+- Ante la duda, AGRUPA en menos posts; nunca dividas un mismo post en varios.
 
 DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 
@@ -335,13 +348,16 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 }
 
 REGLAS:
+- Aplica SIEMPRE la REGLA DE SEGMENTACIÓN de arriba: las páginas sin URL que continúan
+  la captura, las reacciones o los comentarios NO son posts nuevos; pertenecen al post
+  de la última URL vista.
 - Si solo hay UN post, devuelve igualmente "posts" con un único elemento.
 - "Me gusta"=likes, "Me encanta"=loves, "Me importa"=cares, "Me divierte"=hahas,
   "Me entristece"=sads, "Me asombra"=wows, "Me enoja"=angrys
 - NO extraer "compartidos" ni reproducciones/vistas
 - FECHA: si es absoluta, devuélvela como 'YYYY-MM-DD'. Si es RELATIVA (p.ej. 'hace 2 h', 'hace 35 min', 'ayer', 'hace 3 días', 'hace 2 sem'), copia ESE TEXTO TAL CUAL en fecha.valor; NO inventes una fecha exacta. El sistema lo convertirá.
-- ENLACE: busca la URL del post (facebook.com/...). Si está escrita/pegada en el
-  documento úsala; si no aparece → valor=null.
+- ENLACE: usa la URL que marca el inicio del post (facebook.com/...), aunque esté en una
+  página propia separada de la captura. Si ese post no tiene URL → valor=null.
 - Por cada número, la fecha y el enlace, devuelve {"valor": ..., "confianza": "..."}.
 - confianza="seguro" si el dato se lee con total claridad; "dudoso" si está borroso/cortado.
 - Si un dato NO se ve → valor=null.
@@ -353,9 +369,22 @@ _PROMPT_TIKTOK_MULTI = """
 Eres un extractor de datos. Analiza el documento adjunto (puede ser un PDF de varias
 páginas o varias imágenes) con capturas de pantalla de TikTok.
 
-IMPORTANTE: el documento puede contener VARIOS posts DISTINTOS. Debes SEGMENTARLO e
-identificar cada post por separado. Cada post suele incluir su descripción, sus métricas,
-sus comentarios y, frecuentemente, su ENLACE (URL) pegado junto a la captura.
+IMPORTANTE — CÓMO SEGMENTAR: el documento puede contener UNO o VARIOS posts. Un MISMO
+post casi siempre ocupa VARIAS páginas (su enlace en una página, la captura del post en
+otra, y sus métricas/comentarios en una o más páginas siguientes). NO confundas
+"una página" con "un post".
+
+REGLA DE SEGMENTACIÓN (críticamente importante):
+- Un post NUEVO empieza ÚNICAMENTE donde aparece una URL/enlace del post
+  (por ejemplo una línea con "tiktok.com/..."). Esa URL marca el inicio del post.
+- TODAS las páginas que vienen DESPUÉS de esa URL (la captura del post, sus métricas y
+  los comentarios, aunque ocupen varias páginas) pertenecen a ESE MISMO post, hasta que
+  aparezca la SIGUIENTE URL.
+- La URL que inicia el post es el "enlace" de ese post.
+- IGNORA por completo las páginas en blanco o casi vacías; no son posts.
+- Si en TODO el documento NO hay ninguna URL, trátalo como UN SOLO post (salvo que se
+  vea con total claridad otra cuenta o cabecera de un post claramente distinto).
+- Ante la duda, AGRUPA en menos posts; nunca dividas un mismo post en varios.
 
 DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 
@@ -379,12 +408,15 @@ DEVUELVE SOLO JSON, SIN texto adicional, con esta estructura exacta:
 }
 
 REGLAS:
+- Aplica SIEMPRE la REGLA DE SEGMENTACIÓN de arriba: las páginas sin URL que continúan
+  la captura, las métricas o los comentarios NO son posts nuevos; pertenecen al post
+  de la última URL vista.
 - Si solo hay UN post, devuelve igualmente "posts" con un único elemento.
 - corazón=likes, marcador/guardar=favoritos, bocadillo=comentarios_count
 - NO extraer "compartidos" ni "vistas" (se teclean a mano)
 - FECHA: si es absoluta, devuélvela como 'YYYY-MM-DD'. Si es RELATIVA (p.ej. 'hace 2 h', 'hace 35 min', 'ayer', 'hace 3 días', 'hace 2 sem'), copia ESE TEXTO TAL CUAL en fecha.valor; NO inventes una fecha exacta. El sistema lo convertirá.
-- ENLACE: busca la URL del post (tiktok.com/...). Si está escrita/pegada en el
-  documento úsala; si no aparece → valor=null.
+- ENLACE: usa la URL que marca el inicio del post (tiktok.com/...), aunque esté en una
+  página propia separada de la captura. Si ese post no tiene URL → valor=null.
 - Por cada número, la fecha y el enlace, devuelve {"valor": ..., "confianza": "..."}.
 - confianza="seguro" si el dato se lee con total claridad; "dudoso" si está borroso/cortado.
 - Si un dato NO se ve → valor=null.
@@ -623,8 +655,33 @@ def _archivos_a_paginas(archivos: list) -> list[dict]:
 
 
 # ═══════════════════════════════════
-# Deduplicación de posts
+# Deduplicación y filtrado de posts
 # ═══════════════════════════════════
+
+def _post_no_vacio(contrato: dict) -> bool:
+    """True si el contrato tiene algún contenido real.
+
+    Sirve para descartar "posts" fantasma generados por páginas en blanco o
+    de relleno (solo un enlace, o nada): si no hay texto, ni comentarios, ni
+    enlace, ni ninguna métrica/reacción con valor → se considera vacío.
+    """
+    if not isinstance(contrato, dict):
+        return False
+    if (contrato.get("texto_post") or "").strip():
+        return True
+    if contrato.get("comentarios"):
+        return True
+    if (contrato.get("enlace") or {}).get("valor"):
+        return True
+    cuenta = (contrato.get("comentarios_count") or {}).get("valor")
+    if cuenta is not None:
+        return True
+    metricas = contrato.get("reacciones") or contrato.get("metricas") or {}
+    for v in metricas.values():
+        if isinstance(v, dict) and v.get("valor") is not None:
+            return True
+    return False
+
 
 def _deduplicar_posts(posts: list) -> list:
     seen = {}
@@ -657,6 +714,11 @@ def _deduplicar_posts(posts: list) -> list:
     return result
 
 
+def _depurar_posts(posts: list) -> list:
+    """Filtra posts vacíos y deduplica (por enlace o texto)."""
+    return _deduplicar_posts([p for p in posts if _post_no_vacio(p)])
+
+
 # ═══════════════════════════════════
 # Función principal MULTI-POST (PDF/imágenes)
 # ═══════════════════════════════════
@@ -667,6 +729,10 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
     Para pocas páginas (≤ VENTANA): una sola llamada con prompt multi-post.
     Para muchas páginas (> VENTANA): extracción por ventanas con solape + deduplicación
     por enlace (o texto truncado a 80 chars si no hay enlace).
+
+    En ambos caminos se filtran posts vacíos y se deduplica, de modo que un mismo
+    post repartido en varias páginas (enlace + captura + comentarios) NO se divida
+    en varios.
 
     Args:
         archivos: Lista de UploadedFile de Streamlit, bytes o imágenes PIL.
@@ -720,6 +786,17 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
                     continue
 
                 posts = [_aplicar_contrato(p, plataforma) for p in posts_raw]
+                posts = _depurar_posts(posts)
+                if not posts:
+                    ultimo_error = "No se detectaron posts con contenido"
+                    if intento == 0:
+                        prompt_multi = (
+                            prompt_multi
+                            + "\n\nADVERTENCIA: la respuesta anterior no traía posts con "
+                            'contenido. Recuerda agrupar páginas del mismo post y devolver '
+                            'SOLO JSON con la forma {"posts": [...]}.'
+                        )
+                    continue
                 return {"posts": posts}
 
             except Exception as e:
@@ -771,7 +848,9 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
         return {"error": ultimo_error or "No se pudo extraer ningún post"}
 
     posts_contratos = [_aplicar_contrato(p, plataforma) for p in posts_raw]
-    posts_dedupe = _deduplicar_posts(posts_contratos)
+    posts_dedupe = _depurar_posts(posts_contratos)
+    if not posts_dedupe:
+        return {"error": ultimo_error or "No se pudo extraer ningún post con contenido"}
     return {"posts": posts_dedupe}
 
 

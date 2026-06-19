@@ -137,7 +137,7 @@ vista = st.sidebar.radio("VISTA", [
     "Dashboard", "Cargar contenido", "Notas metodológicas"
 ])
 
-st.sidebar.markdown('<hr class="sys-divider">')
+st.sidebar.markdown('<hr class="sys-divider">', unsafe_allow_html=True)
 st.sidebar.markdown('<div class="sys-section-label">SISTEMA</div>', unsafe_allow_html=True)
 
 modo_prueba = st.sidebar.toggle(
@@ -161,7 +161,7 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 
-st.sidebar.markdown('<hr class="sys-divider">')
+st.sidebar.markdown('<hr class="sys-divider">', unsafe_allow_html=True)
 
 with st.sidebar.expander("DIAGNÓSTICO DEL SISTEMA"):
     st.caption("GROQ_API_KEY (visión + texto)")
@@ -635,18 +635,37 @@ def render_bloque3_riesgo():
         daily = df_fb.copy()
         daily['fecha'] = daily['created_time'].dt.date
         daily_vol = daily.groupby('fecha').size()
-        cv = daily_vol.std() / daily_vol.mean() if daily_vol.mean() > 0 else 0
-        if cv < 0.5:
-            label_aut = "ESTABLE · perfil orgánico"
-            cls_aut = "kpi-card-sent"
-        elif cv < 1.0:
-            label_aut = "MODERADA · picos puntuales"
-            cls_aut = "kpi-card-ctrl"
+        mean_val = float(daily_vol.mean()) if len(daily_vol) > 0 else 0.0
+        n_dias = int(len(daily_vol))
+        cv_definido = False
+        cv = 0.0
+        if n_dias < 2 or mean_val <= 0 or pd.isna(mean_val):
+            label_aut = f"DATOS INSUFICIENTES · {n_dias} día{'s' if n_dias != 1 else ''} observado{'s' if n_dias != 1 else ''}"
+            cls_aut = ""
+            cv_str = "—"
         else:
-            label_aut = "VOLÁTIL · posible coordinación"
-            cls_aut = "kpi-card-risk"
-        st.markdown(f'<div class="kpi-card {cls_aut}" style="max-width:520px"><div class="kpi-label">COEFICIENTE DE VARIACIÓN</div><div class="kpi-value">{cv:.2f}</div><div class="kpi-meta">{label_aut}</div></div>', unsafe_allow_html=True)
-        st.markdown('<p style="font-size:11px;color:var(--fg-muted);margin-top:8px">Heurística: CV bajo indica volumen diario estable (más orgánico). CV alto sugiere picos súbitos (posible coordinación). No es detección de bots.</p>', unsafe_allow_html=True)
+            std_val = float(daily_vol.std())
+            if pd.isna(std_val):
+                std_val = 0.0
+            cv = std_val / mean_val if mean_val > 0 else 0.0
+            if pd.isna(cv):
+                cv = 0.0
+            cv_definido = True
+            cv_str = f"{cv:.2f}"
+            if cv < 0.5:
+                label_aut = "ESTABLE · perfil orgánico"
+                cls_aut = "kpi-card-sent"
+            elif cv < 1.0:
+                label_aut = "MODERADA · picos puntuales"
+                cls_aut = "kpi-card-ctrl"
+            else:
+                label_aut = "VOLÁTIL · posible coordinación"
+                cls_aut = "kpi-card-risk"
+        st.markdown(f'<div class="kpi-card {cls_aut}" style="max-width:520px"><div class="kpi-label">COEFICIENTE DE VARIACIÓN</div><div class="kpi-value">{cv_str}</div><div class="kpi-meta">{label_aut}</div></div>', unsafe_allow_html=True)
+        if cv_definido:
+            st.markdown(f'<p style="font-size:11px;color:var(--fg-muted);margin-top:8px">Heurística: CV bajo indica volumen diario estable (más orgánico). CV alto sugiere picos súbitos (posible coordinación). Basado en {n_dias} días observados. No es detección de bots.</p>', unsafe_allow_html=True)
+        else:
+            st.markdown('<p style="font-size:11px;color:var(--fg-muted);margin-top:8px">Se requieren al menos 2 días con publicaciones para calcular el coeficiente de variación. Amplía el período o publica más contenido para activar esta lectura.</p>', unsafe_allow_html=True)
 
     # ── 2. NIVEL DE ALERTA ──
     st.markdown('<div class="section-header"><div class="section-title">02 · Nivel de Alerta</div><div class="section-subtitle">Lectura agregada del semáforo reputacional.</div></div>', unsafe_allow_html=True)

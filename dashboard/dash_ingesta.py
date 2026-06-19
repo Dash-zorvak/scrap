@@ -16,7 +16,6 @@ from datetime import datetime
 from config import (
     FB_PAGES_OFICIALES, TK_ACCOUNTS,
     FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB,
-    FACEBOOK_TEST_DB, TIKTOK_TEST_DB, EXTERNOS_TEST_DB,
 )
 from dashboard.guardar_lote import guardar_lote
 from dashboard.procesar_lote import procesar_pipeline
@@ -24,18 +23,13 @@ from dashboard.externos_store import listar_paginas_externas, agregar_pagina_ext
 
 
 def _activas():
-    """Devuelve (FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA, EXTERNOS_DB_ACTIVA) segun modo_prueba."""
-    mp = st.session_state.get("modo_prueba", False)
-    return (
-        FACEBOOK_TEST_DB if mp else FACEBOOK_DB,
-        TIKTOK_TEST_DB if mp else TIKTOK_DB,
-        EXTERNOS_TEST_DB if mp else EXTERNOS_DB,
-    )
+    """Devuelve (FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB)."""
+    return (FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB)
 
 
-# ═══════════════════════════════════════════════════
+# ═══════════════════════════════════════
 # Helpers de revisión (Fase 3)
-# ═══════════════════════════════════════════════════
+# ═══════════════════════════════════════
 
 def _campo_numero(label: str, dato_confianza: dict, key_suffix: str, id_temporal: str) -> None:
     """Renderiza st.number_input con resaltado por confianza.
@@ -94,9 +88,9 @@ def _contrato_vacio(plataforma: str) -> dict:
         }
 
 
-# ═══════════════════════════════════════════════════
+# ═══════════════════════════════════════
 # Fase 3 — Revisión editable del lote
-# ═══════════════════════════════════════════════════
+# ═══════════════════════════════════════
 
 def seccion_revisar_lote() -> None:
     """Pantalla de revisión editable post-extracción (Fase 3).
@@ -550,7 +544,7 @@ def seccion_cargar_contenido():
         st.markdown("### 💾 Paso 4 — Guardar en base de datos")
         st.caption(f"{len(revisados)} post(s) confirmados listos para guardar.")
         if st.button("💾 Guardar lote en base de datos", type="primary"):
-            resumen = guardar_lote(lote, st.session_state.get("modo_prueba", False))
+            resumen = guardar_lote(lote)
             partes = []
             if resumen["fb_posts"]:
                 partes.append(f"{resumen['fb_posts']} posts FB")
@@ -605,7 +599,7 @@ def seccion_cargar_contenido():
         status = st.status("Iniciando pipeline…", expanded=True)
         def _progreso(paso, total, etiqueta):
             status.update(label=f"Paso {paso}/{total}: {etiqueta}")
-        result = procesar_pipeline(st.session_state.get("modo_prueba", False), _progreso)
+        result = procesar_pipeline(_progreso)
         st.session_state["ultimo_procesamiento"] = result
         st.cache_data.clear()
         if result["errores"]:

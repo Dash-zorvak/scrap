@@ -253,14 +253,16 @@ class TestGuardarLote:
         self.fb_tmp.close()
         self.tk_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self.tk_tmp.close()
+        self.ext_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.ext_tmp.close()
         import dashboard.config as cfg
-        monkeypatch.setattr(cfg, "FACEBOOK_TEST_DB", self.fb_tmp.name)
-        monkeypatch.setattr(cfg, "TIKTOK_TEST_DB", self.tk_tmp.name)
         monkeypatch.setattr(cfg, "FACEBOOK_DB", self.fb_tmp.name)
         monkeypatch.setattr(cfg, "TIKTOK_DB", self.tk_tmp.name)
+        monkeypatch.setattr(cfg, "EXTERNOS_DB", self.ext_tmp.name)
         yield
         os.unlink(self.fb_tmp.name)
         os.unlink(self.tk_tmp.name)
+        os.unlink(self.ext_tmp.name)
 
     def _item_revisado(self, datos: dict) -> dict:
         return {
@@ -272,7 +274,7 @@ class TestGuardarLote:
     def test_guardar_lote_facebook(self):
         from dashboard.guardar_lote import guardar_lote
         lote = [self._item_revisado(_FB_SAMPLE)]
-        res = guardar_lote(lote, modo_prueba=True)
+        res = guardar_lote(lote)
         assert res["fb_posts"] == 1
         assert res["fb_comments"] == 2
         assert res["tk_videos"] == 0
@@ -288,7 +290,7 @@ class TestGuardarLote:
     def test_guardar_lote_tiktok(self):
         from dashboard.guardar_lote import guardar_lote
         lote = [self._item_revisado(_TK_SAMPLE)]
-        res = guardar_lote(lote, modo_prueba=True)
+        res = guardar_lote(lote)
         assert res["tk_videos"] == 1
         assert res["tk_comments"] == 2
         assert res["fb_posts"] == 0
@@ -307,7 +309,7 @@ class TestGuardarLote:
             self._item_revisado(_FB_SAMPLE),
             self._item_revisado(_TK_SAMPLE),
         ]
-        res = guardar_lote(lote, modo_prueba=True)
+        res = guardar_lote(lote)
         assert res["fb_posts"] == 1
         assert res["fb_comments"] == 2
         assert res["tk_videos"] == 1
@@ -317,10 +319,10 @@ class TestGuardarLote:
     def test_idempotencia(self):
         from dashboard.guardar_lote import guardar_lote
         lote1 = [self._item_revisado(_FB_SAMPLE)]
-        guardar_lote(lote1, modo_prueba=True)
+        guardar_lote(lote1)
         # second pass with fresh item: same content, same ID → upsert
         lote2 = [self._item_revisado(_FB_SAMPLE)]
-        res = guardar_lote(lote2, modo_prueba=True)
+        res = guardar_lote(lote2)
         assert res["fb_posts"] == 1
         conn = sqlite3.connect(self.fb_tmp.name)
         cnt = conn.execute("SELECT COUNT(*) FROM fb_posts").fetchone()[0]
@@ -334,7 +336,7 @@ class TestGuardarLote:
         lote = [self._item_revisado(fb1), self._item_revisado(fb2)]
         for item in lote:
             item["id_temporal"] = "id-" + str(id(item))
-        res = guardar_lote(lote, modo_prueba=True)
+        res = guardar_lote(lote)
         # dos items con mismo contenido → mismo post_id, upsert → 1 fila
         conn = sqlite3.connect(self.fb_tmp.name)
         cnt = conn.execute("SELECT COUNT(*) FROM fb_posts").fetchone()[0]
@@ -349,14 +351,14 @@ class TestGuardarLote:
             "estado": "revisado",
             "datos_revisados": {"plataforma": "unknown"},
         }
-        res = guardar_lote([item_bueno, item_malo], modo_prueba=True)
+        res = guardar_lote([item_bueno, item_malo])
         assert res["fb_posts"] == 1
         assert len(res["errores"]) >= 1
 
     def test_no_procesa_no_revisados(self):
         from dashboard.guardar_lote import guardar_lote
         lote = [{"id_temporal": "x", "estado": "pendiente"}]
-        res = guardar_lote(lote, modo_prueba=True)
+        res = guardar_lote(lote)
         assert res["fb_posts"] == 0
         assert res["tk_videos"] == 0
 
@@ -365,19 +367,8 @@ class TestGuardarLote:
         datos = dict(_FB_SAMPLE)
         datos["comments_count"] = 0
         lote = [self._item_revisado(datos)]
-        res = guardar_lote(lote, modo_prueba=True)
+        res = guardar_lote(lote)
         assert res["fb_comments"] == 2
-
-    def test_modo_prueba_aislado(self):
-        from dashboard.guardar_lote import guardar_lote
-        import dashboard.config as cfg
-        fb_real = cfg.FACEBOOK_DB
-        tk_real = cfg.TIKTOK_DB
-        lote = [self._item_revisado(_FB_SAMPLE)]
-        guardar_lote(lote, modo_prueba=True)
-        assert not os.path.exists(fb_real) or os.path.getsize(fb_real) == os.path.getsize(
-            cfg.FACEBOOK_DB
-        )
 
     def test_nones_coalesced_to_zero(self):
         from dashboard.guardar_lote import guardar_lote
@@ -385,7 +376,7 @@ class TestGuardarLote:
         datos["likes_count"] = None
         datos["shares_count"] = None
         lote = [self._item_revisado(datos)]
-        res = guardar_lote(lote, modo_prueba=True)
+        res = guardar_lote(lote)
         assert res["fb_posts"] == 1
         conn = sqlite3.connect(self.fb_tmp.name)
         row = conn.execute("SELECT likes_count, shares_count FROM fb_posts").fetchone()

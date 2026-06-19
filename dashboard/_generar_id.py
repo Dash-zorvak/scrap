@@ -30,6 +30,6 @@ def _base_para_hash(datos: dict) -> str:
     post_url = datos.get("post_url") or ""
     if post_url:
         return post_url
-    if datos.get("plataforma") == "facebook":
+    if datos.get("plataforma") in ("facebook", "externos"):
         return f"{datos.get('page_name','')}|{datos.get('created_time','')}|{(datos.get('message','') or '')[:200]}"
     return f"{datos.get('account_id','')}|{datos.get('created_at','')}|{(datos.get('description','') or '')[:200]}"

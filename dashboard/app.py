@@ -40,6 +40,9 @@ from dashboard.dash_inteligencia import (
     cargar_zonas_resumen,
     cargar_alertas_cambridge,
     traducir_alerta,
+    cargar_cruce_tema_zona,
+    cargar_perfil_ocean,
+    cargar_temas_latentes,
 )
 
 # ─── Estado de sesión ───────────────────────────────────────
@@ -655,6 +658,56 @@ def render_bloque2_audiencia():
         st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Son páginas y cuentas oficiales, no ciudadanos individuales.</p>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="status-info">Sin datos de engagement para identificar voces.</div>', unsafe_allow_html=True)
+
+    # ── 4. CRUCE TEMA × ZONA ──
+    st.markdown('<div class="section-header"><div class="section-title">04 · Cruce Tema × Zona</div><div class="section-subtitle">Combinaciones de tema y zona con mayor volumen de comentarios.</div></div>', unsafe_allow_html=True)
+    cruce = cargar_cruce_tema_zona(FACEBOOK_DB)
+    if cruce:
+        rows_html = ""
+        for r in cruce[:10]:
+            sent_emoji = {"positivo": "🟢", "negativo": "🔴", "neutral": "⚪", "muy_positivo": "🟢", "muy_negativo": "🔴", "mixto": "🟡"}.get(r["sentiment"], "⚪")
+            rows_html += f'<div class="bar-row"><div class="bar-row-label">{r["zona"]} · {r["tema"]}</div><div class="bar-row-val" style="min-width:60px">{sent_emoji} {r["n"]:,}</div></div>'
+        st.markdown(f'<div class="panel"><div class="panel-head"><div class="panel-title">TOP 10 · TEMA × ZONA</div><div class="panel-meta">COMENTARIOS</div></div>{rows_html}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">No hay suficientes datos georreferenciados para el cruce tema × zona.</div>', unsafe_allow_html=True)
+
+    # ── 5. PERFIL DE AUDIENCIA (OCEAN) ──
+    st.markdown('<div class="section-header"><div class="section-title">05 · Perfil de Audiencia</div><div class="section-subtitle">Segmentos de público identificados por su comportamiento narrativo.</div></div>', unsafe_allow_html=True)
+    perfil = cargar_perfil_ocean(FACEBOOK_DB)
+    if perfil.get("has_sklearn") and perfil.get("clusters"):
+        sent_map = {"positive": "🟢 positivo", "negative": "🔴 negativo", "neutral": "⚪ neutral"}
+        for label, p in perfil["clusters"].items():
+            sent = sent_map.get(p.get("dominant_sentiment", ""), "⚪")
+            st.markdown(f"""
+            <div class="kpi-card kpi-card-eff" style="max-width:100%">
+                <div class="kpi-label">SEGMENTO {label}</div>
+                <div style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0">
+                    <span style="font-size:13px"><strong>{p.get("size", 0)}</strong> comentarios</span>
+                    <span style="font-size:13px">{sent}</span>
+                    <span style="font-size:13px">Tema: {p.get("dominant_topic", "—")}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">El perfil de audiencia requiere scikit-learn y al menos 5 posts con datos completos.</div>', unsafe_allow_html=True)
+
+    # ── 6. TEMAS EMERGENTES ──
+    st.markdown('<div class="section-header"><div class="section-title">06 · Temas Emergentes</div><div class="section-subtitle">Patrones temáticos latentes detectados en los comentarios (LDA).</div></div>', unsafe_allow_html=True)
+    latentes = cargar_temas_latentes(FACEBOOK_DB)
+    if latentes:
+        cols = st.columns(min(len(latentes), 3))
+        for i, t in enumerate(latentes[:6]):
+            palabras = ", ".join(t.get("words", [])[:5])
+            pct = t.get("pct", 0)
+            with cols[i % 3]:
+                st.markdown(f"""
+                <div class="panel" style="margin-bottom:8px">
+                    <div class="panel-head"><div class="panel-title">TEMA {t.get("id", i + 1)}</div><div class="panel-meta">{pct:.0f}%</div></div>
+                    <div style="font-size:12px;color:var(--fg-secondary);margin-top:4px">{palabras}</div>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">Se requieren al menos 10 comentarios para detectar temas latentes.</div>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════

@@ -214,3 +214,78 @@ def cargar_zonas_resumen(db_path=None) -> dict:
         "enojo": enojo,
         "total_zonas": len(zonas_sent),
     }
+
+
+def cargar_cruce_tema_zona(db_path=None) -> list[dict]:
+    """Ranking de combinaciones tema × zona × sentimiento."""
+    if db_path is None:
+        db_path = FACEBOOK_DB
+    try:
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute("""
+            SELECT fc.zona, pc.categoria_nombre AS tema, fc.sentiment,
+                   COUNT(*) as n
+            FROM fb_comments fc
+            LEFT JOIN post_categorias pc ON fc.post_id = pc.item_id
+            WHERE fc.zona IS NOT NULL AND fc.zona != ''
+              AND fc.sentiment IS NOT NULL
+            GROUP BY fc.zona, pc.categoria_nombre, fc.sentiment
+            ORDER BY n DESC
+            LIMIT 20
+        """).fetchall()
+        conn.close()
+    except Exception:
+        return []
+    return [
+        {"zona": r[0], "tema": r[1] or "Sin categoría", "sentiment": r[2], "n": r[3]}
+        for r in rows if r[0] and r[2]
+    ]
+
+
+def cargar_perfil_ocean(db_path=None) -> dict:
+    """Perfil de audiencia vía OCEAN engine (PCA + clusters)."""
+    from src.analyzer.ocean_engine import run_ocean_analysis
+    posts = _construir_posts(db_path)
+    if len(posts) < 5:
+        return {"has_sklearn": False, "clusters": {}, "pca": {}}
+    result = run_ocean_analysis(posts, posts)
+    perfiles = {}
+    clusters = result.get("clusters", {}).get("profiles", {})
+    for label, p in clusters.items():
+        perfiles[label] = {
+            "size": p.get("size", 0),
+            "avg_reactions": p.get("avg_reactions", 0),
+            "dominant_topic": p.get("dominant_topic", ""),
+            "dominant_sentiment": p.get("dominant_sentiment", ""),
+        }
+    pca = result.get("pca", {})
+    return {
+        "has_sklearn": result.get("has_sklearn", False),
+        "clusters": perfiles,
+        "pca": {
+            "total_explained": pca.get("total_explained", 0),
+            "n_components": pca.get("n_components", 0),
+        },
+    }
+
+
+def cargar_temas_latentes(db_path=None) -> list[dict]:
+    """Temas latentes vía LDA sobre comentarios."""
+    from src.analyzer.latent_topics import extract_latent_topics
+    if db_path is None:
+        db_path = FACEBOOK_DB
+    try:
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute("""
+            SELECT message FROM fb_comments
+            WHERE message IS NOT NULL AND message != ''
+            LIMIT 2000
+        """).fetchall()
+        conn.close()
+    except Exception:
+        return []
+    textos = [r[0] for r in rows]
+    if len(textos) < 10:
+        return []
+    result = extract_latent_topics(textos, n_topics=6, n_top_words=5)
+    return result.get("topics", [])

@@ -38,6 +38,8 @@ from dashboard.dash_metrics import (
 from dashboard.dash_inteligencia import (
     cargar_iq,
     cargar_zonas_resumen,
+    cargar_alertas_cambridge,
+    traducir_alerta,
 )
 
 # ─── Estado de sesión ───────────────────────────────────────
@@ -715,8 +717,27 @@ def render_bloque3_riesgo():
         else:
             st.markdown('<p style="font-size:11px;color:var(--fg-muted);margin-top:8px">Se requieren al menos 2 días con publicaciones para calcular el coeficiente de variación. Amplía el período o publica más contenido para activar esta lectura.</p>', unsafe_allow_html=True)
 
-    # ── 2. NIVEL DE ALERTA ──
-    st.markdown('<div class="section-header"><div class="section-title">02 · Nivel de Alerta</div><div class="section-subtitle">Lectura agregada del semáforo reputacional.</div></div>', unsafe_allow_html=True)
+    # ── 2. ALERTAS DE COMPORTAMIENTO ──
+    st.markdown('<div class="section-header"><div class="section-title">02 · Alertas de Comportamiento</div><div class="section-subtitle">Señales automáticas de anomalías en la conversación (Cambridge Index).</div></div>', unsafe_allow_html=True)
+    alertas = cargar_alertas_cambridge(FACEBOOK_DB)
+    if alertas:
+        for a in alertas:
+            ta = traducir_alerta(a)
+            color_class = {"🟢": "positive", "🟡": "warning", "🔴": "critical"}.get(ta["color"], "warning")
+            st.markdown(f"""
+            <div class="indicator indicator-{color_class}" style="margin-bottom:8px">
+                <div class="indicator-dot"></div>
+                <div style="flex:1">
+                    <div style="font-weight:600;font-size:14px;margin-bottom:2px">{ta["color"]} {ta["titular"]}</div>
+                    <div style="font-size:13px;color:var(--fg-secondary)">{ta["lectura"]}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">No se detectaron alertas activas en el período actual (requiere ≥5 posts con datos de sentimiento y reacciones).</div>', unsafe_allow_html=True)
+
+    # ── 3. NIVEL DE ALERTA ──
+    st.markdown('<div class="section-header"><div class="section-title">03 · Nivel de Alerta</div><div class="section-subtitle">Lectura agregada del semáforo reputacional.</div></div>', unsafe_allow_html=True)
     color_sem, texto_sem = calcular_semaforo(df_fb)
     score_val = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
     pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
@@ -730,8 +751,8 @@ def render_bloque3_riesgo():
     st.markdown(f'<div class="indicator indicator-{sem_class}"><div class="indicator-dot"></div><div class="indicator-text">{texto_sem}</div></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="interpretation"><div class="interpretation-label">CONTEXTO</div><div class="interpretation-texto">{interp}</div></div>', unsafe_allow_html=True)
 
-    # ── 3. VELOCIDAD DE PROPAGACIÓN ──
-    st.markdown('<div class="section-header"><div class="section-title">03 · Velocidad de Propagación</div><div class="section-subtitle">Variación semana actual vs. semana anterior.</div></div>', unsafe_allow_html=True)
+    # ── 4. VELOCIDAD DE PROPAGACIÓN ──
+    st.markdown('<div class="section-header"><div class="section-title">04 · Velocidad de Propagación</div><div class="section-subtitle">Variación semana actual vs. semana anterior.</div></div>', unsafe_allow_html=True)
     df_series = pd.concat([df_fb_s, df_tk_s], ignore_index=True) if not df_fb_s.empty or not df_tk_s.empty else pd.DataFrame()
     if not df_series.empty and 'engagement' in df_series.columns:
         df_series = df_series.sort_values('semana')

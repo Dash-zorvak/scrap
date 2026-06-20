@@ -989,8 +989,31 @@ def render_bloque4_inteligencia():
     else:
         st.markdown('<div class="memo-item memo-item-neutral">Sin datos externos para comparativa sectorial.</div>', unsafe_allow_html=True)
 
-    _b4_card_ia(9, "Proyección de Escenario", "proyeccion", ctx)
-    _b4_card_ia(10, "Recomendación Estratégica", "recomendacion", ctx)
+    # ── 09. FRAGILIDAD / RIESGO DE REVERSIÓN ──
+    _b4_header(9, "Fragilidad / Riesgo de Reversión",
+               "Factores que hacen vulnerable la narrativa actual.")
+    frag_indicators = []
+    if not df_sent.empty:
+        pol = ((df_sent['score_sentimiento'].abs() > 0.5).sum() / len(df_sent) * 100)
+        frag_indicators.append(("Polarización", f"{pol:.0f}%", "alto" if pol > 40 else "moderado"))
+    iq_res = cargar_iq(FACEBOOK_DB)
+    if iq_res and iq_res.get("iq") is not None:
+        iq = iq_res["iq"]
+        frag_indicators.append(("IQ Narrativo", f"{iq:.1f}/100", "frágil" if iq < 40 else "estable"))
+    if not df_fb.empty and 'indice_enojo' in df_fb.columns:
+        eno = df_fb['indice_enojo'].mean()
+        frag_indicators.append(("Enojo en reacciones", f"{eno*100:.0f}%", "crítico" if eno > 0.3 else "controlado"))
+    for label, val, nivel in frag_indicators:
+        color = {"crítico": "var(--red)", "alto": "var(--red)", "frágil": "var(--red)",
+                 "moderado": "var(--amber)", "estable": "var(--green)", "controlado": "var(--green)"}.get(nivel, "var(--amber)")
+        st.markdown(
+            f'<div class="memo-item" style="border-left-color:{color}">'
+            f'<strong>{label}:</strong> {val} <span style="color:{color}">({nivel})</span></div>',
+            unsafe_allow_html=True,
+        )
+
+    _b4_card_ia(10, "Proyección de Escenario", "proyeccion", ctx)
+    _b4_card_ia(11, "Riesgo de Reversión", "recomendacion", ctx)
     st.markdown('</div>', unsafe_allow_html=True)
 
 

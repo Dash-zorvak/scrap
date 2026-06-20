@@ -84,9 +84,10 @@ def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
         ),
         "recomendacion": (
             "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "con LA recomendación operativa única de la semana, sintetizando TODOS los indicadores: "
-            "Pulso, Audiencia, Riesgo, Memoria. Qué hacer el lunes en términos de gestión y servicios "
-            "concretos. Orden directa y ejecutable. Español."
+            "que describa los RIESGOS DE REVERSIÓN de la narrativa actual, sintetizando TODOS los "
+            "indicadores: Pulso, Audiencia, Riesgo, Memoria. Señala qué factores de fragilidad "
+            "existen (fricción, polarización, baja autenticidad, desgaste temático) sin proponer "
+            "acciones correctivas. Sólo diagnóstico. Español."
         ),
     }
 

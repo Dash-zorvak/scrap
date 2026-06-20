@@ -110,12 +110,21 @@ def generar_interpretacion(tipo, datos):
     pct_neg = datos.get('pct_negativo', 0)
     pct_pos = datos.get('pct_positivo', 0)
     enojo = datos.get('indice_enojo', 0)
+    total = datos.get('total_comentarios', 0)
+
+    def _a(num, singular, plural):
+        return singular if num == 1 else plural
 
     if tipo == "semaforo":
+        if total < 20 and total > 0:
+            n_pos = datos.get('n_positivos', round(pct_pos / 100 * total))
+            n_neg = datos.get('n_negativos', round(pct_neg / 100 * total))
+            return (f"{n_pos} {_a(n_pos, 'comentario es', 'comentarios son')} positivos "
+                    f"y {n_neg} {_a(n_neg, 'es', 'son')} negativos, de {int(total)} en total.")
         if score >= 0.25:
             return f"{pct_pos:.0f}% de los comentarios son de apoyo. El {pct_neg:.0f}% son negativos. Las reacciones positivas superan a las negativas."
         elif score >= 0.10:
-            return f"{pct_pos:.0f}% de los comentarios son positivos y {pct_neg:.0f}% negativos. El balance es ligeramente favorable pero con señales mixtas."
+            return f"{pct_pos:.0f}% de los comentarios son positivos y {pct_neg:.0f}% negativos. Balance ligeramente favorable con señales mixtas (score {score:.2f})."
         elif score >= 0:
             return f"{pct_neg:.0f}% de los comentarios son negativos y el enojo representa el {enojo*100:.0f}% de las reacciones. Apoyo y rechazo están casi empatados."
         else:
@@ -124,49 +133,49 @@ def generar_interpretacion(tipo, datos):
     elif tipo == "tema_critico":
         tema = datos.get('tema', '')
         reacciones = datos.get('reacciones', 0)
-        return f"Aquí está el problema. '{tema}' concentra {reacciones:,} reacciones con {pct_neg:.0f}% de comentarios negativos. Cuando publicas sobre este tema, la ciudadanía responde con burla y enojo, no con apoyo. Hay una brecha entre lo que comunicas y lo que la gente vive en su colonia."
+        return f"'{tema}' concentra {reacciones:,} reacciones con {pct_neg:.0f}% de comentarios negativos. Las reacciones adversas (enojo, burla) superan al apoyo en este tema."
 
     elif tipo == "tema_positivo":
         tema = datos.get('tema', '')
-        return f"'{tema}' es tu contenido más fuerte: el {pct_pos:.0f}% de comentarios son positivos y la gente lo comparte por cuenta propia. Aquí la ciudadanía se identifica, no solo consume lo que publicas."
+        return f"'{tema}' registra {pct_pos:.0f}% de comentarios positivos. La ciudadanía comparte este contenido sin necesidad de amplificación pagada."
 
     elif tipo == "anomalia":
         fecha = datos.get('fecha', '')
         views = datos.get('views', 0)
         tipo_pico = datos.get('tipo', 'positivo')
         if tipo_pico == 'positivo':
-            return f"La semana del {fecha} fue inusual: {views:,} interacciones, muy por encima del promedio. Algo movilizó a la ciudadanía a tu favor. Identifica qué se publicó o qué evento ocurrió: ese es el contenido que conviene replicar."
+            return f"La semana del {fecha} registró {views:,} interacciones, por encima del promedio semanal."
         else:
-            return f"La semana del {fecha} tuvo una caída inusual: más rechazo del habitual. Revisa qué se comunicó esa semana y qué pasó en el municipio en esas fechas."
+            return f"La semana del {fecha} registró una caída en la interacción, con más rechazo que el promedio."
 
     elif tipo == "patron_rechazo":
         nombre = datos.get('nombre', '')
         count = datos.get('count', 0)
         tendencia = datos.get('tendencia', '')
-        return f"{count} personas expresaron este patrón con sus propias palabras. No es un comentario aislado: es una narrativa colectiva. Tendencia: {tendencia}. Cuando un patrón de rechazo crece semana a semana, se vuelve el reclamo dominante de la ciudadanía sobre tu gestión."
+        return f"{count} personas expresaron este patrón con sus propias palabras. No es un comentario aislado: es una narrativa colectiva. Tendencia: {tendencia}. Es ciudadanía expresando un reclamo directo."
 
     elif tipo == "patron_respaldo":
         nombre = datos.get('nombre', '')
         count = datos.get('count', 0)
-        return f"{count} personas expresaron apoyo genuino: no por obligación, sino porque algo resonó. Este es tu respaldo ciudadano real en redes. La diferencia entre apoyo genuino y apoyo vacío: el genuino se comparte, el vacío solo existe en el conteo."
+        return f"{count} personas expresaron respaldo ciudadano sin mediar encuesta ni estímulo directo."
 
     elif tipo == "microsegmentacion":
         tipo_contenido = datos.get('tipo', '')
         eng = datos.get('engagement', 0)
         patron = datos.get('patron', '')
         if patron == 'ALTO IMPACTO':
-            return f"'{tipo_contenido}' es tu contenido más efectivo: genera {eng:,.0f} interacciones en promedio, por encima del resto. Cuando publicas esto, la ciudadanía responde."
+            return f"'{tipo_contenido}' genera {eng:,.0f} interacciones en promedio, por encima del resto de tipos de contenido."
         elif patron == 'BAJO IMPACTO':
-            return f"'{tipo_contenido}' no está funcionando: solo {eng:,.0f} interacciones en promedio. La ciudadanía lo ignora o lo rechaza. Replantea cómo comunicas este tema."
+            return f"'{tipo_contenido}' genera {eng:,.0f} interacciones en promedio, por debajo del resto."
         else:
-            return f"'{tipo_contenido}' tiene impacto moderado ({eng:,.0f} interacciones en promedio). Hay potencial, pero algo en el mensaje no termina de conectar con la ciudadanía."
+            return f"'{tipo_contenido}' genera {eng:,.0f} interacciones en promedio, dentro del rango medio."
 
     elif tipo == "contexto_externo":
         n_neg = datos.get('negativas', 0)
         n_total = datos.get('total', 0)
         fuente_top = datos.get('fuente_top', '')
         pct_neg_ext = (n_neg/n_total*100) if n_total > 0 else 0
-        return f"Fuera de tus redes, {pct_neg_ext:.0f}% de las menciones sobre ti son negativas. La fuente más activa es '{fuente_top}'. Lo que se dice fuera de tus páginas es lo que la ciudadanía lee cuando busca tu nombre, no lo que tú publicas."
+        return f"En medios externos, {pct_neg_ext:.0f}% de las menciones son negativas. La fuente más activa es '{fuente_top}'."
 
     return ""
 

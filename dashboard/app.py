@@ -432,14 +432,14 @@ def render_bloque1_pulso():
     pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
     pct_pos_val = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
     enojo_val = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
+    total_comentarios = df_sent['total_comentarios'].sum() if not df_sent.empty else 0
 
     interp = generar_interpretacion("semaforo", {
         'score': score_val, 'pct_negativo': pct_neg_val,
-        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val
+        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val,
+        'total_comentarios': int(total_comentarios),
     })
     st.markdown(f'<div class="interpretation"><div class="interpretation-label">LECTURA EJECUTIVA</div><div class="interpretation-texto">{interp}</div></div>', unsafe_allow_html=True)
-
-    total_comentarios = df_sent['total_comentarios'].sum() if not df_sent.empty else 0
     m = evaluar_muestra(total_comentarios)
     st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">{m["etiqueta"]}</p>', unsafe_allow_html=True)
 
@@ -561,6 +561,7 @@ def render_bloque1_pulso():
     interp_cierre = generar_interpretacion("semaforo", {
         'score': score_val, 'pct_negativo': pct_neg_val,
         'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val,
+        'total_comentarios': int(total_comentarios),
     })
     st.markdown(f'<div class="interpretation" style="margin-top:16px"><div class="interpretation-label">🔎 En una frase:</div><div class="interpretation-texto">{interp_cierre}</div></div>', unsafe_allow_html=True)
 
@@ -796,9 +797,11 @@ def render_bloque3_riesgo():
     pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
     pct_pos_val = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
     enojo_val = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
+    total_comentarios = df_sent['total_comentarios'].sum() if not df_sent.empty else 0
     interp = generar_interpretacion("semaforo", {
         'score': score_val, 'pct_negativo': pct_neg_val,
-        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val
+        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val,
+        'total_comentarios': int(total_comentarios),
     })
     sem_class = {'verde':'positive','amarillo':'warning','rojo':'critical'}.get(color_sem, 'positive')
     st.markdown(f'<div class="indicator indicator-{sem_class}"><div class="indicator-dot"></div><div class="indicator-text">{texto_sem}</div></div>', unsafe_allow_html=True)

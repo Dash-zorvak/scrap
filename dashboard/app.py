@@ -35,6 +35,10 @@ from dashboard.dash_metrics import (
     generar_narrativa_ia,
     generar_interpretacion,
 )
+from dashboard.dash_inteligencia import (
+    cargar_iq,
+    cargar_zonas_resumen,
+)
 
 # ─── Estado de sesión ───────────────────────────────────────
 if "lote_ingreso" not in st.session_state:
@@ -484,6 +488,76 @@ def render_bloque1_pulso():
         st.markdown('<div class="status-info">Clasificación de temas requiere sentence-transformers (no instalado).</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="status-info">El análisis de sentimiento se basa en los comentarios capturados, no en el 100% de la conversación. Los porcentajes son un proxy, no una medición exhaustiva.</div>', unsafe_allow_html=True)
+
+    # ── 3.2 TERMÓMETRO DE COLONIAS ──
+    st.markdown('<div class="section-header"><div class="section-title">03 · Termómetro de Colonias</div><div class="section-subtitle">Zonas donde más se apoya o critica la gestión municipal.</div></div>', unsafe_allow_html=True)
+    dz = cargar_zonas_resumen(FACEBOOK_DB)
+    apoyo = dz.get("apoyo", [])
+    enojo = dz.get("enojo", [])
+    if apoyo or enojo:
+        html_term = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+        html_term += '<div><div style="font-weight:600;font-size:13px;margin-bottom:6px">🟢 Apoyo</div>'
+        if apoyo:
+            html_term += '<div style="display:flex;flex-direction:column;gap:4px">'
+            for z in apoyo:
+                html_term += f'<div style="font-size:13px;padding:4px 8px;background:var(--bg-elevated);border-radius:6px;border-left:3px solid #22c55e">⬤ {z["zona"]} <span style="float:right;font-weight:600;color:#22c55e">{100 - z["pct_negativos"]:.0f}%</span></div>'
+            html_term += '</div>'
+        else:
+            html_term += '<div style="font-size:12px;color:var(--fg-muted)">Sin datos de apoyo</div>'
+        html_term += '</div>'
+        html_term += '<div><div style="font-weight:600;font-size:13px;margin-bottom:6px">🔴 Enojo</div>'
+        if enojo:
+            html_term += '<div style="display:flex;flex-direction:column;gap:4px">'
+            for z in enojo:
+                html_term += f'<div style="font-size:13px;padding:4px 8px;background:var(--bg-elevated);border-radius:6px;border-left:3px solid #ef4444">⬤ {z["zona"]} <span style="float:right;font-weight:600;color:#ef4444">{z["pct_negativos"]:.0f}%</span></div>'
+            html_term += '</div>'
+        else:
+            html_term += '<div style="font-size:12px;color:var(--fg-muted)">Sin datos de enojo</div>'
+        html_term += '</div></div>'
+        st.markdown(html_term, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">No hay suficientes datos georreferenciados para este período.</div>', unsafe_allow_html=True)
+
+    # ── 3.3 PULSO EN UN NÚMERO ──
+    st.markdown('<div class="section-header"><div class="section-title">03 · Pulso en un Número</div><div class="section-subtitle">Indicador sintético de salud narrativa — basado en diversidad, sentimiento y engagement.</div></div>', unsafe_allow_html=True)
+    iq_result = cargar_iq(FACEBOOK_DB)
+    if iq_result and iq_result.get("iq") is not None:
+        iq = iq_result["iq"]
+        quad = iq_result.get("cuadrante", "")
+        quad_map = {
+            "alto_apoyo": ("🟢", "Apoyo Alto"),
+            "bajo_apoyo": ("🟡", "Apoyo Moderado"),
+            "alta_friccion": ("🔴", "Fricción Alta"),
+            "baja_friccion": ("🟡", "Fricción Moderada"),
+        }
+        q_emoji, q_label = quad_map.get(quad, ("⚪", "Sin clasificar"))
+        st.markdown(f"""
+        <div class="panel">
+            <div class="panel-head"><div class="panel-title">IQ DE CONVERSACIÓN</div></div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin:8px 0">
+                <span style="font-size:36px;font-weight:700;color:var(--fg-primary)">{iq:.1f}</span>
+                <span style="font-size:14px;color:var(--fg-muted)">/ 100</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:14px;color:var(--fg-secondary)">
+                {q_emoji} {q_label}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        dims = iq_result.get("dimensiones", [])
+        if dims:
+            st.markdown('<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">', unsafe_allow_html=True)
+            for d in dims:
+                st.markdown(f'<span style="font-size:11px;padding:2px 8px;background:var(--bg-elevated);border-radius:10px;color:var(--fg-secondary)">{d["label"]} <strong>{d["valor"]:.1f}</strong></span>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">El IQ de conversación no está disponible para el período actual.</div>', unsafe_allow_html=True)
+
+    # ── 3.4 CIERRE FACTUAL ──
+    interp_cierre = generar_interpretacion("semaforo", {
+        'score': score_val, 'pct_negativo': pct_neg_val,
+        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val,
+    })
+    st.markdown(f'<div class="interpretation" style="margin-top:16px"><div class="interpretation-label">🔎 En una frase:</div><div class="interpretation-texto">{interp_cierre}</div></div>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════

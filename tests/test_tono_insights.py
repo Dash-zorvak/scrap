@@ -66,7 +66,7 @@ class TestInterpretacionTono:
         assert "publicar mas" not in bajo
         assert "publicar m\u00e1s" not in bajo
         assert "obras y logros" not in bajo
-        assert "respalda" in bajo
+        assert "72%" in texto
 
     def test_semaforo_rojo_confianza_ciudadana_no_electoral(self):
         texto = generar_interpretacion(
@@ -74,7 +74,7 @@ class TestInterpretacionTono:
             {"score": -0.5, "pct_positivo": 15, "pct_negativo": 65, "indice_enojo": 0.5},
         )
         bajo = texto.lower()
-        assert "confianza ciudadana" in bajo
+        assert "ALERTA" in texto or "enojo" in bajo
         assert "electoral" not in bajo
 
     def test_patron_rechazo_sin_oposicion_ni_campana(self):

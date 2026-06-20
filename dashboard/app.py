@@ -38,6 +38,11 @@ from dashboard.dash_metrics import (
 from dashboard.dash_inteligencia import (
     cargar_iq,
     cargar_zonas_resumen,
+    cargar_alertas_cambridge,
+    traducir_alerta,
+    cargar_cruce_tema_zona,
+    cargar_perfil_ocean,
+    cargar_temas_latentes,
 )
 
 # ─── Estado de sesión ───────────────────────────────────────
@@ -427,14 +432,14 @@ def render_bloque1_pulso():
     pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
     pct_pos_val = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
     enojo_val = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
+    total_comentarios = df_sent['total_comentarios'].sum() if not df_sent.empty else 0
 
     interp = generar_interpretacion("semaforo", {
         'score': score_val, 'pct_negativo': pct_neg_val,
-        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val
+        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val,
+        'total_comentarios': int(total_comentarios),
     })
     st.markdown(f'<div class="interpretation"><div class="interpretation-label">LECTURA EJECUTIVA</div><div class="interpretation-texto">{interp}</div></div>', unsafe_allow_html=True)
-
-    total_comentarios = df_sent['total_comentarios'].sum() if not df_sent.empty else 0
     m = evaluar_muestra(total_comentarios)
     st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">{m["etiqueta"]}</p>', unsafe_allow_html=True)
 
@@ -556,6 +561,7 @@ def render_bloque1_pulso():
     interp_cierre = generar_interpretacion("semaforo", {
         'score': score_val, 'pct_negativo': pct_neg_val,
         'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val,
+        'total_comentarios': int(total_comentarios),
     })
     st.markdown(f'<div class="interpretation" style="margin-top:16px"><div class="interpretation-label">🔎 En una frase:</div><div class="interpretation-texto">{interp_cierre}</div></div>', unsafe_allow_html=True)
 
@@ -654,6 +660,56 @@ def render_bloque2_audiencia():
     else:
         st.markdown('<div class="status-info">Sin datos de engagement para identificar voces.</div>', unsafe_allow_html=True)
 
+    # ── 4. CRUCE TEMA × ZONA ──
+    st.markdown('<div class="section-header"><div class="section-title">04 · Cruce Tema × Zona</div><div class="section-subtitle">Combinaciones de tema y zona con mayor volumen de comentarios.</div></div>', unsafe_allow_html=True)
+    cruce = cargar_cruce_tema_zona(FACEBOOK_DB)
+    if cruce:
+        rows_html = ""
+        for r in cruce[:10]:
+            sent_emoji = {"positivo": "🟢", "negativo": "🔴", "neutral": "⚪", "muy_positivo": "🟢", "muy_negativo": "🔴", "mixto": "🟡"}.get(r["sentiment"], "⚪")
+            rows_html += f'<div class="bar-row"><div class="bar-row-label">{r["zona"]} · {r["tema"]}</div><div class="bar-row-val" style="min-width:60px">{sent_emoji} {r["n"]:,}</div></div>'
+        st.markdown(f'<div class="panel"><div class="panel-head"><div class="panel-title">TOP 10 · TEMA × ZONA</div><div class="panel-meta">COMENTARIOS</div></div>{rows_html}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">No hay suficientes datos georreferenciados para el cruce tema × zona.</div>', unsafe_allow_html=True)
+
+    # ── 5. PERFIL DE AUDIENCIA (OCEAN) ──
+    st.markdown('<div class="section-header"><div class="section-title">05 · Perfil de Audiencia</div><div class="section-subtitle">Segmentos de público identificados por su comportamiento narrativo.</div></div>', unsafe_allow_html=True)
+    perfil = cargar_perfil_ocean(FACEBOOK_DB)
+    if perfil.get("has_sklearn") and perfil.get("clusters"):
+        sent_map = {"positive": "🟢 positivo", "negative": "🔴 negativo", "neutral": "⚪ neutral"}
+        for label, p in perfil["clusters"].items():
+            sent = sent_map.get(p.get("dominant_sentiment", ""), "⚪")
+            st.markdown(f"""
+            <div class="kpi-card kpi-card-eff" style="max-width:100%">
+                <div class="kpi-label">SEGMENTO {label}</div>
+                <div style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0">
+                    <span style="font-size:13px"><strong>{p.get("size", 0)}</strong> comentarios</span>
+                    <span style="font-size:13px">{sent}</span>
+                    <span style="font-size:13px">Tema: {p.get("dominant_topic", "—")}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">El perfil de audiencia requiere scikit-learn y al menos 5 posts con datos completos.</div>', unsafe_allow_html=True)
+
+    # ── 6. TEMAS EMERGENTES ──
+    st.markdown('<div class="section-header"><div class="section-title">06 · Temas Emergentes</div><div class="section-subtitle">Patrones temáticos latentes detectados en los comentarios (LDA).</div></div>', unsafe_allow_html=True)
+    latentes = cargar_temas_latentes(FACEBOOK_DB)
+    if latentes:
+        cols = st.columns(min(len(latentes), 3))
+        for i, t in enumerate(latentes[:6]):
+            palabras = ", ".join(t.get("words", [])[:5])
+            pct = t.get("pct", 0)
+            with cols[i % 3]:
+                st.markdown(f"""
+                <div class="panel" style="margin-bottom:8px">
+                    <div class="panel-head"><div class="panel-title">TEMA {t.get("id", i + 1)}</div><div class="panel-meta">{pct:.0f}%</div></div>
+                    <div style="font-size:12px;color:var(--fg-secondary);margin-top:4px">{palabras}</div>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">Se requieren al menos 10 comentarios para detectar temas latentes.</div>', unsafe_allow_html=True)
+
 
 # ═══════════════════════════════════════════
 # BLOQUE III — RIESGO Y AUTENTICIDAD
@@ -715,23 +771,44 @@ def render_bloque3_riesgo():
         else:
             st.markdown('<p style="font-size:11px;color:var(--fg-muted);margin-top:8px">Se requieren al menos 2 días con publicaciones para calcular el coeficiente de variación. Amplía el período o publica más contenido para activar esta lectura.</p>', unsafe_allow_html=True)
 
-    # ── 2. NIVEL DE ALERTA ──
-    st.markdown('<div class="section-header"><div class="section-title">02 · Nivel de Alerta</div><div class="section-subtitle">Lectura agregada del semáforo reputacional.</div></div>', unsafe_allow_html=True)
+    # ── 2. ALERTAS DE COMPORTAMIENTO ──
+    st.markdown('<div class="section-header"><div class="section-title">02 · Alertas de Comportamiento</div><div class="section-subtitle">Señales automáticas de anomalías en la conversación (Cambridge Index).</div></div>', unsafe_allow_html=True)
+    alertas = cargar_alertas_cambridge(FACEBOOK_DB)
+    if alertas:
+        for a in alertas:
+            ta = traducir_alerta(a)
+            color_class = {"🟢": "positive", "🟡": "warning", "🔴": "critical"}.get(ta["color"], "warning")
+            st.markdown(f"""
+            <div class="indicator indicator-{color_class}" style="margin-bottom:8px">
+                <div class="indicator-dot"></div>
+                <div style="flex:1">
+                    <div style="font-weight:600;font-size:14px;margin-bottom:2px">{ta["color"]} {ta["titular"]}</div>
+                    <div style="font-size:13px;color:var(--fg-secondary)">{ta["lectura"]}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">No se detectaron alertas activas en el período actual (requiere ≥5 posts con datos de sentimiento y reacciones).</div>', unsafe_allow_html=True)
+
+    # ── 3. NIVEL DE ALERTA ──
+    st.markdown('<div class="section-header"><div class="section-title">03 · Nivel de Alerta</div><div class="section-subtitle">Lectura agregada del semáforo reputacional.</div></div>', unsafe_allow_html=True)
     color_sem, texto_sem = calcular_semaforo(df_fb)
     score_val = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
     pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
     pct_pos_val = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
     enojo_val = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
+    total_comentarios = df_sent['total_comentarios'].sum() if not df_sent.empty else 0
     interp = generar_interpretacion("semaforo", {
         'score': score_val, 'pct_negativo': pct_neg_val,
-        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val
+        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val,
+        'total_comentarios': int(total_comentarios),
     })
     sem_class = {'verde':'positive','amarillo':'warning','rojo':'critical'}.get(color_sem, 'positive')
     st.markdown(f'<div class="indicator indicator-{sem_class}"><div class="indicator-dot"></div><div class="indicator-text">{texto_sem}</div></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="interpretation"><div class="interpretation-label">CONTEXTO</div><div class="interpretation-texto">{interp}</div></div>', unsafe_allow_html=True)
 
-    # ── 3. VELOCIDAD DE PROPAGACIÓN ──
-    st.markdown('<div class="section-header"><div class="section-title">03 · Velocidad de Propagación</div><div class="section-subtitle">Variación semana actual vs. semana anterior.</div></div>', unsafe_allow_html=True)
+    # ── 4. VELOCIDAD DE PROPAGACIÓN ──
+    st.markdown('<div class="section-header"><div class="section-title">04 · Velocidad de Propagación</div><div class="section-subtitle">Variación semana actual vs. semana anterior.</div></div>', unsafe_allow_html=True)
     df_series = pd.concat([df_fb_s, df_tk_s], ignore_index=True) if not df_fb_s.empty or not df_tk_s.empty else pd.DataFrame()
     if not df_series.empty and 'engagement' in df_series.columns:
         df_series = df_series.sort_values('semana')
@@ -915,8 +992,31 @@ def render_bloque4_inteligencia():
     else:
         st.markdown('<div class="memo-item memo-item-neutral">Sin datos externos para comparativa sectorial.</div>', unsafe_allow_html=True)
 
-    _b4_card_ia(9, "Proyección de Escenario", "proyeccion", ctx)
-    _b4_card_ia(10, "Recomendación Estratégica", "recomendacion", ctx)
+    # ── 09. FRAGILIDAD / RIESGO DE REVERSIÓN ──
+    _b4_header(9, "Fragilidad / Riesgo de Reversión",
+               "Factores que hacen vulnerable la narrativa actual.")
+    frag_indicators = []
+    if not df_sent.empty:
+        pol = ((df_sent['score_sentimiento'].abs() > 0.5).sum() / len(df_sent) * 100)
+        frag_indicators.append(("Polarización", f"{pol:.0f}%", "alto" if pol > 40 else "moderado"))
+    iq_res = cargar_iq(FACEBOOK_DB)
+    if iq_res and iq_res.get("iq") is not None:
+        iq = iq_res["iq"]
+        frag_indicators.append(("IQ Narrativo", f"{iq:.1f}/100", "frágil" if iq < 40 else "estable"))
+    if not df_fb.empty and 'indice_enojo' in df_fb.columns:
+        eno = df_fb['indice_enojo'].mean()
+        frag_indicators.append(("Enojo en reacciones", f"{eno*100:.0f}%", "crítico" if eno > 0.3 else "controlado"))
+    for label, val, nivel in frag_indicators:
+        color = {"crítico": "var(--red)", "alto": "var(--red)", "frágil": "var(--red)",
+                 "moderado": "var(--amber)", "estable": "var(--green)", "controlado": "var(--green)"}.get(nivel, "var(--amber)")
+        st.markdown(
+            f'<div class="memo-item" style="border-left-color:{color}">'
+            f'<strong>{label}:</strong> {val} <span style="color:{color}">({nivel})</span></div>',
+            unsafe_allow_html=True,
+        )
+
+    _b4_card_ia(10, "Proyección de Escenario", "proyeccion", ctx)
+    _b4_card_ia(11, "Riesgo de Reversión", "recomendacion", ctx)
     st.markdown('</div>', unsafe_allow_html=True)
 
 

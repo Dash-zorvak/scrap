@@ -10,6 +10,9 @@ from dashboard.dash_inteligencia import (
     traducir_alerta,
     cargar_iq,
     cargar_zonas_resumen,
+    cargar_cruce_tema_zona,
+    cargar_perfil_ocean,
+    cargar_temas_latentes,
 )
 
 
@@ -271,5 +274,86 @@ class TestCargarZonasResumen:
         conn.close()
         r = cargar_zonas_resumen(db_path)
         assert r["total_zonas"] == 0
-        os.close(db_fd)
         os.unlink(db_path)
+
+
+class TestCargarCruceTemaZona:
+    def test_sin_datos(self, db_con_posts):
+        conn, db_path = db_con_posts
+        r = cargar_cruce_tema_zona(db_path)
+        assert r == []
+
+    def test_con_datos(self, db_con_posts):
+        conn, db_path = db_con_posts
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS post_categorias (
+                item_id TEXT, categoria_nombre TEXT
+            )
+        """)
+        _insertar_comentario(conn, "c1", "p1", "buena obra", "positivo", "col belen")
+        _insertar_comentario(conn, "c2", "p1", "mal servicio", "negativo", "col belen")
+        _insertar_comentario(conn, "c3", "p2", "regular", "neutral", "cant natividad")
+        conn.execute("INSERT INTO post_categorias VALUES ('p1', 'obras')")
+        conn.execute("INSERT INTO post_categorias VALUES ('p2', 'servicios')")
+        conn.commit()
+        r = cargar_cruce_tema_zona(db_path)
+        assert len(r) >= 2
+        zonas = [x["zona"] for x in r]
+        temas = [x["tema"] for x in r]
+        assert "col belen" in zonas
+        assert "obras" in temas
+
+    def test_filtra_nulos(self, db_con_posts):
+        conn, db_path = db_con_posts
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS post_categorias (
+                item_id TEXT, categoria_nombre TEXT
+            )
+        """)
+        _insertar_comentario(conn, "c1", "p1", "sin zona", "positivo", "")
+        conn.commit()
+        r = cargar_cruce_tema_zona(db_path)
+        assert r == []
+
+
+class TestCargarPerfilOcean:
+    def test_sin_posts(self, db_con_posts):
+        conn, db_path = db_con_posts
+        r = cargar_perfil_ocean(db_path)
+        assert "has_sklearn" in r
+
+    def test_con_posts(self, db_con_posts):
+        conn, db_path = db_con_posts
+        for i in range(6):
+            _insertar_post(conn, f"post_{i}", topic="obras", zona="zona_a",
+                           pct_pos=70, pct_neg=30)
+        conn.commit()
+        r = cargar_perfil_ocean(db_path)
+        assert isinstance(r, dict)
+        assert "clusters" in r
+        assert "pca" in r
+
+
+class TestCargarTemasLatentes:
+    def test_sin_comentarios(self, db_con_posts):
+        conn, db_path = db_con_posts
+        r = cargar_temas_latentes(db_path)
+        assert r == []
+
+    def test_pocos_comentarios(self, db_con_posts):
+        conn, db_path = db_con_posts
+        for i in range(3):
+            _insertar_comentario(conn, f"c{i}", "p1", f"mensaje {i}", "positivo", "zona_a")
+        conn.commit()
+        r = cargar_temas_latentes(db_path)
+        assert r == []
+
+    def test_suficientes_comentarios(self, db_con_posts):
+        conn, db_path = db_con_posts
+        for i in range(15):
+            _insertar_comentario(conn, f"c{i}", "p1",
+                                 f"esto es un texto de prueba numero {i} para lda",
+                                 "positivo", "zona_a")
+        conn.commit()
+        r = cargar_temas_latentes(db_path)
+        assert isinstance(r, list)

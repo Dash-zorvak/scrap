@@ -9,6 +9,7 @@ from modulo2_sentimiento import analizar_sentimiento_facebook, analizar_sentimie
 from modulo1_categorias import categorizar_posts, guardar_nombres_clusters
 from modulo3_engagement import procesar_facebook, procesar_tiktok
 from modulo4_series import series_facebook, series_tiktok
+from modulo_zonas import taggear_zonas_facebook
 
 
 def procesar_pipeline(progreso_cb=None):
@@ -22,7 +23,7 @@ def procesar_pipeline(progreso_cb=None):
     """
     fb_db = FACEBOOK_DB
     tk_db = TIKTOK_DB
-    total_pasos = 6
+    total_pasos = 7
     pasos_ok = []
     errores = []
     motor_sentimiento = "reglas"
@@ -57,21 +58,28 @@ def procesar_pipeline(progreso_cb=None):
     except Exception as e:
         errores.append(f"categorias: {e}")
 
-    _notificar(4, "Calculando engagement Facebook...")
+    _notificar(4, "Etiquetando zonas geográficas...")
+    try:
+        taggear_zonas_facebook(db_path=fb_db)
+        pasos_ok.append("zonas")
+    except Exception as e:
+        errores.append(f"zonas: {e}")
+
+    _notificar(5, "Calculando engagement Facebook...")
     try:
         procesar_facebook(fb_db=fb_db)
         pasos_ok.append("engagement_facebook")
     except Exception as e:
         errores.append(f"engagement_facebook: {e}")
 
-    _notificar(5, "Calculando engagement TikTok...")
+    _notificar(6, "Calculando engagement TikTok...")
     try:
         procesar_tiktok(tk_db=tk_db)
         pasos_ok.append("engagement_tiktok")
     except Exception as e:
         errores.append(f"engagement_tiktok: {e}")
 
-    _notificar(6, "Generando series temporales...")
+    _notificar(7, "Generando series temporales...")
     try:
         series_facebook(fb_db=fb_db)
         series_tiktok(tk_db=tk_db)

@@ -134,10 +134,11 @@ class TestProcesarPipeline:
 
         result = procesar_pipeline()
 
-        assert len(result["pasos_ok"]) == 6
+        assert len(result["pasos_ok"]) == 7
         assert "sentimiento_facebook" in result["pasos_ok"]
         assert "sentimiento_tiktok" in result["pasos_ok"]
         assert "categorias" in result["pasos_ok"]
+        assert "zonas" in result["pasos_ok"]
         assert "engagement_facebook" in result["pasos_ok"]
         assert "engagement_tiktok" in result["pasos_ok"]
         assert "series" in result["pasos_ok"]
@@ -190,5 +191,5 @@ class TestProcesarPipeline:
             steps.append((paso, total, etiqueta))
 
         procesar_pipeline(progreso_cb=cb)
-        assert len(steps) == 7  # 6 steps + "Pipeline completado"
-        assert steps[-1] == (6, 6, "Pipeline completado")
+        assert len(steps) == 8  # 7 steps + "Pipeline completado"
+        assert steps[-1] == (7, 7, "Pipeline completado")

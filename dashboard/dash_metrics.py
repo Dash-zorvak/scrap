@@ -112,13 +112,13 @@ def generar_interpretacion(tipo, datos):
 
     if tipo == "semaforo":
         if score >= 0.25:
-            return f"La ciudadanía te respalda esta semana: el {pct_pos:.0f}% de los comentarios son de apoyo. Es el dato, no un mérito garantizado. Documenta qué temas y zonas concretas generan ese respaldo, porque puede revertirse en cuanto un servicio falle."
+            return f"{pct_pos:.0f}% de los comentarios son de apoyo. El {pct_neg:.0f}% son negativos. Las reacciones positivas superan a las negativas."
         elif score >= 0.10:
-            return f"Señales mixtas. Una parte apoya y otra ya cuestiona: el {pct_neg:.0f}% de los comentarios son negativos. No es crisis, pero la tendencia manda. Identifica qué temas concentran las críticas esta semana."
+            return f"{pct_pos:.0f}% de los comentarios son positivos y {pct_neg:.0f}% negativos. El balance es ligeramente favorable pero con señales mixtas."
         elif score >= 0:
-            return f"Equilibrio frágil entre apoyo y rechazo. El {pct_neg:.0f}% de los comentarios son negativos y el enojo es el {enojo*100:.0f}% de las reacciones. La ciudadanía está observando y cualquier error se amplifica de inmediato."
+            return f"{pct_neg:.0f}% de los comentarios son negativos y el enojo representa el {enojo*100:.0f}% de las reacciones. Apoyo y rechazo están casi empatados."
         else:
-            return f"ALERTA. La ciudadanía está en modo crítico. El enojo es el {enojo*100:.0f}% de TODAS las reacciones: por cada persona que apoya hay varias que reaccionan con rechazo activo. El {pct_neg:.0f}% de los comentarios son negativos. No es ruido: es deterioro de confianza ciudadana, y se sostiene en los números, no en una percepción."
+            return f"ALERTA. El enojo es el {enojo*100:.0f}% de las reacciones. {pct_neg:.0f}% de los comentarios son negativos. Las reacciones adversas superan ampliamente a las positivas."
 
     elif tipo == "tema_critico":
         tema = datos.get('tema', '')

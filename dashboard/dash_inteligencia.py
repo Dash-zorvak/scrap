@@ -270,7 +270,12 @@ def cargar_perfil_ocean(db_path=None) -> dict:
 
 
 def cargar_temas_latentes(db_path=None) -> list[dict]:
-    """Temas latentes vía LDA sobre comentarios."""
+    """Temas latentes vía LDA sobre comentarios, con etiqueta legible.
+
+    Devuelve una lista de temas, cada uno con una etiqueta legible (label),
+    sus palabras frecuentes (words) y su peso (pct/doc_count). Los temas que
+    quedan con la misma etiqueta se fusionan para no repetir el mismo tema.
+    """
     from src.analyzer.latent_topics import extract_latent_topics
     if db_path is None:
         db_path = FACEBOOK_DB
@@ -287,5 +292,26 @@ def cargar_temas_latentes(db_path=None) -> list[dict]:
     textos = [r[0] for r in rows]
     if len(textos) < 10:
         return []
-    result = extract_latent_topics(textos, n_topics=6, n_top_words=5)
-    return result.get("topics", [])
+    result = extract_latent_topics(textos, n_topics=6, n_top_words=8)
+    topics = result.get("topics", [])
+
+    fusionados: dict = {}
+    for t in topics:
+        etiqueta = t.get("label") or "Tema sin clasificar"
+        if etiqueta not in fusionados:
+            fusionados[etiqueta] = {
+                "id": len(fusionados) + 1,
+                "label": etiqueta,
+                "words": list(t.get("words", [])),
+                "pct": t.get("pct", 0),
+                "doc_count": t.get("doc_count", 0),
+            }
+        else:
+            f = fusionados[etiqueta]
+            f["pct"] = round(f["pct"] + t.get("pct", 0), 1)
+            f["doc_count"] += t.get("doc_count", 0)
+            for w in t.get("words", []):
+                if w not in f["words"]:
+                    f["words"].append(w)
+
+    return sorted(fusionados.values(), key=lambda x: -x["doc_count"])

@@ -45,7 +45,7 @@ from dashboard.dash_inteligencia import (
     cargar_temas_latentes,
 )
 
-# ─── Estado de sesión ───────────────────────────────────────
+# ─── Estado de sesión ────────────────────────────
 if "lote_ingreso" not in st.session_state:
     st.session_state["lote_ingreso"] = []
 
@@ -102,7 +102,7 @@ except Exception:
     fecha_str = "No disponible"
     fecha_corta = "N/D"
 
-# ─── Topbar institucional ───────────────────────────────────
+# ─── Topbar institucional ──────────────────────────
 st.markdown(f"""
 <div class="topbar">
     <div class="topbar-brand">PANEL <span class="sep">·</span> SANTA ANA <span class="sep">/</span> <span class="who">Inteligencia Ciudadana</span></div>
@@ -110,7 +110,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ─── SIDEBAR · CONSOLA EJECUTIVA ────────────────────────────
+# ─── SIDEBAR · CONSOLA EJECUTIVA ─────────────────────
 
 # Header institucional
 st.sidebar.markdown("""
@@ -171,7 +171,7 @@ st.sidebar.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ─── HELPERS UI ─────────────────────────────────────────────
+# ─── HELPERS UI ────────────────────────────────
 
 def formato_fecha_espanol(fecha):
     dias = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']
@@ -300,15 +300,15 @@ def _docstrip(periodo_lbl: str, plataforma_lbl: str, fecha_lbl: str):
     """, unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 # NOTAS METODOLÓGICAS
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 
 def render_notas_metodologicas():
     _page_head(
         "REFERENCIA METODOLÓGICA / LÍMITES DEL SISTEMA",
         "Notas metodológicas",
-        "Los supuestos, los proxys y los márgenes de error sobre los que se construye esta lectura. Léelos antes de tomar decisiones con estos datos."
+        "Los supuestos, las simplificaciones y los márgenes de error sobre los que se construye esta lectura. Léelos antes de tomar decisiones con estos datos."
     )
     st.markdown(
         "Este panel analiza contenido público (posts, reacciones y comentarios) de las "
@@ -322,8 +322,8 @@ def render_notas_metodologicas():
         unsafe_allow_html=True
     )
     st.markdown(
-        '<div class="status-info">Las reacciones son un proxy emocional, no un test psicológico validado. '
-        'Úsalas como señal de tono colectivo, no como diagnóstico.</div>',
+        '<div class="status-info">Las reacciones son una señal del tono emocional, no un test psicológico validado. '
+        'Léelas como pulso del ánimo colectivo, no como diagnóstico.</div>',
         unsafe_allow_html=True
     )
     st.markdown(
@@ -356,9 +356,9 @@ def render_notas_metodologicas():
     )
 
 
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 # Serie temporal helper
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 
 def _build_serie_chart(df_fb_s, df_tk_s, periodo):
     if df_fb_s.empty and df_tk_s.empty:
@@ -400,9 +400,9 @@ def _build_serie_chart(df_fb_s, df_tk_s, periodo):
     return fig
 
 
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 # BLOQUE I — PULSO GENERAL
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 
 def render_bloque1_pulso():
     _warn_dropped_null_dates()
@@ -492,7 +492,7 @@ def render_bloque1_pulso():
     else:
         st.markdown('<div class="status-info">Clasificación de temas requiere sentence-transformers (no instalado).</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="status-info">El análisis de sentimiento se basa en los comentarios capturados, no en el 100% de la conversación. Los porcentajes son un proxy, no una medición exhaustiva.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="status-info">Este análisis está basado al 100% en los comentarios extraídos y analizados de las publicaciones revisadas.</div>', unsafe_allow_html=True)
 
     # ── 3.2 TERMÓMETRO DE COLONIAS ──
     st.markdown('<div class="section-header"><div class="section-title">03 · Termómetro de Colonias</div><div class="section-subtitle">Zonas donde más se apoya o critica la gestión municipal.</div></div>', unsafe_allow_html=True)
@@ -566,15 +566,15 @@ def render_bloque1_pulso():
     st.markdown(f'<div class="interpretation" style="margin-top:16px"><div class="interpretation-label">🔎 En una frase:</div><div class="interpretation-texto">{interp_cierre}</div></div>', unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 # BLOQUE II — SEGMENTACIÓN DE AUDIENCIA
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 
 def render_bloque2_audiencia():
     _page_head(
         "SEGMENTACIÓN / ANÁLISIS DE AUDIENCIA",
         "Estructura de públicos y voces de influencia",
-        "Lectura proxy de la composición emocional de quienes participan en la conversación: simpatizantes, neutrales, críticos; nivel de polarización y emisores que concentran interacción.",
+        "Composición emocional de quienes participan en la conversación: simpatizantes, neutrales y críticos; nivel de polarización y páginas que concentran la interacción.",
         f'PERÍODO <span class="acc">{periodo.upper()}</span> <span class="sep">·</span> PLATAFORMA <span class="acc">{plataforma.upper()}</span>'
     )
 
@@ -612,7 +612,7 @@ def render_bloque2_audiencia():
             </div>
         </div>
         """, unsafe_allow_html=True)
-        st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Proxy: la base son comentarios, no personas individuales.</p>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:11px;color:var(--fg-muted)">La base son los comentarios analizados, no personas individuales.</p>', unsafe_allow_html=True)
 
         m = evaluar_muestra(len(df_comentarios))
         st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">{m["etiqueta"]}</p>', unsafe_allow_html=True)
@@ -643,7 +643,7 @@ def render_bloque2_audiencia():
         st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Extremos = comentarios con |score| &gt; 0.5 (muy positivos o muy negativos). Alto % indica audiencia polarizada.</p>', unsafe_allow_html=True)
 
     # ── 3. VOCES DE INFLUENCIA ──
-    st.markdown('<div class="section-header"><div class="section-title">03 · Voces de Influencia (proxy)</div><div class="section-subtitle">Páginas oficiales con mayor concentración de interacción.</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header"><div class="section-title">03 · Voces de Influencia</div><div class="section-subtitle">Páginas oficiales con mayor concentración de interacción.</div></div>', unsafe_allow_html=True)
     df_fb_raw = cargar_fb_engagement(FACEBOOK_DB)
     if not df_fb_raw.empty:
         top_pages = df_fb_raw.groupby('page_name').agg(
@@ -693,27 +693,28 @@ def render_bloque2_audiencia():
         st.markdown('<div class="status-info">El perfil de audiencia requiere scikit-learn y al menos 5 posts con datos completos.</div>', unsafe_allow_html=True)
 
     # ── 6. TEMAS EMERGENTES ──
-    st.markdown('<div class="section-header"><div class="section-title">06 · Temas Emergentes</div><div class="section-subtitle">Patrones temáticos latentes detectados en los comentarios (LDA).</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header"><div class="section-title">06 · Temas Emergentes</div><div class="section-subtitle">Los temas de los que más habla la gente en los comentarios, agrupados automáticamente.</div></div>', unsafe_allow_html=True)
     latentes = cargar_temas_latentes(FACEBOOK_DB)
     if latentes:
         cols = st.columns(min(len(latentes), 3))
         for i, t in enumerate(latentes[:6]):
+            titulo = t.get("label") or "Tema sin clasificar"
             palabras = ", ".join(t.get("words", [])[:5])
             pct = t.get("pct", 0)
             with cols[i % 3]:
                 st.markdown(f"""
                 <div class="panel" style="margin-bottom:8px">
-                    <div class="panel-head"><div class="panel-title">TEMA {t.get("id", i + 1)}</div><div class="panel-meta">{pct:.0f}%</div></div>
-                    <div style="font-size:12px;color:var(--fg-secondary);margin-top:4px">{palabras}</div>
+                    <div class="panel-head"><div class="panel-title">{titulo}</div><div class="panel-meta">{pct:.0f}%</div></div>
+                    <div style="font-size:11px;color:var(--fg-muted);margin-top:4px">Palabras frecuentes: {palabras}</div>
                 </div>
                 """, unsafe_allow_html=True)
     else:
         st.markdown('<div class="status-info">Se requieren al menos 10 comentarios para detectar temas latentes.</div>', unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 # BLOQUE III — RIESGO Y AUTENTICIDAD
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 
 def render_bloque3_riesgo():
     _page_head(
@@ -734,7 +735,7 @@ def render_bloque3_riesgo():
         return
 
     # ── 1. AUTENTICIDAD ──
-    st.markdown('<div class="section-header"><div class="section-title">01 · Índice de Autenticidad (heurística)</div><div class="section-subtitle">Estabilidad del volumen diario como proxy de comportamiento orgánico.</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header"><div class="section-title">01 · Índice de Autenticidad (heurística)</div><div class="section-subtitle">Estabilidad del volumen diario como señal de comportamiento orgánico.</div></div>', unsafe_allow_html=True)
     if not df_fb.empty and 'created_time' in df_fb.columns:
         daily = df_fb.copy()
         daily['fecha'] = daily['created_time'].dt.date
@@ -843,9 +844,9 @@ def render_bloque3_riesgo():
         st.markdown('<div class="status-info">Sin comentarios negativos destacados.</div>', unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 # BLOQUE IV — MEMORIA E INTELIGENCIA APLICADA
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 
 def _b4_header(num: int, titulo: str, subtitulo: str = ""):
     st.markdown(
@@ -1020,9 +1021,9 @@ def render_bloque4_inteligencia():
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 # DISPATCH PRINCIPAL
-# ═══════════════════════════════════════════
+# ═════════════════════════════════════════════
 
 if vista == "Dashboard":
     tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs([

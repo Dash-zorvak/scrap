@@ -679,13 +679,14 @@ def render_bloque2_audiencia():
         sent_map = {"positive": "\U0001f7e2 positivo", "negative": "\U0001f534 negativo", "neutral": "\u26aa neutral"}
         for label, p in perfil["clusters"].items():
             sent = sent_map.get(p.get("dominant_sentiment", ""), "\u26aa")
+            dom_topic = p.get("dominant_topic", "\u2014")
             st.markdown(f"""
             <div class="kpi-card kpi-card-eff" style="max-width:100%">
                 <div class="kpi-label">SEGMENTO {label}</div>
                 <div style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0">
                     <span style="font-size:13px"><strong>{p.get("size", 0)}</strong> comentarios</span>
                     <span style="font-size:13px">{sent}</span>
-                    <span style="font-size:13px">Tema: {p.get("dominant_topic", "\u2014")}</span>
+                    <span style="font-size:13px">Tema: {dom_topic}</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)

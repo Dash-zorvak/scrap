@@ -230,8 +230,8 @@ def detect_controversy_spike(
     return AlertResult(
         alert_type="ici",
         severity=severity,
-        title=f"Pico de controversia: {pct_str} ({ici:.1f}σ)",
-        description=f"Índice de Controversia en {pct_str}, {ici:.1f} desviaciones sobre la media de {mean_c * 100:.1f}%. Requiere atención inmediata.",
+        title=f"Pico de controversia: {pct_str} ({ici:.1f}\u03c3)",
+        description=f"\u00cdndice de Controversia en {pct_str}, {ici:.1f} desviaciones sobre la media de {mean_c * 100:.1f}%. Requiere atenci\u00f3n inmediata.",
         score=ici,
         category="controversia",
     )
@@ -258,8 +258,8 @@ def detect_sentiment_dissonance(
     return AlertResult(
         alert_type="sdi",
         severity=3,
-        title=f"Disonancia de sentimiento: caída del {drop_pct:.0f}%",
-        description=f"El sentimiento neto cayó de {prior_net_sentiment * 100:.1f}% a {current_net_sentiment * 100:.1f}%. Posible crisis de percepción.",
+        title=f"Disonancia de sentimiento: ca\u00edda del {drop_pct:.0f}%",
+        description=f"El sentimiento neto cay\u00f3 de {prior_net_sentiment * 100:.1f}% a {current_net_sentiment * 100:.1f}%. Posible crisis de percepci\u00f3n.",
         score=sdi,
         category="sentimiento",
     )
@@ -286,8 +286,8 @@ def detect_engagement_fugue(
     return AlertResult(
         alert_type="efi",
         severity=2,
-        title=f"Fuga de engagement: caída del {drop_pct:.0f}%",
-        description=f"La tasa de engagement cayó de {prior_engagement_rate:.1%} a {current_engagement_rate:.1%}. Señal de desconexión con la audiencia.",
+        title=f"Fuga de engagement: ca\u00edda del {drop_pct:.0f}%",
+        description=f"La tasa de engagement cay\u00f3 de {prior_engagement_rate:.1%} a {current_engagement_rate:.1%}. Se\u00f1al de desconexi\u00f3n con la audiencia.",
         score=efi,
         category="engagement",
     )
@@ -320,7 +320,7 @@ def detect_topic_anomaly(
     return AlertResult(
         alert_type="tai",
         severity=2,
-        title=f"Tópico con rechazo inusual: {topic_label}",
+        title=f"T\u00f3pico con rechazo inusual: {topic_label}",
         description=f"Ratio de enojo de {topic_angry_ratio:.1%} vs {overall_angry_ratio:.1%} promedio ({tai:.1f}x). {topic_post_count} publicaciones afectadas.",
         score=tai,
         category="topic_anomaly",
@@ -352,7 +352,7 @@ def detect_zone_dissonance(
         alert_type="zdi",
         severity=2,
         title=f"Disonancia en zona: {zone_label}",
-        description=f"{neg_pct:.0f}% de publicaciones negativas en zona {zone_label}. Posible problema de ejecución en el territorio.",
+        description=f"{neg_pct:.0f}% de publicaciones negativas en zona {zone_label}. Posible problema de ejecuci\u00f3n en el territorio.",
         score=zdi,
         category="zona_dissonance",
         zona=zone_name,
@@ -443,7 +443,7 @@ def run_all_detectors(
 
 
 def _engagement_metrics(total_reactions, total_comments, total_shares, total_views, total_posts):
-    """Engagement sin inflar la métrica cuando no hay views (sin read_insights).
+    """Engagement sin inflar la m\u00e9trica cuando no hay views (sin read_insights).
     Con views reales -> tasa por views. Sin views -> interacciones promedio por post (proxy)."""
     interactions = total_reactions + total_comments + total_shares
     if total_views > 0:
@@ -465,12 +465,17 @@ def _compute_indices(posts: List[Dict]) -> Dict:
     likes = sum(p.get("likes_count", 0) for p in posts)
     loves = sum(p.get("loves_count", 0) for p in posts)
     cares = sum(p.get("cares_count", 0) for p in posts)
+    hahas = sum(p.get("hahas_count", 0) for p in posts)
     angrys = sum(p.get("angrys_count", 0) for p in posts)
     sads = sum(p.get("sads_count", 0) for p in posts)
 
+    # "Me divierte" (hahas) en publicaciones oficiales es mayoritariamente
+    # burla/sarcasmo: se trata como reaccion NEGATIVA (carga de controversia),
+    # nunca como positiva. Positivas = Me gusta + Me encanta + Me importa.
+    negativas = angrys + sads + hahas
     n = total_reactions or 1
-    net_sentiment = (likes + loves + cares - angrys - sads) / n
-    controversy = (angrys + sads) / n
+    net_sentiment = (likes + loves + cares - negativas) / n
+    controversy = negativas / n
     effectiveness = (likes + loves + cares) / n
     engagement, engagement_basis = _engagement_metrics(
         total_reactions, total_comments, total_shares, total_views, total
@@ -487,7 +492,7 @@ def _compute_indices(posts: List[Dict]) -> Dict:
     for topic_posts in topic_groups.values():
         t_reactions = sum(p.get("likes_count", 0) + p.get("loves_count", 0) + p.get("cares_count", 0) + p.get("hahas_count", 0)
                          + p.get("wows_count", 0) + p.get("sads_count", 0) + p.get("angrys_count", 0) for p in topic_posts)
-        t_neg = sum(p.get("angrys_count", 0) + p.get("sads_count", 0) for p in topic_posts)
+        t_neg = sum(p.get("angrys_count", 0) + p.get("sads_count", 0) + p.get("hahas_count", 0) for p in topic_posts)
         if t_reactions > 0:
             tc = t_neg / t_reactions
             if tc > max_topic_controversy:
@@ -500,7 +505,7 @@ def _compute_indices(posts: List[Dict]) -> Dict:
     risk = max(0.0, min(1.0, risk))
 
     como_pct = (likes + loves + cares) / max(total_reactions, 1) * 100
-    no_gusta_pct = (angrys + sads) / max(total_reactions, 1) * 100
+    no_gusta_pct = negativas / max(total_reactions, 1) * 100
 
     return {
         "engagement": round(engagement, 2),
@@ -528,7 +533,7 @@ def _build_monthly_series(posts: List[Dict]) -> Dict[str, Dict]:
         key = dt.strftime("%Y-%m")
         if key not in monthly:
             monthly[key] = {"posts": 0, "reactions": 0, "comments": 0, "shares": 0,
-                            "views": 0, "likes": 0, "loves": 0, "cares": 0, "angrys": 0, "sads": 0}
+                            "views": 0, "likes": 0, "loves": 0, "cares": 0, "hahas": 0, "angrys": 0, "sads": 0}
         monthly[key]["posts"] += 1
         monthly[key]["reactions"] += sum(p.get(c, 0) for c in
                                           ["likes_count", "loves_count", "cares_count", "hahas_count",
@@ -539,12 +544,14 @@ def _build_monthly_series(posts: List[Dict]) -> Dict[str, Dict]:
         monthly[key]["likes"] += p.get("likes_count", 0)
         monthly[key]["loves"] += p.get("loves_count", 0)
         monthly[key]["cares"] += p.get("cares_count", 0)
+        monthly[key]["hahas"] += p.get("hahas_count", 0)
         monthly[key]["angrys"] += p.get("angrys_count", 0)
         monthly[key]["sads"] += p.get("sads_count", 0)
 
     for k in monthly:
         tr = monthly[k]["reactions"] or 1
-        monthly[k]["controversy"] = (monthly[k]["angrys"] + monthly[k]["sads"]) / tr
+        # hahas (Me divierte) cuenta como carga negativa/controversia.
+        monthly[k]["controversy"] = (monthly[k]["angrys"] + monthly[k]["sads"] + monthly[k]["hahas"]) / tr
         denom = monthly[k]["views"] if monthly[k]["views"] > 0 else max(monthly[k]["posts"], 1)
         monthly[k]["engagement_rate"] = monthly[k]["reactions"] / denom
     return monthly
@@ -568,10 +575,11 @@ def _compute_controversy_window(posts: List[Dict], days: int = 7) -> float:
     likes = sum(p.get("likes_count", 0) for p in recent)
     loves = sum(p.get("loves_count", 0) for p in recent)
     cares = sum(p.get("cares_count", 0) for p in recent)
+    hahas = sum(p.get("hahas_count", 0) for p in recent)
     angrys = sum(p.get("angrys_count", 0) for p in recent)
     sads = sum(p.get("sads_count", 0) for p in recent)
-    tr = likes + loves + cares + angrys + sads or 1
-    return (angrys + sads) / tr
+    tr = likes + loves + cares + hahas + angrys + sads or 1
+    return (angrys + sads + hahas) / tr
 
 
 def _compute_sentiment_series(posts: List[Dict]) -> List[float]:
@@ -580,7 +588,7 @@ def _compute_sentiment_series(posts: List[Dict]) -> List[float]:
     for k in sorted(monthly.keys()):
         v = monthly[k]
         tr = v["reactions"] or 1
-        ns = (v["likes"] + v["loves"] + v["cares"] - v["angrys"] - v["sads"]) / tr
+        ns = (v["likes"] + v["loves"] + v["cares"] - v["angrys"] - v["sads"] - v["hahas"]) / tr
         series.append(ns)
     return series
 

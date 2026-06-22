@@ -25,14 +25,14 @@ DIMENSION_WEIGHTS: Dict[str, float] = {
 
 DIMENSION_LABELS: Dict[str, Dict] = {
     "aprobacion": {
-        "label": "Aprobación Ciudadana",
-        "description": "Sentimiento neto de la población",
+        "label": "Aprobaci\u00f3n Ciudadana",
+        "description": "Sentimiento neto de la poblaci\u00f3n",
         "unit": "%",
         "higher_is_better": True,
     },
     "conexion": {
-        "label": "Conexión con la Gente",
-        "description": "Nivel de engagement e interacción",
+        "label": "Conexi\u00f3n con la Gente",
+        "description": "Nivel de engagement e interacci\u00f3n",
         "unit": "%",
         "higher_is_better": True,
     },
@@ -44,7 +44,7 @@ DIMENSION_LABELS: Dict[str, Dict] = {
     },
     "diversidad_temas": {
         "label": "Diversidad de Temas",
-        "description": "Variedad de tópicos gestionados",
+        "description": "Variedad de t\u00f3picos gestionados",
         "unit": "%",
         "higher_is_better": True,
     },
@@ -61,8 +61,8 @@ DIMENSION_LABELS: Dict[str, Dict] = {
         "higher_is_better": True,
     },
     "atencion": {
-        "label": "Atención a la Comunidad",
-        "description": "Capacidad de generar conversación",
+        "label": "Atenci\u00f3n a la Comunidad",
+        "description": "Capacidad de generar conversaci\u00f3n",
         "unit": "%",
         "higher_is_better": True,
     },
@@ -110,12 +110,16 @@ def compute_dimension_conexion(posts: List[Dict]) -> float:
 
 def compute_dimension_tranquilidad(posts: List[Dict]) -> float:
     total_reactions = sum(p.get("total_reactions", 0) for p in posts)
-    cares = sum(p.get("cares_count", 0) for p in posts)
     angrys = sum(p.get("angrys_count", 0) for p in posts)
     sads = sum(p.get("sads_count", 0) for p in posts)
+    hahas = sum(p.get("hahas_count", 0) for p in posts)
     if total_reactions == 0:
         return 50.0
-    controversy = (angrys + sads) / total_reactions
+    # "Me divierte" (hahas) en publicaciones oficiales es mayoritariamente
+    # burla/sarcasmo: cuenta como controversia/rechazo, igual que "Me enoja"
+    # y "Me entristece". Antes solo estaba en el denominador, lo que inflaba
+    # esta dimension y el IQ.
+    controversy = (angrys + sads + hahas) / total_reactions
     return max(0, min(100, (1 - controversy) * 100))
 
 
@@ -218,13 +222,13 @@ def compute_matrix_position(posts: List[Dict],
 
 def _get_quadrant(x: float, y: float) -> str:
     if x >= 50 and y >= 50:
-        return "LIDERAZGO: Alta aprobación y conexión"
+        return "LIDERAZGO: Alta aprobaci\u00f3n y conexi\u00f3n"
     elif x >= 50 and y < 50:
-        return "INSTITUCIONAL: Bien visto pero poca interacción"
+        return "INSTITUCIONAL: Bien visto pero poca interacci\u00f3n"
     elif x < 50 and y >= 50:
-        return "POPULISTA: Mucha interacción pero desaprobación"
+        return "POPULISTA: Mucha interacci\u00f3n pero desaprobaci\u00f3n"
     else:
-        return "CRISIS: Baja aprobación y baja conexión"
+        return "CRISIS: Baja aprobaci\u00f3n y baja conexi\u00f3n"
 
 
 def compute_iq_full(posts_fb: List[Dict],

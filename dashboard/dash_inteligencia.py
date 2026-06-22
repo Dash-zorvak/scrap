@@ -1,4 +1,4 @@
-"""Capa de inteligencia: conecta Cambridge Index, IQ Engine y resúmenes por zona."""
+"""Capa de inteligencia: conecta Cambridge Index, IQ Engine y res\u00famenes por zona."""
 
 import sys
 import os
@@ -9,8 +9,26 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 from config import FACEBOOK_DB
 
-_SEVERIDAD_COLOR = {1: "🟢", 2: "🟡", 3: "🔴", 4: "🔴"}
-_SEVERIDAD_LABEL = {1: "bajo", 2: "medio", 3: "alto", 4: "crítico"}
+_SEVERIDAD_COLOR = {1: "\U0001f7e2", 2: "\U0001f7e1", 3: "\U0001f534", 4: "\U0001f534"}
+_SEVERIDAD_LABEL = {1: "bajo", 2: "medio", 3: "alto", 4: "cr\u00edtico"}
+
+# Etiquetas legibles para los asuntos ciudadanos detectados en los comentarios.
+# Las claves coinciden con las categor\u00edas de get_main_topic (topic_detection).
+TEMA_LABELS = {
+    "obras_publicas": "Obras p\u00fablicas",
+    "seguridad": "Seguridad",
+    "servicios_publicos": "Servicios b\u00e1sicos (agua, luz, basura)",
+    "empleo": "Empleo y econom\u00eda",
+    "salud": "Salud",
+    "educacion": "Educaci\u00f3n",
+    "movilidad": "Movilidad y transporte",
+    "corrupcion": "Desconfianza y corrupci\u00f3n",
+    "medio_ambiente": "Medio ambiente",
+    "transparencia": "Transparencia y gesti\u00f3n",
+    "cultura": "Cultura y eventos",
+    "deportes": "Deportes",
+    "apoyo_generico": "Mensajes de apoyo y felicitaciones",
+}
 
 
 def _construir_posts(db_path=None) -> list[dict]:
@@ -93,15 +111,15 @@ def cargar_alertas_cambridge(db_path=None) -> list[dict]:
 def traducir_alerta(alert: dict) -> dict:
     tipo = alert.get("type", "")
     severidad = alert.get("severity", 1)
-    color = _SEVERIDAD_COLOR.get(severidad, "🟡")
+    color = _SEVERIDAD_COLOR.get(severidad, "\U0001f7e1")
     zona = alert.get("zona", "")
 
     titulares = {
         "ici": "Sube la controversia en redes",
         "sdi": "Lo que publican no coincide con lo que siente la gente",
-        "efi": "La conversación está perdiendo fuerza",
-        "tai": "Un tema genera mucho más enojo de lo normal",
-        "zdi": f"{zona}: la gente está molesta",
+        "efi": "La conversaci\u00f3n est\u00e1 perdiendo fuerza",
+        "tai": "Un tema genera mucho m\u00e1s enojo de lo normal",
+        "zdi": f"{zona}: la gente est\u00e1 molesta",
     }
     titular = titulares.get(tipo, alert.get("title", "Alerta detectada"))
 
@@ -109,22 +127,22 @@ def traducir_alerta(alert: dict) -> dict:
     n_posts = alert.get("n_posts", 0) or 0
 
     if tipo == "ici":
-        lectura = f"Las reacciones de enojo y tristeza están muy por encima de lo normal en redes sociales."
+        lectura = f"Las reacciones de enojo y tristeza est\u00e1n muy por encima de lo normal en redes sociales."
     elif tipo == "sdi":
-        lectura = f"El sentimiento de los comentarios es más negativo de lo que las reacciones del post sugieren."
+        lectura = f"El sentimiento de los comentarios es m\u00e1s negativo de lo que las reacciones del post sugieren."
     elif tipo == "efi":
-        lectura = f"La gente está respondiendo menos a las publicaciones en comparación con semanas anteriores."
+        lectura = f"La gente est\u00e1 respondiendo menos a las publicaciones en comparaci\u00f3n con semanas anteriores."
     elif tipo == "tai":
         topic = alert.get("topic", "")
-        lectura = f"Las publicaciones sobre {topic} tienen una proporción de enojo muy por encima de lo normal."
+        lectura = f"Las publicaciones sobre {topic} tienen una proporci\u00f3n de enojo muy por encima de lo normal."
     elif tipo == "zdi" and zona:
-        lectura = f"Las publicaciones sobre {zona} tienen más reacciones negativas que positivas."
+        lectura = f"Las publicaciones sobre {zona} tienen m\u00e1s reacciones negativas que positivas."
     else:
         lectura = alert.get("description", "Comportamiento fuera de lo normal detectado.")
 
     return {
         "titular": titular,
-        "lectura": f"🔎 Léelo así: {lectura}",
+        "lectura": f"\U0001f50e L\u00e9elo as\u00ed: {lectura}",
         "color": color,
         "severidad": severidad,
         "tipo": tipo,
@@ -217,7 +235,7 @@ def cargar_zonas_resumen(db_path=None) -> dict:
 
 
 def cargar_cruce_tema_zona(db_path=None) -> list[dict]:
-    """Ranking de combinaciones tema × zona × sentimiento."""
+    """Ranking de combinaciones tema \u00d7 zona \u00d7 sentimiento."""
     if db_path is None:
         db_path = FACEBOOK_DB
     try:
@@ -237,13 +255,13 @@ def cargar_cruce_tema_zona(db_path=None) -> list[dict]:
     except Exception:
         return []
     return [
-        {"zona": r[0], "tema": r[1] or "Sin categoría", "sentiment": r[2], "n": r[3]}
+        {"zona": r[0], "tema": r[1] or "Sin categor\u00eda", "sentiment": r[2], "n": r[3]}
         for r in rows if r[0] and r[2]
     ]
 
 
 def cargar_perfil_ocean(db_path=None) -> dict:
-    """Perfil de audiencia vía OCEAN engine (PCA + clusters)."""
+    """Perfil de audiencia v\u00eda OCEAN engine (PCA + clusters)."""
     from src.analyzer.ocean_engine import run_ocean_analysis
     posts = _construir_posts(db_path)
     if len(posts) < 5:
@@ -270,13 +288,17 @@ def cargar_perfil_ocean(db_path=None) -> dict:
 
 
 def cargar_temas_latentes(db_path=None) -> list[dict]:
-    """Temas latentes vía LDA sobre comentarios, con etiqueta legible.
+    """Temas ciudadanos: clasifica cada comentario en un asunto concreto.
 
-    Devuelve una lista de temas, cada uno con una etiqueta legible (label),
-    sus palabras frecuentes (words) y su peso (pct/doc_count). Los temas que
-    quedan con la misma etiqueta se fusionan para no repetir el mismo tema.
+    En lugar de extraer "palabras frecuentes" (que producen listas sin sentido
+    como "felicidades, muchas, se\u00f1or"), cada comentario se clasifica en una
+    categor\u00eda tem\u00e1tica legible (obras, seguridad, servicios, etc.) usando el
+    detector de t\u00f3picos por palabras clave (get_main_topic). Devuelve, por cada
+    tema con presencia real, su etiqueta legible, el porcentaje sobre los
+    comentarios clasificables, cu\u00e1ntos comentarios lo mencionan y un ejemplo
+    representativo.
     """
-    from src.analyzer.latent_topics import extract_latent_topics
+    from src.analyzer.topic_detection import get_main_topic
     if db_path is None:
         db_path = FACEBOOK_DB
     try:
@@ -292,26 +314,43 @@ def cargar_temas_latentes(db_path=None) -> list[dict]:
     textos = [r[0] for r in rows]
     if len(textos) < 10:
         return []
-    result = extract_latent_topics(textos, n_topics=6, n_top_words=8)
-    topics = result.get("topics", [])
 
-    fusionados: dict = {}
-    for t in topics:
-        etiqueta = t.get("label") or "Tema sin clasificar"
-        if etiqueta not in fusionados:
-            fusionados[etiqueta] = {
-                "id": len(fusionados) + 1,
-                "label": etiqueta,
-                "words": list(t.get("words", [])),
-                "pct": t.get("pct", 0),
-                "doc_count": t.get("doc_count", 0),
-            }
-        else:
-            f = fusionados[etiqueta]
-            f["pct"] = round(f["pct"] + t.get("pct", 0), 1)
-            f["doc_count"] += t.get("doc_count", 0)
-            for w in t.get("words", []):
-                if w not in f["words"]:
-                    f["words"].append(w)
+    conteo: dict = defaultdict(int)
+    ejemplos: dict = {}
+    total_clasificados = 0
+    for texto in textos:
+        try:
+            cat = get_main_topic(texto)
+        except Exception:
+            cat = ""
+        if not cat:
+            continue
+        conteo[cat] += 1
+        total_clasificados += 1
+        # Guarda como ejemplo el comentario legible m\u00e1s corto (>= 15 chars).
+        limpio = " ".join(str(texto).split())
+        prev = ejemplos.get(cat)
+        if prev is None:
+            ejemplos[cat] = limpio
+        elif 15 <= len(limpio) < len(prev):
+            ejemplos[cat] = limpio
 
-    return sorted(fusionados.values(), key=lambda x: -x["doc_count"])
+    if total_clasificados == 0:
+        return []
+
+    temas = []
+    for i, (cat, n) in enumerate(conteo.items()):
+        ejemplo = ejemplos.get(cat, "")
+        if len(ejemplo) > 120:
+            ejemplo = ejemplo[:117] + "..."
+        temas.append({
+            "id": i + 1,
+            "label": TEMA_LABELS.get(cat, cat.replace("_", " ").capitalize()),
+            "categoria": cat,
+            "pct": round(n / total_clasificados * 100, 1),
+            "doc_count": n,
+            "ejemplo": ejemplo,
+            "words": [],
+        })
+
+    return sorted(temas, key=lambda x: -x["doc_count"])

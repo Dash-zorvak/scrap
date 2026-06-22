@@ -43,10 +43,17 @@ def procesar_facebook(fb_db=None):
     df["indice_tristeza"] = _indice("sads_count")
     df["indice_enojo"] = _indice("angrys_count")
     df["engagement_total"] = df["total_reacciones"] + df["comments_count"]
-    # Score emocional neto: afecto positivo (amor + carino + asombro) menos carga negativa (tristeza + enojo)
+    # Score emocional neto (valencia de reacciones en contexto civico):
+    #   Positivas (afecto/apoyo): Me encanta (amor) + Me importa (carino).
+    #   Negativas (rechazo/burla): Me entristece (tristeza) + Me enoja (enojo)
+    #     + Me divierte (humor). "Me divierte" en publicaciones oficiales es
+    #     mayoritariamente burla/sarcasmo, por lo que cuenta como senal
+    #     NEGATIVA, nunca positiva.
+    #   Neutras/ambiguas (excluidas): Me gusta (base generica) y Me asombra
+    #     (asombro, ambiguo: puede ser admiracion o escandalo).
     df["score_emocional"] = (
-        (df["indice_amor"] + df["indice_carino"] + df["indice_asombro"])
-        - (df["indice_tristeza"] + df["indice_enojo"])
+        (df["indice_amor"] + df["indice_carino"])
+        - (df["indice_tristeza"] + df["indice_enojo"] + df["indice_humor"])
     )
     df["plataforma"] = "facebook"
 

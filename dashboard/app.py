@@ -51,6 +51,12 @@ from dashboard.dash_pulso import (
     calcular_concentracion,
 )
 from dashboard.dash_audiencia import calcular_polarizacion
+from dashboard.dash_riesgo import (
+    calcular_autenticidad,
+    calcular_nivel_alerta,
+    calcular_propagacion_24_48,
+    agrupar_fricciones,
+)
 
 # ─── Estado de sesión ─────────────────
 if "lote_ingreso" not in st.session_state:
@@ -732,7 +738,7 @@ def render_bloque3_riesgo():
     _page_head(
         "ALERTAS / GESTIÓN DE RIESGO REPUTACIONAL",
         "Riesgo, autenticidad y velocidad de propagación",
-        "Señales tempranas sobre la salud de la conversación: posibles patrones coordinados, nivel de alerta agregado, dinámica de propagación y puntos críticos de fricción.",
+        "Señales tempranas sobre la salud de la conversación: patrones coordinados, necesidad de respuesta institucional, proyección a 24-48h y puntos críticos de fricción.",
         f'PERÍODO <span class="acc">{periodo.upper()}</span> <span class="sep">·</span> PLATAFORMA <span class="acc">{plataforma.upper()}</span>'
     )
 
@@ -740,120 +746,84 @@ def render_bloque3_riesgo():
     df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB)
     df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
     df_sent = cargar_sentimiento_fb(FACEBOOK_DB)
-    df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB, TIKTOK_DB)
+    df_coment = cargar_comentarios_fb(FACEBOOK_DB)
+    df_coment_raw = safe_query("SELECT message, sentiment, sentiment_score, topic_category FROM fb_comments", FACEBOOK_DB)
 
     if df_fb.empty and df_tk.empty:
         hay_datos(df_fb, "No hay datos para este período.")
         return
 
-    # ── 1. AUTENTICIDAD ──
-    st.markdown('<div class="section-header"><div class="section-title">01 · Índice de Autenticidad (heurística)</div><div class="section-subtitle">Estabilidad del volumen diario como señal de comportamiento orgánico.</div></div>', unsafe_allow_html=True)
-    if not df_fb.empty and 'created_time' in df_fb.columns:
-        daily = df_fb.copy()
-        daily['fecha'] = daily['created_time'].dt.date
-        daily_vol = daily.groupby('fecha').size()
-        mean_val = float(daily_vol.mean()) if len(daily_vol) > 0 else 0.0
-        n_dias = int(len(daily_vol))
-        cv_definido = False
-        cv = 0.0
-        if n_dias < 2 or mean_val <= 0 or pd.isna(mean_val):
-            label_aut = f"DATOS INSUFICIENTES · {n_dias} día{'s' if n_dias != 1 else ''} observado{'s' if n_dias != 1 else ''}"
-            cls_aut = ""
-            cv_str = "—"
-        else:
-            std_val = float(daily_vol.std())
-            if pd.isna(std_val):
-                std_val = 0.0
-            cv = std_val / mean_val if mean_val > 0 else 0.0
-            if pd.isna(cv):
-                cv = 0.0
-            cv_definido = True
-            cv_str = f"{cv:.2f}"
-            if cv < 0.5:
-                label_aut = "ESTABLE · perfil orgánico"
-                cls_aut = "kpi-card-sent"
-            elif cv < 1.0:
-                label_aut = "MODERADA · picos puntuales"
-                cls_aut = "kpi-card-ctrl"
-            else:
-                label_aut = "VOLÁTIL · posible coordinación"
-                cls_aut = "kpi-card-risk"
-        st.markdown(f'<div class="kpi-card {cls_aut}" style="max-width:520px"><div class="kpi-label">COEFICIENTE DE VARIACIÓN</div><div class="kpi-value">{cv_str}</div><div class="kpi-meta">{label_aut}</div></div>', unsafe_allow_html=True)
-        if cv_definido:
-            st.markdown(f'<p style="font-size:11px;color:var(--fg-muted);margin-top:8px">Heurística: CV bajo indica volumen diario estable (más orgánico). CV alto sugiere picos súbitos (posible coordinación). Basado en {n_dias} días observados. No es detección de bots.</p>', unsafe_allow_html=True)
-        else:
-            st.markdown('<p style="font-size:11px;color:var(--fg-muted);margin-top:8px">Se requieren al menos 2 días con publicaciones para calcular el coeficiente de variación. Amplía el período o publica más contenido para activar esta lectura.</p>', unsafe_allow_html=True)
+    # ── 1. AUTENTICIDAD — orgánico vs coordinado/sospechoso ──
+    st.markdown('<div class="section-header"><div class="section-title">01 · Índice de Autenticidad</div><div class="section-subtitle">Proporción de conversación orgánica frente a patrones coordinados o sospechosos (mensajes repetidos).</div></div>', unsafe_allow_html=True)
+    aut = calcular_autenticidad(df_coment_raw['message']) if not df_coment_raw.empty and 'message' in df_coment_raw.columns else None
+    if aut:
+        col_aut = {'organico': 'var(--green)', 'mixto': 'var(--amber)', 'coordinado': 'var(--red)'}.get(aut['nivel'], 'var(--accent)')
+        st.markdown(f"""
+        <div class="panel">
+            <div class="panel-head"><div class="panel-title" style="color:{col_aut}">{aut['estado'].upper()}</div><div class="panel-meta">{aut['n_total']:,} COMENTARIOS · {aut['n_grupos']} GRUPOS REPETIDOS</div></div>
+            <div class="bar-tri" style="height:16px;border-radius:3px">
+                <span class="bar-tri-pos" style="width:{aut['pct_organico']:.1f}%"></span>
+                <span class="bar-tri-neg" style="width:{aut['pct_sospechoso']:.1f}%"></span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px">
+                <span style="color:var(--green)">Orgánico {aut['pct_organico']:.0f}%</span>
+                <span style="color:var(--red)">Sospechoso {aut['pct_sospechoso']:.0f}%</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if aut['ejemplos']:
+            ej_html = "".join(f'<div class="bar-row"><div class="bar-row-label">"{e["texto"][:80]}"</div><div class="bar-row-val">×{e["veces"]}</div></div>' for e in aut['ejemplos'])
+            st.markdown(f'<div class="panel" style="margin-top:8px"><div class="panel-head"><div class="panel-title">MENSAJES MÁS REPETIDOS</div></div>{ej_html}</div>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Sospechoso = mensajes idénticos repetidos (posible copia-pega coordinado). No es detección de bots.</p>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">Aún no hay suficientes comentarios para evaluar autenticidad.</div>', unsafe_allow_html=True)
 
-    # ── 2. ALERTAS DE COMPORTAMIENTO ──
-    st.markdown('<div class="section-header"><div class="section-title">02 · Alertas de Comportamiento</div><div class="section-subtitle">Señales automáticas de anomalías en la conversación (Cambridge Index).</div></div>', unsafe_allow_html=True)
+    # ── 2. NIVEL DE ALERTA — necesidad de respuesta institucional ──
+    st.markdown('<div class="section-header"><div class="section-title">02 · Nivel de Alerta</div><div class="section-subtitle">Necesidad de respuesta institucional, en semáforo (verde / amarillo / rojo).</div></div>', unsafe_allow_html=True)
+    pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
+    enojo_val = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
+    pol_b3 = calcular_polarizacion(df_coment['score_sentimiento']) if not df_coment.empty and 'score_sentimiento' in df_coment.columns else None
+    balance_b3 = pol_b3['balance'] if pol_b3 else None
+    fricciones = agrupar_fricciones(df_coment_raw)
+    alerta = calcular_nivel_alerta(pct_negativo=pct_neg_val, indice_enojo=enojo_val, balance_confrontacion=balance_b3, n_fricciones=len(fricciones))
+    sem_class = {'verde': 'positive', 'amarillo': 'warning', 'rojo': 'critical'}.get(alerta['color'], 'positive')
+    emoji_sem = {'verde': '🟢', 'amarillo': '🟡', 'rojo': '🔴'}.get(alerta['color'], '⚪')
+    st.markdown(f'<div class="indicator indicator-{sem_class}"><div class="indicator-dot"></div><div style="flex:1"><div style="font-weight:600;font-size:14px;margin-bottom:2px">{emoji_sem} {alerta["titular"]}</div><div style="font-size:13px;color:var(--fg-secondary)">{alerta["accion"]}</div></div></div>', unsafe_allow_html=True)
+    st.markdown(f'<p style="font-size:11px;color:var(--fg-muted);margin-top:6px">Índice de necesidad de respuesta: {alerta["riesgo"]:.0f}/100 — combina % de comentarios negativos, enojo en reacciones, confrontación y temas de fricción.</p>', unsafe_allow_html=True)
+
     alertas = cargar_alertas_cambridge(FACEBOOK_DB)
     if alertas:
+        st.markdown('<p style="font-size:11px;color:var(--fg-muted);margin-top:10px;font-weight:600">SEÑALES DE COMPORTAMIENTO DETECTADAS</p>', unsafe_allow_html=True)
         for a in alertas:
             ta = traducir_alerta(a)
             color_class = {"🟢": "positive", "🟡": "warning", "🔴": "critical"}.get(ta["color"], "warning")
-            st.markdown(f"""
-            <div class="indicator indicator-{color_class}" style="margin-bottom:8px">
-                <div class="indicator-dot"></div>
-                <div style="flex:1">
-                    <div style="font-weight:600;font-size:14px;margin-bottom:2px">{ta["color"]} {ta["titular"]}</div>
-                    <div style="font-size:13px;color:var(--fg-secondary)">{ta["lectura"]}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f'<div class="indicator indicator-{color_class}" style="margin-bottom:8px"><div class="indicator-dot"></div><div style="flex:1"><div style="font-weight:600;font-size:13px">{ta["color"]} {ta["titular"]}</div><div style="font-size:12px;color:var(--fg-secondary)">{ta["lectura"]}</div></div></div>', unsafe_allow_html=True)
+
+    # ── 3. VELOCIDAD DE PROPAGACIÓN — proyección 24-48h ──
+    st.markdown('<div class="section-header"><div class="section-title">03 · Velocidad de Propagación</div><div class="section-subtitle">Hacia dónde va la conversación en las próximas 24 a 48 horas.</div></div>', unsafe_allow_html=True)
+    prop = calcular_propagacion_24_48(df_fb)
+    if prop:
+        col_p = {'acelerando': 'var(--red)', 'desacelerando': 'var(--blue)', 'estable': 'var(--fg-secondary)'}.get(prop['tendencia'], 'var(--accent)')
+        maxv = max(prop['hoy'], prop['proy_24h'], prop['proy_48h'], 1)
+        st.markdown(f"""
+        <div class="panel">
+            <div class="panel-head"><div class="panel-title" style="color:{col_p}">{prop['flecha']} {prop['tendencia'].upper()}</div><div class="panel-meta">{prop['n_dias']} DÍAS DE TENDENCIA</div></div>
+            <div class="bar-row"><div class="bar-row-label">HOY</div><div class="bar-track"><div class="bar-fill bar-fill-cy" style="width:{prop['hoy'] / maxv * 100:.1f}%"></div></div><div class="bar-row-val">{prop['hoy']:,.0f}</div></div>
+            <div class="bar-row"><div class="bar-row-label">PROY. +24H</div><div class="bar-track"><div class="bar-fill" style="width:{prop['proy_24h'] / maxv * 100:.1f}%;background:{col_p}"></div></div><div class="bar-row-val">{prop['proy_24h']:,.0f} ({prop['pct_24h']:+.0f}%)</div></div>
+            <div class="bar-row"><div class="bar-row-label">PROY. +48H</div><div class="bar-track"><div class="bar-fill" style="width:{prop['proy_48h'] / maxv * 100:.1f}%;background:{col_p}"></div></div><div class="bar-row-val">{prop['proy_48h']:,.0f} ({prop['pct_48h']:+.0f}%)</div></div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Proyección por tendencia lineal de la interacción diaria reciente. Es una estimación, no una certeza; se actualiza con cada nuevo día de datos.</p>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="status-info">No se detectaron alertas activas en el período actual (requiere ≥5 posts con datos de sentimiento y reacciones).</div>', unsafe_allow_html=True)
+        st.markdown('<div class="status-info">Se necesitan al menos 3 días con interacción para proyectar a 24-48h.</div>', unsafe_allow_html=True)
 
-    # ── 3. NIVEL DE ALERTA ──
-    st.markdown('<div class="section-header"><div class="section-title">03 · Nivel de Alerta</div><div class="section-subtitle">Lectura agregada del semáforo reputacional.</div></div>', unsafe_allow_html=True)
-    color_sem, texto_sem = calcular_semaforo(df_fb)
-    score_val = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
-    pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
-    pct_pos_val = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
-    enojo_val = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
-    total_comentarios = df_sent['total_comentarios'].sum() if not df_sent.empty else 0
-    interp = generar_interpretacion("semaforo", {
-        'score': score_val, 'pct_negativo': pct_neg_val,
-        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val,
-        'total_comentarios': int(total_comentarios),
-    })
-    sem_class = {'verde':'positive','amarillo':'warning','rojo':'critical'}.get(color_sem, 'positive')
-    st.markdown(f'<div class="indicator indicator-{sem_class}"><div class="indicator-dot"></div><div class="indicator-text">{texto_sem}</div></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="interpretation"><div class="interpretation-label">CONTEXTO</div><div class="interpretation-texto">{interp}</div></div>', unsafe_allow_html=True)
-
-    # ── 4. VELOCIDAD DE PROPAGACIÓN ──
-    st.markdown('<div class="section-header"><div class="section-title">04 · Velocidad de Propagación</div><div class="section-subtitle">Variación semana actual vs. semana anterior.</div></div>', unsafe_allow_html=True)
-    df_series = pd.concat([df_fb_s, df_tk_s], ignore_index=True) if not df_fb_s.empty or not df_tk_s.empty else pd.DataFrame()
-    if not df_series.empty and 'engagement' in df_series.columns:
-        df_series = df_series.sort_values('semana')
-        recent = df_series.tail(2)
-        if len(recent) == 2:
-            prev = recent.iloc[0]['engagement']
-            curr = recent.iloc[1]['engagement']
-            if prev > 0:
-                cambio = (curr - prev) / prev * 100
-            else:
-                cambio = 0
-            if cambio > 15:
-                flecha, color_v, cls_v = "↑", "var(--red)", "kpi-card-risk"
-                nota = f"La conversación creció {cambio:.0f}% vs la semana anterior."
-            elif cambio < -15:
-                flecha, color_v, cls_v = "↓", "var(--blue)", "kpi-card-eff"
-                nota = f"La conversación cayó {abs(cambio):.0f}% vs la semana anterior."
-            else:
-                flecha, color_v, cls_v = "→", "var(--fg-secondary)", ""
-                nota = "Volumen estable respecto a la semana anterior."
-            st.markdown(f'<div class="kpi-card {cls_v}" style="max-width:520px;display:flex;align-items:center;gap:18px"><div style="font-size:36px;color:{color_v};font-weight:700;line-height:1">{flecha}</div><div><div class="kpi-label">VARIACIÓN SEMANAL</div><div style="font-size:13px;color:var(--fg-primary);margin-top:4px">{nota}</div></div></div>', unsafe_allow_html=True)
-
-    # ── 4. PUNTOS DE FRICCIÓN ──
-    st.markdown('<div class="section-header"><div class="section-title">04 · Puntos de Fricción</div><div class="section-subtitle">Comentarios con mayor carga crítica del período.</div></div>', unsafe_allow_html=True)
-    df_neg = cargar_comentarios_negativos()
-    if not df_neg.empty:
-        top_neg = df_neg.nsmallest(3, 'sentiment_score') if 'sentiment_score' in df_neg.columns else df_neg.head(3)
-        for _, r in top_neg.iterrows():
-            msg = str(r.get('message', ''))[:160]
-            st.markdown(f'<div class="pattern-card pattern-card-critical"><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.4px;color:var(--red);font-weight:700;margin-bottom:6px">SEÑAL CRÍTICA</div><p style="font-size:13px;color:var(--fg-primary);line-height:1.55;margin:0">\"{msg}\"</p></div>', unsafe_allow_html=True)
+    # ── 4. PUNTOS DE FRICCIÓN — 2-3 temas con más reacción negativa ──
+    st.markdown('<div class="section-header"><div class="section-title">04 · Puntos de Fricción</div><div class="section-subtitle">Los 2-3 temas que más reacción negativa generan, con un comentario representativo.</div></div>', unsafe_allow_html=True)
+    if fricciones:
+        for fr in fricciones:
+            st.markdown(f'<div class="pattern-card pattern-card-critical"><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.4px;color:var(--red);font-weight:700;margin-bottom:6px">{fr["tema"].upper()} · {fr["n"]} COMENTARIOS NEGATIVOS</div><p style="font-size:13px;color:var(--fg-primary);line-height:1.55;margin:0">"{fr["cita"]}"</p></div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="status-info">Sin comentarios negativos destacados.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="status-info">No se detectaron temas con reacción negativa relevante en este período. Si esperabas ver fricción, puede faltar volumen de comentarios clasificados.</div>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════

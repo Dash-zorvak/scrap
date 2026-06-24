@@ -15,11 +15,18 @@ por palabras clave (get_main_topic), de modo que el dashboard nunca se queda sin
 clasificacion. El modelo se configura via GROQ_TEXT_MODEL (hoy Llama 3.3 70B) y
 es compatible con OpenAI, por lo que migrar a NVIDIA NIM solo requiere cambiar
 GROQ_BASE_URL / GROQ_API_KEY / GROQ_TEXT_MODEL.
+
+Control de ritmo (pacing): el plan gratis de Groq limita los tokens por minuto
+(TPM). Para no chocar con el 429 y caer al respaldo por reglas, se espacian las
+llamadas para mantenerse bajo TOPIC_LLM_TPM y, si aun asi llega un 429, se espera
+el tiempo que indique el proveedor y se reintenta.
 """
 
 import json
 import logging
 import os
+import re
+import time
 
 logger = logging.getLogger("topic_llm")
 
@@ -35,10 +42,24 @@ CATEGORIAS_VALIDAS = {
 TONOS_VALIDOS = {"literal", "sarcastico"}
 
 # Cuantos comentarios se mandan por llamada al modelo (controla costo/latencia).
-LOTE_LLM = int(os.environ.get("TOPIC_LLM_LOTE", "30"))
+# Lotes mas grandes = menos llamadas = menos veces se repite el prompt fijo.
+LOTE_LLM = int(os.environ.get("TOPIC_LLM_LOTE", "40"))
 
 # Cuantos caracteres por comentario se envian (evita prompts gigantes).
-MAX_CHARS_COMENTARIO = int(os.environ.get("TOPIC_LLM_MAX_CHARS", "400"))
+MAX_CHARS_COMENTARIO = int(os.environ.get("TOPIC_LLM_MAX_CHARS", "300"))
+
+# Presupuesto de tokens por minuto. Groq free tier = 12000 TPM para
+# llama-3.3-70b-versatile; dejamos margen. 0 desactiva el pacing.
+TPM_BUDGET = int(os.environ.get("TOPIC_LLM_TPM", "10000"))
+
+# Reintentos ante un 429 antes de caer al respaldo por reglas.
+MAX_REINTENTOS_429 = int(os.environ.get("TOPIC_LLM_REINTENTOS", "5"))
+
+# Espera por defecto (segundos) si el 429 no dice cuanto esperar.
+ESPERA_429_DEFAULT = float(os.environ.get("TOPIC_LLM_ESPERA_429", "16"))
+
+# Historial de consumo para el pacing: list[(timestamp, tokens_estimados)].
+_historial_tokens = []
 
 
 _PROMPT = (
@@ -82,42 +103,60 @@ _PROMPT = (
 )
 
 
-def _fallback_keyword(textos):
-    """Clasificacion de respaldo por palabras clave (sin IA)."""
-    try:
-        from src.analyzer.topic_detection import get_main_topic
-    except Exception:
-        get_main_topic = None
-    salida = []
-    for t in textos:
-        cat = ""
-        if get_main_topic is not None:
-            try:
-                cat = get_main_topic(t) or ""
-            except Exception:
-                cat = ""
-        if cat not in CATEGORIAS_VALIDAS:
-            cat = "no_aplica"
-        salida.append({
-            "categoria": cat,
-            "tono": "literal",
-            "confianza": 0.3,
-            "motor": "reglas",
-        })
-    return salida
+def _estimar_tokens(texto):
+    """Estimacion barata de tokens (~4 caracteres por token)."""
+    return max(1, len(texto) // 4)
 
 
-def _clasificar_bloque_llm(textos):
-    """Clasifica un bloque de comentarios con el modelo de texto Groq."""
-    from dashboard.llm_groq import chat_texto
+def _purgar_historial(ahora):
+    global _historial_tokens
+    _historial_tokens = [(t, n) for (t, n) in _historial_tokens if ahora - t < 60.0]
 
-    items = []
-    for idx, t in enumerate(textos):
-        limpio = " ".join(str(t or "").split())[:MAX_CHARS_COMENTARIO]
-        items.append(f"{idx}. {limpio}")
-    prompt = _PROMPT + "\n".join(items)
 
-    raw = chat_texto(prompt, json=True, temperature=0, max_tokens=4096)
+def _esperar_presupuesto(tokens_estimados):
+    """Pausa hasta que `tokens_estimados` quepa en el presupuesto del minuto."""
+    if TPM_BUDGET <= 0:
+        return
+    ahora = time.time()
+    _purgar_historial(ahora)
+    espera_acumulada = 0.0
+    while _historial_tokens:
+        usados = sum(n for _, n in _historial_tokens)
+        if usados + tokens_estimados <= TPM_BUDGET:
+            break
+        ts_viejo = _historial_tokens[0][0]
+        dormir = max(0.0, 60.0 - (ahora - ts_viejo)) + 0.3
+        if dormir <= 0:
+            break
+        logger.info("Pacing IA: esperando %.1fs para no superar %d TPM", dormir, TPM_BUDGET)
+        time.sleep(min(dormir, 20.0))
+        espera_acumulada += dormir
+        if espera_acumulada > 180:
+            break
+        ahora = time.time()
+        _purgar_historial(ahora)
+
+
+def _registrar_tokens(tokens):
+    _historial_tokens.append((time.time(), tokens))
+
+
+def _es_rate_limit(msg):
+    m = msg.lower()
+    return "429" in msg or "rate_limit" in m or "rate limit" in m
+
+
+def _segundos_espera_429(msg):
+    encontrado = re.search("try again in ([0-9.]+)", msg)
+    if encontrado:
+        try:
+            return float(encontrado.group(1)) + 0.8
+        except (TypeError, ValueError):
+            pass
+    return ESPERA_429_DEFAULT
+
+
+def _parsear_respuesta(raw, textos):
     parsed = json.loads(raw)
     if isinstance(parsed, list):
         arr = parsed
@@ -147,6 +186,72 @@ def _clasificar_bloque_llm(textos):
     return salida
 
 
+def _fallback_keyword(textos):
+    """Clasificacion de respaldo por palabras clave (sin IA)."""
+    try:
+        from src.analyzer.topic_detection import get_main_topic
+    except Exception:
+        get_main_topic = None
+    salida = []
+    for t in textos:
+        cat = ""
+        if get_main_topic is not None:
+            try:
+                cat = get_main_topic(t) or ""
+            except Exception:
+                cat = ""
+        if cat not in CATEGORIAS_VALIDAS:
+            cat = "no_aplica"
+        salida.append({
+            "categoria": cat,
+            "tono": "literal",
+            "confianza": 0.3,
+            "motor": "reglas",
+        })
+    return salida
+
+
+def _clasificar_bloque_llm(textos):
+    """Clasifica un bloque de comentarios con el modelo de texto Groq.
+
+    Respeta el limite de tokens por minuto (pacing) y, si aun asi recibe un 429,
+    espera lo que indique el proveedor y reintenta antes de propagar el error.
+    """
+    from dashboard.llm_groq import chat_texto
+
+    items = []
+    for idx, t in enumerate(textos):
+        limpio = " ".join(str(t or "").split())[:MAX_CHARS_COMENTARIO]
+        items.append(f"{idx}. {limpio}")
+    prompt = _PROMPT + "\n".join(items)
+
+    tokens_est = _estimar_tokens(prompt) + len(textos) * 15
+
+    ultimo_error = None
+    for intento in range(MAX_REINTENTOS_429 + 1):
+        _esperar_presupuesto(tokens_est)
+        try:
+            raw = chat_texto(prompt, json=True, temperature=0, max_tokens=4096)
+            _registrar_tokens(tokens_est)
+            return _parsear_respuesta(raw, textos)
+        except Exception as e:
+            _registrar_tokens(tokens_est)
+            msg = str(e)
+            if _es_rate_limit(msg) and intento < MAX_REINTENTOS_429:
+                espera = _segundos_espera_429(msg)
+                logger.warning(
+                    "Rate limit IA (intento %d/%d); esperando %.1fs antes de reintentar",
+                    intento + 1, MAX_REINTENTOS_429, espera,
+                )
+                time.sleep(espera)
+                ultimo_error = e
+                continue
+            raise
+    if ultimo_error:
+        raise ultimo_error
+    return _fallback_keyword(textos)
+
+
 def clasificar_temas_lote(textos, lote=None):
     """Clasifica una lista de comentarios devolviendo un dict por comentario.
 
@@ -168,7 +273,7 @@ def clasificar_temas_lote(textos, lote=None):
 
     tam = lote or LOTE_LLM
     if tam < 1:
-        tam = 30
+        tam = 40
 
     salida = []
     for i in range(0, len(textos), tam):

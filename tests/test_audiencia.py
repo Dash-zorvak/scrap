@@ -21,7 +21,8 @@ class TestPolarizacion:
         assert r["balance"] == 0.2
 
     def test_dividida(self):
-        r = calcular_polarizacion([0.5, 0.5, 0.5, -0.5, -0.5])
+        # 5 a favor + 2 en contra -> balance = 2*2/7 = 0.57 (0.35 <= b < 0.6)
+        r = calcular_polarizacion([0.5] * 5 + [-0.5] * 2)
         assert r["nivel"] == "dividida"
         assert r["lado"] == "favor"
 

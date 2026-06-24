@@ -313,9 +313,9 @@ def _docstrip(periodo_lbl: str, plataforma_lbl: str, fecha_lbl: str):
     """, unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # NOTAS METODOLÓGICAS
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def render_notas_metodologicas():
     _page_head(
@@ -369,9 +369,9 @@ def render_notas_metodologicas():
     )
 
 
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # Serie temporal helper
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def _build_serie_chart(df_fb_s, df_tk_s, periodo):
     if df_fb_s.empty and df_tk_s.empty:
@@ -413,9 +413,9 @@ def _build_serie_chart(df_fb_s, df_tk_s, periodo):
     return fig
 
 
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # BLOQUE I — PULSO GENERAL
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def render_bloque1_pulso():
     _warn_dropped_null_dates()
@@ -601,9 +601,9 @@ def render_bloque1_pulso():
     st.markdown(f'<div class="interpretation" style="margin-top:16px"><div class="interpretation-label">🔎 En una frase:</div><div class="interpretation-texto">{interp_cierre}</div></div>', unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # BLOQUE II — SEGMENTACIÓN DE AUDIENCIA
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def render_bloque2_audiencia():
     _page_head(
@@ -730,9 +730,9 @@ def render_bloque2_audiencia():
     render_temas_emergentes(FACEBOOK_DB)
 
 
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # BLOQUE III — RIESGO Y AUTENTICIDAD
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def render_bloque3_riesgo():
     _page_head(
@@ -826,9 +826,9 @@ def render_bloque3_riesgo():
         st.markdown('<div class="status-info">No se detectaron temas con reacción negativa relevante en este período. Si esperabas ver fricción, puede faltar volumen de comentarios clasificados.</div>', unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # BLOQUE IV — MEMORIA E INTELIGENCIA APLICADA
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def _b4_header(num: int, titulo: str, subtitulo: str = ""):
     st.markdown(
@@ -951,7 +951,7 @@ def render_bloque4_inteligencia():
             for _, r in distorsion_alta.head(3).iterrows():
                 msg = str(r.get('message', '') or '')[:100]
                 st.markdown(
-                    f'<div class="memo-item memo-item-negativo">"{msg}"</div>',
+                    f'<div class="memo-item memo-item-negativo">\"{msg}\"</div>',
                     unsafe_allow_html=True,
                 )
     else:
@@ -1003,9 +1003,9 @@ def render_bloque4_inteligencia():
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # DISPATCH PRINCIPAL
-# ══════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 if vista == "Dashboard":
     tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs([
@@ -1027,4 +1027,24 @@ if vista == "Dashboard":
 elif vista == "Cargar contenido":
     _page_head(
         "OPERACIÓN / CARGA DE CONTENIDO",
-        "Centro de ingesta de informes y evidenc
+        "Centro de ingesta de informes y evidencia",
+        "Cargue informes consolidados, evidencia documental y briefings diarios. Cada documento se incorpora al pipeline de inteligencia."
+    )
+    st.markdown("""
+    <div class="doc-center">
+        <div class="doc-label">
+            <div class="doc-icon-box">PDF</div>
+            <div class="doc-info">
+                <div class="doc-filename">Informe Consolidado del Día</div>
+                <div class="doc-meta">CENTRO DE DOCUMENTACIÓN EJECUTIVA · BRIEFING DIARIO CORPORATIVO</div>
+            </div>
+        </div>
+        <div class="doc-empty">
+            <div class="doc-empty-label">Sin documento disponible. El informe consolidado se genera automáticamente al procesar los datos del día.</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    seccion_cargar_contenido()
+
+elif vista == "Notas metodológicas":
+    render_notas_metodologicas()

@@ -45,8 +45,13 @@ from dashboard.dash_inteligencia import (
     cargar_temas_latentes,
 )
 from dashboard.dash_temas import render_temas_emergentes
+from dashboard.dash_pulso import (
+    calcular_clima_diario,
+    calcular_intensidad_vs_promedio,
+    calcular_concentracion,
+)
 
-# ─── Estado de sesión ───────────────
+# ─── Estado de sesión ─────────────────
 if "lote_ingreso" not in st.session_state:
     st.session_state["lote_ingreso"] = []
 
@@ -301,9 +306,9 @@ def _docstrip(periodo_lbl: str, plataforma_lbl: str, fecha_lbl: str):
     """, unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # NOTAS METODOLÓGICAS
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def render_notas_metodologicas():
     _page_head(
@@ -357,9 +362,9 @@ def render_notas_metodologicas():
     )
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # Serie temporal helper
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def _build_serie_chart(df_fb_s, df_tk_s, periodo):
     if df_fb_s.empty and df_tk_s.empty:
@@ -401,9 +406,9 @@ def _build_serie_chart(df_fb_s, df_tk_s, periodo):
     return fig
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # BLOQUE I — PULSO GENERAL
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def render_bloque1_pulso():
     _warn_dropped_null_dates()
@@ -422,12 +427,7 @@ def render_bloque1_pulso():
         hay_datos(df_fb, "No hay datos para este período.")
         return
 
-    # ── 1. CLIMA NARRATIVO ──
-    st.markdown('<div class="section-header"><div class="section-title">01 · Clima Narrativo</div><div class="section-subtitle">Indicador agregado de tono de la conversación.</div></div>', unsafe_allow_html=True)
-    color_sem, texto_sem = calcular_semaforo(df_fb)
-    sem_class = {'verde':'positive','amarillo':'warning','rojo':'critical'}.get(color_sem, 'positive')
-    st.markdown(f'<div class="indicator indicator-{sem_class}"><div class="indicator-dot"></div><div class="indicator-text">{texto_sem}</div></div>', unsafe_allow_html=True)
-
+    # Métricas de sentimiento (alimentan el Termómetro y el cierre factual).
     df_sent = cargar_sentimiento_fb(FACEBOOK_DB)
     score_val = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
     pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
@@ -435,63 +435,90 @@ def render_bloque1_pulso():
     enojo_val = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
     total_comentarios = df_sent['total_comentarios'].sum() if not df_sent.empty else 0
 
-    interp = generar_interpretacion("semaforo", {
-        'score': score_val, 'pct_negativo': pct_neg_val,
-        'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val,
-        'total_comentarios': int(total_comentarios),
-    })
-    st.markdown(f'<div class="interpretation"><div class="interpretation-label">LECTURA EJECUTIVA</div><div class="interpretation-texto">{interp}</div></div>', unsafe_allow_html=True)
-    m = evaluar_muestra(total_comentarios)
-    st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">{m["etiqueta"]}</p>', unsafe_allow_html=True)
-
-    # ── 2. INTENSIDAD ──
-    st.markdown('<div class="section-header"><div class="section-title">02 · Intensidad de la Conversación</div><div class="section-subtitle">Volumen de interacción ciudadana sobre el contenido oficial.</div></div>', unsafe_allow_html=True)
-    total_eng = (int(df_fb['engagement_total'].sum()) if not df_fb.empty else 0) + (int(df_tk['engagement_total'].sum()) if not df_tk.empty else 0)
-    total_posts = len(df_fb) + len(df_tk)
-    total_reacciones = (int(df_fb['total_reacciones'].sum()) if not df_fb.empty else 0) + (int(df_tk['likes'].sum()) if not df_tk.empty else 0)
-
-    # KPI row ejecutiva (bordes superiores codificados por color)
-    st.markdown(f"""
-    <div class="kpi-row" style="grid-template-columns:repeat(3,1fr)">
-        <div class="kpi-card kpi-card-eng">
-            <div class="kpi-label">INTERACCIONES TOTALES</div>
-            <div class="kpi-value">{total_eng:,}</div>
-            <div class="kpi-meta">Engagement agregado del período</div>
+    # ── 1. CLIMA NARRATIVO — tono dominante del día + tendencia vs ayer ──
+    st.markdown('<div class="section-header"><div class="section-title">01 · Clima Narrativo</div><div class="section-subtitle">Tono dominante del día y su tendencia frente al día anterior.</div></div>', unsafe_allow_html=True)
+    clima = calcular_clima_diario(safe_query(
+        "SELECT fs.pct_positivo, fs.pct_negativo, fs.total_comentarios, fe.created_time "
+        "FROM fb_sentimiento fs JOIN fb_engagement fe ON fs.post_id = fe.post_id",
+        FACEBOOK_DB,
+    ))
+    if clima:
+        fav = clima['pct_favorable']; neu = clima['pct_neutro']; adv = clima['pct_adverso']
+        dom = max((fav, 'Favorable'), (neu, 'Neutro'), (adv, 'Adverso'), key=lambda x: x[0])[1]
+        delta = clima.get('delta_favorable')
+        if delta is None:
+            trend = '<span style="color:var(--fg-muted)">Sin día previo para comparar.</span>'
+        elif delta > 1:
+            trend = f'<span style="color:var(--green)">▲ +{delta:.1f} pts favorables respecto al día anterior.</span>'
+        elif delta < -1:
+            trend = f'<span style="color:var(--red)">▼ {delta:.1f} pts favorables respecto al día anterior.</span>'
+        else:
+            trend = f'<span style="color:var(--fg-secondary)">→ Estable respecto al día anterior ({delta:+.1f} pts).</span>'
+        st.markdown(f"""
+        <div class="panel">
+            <div class="panel-head"><div class="panel-title">TONO DOMINANTE · {dom.upper()}</div><div class="panel-meta">{clima['n_comentarios']:,} COMENTARIOS · {clima['fecha']}</div></div>
+            <div class="bar-tri" style="height:16px;border-radius:3px">
+                <span class="bar-tri-pos" style="width:{fav:.1f}%"></span>
+                <span class="bar-tri-neu" style="width:{neu:.1f}%"></span>
+                <span class="bar-tri-neg" style="width:{adv:.1f}%"></span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px">
+                <span style="color:var(--green)">Favorable {fav:.0f}%</span>
+                <span style="color:var(--amber)">Neutro {neu:.0f}%</span>
+                <span style="color:var(--red)">Adverso {adv:.0f}%</span>
+            </div>
+            <div style="margin-top:10px;font-size:13px">{trend}</div>
         </div>
-        <div class="kpi-card kpi-card-eff">
-            <div class="kpi-label">CONTENIDO PUBLICADO</div>
-            <div class="kpi-value">{total_posts:,}</div>
-            <div class="kpi-meta">Posts y videos en la ventana</div>
-        </div>
-        <div class="kpi-card kpi-card-sent">
-            <div class="kpi-label">REACCIONES TOTALES</div>
-            <div class="kpi-value">{total_reacciones:,}</div>
-            <div class="kpi-meta">Respuesta emocional ciudadana</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    df_fb_s, df_tk_s = cargar_series(FACEBOOK_DB, TIKTOK_DB)
-    fig = _build_serie_chart(df_fb_s, df_tk_s, periodo)
-    if fig:
-        card_explicativa("Qué tanto la gente reacciona, comenta y comparte.", "Más alto: más gente se involucra. Más bajo: la gente lo ve pero no responde.")
-        st.plotly_chart(fig, width='stretch')
-
-    # ── 3. CONCENTRACIÓN TEMÁTICA ──
-    st.markdown('<div class="section-header"><div class="section-title">03 · Concentración Temática</div><div class="section-subtitle">Distribución del contenido por categoría — concentración vs. diversidad.</div></div>', unsafe_allow_html=True)
-    df_cat = safe_query("SELECT item_id, categoria_nombre FROM post_categorias", FACEBOOK_DB)
-    if not df_cat.empty:
-        conteo = df_cat['categoria_nombre'].value_counts()
-        total_cat = conteo.sum()
-        top_tema = conteo.index[0]
-        share_top = conteo.iloc[0] / total_cat * 100
-        hhi = sum((c/total_cat*100)**2 for c in conteo) / 10000
-        st.markdown(f'<div class="panel"><div class="panel-head"><div class="panel-title">TEMA PRINCIPAL</div><div class="panel-meta">HHI {hhi:.2f} · CONCENTRACIÓN {share_top:.0f}%</div></div><div style="font-size:18px;color:var(--fg-primary);font-weight:600;margin-bottom:10px">{top_tema}</div><div class="bar-track" style="height:8px"><div class="bar-fill bar-fill-cy" style="width:{share_top:.0f}%"></div></div></div>', unsafe_allow_html=True)
-        otros = conteo.iloc[1:].index.tolist()[:5]
-        if otros:
-            st.markdown(f'<p style="font-size:11px;color:var(--fg-muted);margin-top:6px">Otros temas en circulación: {", ".join(str(t) for t in otros)}</p>', unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+        m = evaluar_muestra(clima['n_comentarios'])
+        st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">{m["etiqueta"]}</p>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="status-info">Clasificación de temas requiere sentence-transformers (no instalado).</div>', unsafe_allow_html=True)
+        st.markdown('<div class="status-info">Aún no hay suficientes comentarios con fecha para calcular el clima del día.</div>', unsafe_allow_html=True)
+
+    # ── 2. INTENSIDAD — volumen del último día vs promedio diario de la semana ──
+    st.markdown('<div class="section-header"><div class="section-title">02 · Intensidad de la Conversación</div><div class="section-subtitle">Volumen de interacción del último día frente al promedio diario de la semana.</div></div>', unsafe_allow_html=True)
+    intens = calcular_intensidad_vs_promedio(df_fb, df_tk)
+    if intens:
+        vol_hoy = intens['vol_hoy']; prom = intens['promedio']; pct = intens['pct_dif']
+        maxv = max(vol_hoy, prom, 1)
+        if pct > 15:
+            col_hoy = 'var(--red)'; lectura = f'El último día registró {pct:.0f}% más interacción que el promedio de la semana.'
+        elif pct < -15:
+            col_hoy = 'var(--blue)'; lectura = f'El último día registró {abs(pct):.0f}% menos interacción que el promedio de la semana.'
+        else:
+            col_hoy = 'var(--accent)'; lectura = 'El último día se mantiene en línea con el promedio de la semana.'
+        st.markdown(f"""
+        <div class="panel">
+            <div class="panel-head"><div class="panel-title">ÚLTIMO DÍA VS PROMEDIO SEMANAL</div><div class="panel-meta">{intens['fecha_hoy']} · {intens['n_ref']} DÍAS DE REFERENCIA</div></div>
+            <div class="bar-row"><div class="bar-row-label">ÚLTIMO DÍA</div><div class="bar-track"><div class="bar-fill" style="width:{vol_hoy / maxv * 100:.1f}%;background:{col_hoy}"></div></div><div class="bar-row-val">{vol_hoy:,.0f}</div></div>
+            <div class="bar-row"><div class="bar-row-label">PROMEDIO</div><div class="bar-track"><div class="bar-fill bar-fill-blu" style="width:{prom / maxv * 100:.1f}%"></div></div><div class="bar-row-val">{prom:,.0f}</div></div>
+            <div style="margin-top:10px;font-size:13px;color:var(--fg-primary)">{lectura}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">Aún no hay suficientes días con interacción para comparar contra el promedio semanal.</div>', unsafe_allow_html=True)
+
+    # ── 3. CONCENTRACIÓN TEMÁTICA — proporción tema principal vs resto ──
+    st.markdown('<div class="section-header"><div class="section-title">03 · Concentración Temática</div><div class="section-subtitle">Qué parte de la conversación se la lleva el tema principal frente a todos los demás.</div></div>', unsafe_allow_html=True)
+    df_cat = safe_query("SELECT item_id, categoria_nombre FROM post_categorias", FACEBOOK_DB)
+    conc = calcular_concentracion(df_cat['categoria_nombre'].value_counts().to_dict()) if not df_cat.empty else None
+    if conc:
+        col_estado = {'dominado': 'var(--red)', 'liderado': 'var(--amber)', 'fragmentado': 'var(--green)'}.get(conc['nivel'], 'var(--accent)')
+        st.markdown(f"""
+        <div class="panel">
+            <div class="panel-head"><div class="panel-title" style="color:{col_estado}">{conc['estado'].upper()}</div><div class="panel-meta">{conc['n_temas']} TEMAS · HHI {conc['hhi']:.2f}</div></div>
+            <div class="bar-tri" style="height:16px;border-radius:3px">
+                <span style="display:inline-block;height:100%;background:var(--accent);width:{conc['share_top']:.1f}%"></span>
+                <span style="display:inline-block;height:100%;background:var(--border);width:{conc['share_resto']:.1f}%"></span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px">
+                <span style="color:var(--accent)">{conc['top_tema']} · {conc['share_top']:.0f}%</span>
+                <span style="color:var(--fg-muted)">Resto de temas · {conc['share_resto']:.0f}%</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">Clasificación de temas no disponible para este período.</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="status-info">Este análisis está basado al 100% en los comentarios extraídos y analizados de las publicaciones revisadas.</div>', unsafe_allow_html=True)
 
@@ -567,9 +594,9 @@ def render_bloque1_pulso():
     st.markdown(f'<div class="interpretation" style="margin-top:16px"><div class="interpretation-label">🔎 En una frase:</div><div class="interpretation-texto">{interp_cierre}</div></div>', unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # BLOQUE II — SEGMENTACIÓN DE AUDIENCIA
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def render_bloque2_audiencia():
     _page_head(
@@ -698,9 +725,9 @@ def render_bloque2_audiencia():
     render_temas_emergentes(FACEBOOK_DB)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # BLOQUE III — RIESGO Y AUTENTICIDAD
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def render_bloque3_riesgo():
     _page_head(
@@ -830,9 +857,9 @@ def render_bloque3_riesgo():
         st.markdown('<div class="status-info">Sin comentarios negativos destacados.</div>', unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # BLOQUE IV — MEMORIA E INTELIGENCIA APLICADA
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 def _b4_header(num: int, titulo: str, subtitulo: str = ""):
     st.markdown(
@@ -1007,9 +1034,9 @@ def render_bloque4_inteligencia():
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # DISPATCH PRINCIPAL
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 if vista == "Dashboard":
     tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs([

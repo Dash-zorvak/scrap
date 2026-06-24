@@ -50,6 +50,7 @@ from dashboard.dash_pulso import (
     calcular_intensidad_vs_promedio,
     calcular_concentracion,
 )
+from dashboard.dash_audiencia import calcular_polarizacion
 
 # ─── Estado de sesión ─────────────────
 if "lote_ingreso" not in st.session_state:
@@ -645,30 +646,28 @@ def render_bloque2_audiencia():
         m = evaluar_muestra(len(df_comentarios))
         st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">{m["etiqueta"]}</p>', unsafe_allow_html=True)
 
-    # ── 2. POLARIZACIÓN ──
-    st.markdown('<div class="section-header"><div class="section-title">02 · Polarización</div><div class="section-subtitle">Peso de las posiciones extremas frente al centro.</div></div>', unsafe_allow_html=True)
-    if not df_tmp.empty:
-        p_extremos = ((df_tmp['score_sentimiento'].abs() > 0.5).sum() / len(df_tmp) * 100)
-        p_centro = 100 - p_extremos
+    # ── 2. POLARIZACIÓN — consenso vs confrontación ──
+    st.markdown('<div class="section-header"><div class="section-title">02 · Polarización</div><div class="section-subtitle">Consenso vs. confrontación: si la conversación se parte en dos bandos enfrentados.</div></div>', unsafe_allow_html=True)
+    pol = calcular_polarizacion(df_tmp['score_sentimiento']) if not df_tmp.empty else None
+    if pol:
+        col_nivel = {'confrontacion': 'var(--red)', 'dividida': 'var(--amber)', 'consenso': 'var(--green)'}.get(pol['nivel'], 'var(--accent)')
+        comprometidos = pol['n_favor'] + pol['n_contra']
         st.markdown(f"""
         <div class="panel">
-            <div class="panel-head">
-                <div class="panel-title">CENTRO VS EXTREMOS</div>
-                <div class="panel-meta">|SCORE| &gt; 0.5 = EXTREMO</div>
+            <div class="panel-head"><div class="panel-title" style="color:{col_nivel}">{pol['estado'].upper()}</div><div class="panel-meta">{comprometidos:,} TOMARON POSTURA · ÍNDICE {pol['indice']:.0f}/100</div></div>
+            <div class="bar-tri" style="height:16px;border-radius:3px">
+                <span class="bar-tri-pos" style="width:{pol['pct_favor']:.1f}%"></span>
+                <span class="bar-tri-neg" style="width:{pol['pct_contra']:.1f}%"></span>
             </div>
-            <div class="bar-row">
-                <div class="bar-row-label">CENTRO</div>
-                <div class="bar-track"><div class="bar-fill bar-fill-blu" style="width:{p_centro:.1f}%"></div></div>
-                <div class="bar-row-val">{p_centro:.0f}%</div>
-            </div>
-            <div class="bar-row">
-                <div class="bar-row-label">EXTREMOS</div>
-                <div class="bar-track"><div class="bar-fill bar-fill-red" style="width:{p_extremos:.1f}%"></div></div>
-                <div class="bar-row-val">{p_extremos:.0f}%</div>
+            <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px">
+                <span style="color:var(--green)">A favor {pol['pct_favor']:.0f}%</span>
+                <span style="color:var(--red)">En contra {pol['pct_contra']:.0f}%</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Extremos = comentarios con |score| &gt; 0.5 (muy positivos o muy negativos). Alto % indica audiencia polarizada.</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">Confrontación alta = los dos bandos tienen tamaño parecido. Consenso = un lado domina o la mayoría es neutral. Índice {pol["indice"]:.0f}/100 (equilibrio de bandos × cuánta gente toma postura).</p>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">Aún no hay suficientes comentarios con postura definida para medir polarización.</div>', unsafe_allow_html=True)
 
     # ── 3. VOCES DE INFLUENCIA ──
     st.markdown('<div class="section-header"><div class="section-title">03 · Voces de Influencia</div><div class="section-subtitle">Páginas oficiales con mayor concentración de interacción.</div></div>', unsafe_allow_html=True)

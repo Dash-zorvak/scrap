@@ -150,7 +150,7 @@ TOPIC_KEYWORDS = {
         "calentamiento global", "huella ecologica",
         "energia limpia", "energia solar", "paneles solares",
         "renovable", "sustentable",
-        "parque ecologico", "jardin botanico", "jardin botánico",
+        "parque ecologico", "jardin botanico", "jard\u00edn bot\u00e1nico",
         "vivero", "aguas residuales", "tratamiento de aguas",
         "humedal", "laguna", "lago", "volcan", "cerro",
         "montana", "senderismo", "aves", "pajaro", "pajaros",
@@ -216,14 +216,14 @@ ZONA_KEYWORDS = {
     "Centro": [
         "centro de santa ana", "santa ana centro", "casco urbano",
         "calle principal centro", "parque libertad", "parque colon",
-        "parque colón", "plaza mayor", "palacio municipal",
+        "parque col\u00f3n", "plaza mayor", "palacio municipal",
         "catedral", "mercado central", "mercado municipal",
         "calle libertad", "avenida independencia",
-        "1ª calle poniente", "2ª avenida sur",
+        "1\u00aa calle poniente", "2\u00aa avenida sur",
         "barrio san lorenzo", "barrio santa cruz", "barrio el calvario",
-        "barrio concepcion", "barrio concepción",
+        "barrio concepcion", "barrio concepci\u00f3n",
         "colonia las magnolias", "colonia san miguelito",
-        "colonia belen", "colonia belén",
+        "colonia belen", "colonia bel\u00e9n",
         "colonia centroamericana", "urbanizacion centro",
         "residencial centro", "colonias del centro",
     ],
@@ -233,7 +233,7 @@ ZONA_KEYWORDS = {
         "barrio norte", "la china",
         "colonia san antonio", "colonia santa rosa",
         "colonia las flores", "colonia ferrocarril",
-        "colonia san jose", "colonia san josé",
+        "colonia san jose", "colonia san jos\u00e9",
         "colonia santa rosa de lima",
         "colonia los andes", "colonia altos del norte",
         "colonia santa elena",
@@ -241,7 +241,7 @@ ZONA_KEYWORDS = {
         "residencial villas del norte",
         "urbanizacion jardines de santa ana",
         "urbanizacion los pinos",
-        "caserio el rodeo", "cantón norte",
+        "caserio el rodeo", "cant\u00f3n norte",
     ],
     "Sur": [
         "sector sur", "zona sur", "sur de santa ana",
@@ -270,14 +270,14 @@ ZONA_KEYWORDS = {
     "Oeste": [
         "sector oeste", "zona oeste", "oeste de santa ana",
         "colonia san juan", "colonia san cristobal",
-        "colonia san cristóbal", "colonia santa marta",
+        "colonia san crist\u00f3bal", "colonia santa marta",
         "colonia la joya", "colonia san jeronimo",
-        "colonia san jerónimo",
+        "colonia san jer\u00f3nimo",
         "colonia el pais", "colonia metapan",
         "colonia texistepeque", "colonia candelaria",
         "residencial san cristobal",
         "urbanizacion oeste",
-        "caserio la montañona", "caserio la montanona",
+        "caserio la monta\u00f1ona", "caserio la montanona",
         "canton san cristobal", "canton san juan",
         "canton el congo",
     ],
@@ -290,10 +290,10 @@ EMERGENCY_KEYWORDS = [
     "derrumbe", "deslizamiento", "incendio",
 ]
 
-# ─── Capa 3 · Robustez del respaldo por palabras clave ───────────────
-# Palabras "ambiguas": aparecen a menudo en dichos, bromas o lenguaje figurado y
+# \u2500\u2500\u2500 Capa 3 \u00b7 Robustez del respaldo por palabras clave \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# Palabras \"ambiguas\": aparecen a menudo en dichos, bromas o lenguaje figurado y
 # por si solas NO bastan para afirmar que el comentario trata de ese tema.
-# Ejemplo: "rio" en el dicho burlon "panchito el rio estaba" no habla de medio
+# Ejemplo: \"rio\" en el dicho burlon \"panchito el rio estaba\" no habla de medio
 # ambiente. Cuando la UNICA senal de un tema es ambigua, se exige una segunda
 # senal para asignarlo (ver detect_topics). Una palabra fuerte/especifica
 # (cualquier otra) basta por si sola, como antes.
@@ -305,8 +305,11 @@ AMBIGUOUS_KEYWORDS = {
 # Dichos / frases hechas locales (El Salvador) que NO hablan del tema literal.
 # Si el comentario contiene uno de estos dichos, el respaldo por palabras clave
 # NO le asigna tema (lo deja para que la IA lo marque como no_aplica).
-# Lista AMPLIABLE: agrega aqui los dichos que se detecten en los datos reales.
-DICHOS_LOCALES = [
+#
+# La lista combina una semilla base (hardcodeada) con las frases idiomaticas
+# multi-palabra definidas en idioms_sv_global.json (raiz del repo), cargadas por
+# src.analyzer.idioms_loader. Para agregar mas dichos, edita ese archivo JSON.
+_DICHOS_BASE = [
     "panchito el rio estaba",
     "al que madruga dios lo ayuda",
     "camaron que se duerme se lo lleva la corriente",
@@ -317,6 +320,35 @@ DICHOS_LOCALES = [
     "no hay mal que dure cien anos",
     "el que mucho abarca poco aprieta",
 ]
+
+
+def _fusionar_dichos(*listas) -> List[str]:
+    """Une varias listas de dichos evitando duplicados (sin distinguir
+    mayusculas) y conservando el orden de aparicion."""
+    vistos = set()
+    salida: List[str] = []
+    for lista in listas:
+        for dicho in (lista or []):
+            if not dicho:
+                continue
+            clave = dicho.strip().lower()
+            if not clave or clave in vistos:
+                continue
+            vistos.add(clave)
+            salida.append(dicho)
+    return salida
+
+
+# Carga defensiva: si idioms_sv_global.json falta o esta malformado, se conserva
+# unicamente la lista base y el pipeline/CI siguen funcionando con normalidad.
+try:
+    from src.analyzer.idioms_loader import extraer_dichos as _extraer_dichos_idioms
+    _DICHOS_IDIOMS = _extraer_dichos_idioms()
+except Exception as _exc:  # pragma: no cover - nunca romper por carga de dichos
+    logger.warning("No se pudieron cargar dichos de idioms_sv_global.json: %r", _exc)
+    _DICHOS_IDIOMS = []
+
+DICHOS_LOCALES = _fusionar_dichos(_DICHOS_BASE, _DICHOS_IDIOMS)
 
 # Cuantas senales (palabras clave) se exigen para asignar un tema cuando NINGUNA
 # de las coincidencias es una palabra clave fuerte (especifica). Configurable.
@@ -347,7 +379,7 @@ def _matches_dicho(text_norm: str) -> bool:
     return any(d and d in text_norm for d in _norm_dichos())
 
 def _kw_match(kw_norm: str, text_norm: str) -> bool:
-    # límite de palabra + plural español opcional (escuela → escuelas, bache → baches)
+    # l\u00edmite de palabra + plural espa\u00f1ol opcional (escuela \u2192 escuelas, bache \u2192 baches)
     return re.search(r'\b' + re.escape(kw_norm) + r'(?:es|s)?\b', text_norm) is not None
 
 APOYO_GENERICO = [

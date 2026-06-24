@@ -38,56 +38,64 @@ def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
 
     reglas_comunes = (
         " REGLAS OBLIGATORIAS DE SALIDA: "
-        "(1) Tono crudo y directo, sin eufemismos, sin adjetivos vacíos y sin frases de relleno. "
-        "(2) PROHIBIDO mencionar 'reelección', 'campaña', 'propaganda', 'voto', 'candidato' o sugerir "
-        "cualquier estrategia electoral o de propaganda; esto es un análisis de gestión y percepción "
-        "ciudadana, NO de campaña. No recomiendes 'publicar más obras' ni acciones de imagen. "
-        "(3) Cada afirmación debe respaldarse con cifras concretas del contexto (porcentajes, conteos, "
-        "reacciones, comentarios, vistas). No escribas generalidades sin un número que las sostenga. "
-        "(4) Cuando el dato exista, nombra zonas, colonias, cantones o categorías concretas. "
-        "No inventes datos que no estén en el contexto."
+        "(1) Escribe en español claro y directo, como si se lo explicaras a una persona sin "
+        "formación técnica (nivel de bachillerato): frases cortas, sin jerga, sin adjetivos vacíos "
+        "ni frases de relleno. Si usas un término técnico, explícalo en pocas palabras. "
+        "(2) PROHIBIDO mencionar o insinuar 'reelección', 'campaña', 'propaganda', 'voto', 'votos', "
+        "'candidato' o cualquier estrategia electoral o de imagen. Esto es un análisis de GESTIÓN y "
+        "PERCEPCIÓN ciudadana, NO de política electoral. "
+        "(3) Cada afirmación se sostiene con una cifra concreta del contexto (porcentaje, conteo, "
+        "índice, interacciones, comentarios). Nada de generalidades sin un número detrás. "
+        "(4) Cuando el dato exista, nombra la zona, colonia, categoría o tema concreto. NUNCA inventes "
+        "datos, eventos ni cifras que no estén en el contexto; si falta evidencia, dilo explícitamente. "
+        "(5) Un solo párrafo, máximo 110 palabras."
     )
 
     prompts = {
         "eco_historico": (
             "Eres analista de percepción ciudadana para la Alcaldía de Santa Ana. "
-            "Dado el contexto de métricas de percepción de la semana, escribe un párrafo ejecutivo "
-            "(máx 120 palabras) que explique qué patrón histórico o 'eco' del pasado "
-            "resuena con la situación actual y qué implica para la gestión. Español."
+            "Con las métricas de percepción del período, responde a una pregunta concreta: "
+            "¿esta situación ya se vivió antes según los datos (un patrón de enojo, de apoyo o un "
+            "tema que reaparece) y cómo se comportó entonces? Si en el contexto no hay un precedente "
+            "claro, dilo sin rodeos en lugar de inventarlo. Solo describe el patrón, no opines."
         ),
         "leccion": (
-            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "sintetizando la lección operativa clara que deja esta semana de datos. "
-            "Qué NO repetir, qué replicar, sustentado en las cifras. Español."
+            "Eres analista de percepción ciudadana. Extrae UNA sola lección operativa concreta de "
+            "este período: qué tipo de contenido o tema funcionó o falló según las cifras, y qué "
+            "conviene repetir o evitar. Debe ser específica y verificable con los números del "
+            "contexto, no un consejo genérico. Describe el aprendizaje a partir de los datos."
         ),
         "brecha": (
-            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "sobre la brecha entre lo que la ciudadanía PERCIBE (sentimiento, temas, enojo) "
-            "y la GESTIÓN REAL (obras, servicios, indicadores municipales — dato no disponible en BD, "
-            "asume que existe). Confronta percepción vs realidad sin suavizar. Español."
+            "Eres analista de percepción ciudadana. Señala 'lo que nadie ve': un dato del contexto "
+            "que contradice la lectura superficial. Por ejemplo, apoyo general alto pero concentrado "
+            "en un solo tema; calma aparente con un foco de enojo en una zona; o un sentimiento "
+            "promedio neutro que en realidad esconde dos bandos opuestos. Explica el contraste entre "
+            "la percepción evidente y lo que muestran las cifras. No inventes una 'realidad de gestión': "
+            "usa solo los datos disponibles."
         ),
         "contexto": (
-            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "explicando qué está pasando FUERA de las redes (eventos municipales, "
-            "economía local, clima, noticias) que explica el sentimiento negativo detectado "
-            "en comentarios. Usa solo el contexto implícito en los datos. Español."
+            "Eres analista de percepción ciudadana. Explica qué factores FUERA de las redes podrían "
+            "estar detrás del sentimiento detectado (temas dominantes, zonas con más enojo, picos de "
+            "actividad), basándote SOLO en las señales presentes en el contexto. No inventes eventos, "
+            "noticias ni fechas; si no hay señal suficiente para afirmarlo, dilo con claridad."
         ),
         "correlacion": (
-            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "sobre la correlación entre TIPO DE CONTENIDO publicado y REACCIÓN CIUDADANA "
-            "(brecha reacción vs comentario). Qué contenido genera desconexión. Diagnóstico preciso. Español."
+            "Eres analista de percepción ciudadana. Describe la relación entre el TIPO DE CONTENIDO "
+            "publicado y la REACCIÓN ciudadana (la brecha entre la reacción al post y el tono de los "
+            "comentarios). Indica qué tipo de contenido genera desconexión, con cifras. Solo diagnóstico."
         ),
         "proyeccion": (
-            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "proyectando el escenario a 2 semanas si la tendencia actual de sentimiento, "
-            "engagement y narrativas se mantiene. Alerta temprana, sin alarmismo. Español."
+            "Eres analista de percepción ciudadana. Proyecta el escenario de las próximas 24 a 48 horas "
+            "si la tendencia actual de sentimiento y de interacción se mantiene. Di hacia dónde va la "
+            "conversación y qué señal concreta habría que vigilar en ese plazo. Es una estimación a partir "
+            "de la tendencia, no una certeza: dilo así. Alerta temprana, con cifras y sin alarmismo."
         ),
         "recomendacion": (
-            "Eres analista de percepción ciudadana. Escribe un párrafo ejecutivo (máx 120 palabras) "
-            "que describa los RIESGOS DE REVERSIÓN de la narrativa actual, sintetizando TODOS los "
-            "indicadores: Pulso, Audiencia, Riesgo, Memoria. Señala qué factores de fragilidad "
-            "existen (fricción, polarización, baja autenticidad, desgaste temático) sin proponer "
-            "acciones correctivas. Sólo diagnóstico. Español."
+            "Eres analista de percepción ciudadana. Entrega UNA recomendación estratégica de GESTIÓN y "
+            "COMUNICACIÓN INSTITUCIONAL (nunca electoral ni de imagen) priorizada por los datos: qué "
+            "conviene atender PRIMERO según el tema o la zona con más fricción, y por qué, citando la "
+            "cifra que lo justifica. Debe ser concreta y accionable (qué revisar, aclarar o responder), "
+            "no un diagnóstico ni una generalidad. Una sola recomendación principal, sustentada en el contexto."
         ),
     }
 
@@ -98,7 +106,7 @@ def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
         return chat_texto(
             f"{prompt_base}\n\nCONTEXTO (JSON):\n{ctx_str}",
             max_tokens=600,
-            temperature=0.7,
+            temperature=0.6,
             json=False,
         )
     except Exception:

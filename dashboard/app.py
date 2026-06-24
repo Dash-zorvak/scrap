@@ -57,6 +57,10 @@ from dashboard.dash_riesgo import (
     calcular_propagacion_24_48,
     agrupar_fricciones,
 )
+from dashboard.dash_memoria import (
+    clasificar_evolucion_temas,
+    comparar_sectorial,
+)
 
 # ─── Estado de sesión ─────────────────
 if "lote_ingreso" not in st.session_state:
@@ -772,7 +776,7 @@ def render_bloque3_riesgo():
         </div>
         """, unsafe_allow_html=True)
         if aut['ejemplos']:
-            ej_html = "".join(f'<div class="bar-row"><div class="bar-row-label">"{e["texto"][:80]}"</div><div class="bar-row-val">×{e["veces"]}</div></div>' for e in aut['ejemplos'])
+            ej_html = "".join(f'<div class="bar-row"><div class="bar-row-label">\"{e["texto"][:80]}\"</div><div class="bar-row-val">×{e["veces"]}</div></div>' for e in aut['ejemplos'])
             st.markdown(f'<div class="panel" style="margin-top:8px"><div class="panel-head"><div class="panel-title">MENSAJES MÁS REPETIDOS</div></div>{ej_html}</div>', unsafe_allow_html=True)
         st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Sospechoso = mensajes idénticos repetidos (posible copia-pega coordinado). No es detección de bots.</p>', unsafe_allow_html=True)
     else:
@@ -821,7 +825,7 @@ def render_bloque3_riesgo():
     st.markdown('<div class="section-header"><div class="section-title">04 · Puntos de Fricción</div><div class="section-subtitle">Los 2-3 temas que más reacción negativa generan, con un comentario representativo.</div></div>', unsafe_allow_html=True)
     if fricciones:
         for fr in fricciones:
-            st.markdown(f'<div class="pattern-card pattern-card-critical"><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.4px;color:var(--red);font-weight:700;margin-bottom:6px">{fr["tema"].upper()} · {fr["n"]} COMENTARIOS NEGATIVOS</div><p style="font-size:13px;color:var(--fg-primary);line-height:1.55;margin:0">"{fr["cita"]}"</p></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="pattern-card pattern-card-critical"><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.4px;color:var(--red);font-weight:700;margin-bottom:6px">{fr["tema"].upper()} · {fr["n"]} COMENTARIOS NEGATIVOS</div><p style="font-size:13px;color:var(--fg-primary);line-height:1.55;margin:0">\"{fr["cita"]}\"</p></div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="status-info">No se detectaron temas con reacción negativa relevante en este período. Si esperabas ver fricción, puede faltar volumen de comentarios clasificados.</div>', unsafe_allow_html=True)
 
@@ -885,8 +889,8 @@ def render_bloque4_inteligencia():
     _b4_card_ia(2, "Lección Aprendida", "leccion", ctx)
     _b4_card_ia(3, "Brecha Percepción-Realidad", "brecha", ctx)
 
-    # ── 04 + 05 Temas ──
-    emergentes, extintos = [], []
+    # ── 04 + 05 Temas (emergentes / en auge / en declive / en extinción) ──
+    evol = None
     temas_disponibles = False
     df_cat = safe_query(
         "SELECT item_id, categoria_nombre, created_time FROM fb_posts "
@@ -902,36 +906,38 @@ def render_bloque4_inteligencia():
             ultima_sem = df_cat['semana'].max()
             sem_actual = df_cat[df_cat['semana'] == ultima_sem]
             sem_prev = df_cat[df_cat['semana'] == ultima_sem - pd.Timedelta(days=7)]
-            freq_actual = sem_actual['categoria_nombre'].value_counts()
-            freq_prev = sem_prev['categoria_nombre'].value_counts()
-            emergentes = [c for c in freq_actual.index if c not in freq_prev.index]
-            extintos = [c for c in freq_prev.index if c not in freq_actual.index]
+            evol = clasificar_evolucion_temas(
+                sem_actual['categoria_nombre'].value_counts().to_dict(),
+                sem_prev['categoria_nombre'].value_counts().to_dict(),
+            )
 
     _b4_header(4, "Temas Emergentes")
-    if temas_disponibles:
-        if emergentes:
-            html_e = "".join(
-                f'<div class="memo-item memo-item-positivo">+ {t}</div>'
-                for t in emergentes[:8]
-            )
+    if temas_disponibles and evol is not None:
+        filas = []
+        for it in evol['emergentes'][:6]:
+            filas.append(f'<div class="memo-item memo-item-positivo">+ {it["tema"]} <span style="color:var(--fg-muted)">· nuevo, {it["n_actual"]} menciones</span></div>')
+        for it in evol['en_auge'][:4]:
+            filas.append(f'<div class="memo-item memo-item-positivo">▲ {it["tema"]} <span style="color:var(--fg-muted)">· ganando fuerza, {it["cambio_pct"]:+.0f}% ({it["n_previo"]}→{it["n_actual"]})</span></div>')
+        if filas:
+            st.markdown("".join(filas), unsafe_allow_html=True)
         else:
-            html_e = '<div class="memo-item memo-item-neutral">Sin temas nuevos esta semana.</div>'
-        st.markdown(html_e, unsafe_allow_html=True)
+            st.markdown('<div class="memo-item memo-item-neutral">Sin temas nuevos ni en alza esta semana.</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="memo-item memo-item-neutral">Clasificación de temas requiere sentence-transformers.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="memo-item memo-item-neutral">Clasificación de temas no disponible para este período.</div>', unsafe_allow_html=True)
 
     _b4_header(5, "Temas en Extinción")
-    if temas_disponibles:
-        if extintos:
-            html_x = "".join(
-                f'<div class="memo-item memo-item-negativo">- {t}</div>'
-                for t in extintos[:8]
-            )
+    if temas_disponibles and evol is not None:
+        filas = []
+        for it in evol['en_extincion'][:6]:
+            filas.append(f'<div class="memo-item memo-item-negativo">- {it["tema"]} <span style="color:var(--fg-muted)">· desapareció, {it["n_previo"]} → 0</span></div>')
+        for it in evol['en_declive'][:4]:
+            filas.append(f'<div class="memo-item memo-item-negativo">▼ {it["tema"]} <span style="color:var(--fg-muted)">· perdiendo tracción, {it["cambio_pct"]:+.0f}% ({it["n_previo"]}→{it["n_actual"]})</span></div>')
+        if filas:
+            st.markdown("".join(filas), unsafe_allow_html=True)
         else:
-            html_x = '<div class="memo-item memo-item-neutral">Sin temas en extinción esta semana.</div>'
-        st.markdown(html_x, unsafe_allow_html=True)
+            st.markdown('<div class="memo-item memo-item-neutral">Ningún tema perdió tracción esta semana.</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="memo-item memo-item-neutral">Clasificación de temas requiere sentence-transformers.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="memo-item memo-item-neutral">Clasificación de temas no disponible para este período.</div>', unsafe_allow_html=True)
 
     _b4_card_ia(6, "Contexto No Visible", "contexto", ctx)
 
@@ -959,25 +965,29 @@ def render_bloque4_inteligencia():
 
     _b4_header(8, "Comparativa Sectorial")
     df_ext = cargar_externos(EXTERNOS_DB)
+    comp = None
     if df_ext is not None and not df_ext.empty:
         col_fuente = 'page_name' if 'page_name' in df_ext.columns else ('source' if 'source' in df_ext.columns else None)
         n_fuentes = int(df_ext[col_fuente].nunique()) if col_fuente else 0
         n_menciones = len(df_ext)
         score_ext = float(df_ext['score_sentimiento'].mean()) if 'score_sentimiento' in df_ext.columns else 0.0
-        tono_ext = "POSITIVO" if score_ext > 0.1 else ("MIXTO" if score_ext > -0.1 else "CRÍTICO")
-        color_t = "var(--green)" if score_ext > 0.1 else ("var(--amber)" if score_ext > -0.1 else "var(--red)")
+        comp = comparar_sectorial(score, score_ext, n_fuentes, n_menciones)
+    if comp:
+        tono_color = {"favorable": "var(--green)", "mixto": "var(--amber)", "crítico": "var(--red)"}
+        c_int = tono_color.get(comp['tono_interno'], 'var(--amber)')
+        c_ext = tono_color.get(comp['tono_externo'], 'var(--amber)')
         st.markdown(
-            f'<div class="memo-item memo-item-neutral">Fuentes externas: {n_fuentes}</div>'
-            f'<div class="memo-item memo-item-neutral">Menciones totales: {n_menciones}</div>'
-            f'<div class="memo-item memo-item-positivo" style="border-left-color:{color_t};color:{color_t}">Tono externo: {tono_ext}</div>',
+            f'<div class="memo-item" style="border-left-color:{c_int}">Tus páginas: tono <strong style="color:{c_int}">{comp["tono_interno"]}</strong> (índice {comp["score_interno"]:+.2f})</div>'
+            f'<div class="memo-item" style="border-left-color:{c_ext}">Fuentes externas: tono <strong style="color:{c_ext}">{comp["tono_externo"]}</strong> (índice {comp["score_externo"]:+.2f}) · {comp["n_fuentes"]} fuentes, {comp["n_menciones"]} menciones</div>'
+            f'<div class="memo-item memo-item-neutral">{comp["lectura"]}</div>',
             unsafe_allow_html=True,
         )
     else:
-        st.markdown('<div class="memo-item memo-item-neutral">Sin datos externos para comparativa sectorial.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="memo-item memo-item-neutral">Aún no hay menciones en fuentes externas para comparar con la conversación propia.</div>', unsafe_allow_html=True)
 
-    # ── 09. FRAGILIDAD / RIESGO DE REVERSIÓN ──
-    _b4_header(9, "Fragilidad / Riesgo de Reversión",
-               "Factores que hacen vulnerable la narrativa actual.")
+    # ── 09. FRAGILIDAD DE LA NARRATIVA ──
+    _b4_header(9, "Fragilidad de la Narrativa",
+               "Factores que hacen vulnerable la lectura actual.")
     frag_indicators = []
     if not df_sent.empty:
         pol = ((df_sent['score_sentimiento'].abs() > 0.5).sum() / len(df_sent) * 100)
@@ -999,7 +1009,7 @@ def render_bloque4_inteligencia():
         )
 
     _b4_card_ia(10, "Proyección de Escenario", "proyeccion", ctx)
-    _b4_card_ia(11, "Riesgo de Reversión", "recomendacion", ctx)
+    _b4_card_ia(11, "Recomendación Estratégica", "recomendacion", ctx)
     st.markdown('</div>', unsafe_allow_html=True)
 
 

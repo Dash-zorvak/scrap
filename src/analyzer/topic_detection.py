@@ -1,4 +1,5 @@
 import re
+import os
 import logging
 import unicodedata
 import functools
@@ -289,6 +290,38 @@ EMERGENCY_KEYWORDS = [
     "derrumbe", "deslizamiento", "incendio",
 ]
 
+# ─── Capa 3 · Robustez del respaldo por palabras clave ───────────────
+# Palabras "ambiguas": aparecen a menudo en dichos, bromas o lenguaje figurado y
+# por si solas NO bastan para afirmar que el comentario trata de ese tema.
+# Ejemplo: "rio" en el dicho burlon "panchito el rio estaba" no habla de medio
+# ambiente. Cuando la UNICA senal de un tema es ambigua, se exige una segunda
+# senal para asignarlo (ver detect_topics). Una palabra fuerte/especifica
+# (cualquier otra) basta por si sola, como antes.
+AMBIGUOUS_KEYWORDS = {
+    "rio", "rios", "arbol", "arboles", "verde", "playa",
+    "cerro", "montana", "lago", "laguna", "aves", "pajaro", "pajaros",
+}
+
+# Dichos / frases hechas locales (El Salvador) que NO hablan del tema literal.
+# Si el comentario contiene uno de estos dichos, el respaldo por palabras clave
+# NO le asigna tema (lo deja para que la IA lo marque como no_aplica).
+# Lista AMPLIABLE: agrega aqui los dichos que se detecten en los datos reales.
+DICHOS_LOCALES = [
+    "panchito el rio estaba",
+    "al que madruga dios lo ayuda",
+    "camaron que se duerme se lo lleva la corriente",
+    "el que nace para tamal",
+    "mas vale pajaro en mano",
+    "el que con ninos se acuesta",
+    "arbol que nace torcido",
+    "no hay mal que dure cien anos",
+    "el que mucho abarca poco aprieta",
+]
+
+# Cuantas senales (palabras clave) se exigen para asignar un tema cuando NINGUNA
+# de las coincidencias es una palabra clave fuerte (especifica). Configurable.
+MIN_SENALES_KEYWORD = int(os.environ.get("TOPIC_KW_MIN_SENALES", "2"))
+
 
 def _normalize(s: str) -> str:
     return unicodedata.normalize('NFKD', s.lower()).encode('ascii', 'ignore').decode('ascii')
@@ -300,6 +333,18 @@ def _norm_topic_keywords():
 @functools.lru_cache(maxsize=1)
 def _norm_zona_keywords():
     return {z: [_normalize(k) for k in kws] for z, kws in ZONA_KEYWORDS.items()}
+
+@functools.lru_cache(maxsize=1)
+def _norm_ambiguous():
+    return {_normalize(k) for k in AMBIGUOUS_KEYWORDS}
+
+@functools.lru_cache(maxsize=1)
+def _norm_dichos():
+    return [_normalize(d) for d in DICHOS_LOCALES]
+
+def _matches_dicho(text_norm: str) -> bool:
+    """True si el texto (normalizado) contiene algun dicho/frase hecha local."""
+    return any(d and d in text_norm for d in _norm_dichos())
 
 def _kw_match(kw_norm: str, text_norm: str) -> bool:
     # límite de palabra + plural español opcional (escuela → escuelas, bache → baches)
@@ -333,11 +378,22 @@ def detect_topics(text: str) -> List[Tuple[str, float]]:
     if not text:
         return []
     text_norm = _normalize(text)
+    # Capa 3: los dichos / frases hechas no representan un tema literal.
+    if _matches_dicho(text_norm):
+        return []
+    ambiguous = _norm_ambiguous()
     topics_found = []
     for topic, keywords in _norm_topic_keywords().items():
-        matches = sum(1 for kw in keywords if _kw_match(kw, text_norm))
-        if matches > 0:
-            topics_found.append((topic, min(matches / 3, 1.0)))
+        matched = [kw for kw in keywords if _kw_match(kw, text_norm)]
+        if not matched:
+            continue
+        total = len(matched)
+        fuertes = sum(1 for kw in matched if kw not in ambiguous)
+        # Capa 3: se asigna el tema si hay al menos UNA senal fuerte (palabra
+        # especifica) o, en su defecto, al menos MIN_SENALES_KEYWORD senales
+        # (aunque todas sean ambiguas). Una sola palabra ambigua suelta NO basta.
+        if fuertes >= 1 or total >= MIN_SENALES_KEYWORD:
+            topics_found.append((topic, min(total / 3, 1.0)))
     topics_found.sort(key=lambda x: x[1], reverse=True)
     return topics_found[:3]
 
@@ -347,6 +403,9 @@ def get_main_topic(text: str) -> str:
     if topics:
         return topics[0][0]
     text_norm = _normalize(text or "")
+    # Capa 3: un dicho no es apoyo generico ni ningun tema.
+    if _matches_dicho(text_norm):
+        return ""
     if any(_kw_match(_normalize(g), text_norm) for g in APOYO_GENERICO):
         return "apoyo_generico"
     return ""

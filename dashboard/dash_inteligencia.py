@@ -30,6 +30,11 @@ TEMA_LABELS = {
     "apoyo_generico": "Mensajes de apoyo y felicitaciones",
 }
 
+# Umbral de confianza por debajo del cual una clasificación se considera dudosa.
+UMBRAL_CONFIANZA_DUDOSA = float(os.environ.get("TEMAS_UMBRAL_DUDOSO", "0.55"))
+# Máximo de comentarios ambiguos que se exponen para revisión manual.
+MAX_AMBIGUOS_REVISION = int(os.environ.get("TEMAS_MAX_AMBIGUOS", "15"))
+
 
 def _construir_posts(db_path=None) -> list[dict]:
     if db_path is None:
@@ -287,21 +292,24 @@ def cargar_perfil_ocean(db_path=None) -> dict:
     }
 
 
-def cargar_temas_latentes(db_path=None) -> list[dict]:
-    """Temas ciudadanos: clasifica cada comentario en un asunto concreto.
+def cargar_temas_latentes_detallado(db_path=None) -> dict:
+    """Versión detallada de Temas Emergentes con banderas de confianza y tono.
 
-    Cada comentario se clasifica en una categoría temática legible (obras,
-    seguridad, servicios, etc.) usando clasificación con IA que entiende el
-    contexto (topic_llm), con respaldo por palabras clave si la IA no está
-    disponible. Los comentarios que no hablan de ningún asunto municipal
-    (dichos, bromas, sarcasmo sin tema) se marcan como "no_aplica" y se
-    descartan. Devuelve, por cada tema con presencia real, su etiqueta legible,
-    el porcentaje sobre los comentarios clasificables, cuántos comentarios lo
-    mencionan y un ejemplo representativo.
+    Clasifica cada comentario con IA contextual (topic_llm), con respaldo por
+    palabras clave. Devuelve un dict con:
+      - "temas": lista de temas con presencia real. Cada tema incluye, además
+        de su etiqueta, porcentaje, conteo y ejemplo: la confianza promedio de
+        sus comentarios, cuántos son sarcásticos o dudosos, y una "bandera" de
+        calidad ("ok", "dudosa" o "sarcasmo").
+      - "ambiguos": comentarios de baja confianza o tono sarcástico, separados
+        para revisión humana (no se usan como ejemplo de ningún tema).
+      - "resumen": conteos globales (total, clasificados, no_aplica, dudosos,
+        sarcásticos, por_reglas) para mostrar honestamente la calidad.
     """
     from dashboard.topic_llm import clasificar_temas_lote
     if db_path is None:
         db_path = FACEBOOK_DB
+    vacio = {"temas": [], "ambiguos": [], "resumen": {}}
     try:
         conn = sqlite3.connect(db_path)
         rows = conn.execute("""
@@ -311,45 +319,114 @@ def cargar_temas_latentes(db_path=None) -> list[dict]:
         """).fetchall()
         conn.close()
     except Exception:
-        return []
+        return vacio
     textos = [r[0] for r in rows]
     if len(textos) < 10:
-        return []
+        return vacio
 
     clasificacion = clasificar_temas_lote(textos)
 
-    conteo: dict = defaultdict(int)
-    ejemplos: dict = {}       # ejemplos literales (preferidos)
-    ejemplos_alt: dict = {}   # cualquier ejemplo, por si no hay uno literal
+    agreg = defaultdict(lambda: {
+        "n": 0, "suma_conf": 0.0, "n_sarcasticos": 0, "n_dudosos": 0, "n_reglas": 0,
+    })
+    ejemplos = {}       # ejemplos literales y confiables (preferidos)
+    ejemplos_alt = {}   # cualquier ejemplo, por si no hay uno confiable
+    ambiguos = []
     total_clasificados = 0
+    n_no_aplica = 0
+    n_sarcasticos_total = 0
+    n_dudosos_total = 0
+    n_reglas_total = 0
+
     for texto, info in zip(textos, clasificacion):
-        cat = (info or {}).get("categoria", "") or ""
-        tono = (info or {}).get("tono", "literal")
-        # Se descartan los comentarios que no hablan de ningun asunto municipal
-        # (dichos, bromas, sarcasmo sin tema): categoria "no_aplica" o vacia.
-        if not cat or cat == "no_aplica":
-            continue
-        conteo[cat] += 1
-        total_clasificados += 1
+        info = info or {}
+        cat = info.get("categoria", "") or ""
+        tono = info.get("tono", "literal")
+        try:
+            conf = float(info.get("confianza", 0.5))
+        except (TypeError, ValueError):
+            conf = 0.5
+        motor = info.get("motor", "llm")
         limpio = " ".join(str(texto).split())
+        es_dudoso = conf < UMBRAL_CONFIANZA_DUDOSA
+        es_sarcastico = tono == "sarcastico"
+        if motor == "reglas":
+            n_reglas_total += 1
+
+        # Los comentarios que no hablan de ningún asunto municipal (dichos,
+        # bromas, sarcasmo sin tema) se descartan de los temas.
+        if not cat or cat == "no_aplica":
+            n_no_aplica += 1
+            continue
+
+        a = agreg[cat]
+        a["n"] += 1
+        a["suma_conf"] += conf
+        total_clasificados += 1
+        if es_sarcastico:
+            a["n_sarcasticos"] += 1
+            n_sarcasticos_total += 1
+        if es_dudoso:
+            a["n_dudosos"] += 1
+            n_dudosos_total += 1
+        if motor == "reglas":
+            a["n_reglas"] += 1
+
         alt_prev = ejemplos_alt.get(cat)
         if alt_prev is None or 15 <= len(limpio) < len(alt_prev):
             ejemplos_alt[cat] = limpio
-        # Evitar usar comentarios sarcasticos como ejemplo representativo.
-        if tono == "sarcastico":
-            continue
-        prev = ejemplos.get(cat)
-        if prev is None or 15 <= len(limpio) < len(prev):
-            ejemplos[cat] = limpio
+        # Un buen ejemplo es literal y con confianza suficiente.
+        if not es_sarcastico and not es_dudoso:
+            prev = ejemplos.get(cat)
+            if prev is None or 15 <= len(limpio) < len(prev):
+                ejemplos[cat] = limpio
+
+        # Separar ambiguos: dudosos o sarcásticos, para revisión manual.
+        if (es_dudoso or es_sarcastico) and len(ambiguos) < MAX_AMBIGUOS_REVISION:
+            if es_sarcastico and es_dudoso:
+                motivo = "posible sarcasmo + clasificación dudosa"
+            elif es_sarcastico:
+                motivo = "posible sarcasmo"
+            else:
+                motivo = "clasificación dudosa"
+            texto_corto = limpio if len(limpio) <= 160 else limpio[:157] + "..."
+            ambiguos.append({
+                "texto": texto_corto,
+                "categoria_tentativa": cat,
+                "label_tentativa": TEMA_LABELS.get(cat, cat.replace("_", " ").capitalize()),
+                "tono": tono,
+                "confianza": round(conf, 2),
+                "motivo": motivo,
+            })
+
+    resumen = {
+        "total": len(textos),
+        "clasificados": total_clasificados,
+        "no_aplica": n_no_aplica,
+        "sarcasticos": n_sarcasticos_total,
+        "dudosos": n_dudosos_total,
+        "por_reglas": n_reglas_total,
+        "umbral_dudoso": UMBRAL_CONFIANZA_DUDOSA,
+    }
 
     if total_clasificados == 0:
-        return []
+        return {"temas": [], "ambiguos": ambiguos, "resumen": resumen}
 
     temas = []
-    for i, (cat, n) in enumerate(conteo.items()):
+    for i, (cat, a) in enumerate(agreg.items()):
+        n = a["n"]
         ejemplo = ejemplos.get(cat) or ejemplos_alt.get(cat, "")
         if len(ejemplo) > 120:
             ejemplo = ejemplo[:117] + "..."
+        conf_prom = a["suma_conf"] / n if n else 0.0
+        frac_sarc = a["n_sarcasticos"] / n if n else 0.0
+        frac_dud = a["n_dudosos"] / n if n else 0.0
+        if conf_prom < UMBRAL_CONFIANZA_DUDOSA or frac_dud >= 0.5:
+            bandera = "dudosa"
+        elif frac_sarc >= 0.34:
+            bandera = "sarcasmo"
+        else:
+            bandera = "ok"
         temas.append({
             "id": i + 1,
             "label": TEMA_LABELS.get(cat, cat.replace("_", " ").capitalize()),
@@ -358,6 +435,20 @@ def cargar_temas_latentes(db_path=None) -> list[dict]:
             "doc_count": n,
             "ejemplo": ejemplo,
             "words": [],
+            "confianza_promedio": round(conf_prom, 2),
+            "n_sarcasticos": a["n_sarcasticos"],
+            "n_dudosos": a["n_dudosos"],
+            "bandera": bandera,
         })
 
-    return sorted(temas, key=lambda x: -x["doc_count"])
+    temas = sorted(temas, key=lambda x: -x["doc_count"])
+    return {"temas": temas, "ambiguos": ambiguos, "resumen": resumen}
+
+
+def cargar_temas_latentes(db_path=None) -> list[dict]:
+    """Temas ciudadanos (lista). Wrapper compatible de cargar_temas_latentes_detallado.
+
+    Devuelve solo la lista de temas. Para banderas de confianza/tono y la lista
+    de comentarios ambiguos, usar cargar_temas_latentes_detallado.
+    """
+    return cargar_temas_latentes_detallado(db_path).get("temas", [])

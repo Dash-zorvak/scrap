@@ -1,0 +1,205 @@
+{
+  "meta": {
+    "descripcion": "Lista de modismos, caliche salvadoreño y dichos globales en español. Uso: contexto para análisis de sentimiento en comentarios de FB/TikTok. El modelo debe tratar estas frases como expresiones idiomáticas, NO como sentimiento literal positivo/negativo.",
+    "version": "1.0",
+    "fuentes": [
+      "elsalvadormipais.com",
+      "es.wiktionary.org/wiki/Apéndice:Salvadoreñismos",
+      "gasda.com.ar (caliche)",
+      "hablarydecir.com",
+      "lingoda.com"
+    ]
+  },
+
+  "salvadoreno": {
+
+    "exclamaciones": {
+      "descripcion": "Interjecciones que expresan emoción pero NO indican sentimiento claro hacia el contenido analizado",
+      "entradas": [
+        { "expresion": "¡A chis!", "tipo": "sorpresa_neutral", "notas": "Sorpresa, incredulidad. No positivo ni negativo per se." },
+        { "expresion": "¡A la púchica!", "tipo": "frustracion_o_sorpresa", "notas": "Inconformidad, protesta, o asombro intenso." },
+        { "expresion": "¡Puchica!", "tipo": "frustracion_o_sorpresa", "notas": "Versión suavizada. Multiusos: enojo, sorpresa, admiración." },
+        { "expresion": "¡Chejein!", "tipo": "sorpresa_burlona", "notas": "Reacción ante algo muy autóctono o torpe." },
+        { "expresion": "¡Guevos!", "tipo": "miedo_o_sorpresa", "notas": "Susto o incredulidad. Vulgar pero común." },
+        { "expresion": "¡Ya comió zompopos!", "tipo": "burla_neutral", "notas": "Broma por voz ronca, no sentimiento negativo hacia tema." },
+        { "expresion": "¡Madre vos!", "tipo": "sorpresa_o_disgusto", "notas": "Exclamación intensa, contexto define valence." },
+        { "expresion": "¡Mire pues!", "tipo": "enfasis_neutral", "notas": "Llamado de atención, no sentimiento." },
+        { "expresion": "¡Valgame Dios!", "tipo": "sorpresa_neutral", "notas": "Asombro, puede ser positivo o negativo según contexto." },
+        { "expresion": "¡Cabal!", "tipo": "afirmacion_positiva", "notas": "Confirmación exacta, acuerdo." }
+      ]
+    },
+
+    "dichos_idiomaticos": {
+      "descripcion": "Frases cuyo significado literal difiere del real. El modelo NO debe analizarlas palabra por palabra.",
+      "entradas": [
+        { "expresion": "Hablar paja", "significado_real": "Decir mentiras o tonterías", "valence_aparente": "negativo", "valence_real": "negativo hacia el sujeto, no hacia el tema" },
+        { "expresion": "Hacerse el maje", "significado_real": "Fingir que no se entiende o no darse por enterado", "valence_aparente": "neutro", "valence_real": "negativo leve (crítica al sujeto)" },
+        { "expresion": "Ya te llevó la que no te trajo", "significado_real": "Pagar consecuencias por algo indebido", "valence_aparente": "negativo literal", "valence_real": "negativo hacia el sujeto" },
+        { "expresion": "Joderse", "significado_real": "Las cosas salieron mal", "valence_aparente": "negativo", "valence_real": "negativo, frustración" },
+        { "expresion": "Quedar ahuevado", "significado_real": "Hacer el ridículo, quedar mal", "valence_aparente": "neutro", "valence_real": "negativo (vergüenza)" },
+        { "expresion": "Ser aguacate", "significado_real": "Ser miedoso", "valence_aparente": "neutro", "valence_real": "negativo (insulto leve)" },
+        { "expresion": "Agarrar la onda", "significado_real": "Entender algo, familiarizarse", "valence_aparente": "neutro", "valence_real": "positivo" },
+        { "expresion": "Dale pues", "significado_real": "Aceptar, estar de acuerdo", "valence_aparente": "positivo", "valence_real": "positivo (acuerdo)" },
+        { "expresion": "Nos guachamos después", "significado_real": "Nos vemos luego", "valence_aparente": "neutro", "valence_real": "neutro (despedida)" },
+        { "expresion": "Irse para los Yunaís", "significado_real": "Emigrar a Estados Unidos", "valence_aparente": "neutro", "valence_real": "neutro (acción, no sentimiento)" },
+        { "expresion": "Regarla", "significado_real": "Cometer un error, arruinarla", "valence_aparente": "negativo", "valence_real": "negativo" },
+        { "expresion": "Agarrarse hasta el codo", "significado_real": "Abusar de la confianza", "valence_aparente": "neutro literal", "valence_real": "negativo" },
+        { "expresion": "El burro hablando de orejas", "significado_real": "Criticar defectos que uno mismo tiene", "valence_aparente": "negativo", "valence_real": "negativo (crítica sarcástica)" },
+        { "expresion": "La hoya le dijo al comal", "significado_real": "Lo mismo que el burro y las orejas", "valence_aparente": "negativo", "valence_real": "negativo (crítica)" },
+        { "expresion": "Estar en todo menos en misa", "significado_real": "Meterse donde no le llaman", "valence_aparente": "negativo", "valence_real": "negativo leve (crítica)" },
+        { "expresion": "En un dos por tres", "significado_real": "Muy rápido", "valence_aparente": "neutro", "valence_real": "neutro" },
+        { "expresion": "Cuando vos vas, yo ya vengo", "significado_real": "Tengo más experiencia o ventaja", "valence_aparente": "neutro", "valence_real": "neutro/positivo (autoconfianza)" },
+        { "expresion": "Como anillo al dedo", "significado_real": "Algo que encaja perfectamente", "valence_aparente": "positivo", "valence_real": "positivo" },
+        { "expresion": "Camarón que se duerme, se lo lleva la corriente", "significado_real": "Quien no aprovecha las oportunidades pierde", "valence_aparente": "neutro/negativo", "valence_real": "advertencia, neutro" },
+        { "expresion": "Qué galán", "significado_real": "Qué bien, pasarla bien", "valence_aparente": "positivo", "valence_real": "positivo" },
+        { "expresion": "Se lo bajaron", "significado_real": "Le mintieron o engañaron", "valence_aparente": "neutro literal", "valence_real": "negativo (víctima de engaño)" },
+        { "expresion": "Qué comes que adivinas", "significado_real": "Acertaste justo", "valence_aparente": "positivo", "valence_real": "positivo/sorpresa" },
+        { "expresion": "Pachito estaba el río", "significado_real": "Descubrir algo inesperado", "valence_aparente": "neutro", "valence_real": "neutro/sorpresa" },
+        { "expresion": "Enyoyarse con alguien", "significado_real": "Congraciarse para obtener favor", "valence_aparente": "positivo superficial", "valence_real": "negativo leve (interés oculto)" },
+        { "expresion": "Hay que socarla", "significado_real": "Hay que enfrentarlo/aguantarlo", "valence_aparente": "neutro", "valence_real": "neutro/determinación" },
+        { "expresion": "Ser gorrón", "significado_real": "Aprovecharse de los demás", "valence_aparente": "neutro literal", "valence_real": "negativo (insulto)" },
+        { "expresion": "Andar chaineado", "significado_real": "Ir bien arreglado, guapo", "valence_aparente": "positivo", "valence_real": "positivo" },
+        { "expresion": "Agarrar zumba", "significado_real": "Tomar alcohol por días seguidos", "valence_aparente": "neutro literal", "valence_real": "negativo (hábito no saludable)" },
+        { "expresion": "No es lo mismo verla venir que platicar con ella", "significado_real": "Mucho hablar, poco actuar", "valence_aparente": "negativo", "valence_real": "negativo (crítica)" },
+        { "expresion": "Buscar oficio", "significado_real": "Encontrar algo que hacer / buscar trabajo", "valence_aparente": "neutro", "valence_real": "neutro" },
+        { "expresion": "Estar huevoneando", "significado_real": "Estar sin hacer nada, flojear", "valence_aparente": "negativo", "valence_real": "negativo leve" },
+        { "expresion": "Vaya pues", "significado_real": "Hasta luego / Ok / Está bien", "valence_aparente": "positivo/neutral", "valence_real": "neutro (despedida o acuerdo)" },
+        { "expresion": "Qué ondas", "significado_real": "¿Qué tal? / ¿Cómo estás?", "valence_aparente": "neutro", "valence_real": "neutro (saludo)" },
+        { "expresion": "Buena onda", "significado_real": "Buena vibra, actitud positiva", "valence_aparente": "positivo", "valence_real": "positivo" },
+        { "expresion": "De choto", "significado_real": "Gratis", "valence_aparente": "positivo", "valence_real": "positivo (ventaja)" },
+        { "expresion": "Chotiar", "significado_real": "Salir a pasear con amigos", "valence_aparente": "neutro", "valence_real": "positivo (ocio)" },
+        { "expresion": "Dar castigo", "significado_real": "Demostrar superioridad en algo", "valence_aparente": "negativo literal", "valence_real": "positivo (habilidad)" },
+        { "expresion": "Dar en la nuca", "significado_real": "Traicionar / ser infiel / timar", "valence_aparente": "neutro literal", "valence_real": "negativo (traición)" },
+        { "expresion": "Pelarse", "significado_real": "Hacer algo fuera de lo común o inesperado", "valence_aparente": "neutro", "valence_real": "neutro/sorpresa" }
+      ]
+    },
+
+    "caliche_palabras": {
+      "descripcion": "Vocabulario caliche: palabras únicas con significado diferente al español estándar",
+      "entradas": [
+        { "palabra": "yuca", "significado_real": "Situación difícil", "no_confundir_con": "el tubérculo yuca (vegetal)" },
+        { "palabra": "chivo", "significado_real": "Bonito, bueno, excelente", "no_confundir_con": "el animal" },
+        { "palabra": "mamado", "significado_real": "Muy fácil, sencillo", "no_confundir_con": "musculoso o amamantado" },
+        { "palabra": "chévere", "significado_real": "Genial, excelente, divertido", "no_confundir_con": "nada negativo" },
+        { "palabra": "cabal", "significado_real": "Exacto, correcto, justo", "no_confundir_con": "nada negativo" },
+        { "palabra": "bicho", "significado_real": "Niño, joven (afectivo)", "no_confundir_con": "insecto o algo negativo" },
+        { "palabra": "cipote", "significado_real": "Niño, muchacho", "no_confundir_con": "insulto en otros países" },
+        { "palabra": "chero", "significado_real": "Amigo, cuate", "no_confundir_con": "nada negativo" },
+        { "palabra": "alero", "significado_real": "Amigo muy cercano, mano derecha", "no_confundir_con": "parte de un techo" },
+        { "palabra": "maje", "significado_real": "Persona (coloquial), a veces 'tonto'", "no_confundir_con": "insulto grave; depende contexto" },
+        { "palabra": "baro", "significado_real": "Dinero", "no_confundir_con": "nada negativo" },
+        { "palabra": "pisto", "significado_real": "Dinero", "no_confundir_con": "plato de comida en otros países" },
+        { "palabra": "chunche", "significado_real": "Objeto, cosa cualquiera", "no_confundir_con": "nada negativo" },
+        { "palabra": "bolado", "significado_real": "Objeto, cosa", "no_confundir_con": "nada negativo" },
+        { "palabra": "bolo", "significado_real": "Borracho", "no_confundir_con": "juego de bolos" },
+        { "palabra": "guanaco", "significado_real": "Salvadoreño (gentilicio afectivo)", "no_confundir_con": "insulto; aquí es identidad" },
+        { "palabra": "chucho", "significado_real": "Perro / persona tacaña", "no_confundir_con": "necesariamente negativo; contexto" },
+        { "palabra": "chuco", "significado_real": "Sucio", "no_confundir_con": "nada más" },
+        { "palabra": "chimbolo", "significado_real": "Pez pequeño", "no_confundir_con": "nada negativo" },
+        { "palabra": "güevón", "significado_real": "En SV: persona relajada, no muy trabajadora (no tan ofensivo como en otros países)", "no_confundir_con": "insulto grave; en SV es más leve" },
+        { "palabra": "ajolotar", "significado_real": "Desesperarse", "no_confundir_con": "el ajolote (animal)" },
+        { "palabra": "chirria", "significado_real": "Cólera, enfado", "no_confundir_con": "sonido" },
+        { "palabra": "chirilicas", "significado_real": "Dinero (coloquial)", "no_confundir_con": "nada negativo" },
+        { "palabra": "yuca", "significado_real": "Situación difícil (ver arriba)", "no_confundir_con": "vegetal" },
+        { "palabra": "zumba", "significado_real": "Borrachera extendida por días", "no_confundir_con": "el ejercicio/baile Zumba" },
+        { "palabra": "yunais", "significado_real": "Estados Unidos", "no_confundir_con": "nada negativo" },
+        { "palabra": "chiche", "significado_real": "Fácil, sencillo", "no_confundir_con": "nada negativo en este contexto" },
+        { "palabra": "vergón", "significado_real": "Excelente, genial (positivo coloquial)", "no_confundir_con": "vulgar en otros países; aquí elogio" },
+        { "palabra": "cabal", "significado_real": "Exacto, de acuerdo", "no_confundir_con": "nada negativo" },
+        { "palabra": "aguacatero", "significado_real": "Autóctono, ordinario (a veces despectivo)", "no_confundir_con": "vendedor de aguacate" },
+        { "palabra": "chiripa", "significado_real": "Por suerte, golpe de suerte", "no_confundir_con": "negativo; es positivo (suerte)" },
+        { "palabra": "de buen cuerpo", "significado_real": "De buenas, de buen humor", "no_confundir_con": "físico del cuerpo" }
+      ]
+    },
+
+    "refranes": {
+      "descripcion": "Refranes populares. Contienen palabras con carga negativa aparente pero son sabiduría popular neutral.",
+      "entradas": [
+        { "refran": "Al perro más flaco se le pegan las pulgas", "moraleja": "Los más débiles sufren más problemas", "valence": "neutro/negativo descriptivo" },
+        { "refran": "Candil de la calle, oscuridad de la casa", "moraleja": "Quien es bueno afuera pero malo en casa", "valence": "negativo (crítica)" },
+        { "refran": "El que oye consejos, llega a viejo", "moraleja": "Ser prudente alarga la vida", "valence": "positivo (consejo)" },
+        { "refran": "Al que madruga, Dios le ayuda", "moraleja": "Ser diligente trae recompensas", "valence": "positivo" },
+        { "refran": "El que de ajeno se viste, en la calle lo desvisten", "moraleja": "El engaño se descubre", "valence": "neutro/advertencia" },
+        { "refran": "A la fuerza ni los zapatos entran", "moraleja": "No hacer nada contra la voluntad ajena", "valence": "neutro" },
+        { "refran": "Camarón que se duerme se lo lleva la corriente", "moraleja": "Hay que aprovechar oportunidades", "valence": "neutro/advertencia" }
+      ]
+    }
+  },
+
+  "global_espanol": {
+
+    "modismos_universales": {
+      "descripcion": "Expresiones comunes en todo el mundo hispanohablante. El modelo debe reconocerlas como idiomáticas.",
+      "entradas": [
+        { "expresion": "Meter la pata", "significado_real": "Cometer un error social", "valence_real": "negativo" },
+        { "expresion": "Costar un ojo de la cara", "significado_real": "Ser muy caro", "valence_real": "negativo (queja de precio)" },
+        { "expresion": "Ponerse la camiseta", "significado_real": "Comprometerse con algo/alguien", "valence_real": "positivo" },
+        { "expresion": "Dar en el clavo", "significado_real": "Acertar exactamente", "valence_real": "positivo" },
+        { "expresion": "No dar pie con bola", "significado_real": "Equivocarse en todo", "valence_real": "negativo" },
+        { "expresion": "Tirar la toalla", "significado_real": "Rendirse", "valence_real": "negativo" },
+        { "expresion": "Estar en las nubes", "significado_real": "Estar distraído", "valence_real": "negativo leve" },
+        { "expresion": "No hay mal que por bien no venga", "significado_real": "Algo malo puede traer algo bueno", "valence_real": "positivo (consuelo)" },
+        { "expresion": "A mal tiempo buena cara", "significado_real": "Actitud positiva ante adversidades", "valence_real": "positivo" },
+        { "expresion": "Hacer de tripas corazón", "significado_real": "Armarse de valor", "valence_real": "positivo/neutral" },
+        { "expresion": "Matar dos pájaros de un tiro", "significado_real": "Resolver dos cosas a la vez", "valence_real": "positivo (eficiencia)" },
+        { "expresion": "No hay mal que dure cien años", "significado_real": "Los problemas pasan", "valence_real": "positivo (esperanza)" },
+        { "expresion": "Ser un melón", "significado_real": "Ser bobo/tonto", "valence_real": "negativo (insulto leve)" },
+        { "expresion": "Como Pedro por su casa", "significado_real": "Actuar con total confianza en lugar ajeno", "valence_real": "negativo leve (crítica)" },
+        { "expresion": "Quedarse con los crespos hechos", "significado_real": "Quedarse esperando en vano", "valence_real": "negativo (decepción)" },
+        { "expresion": "Ponerse las pilas", "significado_real": "Activarse, esforzarse", "valence_real": "positivo (motivación)" },
+        { "expresion": "Echar agua al mar", "significado_real": "Hacer algo inútil", "valence_real": "negativo (inutilidad)" },
+        { "expresion": "A otro perro con ese hueso", "significado_real": "No creer lo que alguien dice", "valence_real": "negativo (desconfianza)" },
+        { "expresion": "Sacar el cobre", "significado_real": "Mostrar la verdadera personalidad (negativa)", "valence_real": "negativo" },
+        { "expresion": "Echar leña al fuego", "significado_real": "Empeorar una situación", "valence_real": "negativo" }
+      ]
+    },
+
+    "modismos_latinoamerica": {
+      "descripcion": "Expresiones comunes en Latinoamérica que pueden confundir al modelo.",
+      "entradas": [
+        { "expresion": "Ya me cargó el payaso", "origen": "México", "significado_real": "Me pasó algo malo", "valence_real": "negativo" },
+        { "expresion": "¿Qué más pues?", "origen": "Colombia", "significado_real": "¿Cómo estás? (saludo)", "valence_real": "neutro" },
+        { "expresion": "Buena nota", "origen": "Colombia", "significado_real": "Persona o cosa excelente", "valence_real": "positivo" },
+        { "expresion": "Ser un camello", "origen": "Colombia", "significado_real": "Trabajar duro", "valence_real": "positivo" },
+        { "expresion": "Estar salado", "origen": "Colombia/Venezuela", "significado_real": "Tener mala suerte", "valence_real": "negativo" },
+        { "expresion": "No hay bronca", "origen": "México", "significado_real": "No hay problema", "valence_real": "positivo/neutro" },
+        { "expresion": "¡Órale!", "origen": "México", "significado_real": "¡Ándale! / De acuerdo / ¡Wow!", "valence_real": "neutro/positivo según contexto" },
+        { "expresion": "Estar en el horno", "origen": "Argentina", "significado_real": "Estar en problemas", "valence_real": "negativo" },
+        { "expresion": "Ni modo", "origen": "México/Centroamérica", "significado_real": "No hay remedio / qué se le va a hacer", "valence_real": "neutro/resignación" },
+        { "expresion": "Dar una paliza", "origen": "General", "significado_real": "Ganar ampliamente / también pegar", "valence_real": "positivo o negativo según contexto" }
+      ]
+    },
+
+    "expresiones_redes_sociales": {
+      "descripcion": "Expresiones virales o de internet usadas en comentarios de FB/TikTok que no indican sentimiento claro",
+      "entradas": [
+        { "expresion": "No tiene madre", "significado_real": "Es increíble / es muy malo (ambiguo)", "valence_real": "AMBIGUO: requiere contexto" },
+        { "expresion": "Me mata", "significado_real": "Me da risa / me parece increíble", "valence_real": "positivo en redes (humor)" },
+        { "expresion": "Lo tiró", "significado_real": "Lo hizo muy bien (slang de redes)", "valence_real": "positivo" },
+        { "expresion": "No es por nada pero", "significado_real": "Introducción a crítica o queja", "valence_real": "negativo (señal de crítica)" },
+        { "expresion": "Todo bien todo bien", "significado_real": "Ironía: nada está bien", "valence_real": "negativo (sarcasmo)" },
+        { "expresion": "Viva la gente", "significado_real": "Sarcasmo ante algo estúpido o gracioso", "valence_real": "negativo/burlón" },
+        { "expresion": "Con razón", "significado_real": "Ahora entiendo (puede ser positivo o sarcástico)", "valence_real": "AMBIGUO" },
+        { "expresion": "Está de más", "significado_real": "Está excelente / sobra (opuestos; ver contexto)", "valence_real": "AMBIGUO" },
+        { "expresion": "Me quedé loco/a", "significado_real": "Me sorprendió muchísimo", "valence_real": "positivo/neutro (asombro)" },
+        { "expresion": "Eso es todo", "significado_real": "Remate de un argumento fuerte", "valence_real": "neutro/positivo (confirmación)" },
+        { "expresion": "Para qué más", "significado_real": "Es perfecto, no se necesita más", "valence_real": "positivo" },
+        { "expresion": "Eso ya es harina de otro costal", "significado_real": "Eso es otro tema diferente", "valence_real": "neutro" },
+        { "expresion": "Se armó", "significado_real": "Ocurrió un problema o algo intenso", "valence_real": "negativo/dramático" },
+        { "expresion": "La cagó", "significado_real": "Cometió un error grave", "valence_real": "negativo" },
+        { "expresion": "Se pasó", "significado_real": "Exageró (positivo o negativo)", "valence_real": "AMBIGUO" }
+      ]
+    }
+  },
+
+  "instrucciones_para_modelo": {
+    "regla_1": "Si un comentario contiene una expresión de esta lista, analizar el sentimiento del comentario COMPLETO, no de la expresión aislada.",
+    "regla_2": "Expresiones marcadas como AMBIGUO requieren análisis de contexto del comentario circundante.",
+    "regla_3": "Palabras de caliche (ej: 'chivo', 'vergón', 'mamado') pueden significar lo OPUESTO a su apariencia literal. Usar la tabla caliche_palabras.",
+    "regla_4": "Refranes y dichos no expresan sentimiento del autor hacia el contenido; expresan sabiduría popular. Tratar como neutros a menos que el contexto indique uso sarcástico.",
+    "regla_5": "Exclamaciones (¡Puchica!, ¡A chis!, etc.) modifican intensidad pero no determinan valence por sí solas.",
+    "regla_6": "'Dar castigo' en SV = positivo (habilidad). NO confundir con 'castigar' = negativo.",
+    "regla_7": "Güevón en SV es mucho menos ofensivo que en otros países; ver contexto antes de clasificar como negativo.",
+    "regla_8": "Zumba en comentarios salvadoreños puede ser la bebida/borrachera, NO el ejercicio. Contexto manda."
+  }
+}

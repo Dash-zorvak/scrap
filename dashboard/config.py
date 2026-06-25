@@ -1,4 +1,13 @@
 import os
+from dotenv import load_dotenv
+
+# Carga variables desde un archivo .env cuando se corre en local. Se hace aqui
+# (config es lo primero que importa el dashboard) para que cualquier modulo que
+# lea variables de entorno al importarse —incluida la capa de IA en llm_groq /
+# topic_llm— ya las vea cargadas. En HF Spaces / Railway las variables vienen del
+# entorno del contenedor y load_dotenv() es un no-op (no sobreescribe lo ya
+# definido), asi que es seguro en todos los despliegues.
+load_dotenv()
 
 # Rutas relativas al proyecto
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

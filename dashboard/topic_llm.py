@@ -1,25 +1,29 @@
 """Clasificacion de temas ciudadanos con IA (contexto + tono).
 
 Capa mas relevante del robustecimiento de temas: en lugar de buscar palabras
-clave literales (que confunde dichos como "panchito el rio estaba" con medio
+clave literales (que confunde dichos como \"panchito el rio estaba\" con medio
 ambiente), un modelo de lenguaje lee cada comentario completo y decide:
 
-  - "categoria": el asunto ciudadano (mismas claves que TEMA_LABELS /
-    topic_detection), o "no_aplica" si el comentario no habla de ningun asunto
+  - \"categoria\": el asunto ciudadano (mismas claves que TEMA_LABELS /
+    topic_detection), o \"no_aplica\" si el comentario no habla de ningun asunto
     municipal (dicho, broma, saludo, sarcasmo sin tema, spam).
-  - "tono": "literal" o "sarcastico".
-  - "confianza": 0.0 a 1.0.
+  - \"tono\": \"literal\" o \"sarcastico\".
+  - \"confianza\": 0.0 a 1.0.
 
-Si Groq no esta disponible o el modelo falla, se cae con elegancia al detector
-por palabras clave (get_main_topic), de modo que el dashboard nunca se queda sin
-clasificacion. El modelo se configura via GROQ_TEXT_MODEL (hoy Llama 3.3 70B) y
-es compatible con OpenAI, por lo que migrar a NVIDIA NIM solo requiere cambiar
-GROQ_BASE_URL / GROQ_API_KEY / GROQ_TEXT_MODEL.
+Si el proveedor no esta disponible o el modelo falla, se cae con elegancia al
+detector por palabras clave (get_main_topic), de modo que el dashboard nunca se
+queda sin clasificacion. El modelo se configura via llm_groq (hoy DeepSeek V3.2
+en NVIDIA NIM) y es compatible con OpenAI.
 
-Control de ritmo (pacing): el plan gratis de Groq limita los tokens por minuto
-(TPM). Para no chocar con el 429 y caer al respaldo por reglas, se espacian las
-llamadas para mantenerse bajo TOPIC_LLM_TPM y, si aun asi llega un 429, se espera
-el tiempo que indique el proveedor y se reintenta.
+Cascada de verificacion cruzada (doble razonamiento): el modelo primario
+clasifica todo; los casos dudosos (baja confianza o sarcasmo) se re-evaluan con
+un segundo modelo distinto (VERIFIER_MODEL, p. ej. GLM) y se reconcilian. Ver
+dashboard/llm_cascade.py. Se desactiva con LLM_CASCADA_ACTIVA=0.
+
+Control de ritmo (pacing): el tier gratis limita los tokens por minuto (TPM).
+Para no chocar con el 429 y caer al respaldo por reglas, se espacian las
+llamadas para mantenerse bajo TOPIC_LLM_TPM y, si aun asi llega un 429, se
+espera el tiempo que indique el proveedor y se reintenta.
 """
 
 import json
@@ -31,7 +35,7 @@ import time
 logger = logging.getLogger("topic_llm")
 
 # Claves validas: deben coincidir con TOPIC_KEYWORDS (topic_detection) y
-# TEMA_LABELS (dash_inteligencia). "no_aplica" es nueva: marca comentarios que
+# TEMA_LABELS (dash_inteligencia). \"no_aplica\" es nueva: marca comentarios que
 # no hablan de ningun asunto municipal.
 CATEGORIAS_VALIDAS = {
     "obras_publicas", "seguridad", "servicios_publicos", "empleo", "salud",
@@ -48,8 +52,7 @@ LOTE_LLM = int(os.environ.get("TOPIC_LLM_LOTE", "40"))
 # Cuantos caracteres por comentario se envian (evita prompts gigantes).
 MAX_CHARS_COMENTARIO = int(os.environ.get("TOPIC_LLM_MAX_CHARS", "300"))
 
-# Presupuesto de tokens por minuto. Groq free tier = 12000 TPM para
-# llama-3.3-70b-versatile; dejamos margen. 0 desactiva el pacing.
+# Presupuesto de tokens por minuto. 0 desactiva el pacing.
 TPM_BUDGET = int(os.environ.get("TOPIC_LLM_TPM", "10000"))
 
 # Reintentos ante un 429 antes de caer al respaldo por reglas.
@@ -57,6 +60,10 @@ MAX_REINTENTOS_429 = int(os.environ.get("TOPIC_LLM_REINTENTOS", "5"))
 
 # Espera por defecto (segundos) si el 429 no dice cuanto esperar.
 ESPERA_429_DEFAULT = float(os.environ.get("TOPIC_LLM_ESPERA_429", "16"))
+
+# Cascada de verificacion cruzada: re-evalua los casos dudosos con un segundo
+# modelo potente (VERIFIER_MODEL en llm_groq). 0 la desactiva.
+CASCADA_ACTIVA = os.environ.get("LLM_CASCADA_ACTIVA", "1") not in ("0", "false", "False", "")
 
 # Historial de consumo para el pacing: list[(timestamp, tokens_estimados)].
 _historial_tokens = []
@@ -89,8 +96,10 @@ _PROMPT = (
     "frases hechas que NO hablan del tema literal. Por ejemplo 'panchito el rio "
     "estaba' es un dicho burlon (alguien se siente aludido sin que lo nombren); "
     "NO habla de un rio ni de medio ambiente, asi que su categoria es "
-    "'no_aplica'. No te dejes enganar por una sola palabra: clasifica por el "
-    "SENTIDO real del comentario completo.\n\n"
+    "'no_aplica'. Una burla o ironia hacia el alcalde NO es apoyo_generico: si "
+    "se mofa sin hablar de un tema, es 'no_aplica' con tono 'sarcastico'. No te "
+    "dejes enganar por una sola palabra: clasifica por el SENTIDO real del "
+    "comentario completo.\n\n"
     "2) \"tono\": \"literal\" si dice lo que parece; \"sarcastico\" si es "
     "ironico o burla (por ejemplo 'excelente trabajo, lo que faltaba').\n\n"
     "3) \"confianza\": numero de 0.0 a 1.0 de que tan seguro estas.\n\n"
@@ -211,11 +220,25 @@ def _fallback_keyword(textos):
     return salida
 
 
-def _clasificar_bloque_llm(textos):
-    """Clasifica un bloque de comentarios con el modelo de texto Groq.
+def _verifier_model():
+    """Modelo verificador de la cascada (None si no esta configurado).
 
-    Respeta el limite de tokens por minuto (pacing) y, si aun asi recibe un 429,
-    espera lo que indique el proveedor y reintenta antes de propagar el error.
+    Se lee de forma perezosa para no forzar la importacion de openai/llm_groq
+    en entornos donde no se use IA (p. ej. CI con respaldo por reglas).
+    """
+    try:
+        from dashboard.llm_groq import VERIFIER_MODEL
+        return VERIFIER_MODEL or None
+    except Exception:
+        return None
+
+
+def _clasificar_bloque_llm(textos, model=None):
+    """Clasifica un bloque de comentarios con el modelo de texto.
+
+    `model` permite usar el verificador de la cascada en vez del primario.
+    Respeta el limite de tokens por minuto (pacing) y, si recibe un 429, espera
+    lo que indique el proveedor y reintenta antes de propagar el error.
     """
     from dashboard.llm_groq import chat_texto
 
@@ -231,7 +254,7 @@ def _clasificar_bloque_llm(textos):
     for intento in range(MAX_REINTENTOS_429 + 1):
         _esperar_presupuesto(tokens_est)
         try:
-            raw = chat_texto(prompt, json=True, temperature=0, max_tokens=4096)
+            raw = chat_texto(prompt, json=True, temperature=0, max_tokens=4096, model=model)
             _registrar_tokens(tokens_est)
             return _parsear_respuesta(raw, textos)
         except Exception as e:
@@ -255,9 +278,10 @@ def _clasificar_bloque_llm(textos):
 def clasificar_temas_lote(textos, lote=None):
     """Clasifica una lista de comentarios devolviendo un dict por comentario.
 
-    Cada dict: {"categoria", "tono", "confianza", "motor"}. La lista de salida
-    queda alineada 1 a 1 con `textos`. Usa el modelo de lenguaje si Groq esta
-    disponible; si no, cae a palabras clave.
+    Cada dict: {\"categoria\", \"tono\", \"confianza\", \"motor\", ...}. La lista de
+    salida queda alineada 1 a 1 con `textos`. Usa el modelo de lenguaje (con
+    cascada de verificacion si esta activa) si el proveedor esta disponible; si
+    no, cae a palabras clave.
     """
     if not textos:
         return []
@@ -275,11 +299,19 @@ def clasificar_temas_lote(textos, lote=None):
     if tam < 1:
         tam = 40
 
+    verif = _verifier_model() if CASCADA_ACTIVA else None
+
     salida = []
     for i in range(0, len(textos), tam):
         bloque = textos[i:i + tam]
         try:
-            salida.extend(_clasificar_bloque_llm(bloque))
+            if verif:
+                from dashboard.llm_cascade import clasificar_con_cascada
+                salida.extend(clasificar_con_cascada(
+                    bloque, _clasificar_bloque_llm, verificador_model=verif,
+                ))
+            else:
+                salida.extend(_clasificar_bloque_llm(bloque))
         except Exception as e:
             logger.warning(
                 "Clasificacion IA fallo en bloque %d (%d items): %r; usando reglas",

@@ -11,9 +11,14 @@ nombres antiguos GROQ_* como respaldo para no romper despliegues en transición:
 
   API key:    LLM_API_KEY   -> NVIDIA_API_KEY -> GROQ_API_KEY
   Base URL:   LLM_BASE_URL  -> GROQ_BASE_URL  -> https://integrate.api.nvidia.com/v1
-  Texto:      LLM_TEXT_MODEL     -> GROQ_TEXT_MODEL   -> deepseek-ai/deepseek-v3.2
-  Verificador (cascada): LLM_VERIFIER_MODEL          -> zai-org/glm-4.6
+  Texto:      LLM_TEXT_MODEL     -> GROQ_TEXT_MODEL   -> deepseek-ai/deepseek-v4-flash
+  Verificador (cascada): LLM_VERIFIER_MODEL          -> z-ai/glm-5.1
   Visión:     LLM_VISION_MODEL   -> GROQ_VISION_MODEL -> nvidia/llama-3.1-nemotron-nano-vl-8b-v1
+
+En local, las variables se leen de un archivo .env (cargado con load_dotenv).
+En HF Spaces / Railway vienen del entorno del contenedor. Si el primario
+(DeepSeek V4 Flash) sigue clasificando mal casos claros, basta con poner
+LLM_TEXT_MODEL=deepseek-ai/deepseek-v4-pro (sin tocar codigo).
 
 IMPORTANTE: los slugs exactos de los modelos pueden variar en build.nvidia.com.
 Verifícalos en https://build.nvidia.com/models y ajústalos por entorno si hace
@@ -24,7 +29,14 @@ JSON con LLM_JSON_MODE=0 (el prompt ya pide JSON explícitamente).
 import base64
 import os
 import time
+from dotenv import load_dotenv
 from openai import OpenAI
+
+# Carga .env en local para que los slugs de modelos y la API key esten
+# disponibles aunque este modulo se use fuera del dashboard (p. ej. el pipeline
+# de clasificacion). Es idempotente y no sobreescribe variables ya definidas en
+# el entorno (HF / Railway), asi que es seguro llamarlo aqui.
+load_dotenv()
 
 
 def _primer_env(*nombres, default=None):
@@ -40,11 +52,11 @@ def _primer_env(*nombres, default=None):
 
 TEXT_MODEL = _primer_env(
     "LLM_TEXT_MODEL", "GROQ_TEXT_MODEL",
-    default="deepseek-ai/deepseek-v3.2",
+    default="deepseek-ai/deepseek-v4-flash",
 )
 VERIFIER_MODEL = _primer_env(
     "LLM_VERIFIER_MODEL",
-    default="zai-org/glm-4.6",
+    default="z-ai/glm-5.1",
 )
 VISION_MODEL = _primer_env(
     "LLM_VISION_MODEL", "GROQ_VISION_MODEL",

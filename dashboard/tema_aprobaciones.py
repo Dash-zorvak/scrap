@@ -16,7 +16,12 @@ import sqlite3
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from dashboard.tema_taxonomia import CATEGORIAS_VALIDAS, etiqueta_tema, remapear
+from dashboard.tema_taxonomia import (
+    CATEGORIAS_VALIDAS,
+    REMAP_LEGACY,
+    etiqueta_tema,
+    remapear,
+)
 
 TABLA = "tema_aprobaciones"
 
@@ -52,14 +57,20 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
                        tema_sugerido=None, tono="literal", confianza=None):
     """Guarda (o actualiza) la aprobacion de un comentario.
 
-    Devuelve True si se guardo. El tema se remapea a clave englobante; si no es
-    valido (o falta comment_id/tema), no guarda y devuelve False.
+    Devuelve True si se guardo. En la aprobacion MANUAL validamos de forma
+    estricta: solo se aceptan categorias englobantes validas o claves legacy
+    conocidas (que luego se remapean a su englobante). Cualquier otro tema
+    inexistente -o falta comment_id/tema- no guarda y devuelve False.
+
+    Nota: a diferencia de remapear() -que degrada lo desconocido a 'no_aplica'
+    para tolerar ruido del modelo-, aqui un tema invalido se RECHAZA, porque es
+    una decision explicita del usuario y no debe colarse como 'no_aplica'.
     """
     if not comment_id or not tema:
         return False
-    tema = remapear(tema)
-    if tema not in CATEGORIAS_VALIDAS:
+    if tema not in CATEGORIAS_VALIDAS and tema not in REMAP_LEGACY:
         return False
+    tema = remapear(tema)
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:

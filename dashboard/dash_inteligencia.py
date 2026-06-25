@@ -8,27 +8,20 @@ from collections import Counter, defaultdict
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 from config import FACEBOOK_DB
+from dashboard.tema_taxonomia import (
+    TEMA_LABELS as _TAX_LABELS,
+    REMAP_LEGACY as _REMAP_LEGACY,
+    etiqueta_tema,
+)
 
 _SEVERIDAD_COLOR = {1: "🟢", 2: "🟡", 3: "🔴", 4: "🔴"}
 _SEVERIDAD_LABEL = {1: "bajo", 2: "medio", 3: "alto", 4: "crítico"}
 
-# Etiquetas legibles para los asuntos ciudadanos detectados en los comentarios.
-# Las claves coinciden con las categorías de get_main_topic (topic_detection).
-TEMA_LABELS = {
-    "obras_publicas": "Obras públicas",
-    "seguridad": "Seguridad",
-    "servicios_publicos": "Servicios básicos (agua, luz, basura)",
-    "empleo": "Empleo y economía",
-    "salud": "Salud",
-    "educacion": "Educación",
-    "movilidad": "Movilidad y transporte",
-    "corrupcion": "Desconfianza y corrupción",
-    "medio_ambiente": "Medio ambiente",
-    "transparencia": "Transparencia y gestión",
-    "cultura": "Cultura y eventos",
-    "deportes": "Deportes",
-    "apoyo_generico": "Mensajes de apoyo y felicitaciones",
-}
+# Etiquetas legibles de los temas englobantes (fuente: tema_taxonomia). Se
+# conservan tambien las claves historicas por compatibilidad con datos viejos.
+TEMA_LABELS = dict(_TAX_LABELS)
+for _old, _new in _REMAP_LEGACY.items():
+    TEMA_LABELS.setdefault(_old, _TAX_LABELS.get(_new, _old))
 
 # Umbral de confianza por debajo del cual una clasificación se considera dudosa.
 UMBRAL_CONFIANZA_DUDOSA = float(os.environ.get("TEMAS_UMBRAL_DUDOSO", "0.55"))
@@ -293,18 +286,10 @@ def cargar_perfil_ocean(db_path=None) -> dict:
 
 
 def cargar_temas_latentes_detallado(db_path=None) -> dict:
-    """Versión detallada de Temas Emergentes con banderas de confianza y tono.
+    """Version detallada (legacy) de Temas Emergentes con banderas de confianza.
 
-    Clasifica cada comentario con IA contextual (topic_llm), con respaldo por
-    palabras clave. Devuelve un dict con:
-      - "temas": lista de temas con presencia real. Cada tema incluye, además
-        de su etiqueta, porcentaje, conteo y ejemplo: la confianza promedio de
-        sus comentarios, cuántos son sarcásticos o dudosos, y una "bandera" de
-        calidad ("ok", "dudosa" o "sarcasmo").
-      - "ambiguos": comentarios de baja confianza o tono sarcástico, separados
-        para revisión humana (no se usan como ejemplo de ningún tema).
-      - "resumen": conteos globales (total, clasificados, no_aplica, dudosos,
-        sarcásticos, por_reglas) para mostrar honestamente la calidad.
+    Se conserva por compatibilidad; el dashboard ahora usa el modelo de
+    aprobacion manual (cargar_temas_aprobados / sugerir_temas_pendientes).
     """
     from dashboard.topic_llm import clasificar_temas_lote
     if db_path is None:
@@ -329,8 +314,8 @@ def cargar_temas_latentes_detallado(db_path=None) -> dict:
     agreg = defaultdict(lambda: {
         "n": 0, "suma_conf": 0.0, "n_sarcasticos": 0, "n_dudosos": 0, "n_reglas": 0,
     })
-    ejemplos = {}       # ejemplos literales y confiables (preferidos)
-    ejemplos_alt = {}   # cualquier ejemplo, por si no hay uno confiable
+    ejemplos = {}
+    ejemplos_alt = {}
     ambiguos = []
     total_clasificados = 0
     n_no_aplica = 0
@@ -353,8 +338,6 @@ def cargar_temas_latentes_detallado(db_path=None) -> dict:
         if motor == "reglas":
             n_reglas_total += 1
 
-        # Los comentarios que no hablan de ningún asunto municipal (dichos,
-        # bromas, sarcasmo sin tema) se descartan de los temas.
         if not cat or cat == "no_aplica":
             n_no_aplica += 1
             continue
@@ -375,13 +358,11 @@ def cargar_temas_latentes_detallado(db_path=None) -> dict:
         alt_prev = ejemplos_alt.get(cat)
         if alt_prev is None or 15 <= len(limpio) < len(alt_prev):
             ejemplos_alt[cat] = limpio
-        # Un buen ejemplo es literal y con confianza suficiente.
         if not es_sarcastico and not es_dudoso:
             prev = ejemplos.get(cat)
             if prev is None or 15 <= len(limpio) < len(prev):
                 ejemplos[cat] = limpio
 
-        # Separar ambiguos: dudosos o sarcásticos, para revisión manual.
         if (es_dudoso or es_sarcastico) and len(ambiguos) < MAX_AMBIGUOS_REVISION:
             if es_sarcastico and es_dudoso:
                 motivo = "posible sarcasmo + clasificación dudosa"
@@ -445,10 +426,85 @@ def cargar_temas_latentes_detallado(db_path=None) -> dict:
     return {"temas": temas, "ambiguos": ambiguos, "resumen": resumen}
 
 
-def cargar_temas_latentes(db_path=None) -> list[dict]:
-    """Temas ciudadanos (lista). Wrapper compatible de cargar_temas_latentes_detallado.
+def cargar_temas_aprobados(db_path=None) -> list[dict]:
+    """Tarjetas de Temas Emergentes: SOLO comentarios aprobados manualmente.
 
-    Devuelve solo la lista de temas. Para banderas de confianza/tono y la lista
-    de comentarios ambiguos, usar cargar_temas_latentes_detallado.
+    Cada tema trae su etiqueta, el numero de comentarios aprobados (doc_count) y
+    su porcentaje sobre el total de comentarios con tema aprobado (pct). Sin
+    banderas de confianza: el badge es '%·N comentarios'.
     """
-    return cargar_temas_latentes_detallado(db_path).get("temas", [])
+    if db_path is None:
+        db_path = FACEBOOK_DB
+    from dashboard.tema_aprobaciones import agregar_por_tema
+    return agregar_por_tema(db_path)
+
+
+def cargar_temas_latentes(db_path=None) -> list[dict]:
+    """Compat: temas mostrados en el dashboard.
+
+    En el modelo de aprobacion manual, los temas mostrados son los aprobados.
+    """
+    return cargar_temas_aprobados(db_path)
+
+
+def sugerir_temas_pendientes(db_path=None, limite=None) -> list[dict]:
+    """Comentarios SIN aprobacion, con una sugerencia de tema de la IA.
+
+    La IA solo sugiere (no cuenta en las tarjetas). El usuario aprueba/corrige.
+    Las aprobaciones previas se inyectan como ejemplos (few-shot) para que la
+    sugerencia se afine con el criterio del usuario.
+    """
+    if db_path is None:
+        db_path = FACEBOOK_DB
+    if limite is None:
+        try:
+            limite = int(os.environ.get("TEMAS_PENDIENTES_LOTE", "40"))
+        except (TypeError, ValueError):
+            limite = 40
+
+    from dashboard.tema_aprobaciones import ids_aprobados, ejemplos_few_shot
+    from dashboard.topic_llm import clasificar_temas_lote
+
+    rows = []
+    try:
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute("""
+            SELECT comment_id, message FROM fb_comments
+            WHERE message IS NOT NULL AND message != ''
+            ORDER BY (created_time IS NULL), created_time DESC
+        """).fetchall()
+        conn.close()
+    except Exception:
+        try:
+            conn = sqlite3.connect(db_path)
+            rows = conn.execute(
+                "SELECT comment_id, message FROM fb_comments "
+                "WHERE message IS NOT NULL AND message != ''"
+            ).fetchall()
+            conn.close()
+        except Exception:
+            return []
+
+    aprobados = ids_aprobados(db_path)
+    pendientes = [(cid, msg) for cid, msg in rows if cid not in aprobados]
+    if not pendientes:
+        return []
+    pendientes = pendientes[:limite]
+
+    ejemplos = ejemplos_few_shot(db_path)
+    textos = [m for _, m in pendientes]
+    sugerencias = clasificar_temas_lote(textos, ejemplos=ejemplos or None)
+
+    salida = []
+    for (cid, msg), sug in zip(pendientes, sugerencias):
+        sug = sug or {}
+        cat = sug.get("categoria", "no_aplica") or "no_aplica"
+        salida.append({
+            "comment_id": cid,
+            "texto": " ".join(str(msg or "").split()),
+            "sugerencia": cat,
+            "sugerencia_label": etiqueta_tema(cat),
+            "tono": sug.get("tono", "literal"),
+            "confianza": sug.get("confianza", 0.5),
+        })
+    return salida

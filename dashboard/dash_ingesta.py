@@ -11,7 +11,7 @@ import pandas as pd
 import uuid
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, date
 
 from config import (
     FB_PAGES_OFICIALES, TK_ACCOUNTS,
@@ -27,9 +27,9 @@ def _activas():
     return (FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB)
 
 
-# ═══════════════════════════════════════
+# ═══════════════════════
 # Helpers de revisión (Fase 3)
-# ═══════════════════════════════════════
+# ════════════════════════
 
 def _campo_numero(label: str, dato_confianza: dict, key_suffix: str, id_temporal: str) -> None:
     """Renderiza st.number_input con resaltado por confianza.
@@ -88,9 +88,9 @@ def _contrato_vacio(plataforma: str) -> dict:
         }
 
 
-# ═══════════════════════════════════════
+# ════════════════════════
 # Fase 3 — Revisión editable del lote
-# ═══════════════════════════════════════
+# ════════════════════════
 
 def seccion_revisar_lote() -> None:
     """Pantalla de revisión editable post-extracción (Fase 3).
@@ -214,8 +214,32 @@ def seccion_revisar_lote() -> None:
                         fecha_init = datetime.strptime(fv, "%Y-%m-%d").date() if fv else None
                     except (ValueError, TypeError):
                         fecha_init = None
-                    st.date_input(fecha_label, value=fecha_init, key=fecha_key)
-                    if fecha_conf == "dudoso":
+                    # Rango válido del selector. Si no se fija min/max, Streamlit
+                    # usa valor±10 años; una fecha mal leída por la IA (p. ej.
+                    # 1987) dejaba el calendario topado en ~1997 y al operador
+                    # atrapado sin poder llegar a la fecha real. Un post no puede
+                    # ser futuro, así que el tope es hoy.
+                    fecha_min = date(2015, 1, 1)
+                    fecha_max = date.today()
+                    fecha_fuera_rango = (
+                        fecha_init is not None
+                        and not (fecha_min <= fecha_init <= fecha_max)
+                    )
+                    if fecha_fuera_rango:
+                        fecha_init = None
+                    st.date_input(
+                        fecha_label,
+                        value=fecha_init,
+                        min_value=fecha_min,
+                        max_value=fecha_max,
+                        key=fecha_key,
+                    )
+                    if fecha_fuera_rango:
+                        st.caption(
+                            "⚠️ la fecha leída quedaba fuera de rango (posible "
+                            "error de lectura); selecciónala a mano"
+                        )
+                    elif fecha_conf == "dudoso":
                         st.caption("revisar: lectura dudosa")
                     elif fecha_conf == "no_detectado":
                         st.caption("no detectado — completa a mano")

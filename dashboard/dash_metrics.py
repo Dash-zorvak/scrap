@@ -2,8 +2,8 @@
 
 Contiene consultas SQL seguras, carga de engagement/sentimiento/series,
 clculos (semaforo, patrones, confianza, narrativas, contagio, viralidad,
-correlacion) y la capa de narrativa IA (Groq). Las rutas de BD activas se
-resuelven en tiempo de ejecucion via _activas().
+correlacion) y la capa de narrativa IA (cascada NIM: DeepSeek -> GLM). Las
+rutas de BD activas se resuelven en tiempo de ejecucion via _activas().
 """
 
 import streamlit as st
@@ -18,7 +18,7 @@ import json
 from config import (
     FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB,
 )
-from dashboard.llm_groq import chat_texto, groq_disponible
+from dashboard.llm_groq import chat_texto, groq_disponible, VERIFIER_MODEL
 
 
 def _activas():
@@ -29,12 +29,15 @@ def _activas():
 @st.cache_data(ttl=3600, show_spinner=False)
 def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
     """
-    Genera narrativa ejecutiva usando Groq (Llama 3.3 70B).
+    Genera narrativa ejecutiva con la cascada de IA en NVIDIA NIM: modelo
+    primario DeepSeek V4 Flash (LLM_TEXT_MODEL) y, si falla, respaldo con el
+    verificador GLM 5.1 (LLM_VERIFIER_MODEL). Es la MISMA cascada NIM que usa la
+    clasificacion de temas; no se usa Groq.
     Tipos: 'eco_historico', 'leccion', 'brecha', 'contexto',
            'correlacion', 'proyeccion', 'recomendacion'
     """
     if not groq_disponible():
-        return "Análisis IA no disponible en este momento (falta GROQ_API_KEY en .streamlit/secrets.toml o variable de entorno)"
+        return "Análisis IA no disponible en este momento (falta LLM_API_KEY / NVIDIA_API_KEY en el entorno o en .env)"
 
     reglas_comunes = (
         " REGLAS OBLIGATORIAS DE SALIDA: "
@@ -101,16 +104,35 @@ def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
 
     prompt_base = prompts.get(tipo, prompts["recomendacion"]) + reglas_comunes
     ctx_str = json.dumps(contexto, ensure_ascii=False, default=str)[:3000]
+    prompt_full = f"{prompt_base}\n\nCONTEXTO (JSON):\n{ctx_str}"
 
-    try:
-        return chat_texto(
-            f"{prompt_base}\n\nCONTEXTO (JSON):\n{ctx_str}",
-            max_tokens=600,
-            temperature=0.6,
-            json=False,
-        )
-    except Exception:
-        return "Análisis IA no disponible en este momento (error en llamada API)"
+    # Cascada de generación: primario (DeepSeek V4 Flash) y, si falla con un
+    # error de API/modelo, respaldo con el verificador (GLM 5.1). Así las
+    # tarjetas narrativas del Bloque IV usan la misma cascada NIM que la
+    # clasificación de temas, en vez de quedarse sin salida cuando el primario
+    # falla.
+    modelos = [None]  # None -> usa el TEXT_MODEL primario (DeepSeek)
+    if VERIFIER_MODEL:
+        modelos.append(VERIFIER_MODEL)
+
+    ultimo_error = None
+    for modelo in modelos:
+        try:
+            return chat_texto(
+                prompt_full,
+                max_tokens=600,
+                temperature=0.6,
+                json=False,
+                model=modelo,
+            )
+        except Exception as e:
+            ultimo_error = e
+            continue
+
+    logging.warning(
+        "generar_narrativa_ia: cascada agotada (%s): %r", tipo, ultimo_error
+    )
+    return "Análisis IA no disponible en este momento (error en llamada API)"
 
 
 def generar_interpretacion(tipo, datos):

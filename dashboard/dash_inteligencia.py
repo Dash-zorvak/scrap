@@ -453,9 +453,26 @@ def sugerir_temas_pendientes(db_path=None, limite=None) -> list[dict]:
     La IA solo sugiere (no cuenta en las tarjetas). El usuario aprueba/corrige.
     Las aprobaciones previas se inyectan como ejemplos (few-shot) para que la
     sugerencia se afine con el criterio del usuario.
+
+    Equivale a sugerir_temas_pendientes_cacheado con un cache vacio: clasifica
+    todos los pendientes en cada llamada (comportamiento historico).
+    """
+    return sugerir_temas_pendientes_cacheado(db_path, cache={}, limite=limite)
+
+
+def sugerir_temas_pendientes_cacheado(db_path=None, cache=None, limite=None) -> list[dict]:
+    """Igual que sugerir_temas_pendientes pero reutilizando un cache por comentario.
+
+    `cache` es un dict {comment_id: sugerencia_dict} que se MUTA in-place. Solo
+    se invoca al LLM para los comentarios pendientes que aun NO estan en el
+    cache; el resto se sirve desde el cache. Asi, aprobar un comentario (que en
+    la UI dispara un rerun) ya no obliga a reclasificar a los demas: el bloque
+    de revision deja de congelarse en cada aprobacion.
     """
     if db_path is None:
         db_path = FACEBOOK_DB
+    if cache is None:
+        cache = {}
     if limite is None:
         try:
             limite = int(os.environ.get("TEMAS_PENDIENTES_LOTE", "40"))
@@ -491,20 +508,37 @@ def sugerir_temas_pendientes(db_path=None, limite=None) -> list[dict]:
         return []
     pendientes = pendientes[:limite]
 
-    ejemplos = ejemplos_few_shot(db_path)
-    textos = [m for _, m in pendientes]
-    sugerencias = clasificar_temas_lote(textos, ejemplos=ejemplos or None)
+    # Solo se clasifican (LLM) los pendientes que aun no tienen sugerencia en el
+    # cache. Si todos ya estan cacheados, no se hace ninguna llamada al modelo.
+    faltantes = [(cid, msg) for cid, msg in pendientes if cid not in cache]
+    if faltantes:
+        ejemplos = ejemplos_few_shot(db_path)
+        textos = [m for _, m in faltantes]
+        sugerencias = clasificar_temas_lote(textos, ejemplos=ejemplos or None)
+        for (cid, msg), sug in zip(faltantes, sugerencias):
+            sug = sug or {}
+            cat = sug.get("categoria", "no_aplica") or "no_aplica"
+            cache[cid] = {
+                "comment_id": cid,
+                "texto": " ".join(str(msg or "").split()),
+                "sugerencia": cat,
+                "sugerencia_label": etiqueta_tema(cat),
+                "tono": sug.get("tono", "literal"),
+                "confianza": sug.get("confianza", 0.5),
+            }
 
     salida = []
-    for (cid, msg), sug in zip(pendientes, sugerencias):
-        sug = sug or {}
-        cat = sug.get("categoria", "no_aplica") or "no_aplica"
-        salida.append({
-            "comment_id": cid,
-            "texto": " ".join(str(msg or "").split()),
-            "sugerencia": cat,
-            "sugerencia_label": etiqueta_tema(cat),
-            "tono": sug.get("tono", "literal"),
-            "confianza": sug.get("confianza", 0.5),
-        })
+    for cid, msg in pendientes:
+        item = cache.get(cid)
+        if item is None:
+            # Defensivo: si por algun motivo no se cacheo, crea uno neutro.
+            item = {
+                "comment_id": cid,
+                "texto": " ".join(str(msg or "").split()),
+                "sugerencia": "no_aplica",
+                "sugerencia_label": etiqueta_tema("no_aplica"),
+                "tono": "literal",
+                "confianza": 0.5,
+            }
+        salida.append(item)
     return salida

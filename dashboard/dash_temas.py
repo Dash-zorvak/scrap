@@ -2,11 +2,12 @@
 
 Cambios respecto a la versión anterior:
   - Temas englobantes por defecto (tema_taxonomia), no descubiertos libremente.
-  - La IA SUGIERE un tema por comentario; el usuario APRUEBA/corrige y eso se
-    guarda (tema_aprobaciones). Solo los comentarios aprobados cuentan en las
-    tarjetas. El sistema aprende de las aprobaciones (few-shot).
-  - Se elimina el semáforo de confianza. El badge de cada tema ahora muestra el
-    porcentaje y la cantidad de comentarios: '%·N comentarios'.
+  - La IA SUGIERE un tema y una POSTURA (apoyo/crítica/neutral) por comentario;
+    el usuario APRUEBA/corrige ambos y eso se guarda (tema_aprobaciones). Solo
+    los comentarios aprobados cuentan en las tarjetas. El sistema aprende de las
+    aprobaciones (few-shot).
+  - Cada tarjeta de tema se divide en apoyo / crítica / neutral, de modo que una
+    crítica no se lee como impulso positivo del tema.
   - Las sugerencias de la IA se cachean por comentario durante la sesión: aprobar
     un comentario ya no reclasifica a los demás (el bloque no se congela).
 """
@@ -22,14 +23,26 @@ from dashboard.dash_inteligencia import (
 from dashboard.tema_aprobaciones import guardar_aprobacion, resumen_revision
 from dashboard.tema_taxonomia import TEMAS_VISIBLES, TEMA_LABELS
 
-# Opciones del selector: temas englobantes + 'sin tema'.
+# Opciones del selector de tema: temas englobantes + 'sin tema'.
 _OPCIONES = list(TEMAS_VISIBLES) + ["no_aplica"]
+
+# Opciones del selector de postura.
+_POSTURA_OPCIONES = ["apoyo", "critica", "neutral"]
+_POSTURA_LABELS_UI = {
+    "apoyo": "👍 Apoyo",
+    "critica": "👎 Crítica",
+    "neutral": "➖ Neutral",
+}
 
 
 def _label_opcion(clave):
     if clave == "no_aplica":
         return "— Sin tema / descartar —"
     return TEMA_LABELS.get(clave, clave)
+
+
+def _label_postura(clave):
+    return _POSTURA_LABELS_UI.get(clave, clave)
 
 
 def _contar_comentarios(db_path):
@@ -49,7 +62,8 @@ def render_temas_emergentes(db_path):
     st.markdown(
         '<div class="section-header"><div class="section-title">06 · Temas Emergentes</div>'
         '<div class="section-subtitle">Temas englobantes definidos por defecto. La IA sugiere '
-        'en qué tema va cada comentario y tú lo apruebas; solo lo aprobado cuenta.</div></div>',
+        'en qué tema va cada comentario y con qué postura (apoyo/crítica/neutral); tú lo apruebas. '
+        'Solo lo aprobado cuenta.</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -67,6 +81,10 @@ def render_temas_emergentes(db_path):
             titulo = t.get("label") or "Tema"
             pct = t.get("pct", 0)
             n_com = t.get("doc_count", 0)
+            n_apoyo = t.get("apoyo", 0)
+            n_critica = t.get("critica", 0)
+            n_neutral = t.get("neutral", 0)
+            pct_critica = t.get("pct_critica", 0)
             ejemplo = (t.get("ejemplo") or "").replace('"', "'")
             ejemplo_html = (
                 f'<div style="font-size:11px;color:var(--fg-secondary);margin-top:6px;'
@@ -79,17 +97,34 @@ def render_temas_emergentes(db_path):
                 f'color:var(--accent);border:1px solid var(--border)">'
                 f'{pct:.0f}% · {n_com:,} comentarios</span>'
             )
+            # Desglose de postura: apoyo / crítica / neutral.
+            split_html = (
+                f'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:11px;font-weight:700">'
+                f'<span style="padding:2px 8px;border-radius:10px;background:rgba(34,197,94,0.12);'
+                f'color:var(--green)">👍 {n_apoyo:,} apoyo</span>'
+                f'<span style="padding:2px 8px;border-radius:10px;background:rgba(239,68,68,0.12);'
+                f'color:var(--red)">👎 {n_critica:,} crítica</span>'
+                f'<span style="padding:2px 8px;border-radius:10px;background:var(--bg-elevated);'
+                f'color:var(--fg-muted)">➖ {n_neutral:,} neutral</span>'
+                f'</div>'
+            )
+            aviso_critica = (
+                f'<div style="font-size:11px;color:var(--red);margin-top:6px;font-weight:600">'
+                f'⚠️ {pct_critica:.0f}% de este tema es crítica</div>'
+                if pct_critica >= 50 else ""
+            )
             with cols[i % 3]:
                 st.markdown(
                     f'<div class="panel" style="margin-bottom:8px">'
                     f'<div class="panel-head"><div class="panel-title">{titulo}</div></div>'
                     f'<div style="margin-top:6px">{badge}</div>'
-                    f'{ejemplo_html}</div>',
+                    f'{split_html}{aviso_critica}{ejemplo_html}</div>',
                     unsafe_allow_html=True,
                 )
         st.markdown(
             '<p style="font-size:11px;color:var(--fg-muted);margin-top:6px">'
-            'El porcentaje es sobre los comentarios que ya aprobaste con un tema, no sobre el total.</p>',
+            'El porcentaje es sobre los comentarios que ya aprobaste con un tema, no sobre el total. '
+            'Cada tema se divide en apoyo / crítica / neutral según la postura que aprobaste.</p>',
             unsafe_allow_html=True,
         )
 
@@ -143,9 +178,9 @@ def _render_revisor(db_path):
             return
 
         st.markdown(
-            '<p style="font-size:11px;color:var(--fg-muted)">La IA propone un tema para cada '
-            'comentario (según tus aprobaciones previas). Ajusta el tema si hace falta y aprueba. '
-            'Cada aprobación enseña al sistema para que a futuro sugiera mejor.</p>',
+            '<p style="font-size:11px;color:var(--fg-muted)">La IA propone un tema y una '
+            'postura para cada comentario (según tus aprobaciones previas). Ajusta lo que haga '
+            'falta y aprueba. Cada aprobación enseña al sistema para que a futuro sugiera mejor.</p>',
             unsafe_allow_html=True,
         )
 
@@ -155,6 +190,7 @@ def _render_revisor(db_path):
                     db_path, p["comment_id"], p["sugerencia"],
                     texto=p["texto"], tema_sugerido=p["sugerencia"],
                     tono=p["tono"], confianza=p["confianza"],
+                    postura=p.get("postura", "neutral"),
                 )
                 cache.pop(p["comment_id"], None)
             st.rerun()
@@ -166,10 +202,10 @@ def _render_revisor(db_path):
                 f'<div style="font-size:13px;padding:8px 10px;margin:8px 0 4px 0;'
                 f'background:var(--bg-elevated);border-radius:6px;border-left:3px solid var(--accent)">'
                 f'«{texto}»<div style="font-size:10px;color:var(--fg-muted);margin-top:4px">'
-                f'Sugerencia IA: {p["sugerencia_label"]}</div></div>',
+                f'Sugerencia IA: {p["sugerencia_label"]} · {p.get("postura_label", "Neutral")}</div></div>',
                 unsafe_allow_html=True,
             )
-            c1, c2 = st.columns([3, 1])
+            c1, c2, c3 = st.columns([2, 1, 1])
             with c1:
                 try:
                     idx = _OPCIONES.index(p["sugerencia"])
@@ -180,11 +216,20 @@ def _render_revisor(db_path):
                     key=f"sel_{cid}", label_visibility="collapsed",
                 )
             with c2:
+                try:
+                    idx_p = _POSTURA_OPCIONES.index(p.get("postura", "neutral"))
+                except ValueError:
+                    idx_p = _POSTURA_OPCIONES.index("neutral")
+                sel_postura = st.selectbox(
+                    "Postura", _POSTURA_OPCIONES, index=idx_p, format_func=_label_postura,
+                    key=f"post_{cid}", label_visibility="collapsed",
+                )
+            with c3:
                 if st.button("Aprobar", key=f"ap_{cid}"):
                     guardar_aprobacion(
                         db_path, cid, sel, texto=p["texto"],
                         tema_sugerido=p["sugerencia"], tono=p["tono"],
-                        confianza=p["confianza"],
+                        confianza=p["confianza"], postura=sel_postura,
                     )
                     cache.pop(cid, None)
                     st.rerun()

@@ -1,9 +1,12 @@
-"""Clasificacion de temas ciudadanos con IA (contexto + tono).
+"""Clasificacion de temas ciudadanos con IA (contexto + tono + postura).
 
 Un modelo de lenguaje lee cada comentario completo y decide:
   - categoria: uno de los temas ENGLOBANTES (ver dashboard/tema_taxonomia.py) o
     'no_aplica' si el comentario no habla de ningun asunto municipal.
   - tono: 'literal' o 'sarcastico'.
+  - postura: 'apoyo', 'critica' o 'neutral' (polaridad hacia la gestion). Es un
+    eje SEPARADO del tema: el tema dice DE QUE habla; la postura dice COMO lo
+    dice. Asi una queja sobre un tema NO infla ese tema como impulso positivo.
   - confianza: 0.0 a 1.0.
 
 Si el proveedor no esta disponible o el modelo falla, se cae con elegancia al
@@ -34,6 +37,7 @@ import time
 from dashboard.tema_taxonomia import (
     CATEGORIAS_VALIDAS,
     TEMAS as _TEMAS,
+    normalizar_postura as _normalizar_postura,
     remapear as _remapear,
 )
 
@@ -72,7 +76,7 @@ def _construir_prompt_base(ejemplos=None):
     lineas = [
         "Eres un analista que clasifica comentarios ciudadanos de las redes "
         "sociales de una alcaldia de El Salvador (Santa Ana). Para CADA "
-        "comentario decide tres cosas.",
+        "comentario decide cuatro cosas.",
         "",
         "1) \"categoria\": el asunto ciudadano del que habla. Usa UNA de estas "
         "claves EXACTAS:",
@@ -81,18 +85,33 @@ def _construir_prompt_base(ejemplos=None):
         lineas.append(f"   - {clave}: {info.get('desc', '')}")
     lineas += [
         "",
+        "MUY IMPORTANTE - el tema es NEUTRAL: describe el ASUNTO, no si el "
+        "comentario es bueno o malo. Una queja, un reclamo, un reproche o una "
+        "burla sobre un asunto municipal SI tienen tema: van en la categoria de "
+        "ese asunto (por ejemplo, una critica sobre la honestidad o el manejo "
+        "del gobierno local va en 'gobernanza'), NO en 'no_aplica'. Solo usa "
+        "'no_aplica' cuando de plano no se habla de ningun asunto municipal.",
+        "",
         "MUY IMPORTANTE - dichos y sarcasmo salvadorenos: muchos comentarios "
         "usan frases hechas que NO hablan del tema literal. Por ejemplo "
         "'panchito el rio estaba' es un dicho burlon; NO habla de un rio ni de "
-        "medio ambiente, asi que su categoria es 'no_aplica'. Una burla o ironia "
-        "hacia el alcalde que no menciona un tema concreto es 'no_aplica' con "
-        "tono 'sarcastico'. No te dejes enganar por una sola palabra: clasifica "
-        "por el SENTIDO real del comentario completo.",
+        "medio ambiente, asi que su categoria es 'no_aplica'. No te dejes "
+        "enganar por una sola palabra: clasifica por el SENTIDO real del "
+        "comentario completo.",
         "",
         "2) \"tono\": \"literal\" si dice lo que parece; \"sarcastico\" si es "
         "ironico o burla (por ejemplo 'excelente trabajo, lo que faltaba').",
         "",
-        "3) \"confianza\": numero de 0.0 a 1.0 de que tan seguro estas.",
+        "3) \"postura\": la actitud del comentario hacia la gestion municipal. "
+        "Usa UNA de estas claves EXACTAS:",
+        "   - apoyo: felicita, agradece, respalda o defiende.",
+        "   - critica: reclama, se queja, expresa enojo, reprocha o se burla.",
+        "   - neutral: pregunta o comenta sin una postura clara a favor o en contra.",
+        "   La postura es INDEPENDIENTE del tema y del tono: un comentario "
+        "sarcastico suele ser 'critica'. Para 'no_aplica' usa normalmente "
+        "'neutral' salvo que sea una burla clara ('critica').",
+        "",
+        "4) \"confianza\": numero de 0.0 a 1.0 de que tan seguro estas.",
         "",
     ]
     if ejemplos:
@@ -110,8 +129,8 @@ def _construir_prompt_base(ejemplos=None):
         "Devuelve SOLO un JSON object con la clave \"resultados\": un array en el "
         "MISMO orden y con la MISMA cantidad de elementos que los comentarios. "
         "Cada elemento debe ser: {\"categoria\": \"<clave>\", \"tono\": "
-        "\"literal|sarcastico\", \"confianza\": 0.0}. NO devuelvas markdown ni "
-        "texto adicional.",
+        "\"literal|sarcastico\", \"postura\": \"apoyo|critica|neutral\", "
+        "\"confianza\": 0.0}. NO devuelvas markdown ni texto adicional.",
         "",
         "Comentarios:",
     ]
@@ -187,6 +206,7 @@ def _parsear_respuesta(raw, textos):
         tono = entry.get("tono", "literal")
         if tono not in TONOS_VALIDOS:
             tono = "literal"
+        postura = _normalizar_postura(entry.get("postura"))
         try:
             conf = float(entry.get("confianza", 0.5))
         except (TypeError, ValueError):
@@ -195,6 +215,7 @@ def _parsear_respuesta(raw, textos):
         salida.append({
             "categoria": cat,
             "tono": tono,
+            "postura": postura,
             "confianza": round(conf, 3),
             "motor": "llm",
         })
@@ -205,6 +226,7 @@ def _fallback_keyword(textos):
     """Clasificacion de respaldo por palabras clave (sin IA).
 
     get_main_topic devuelve claves historicas; se remapean a las englobantes.
+    Sin IA no se infiere polaridad: la postura queda 'neutral'.
     """
     try:
         from src.analyzer.topic_detection import get_main_topic
@@ -224,6 +246,7 @@ def _fallback_keyword(textos):
         salida.append({
             "categoria": cat,
             "tono": "literal",
+            "postura": "neutral",
             "confianza": 0.3,
             "motor": "reglas",
         })
@@ -284,9 +307,9 @@ def _clasificar_bloque_llm(textos, model=None, ejemplos=None):
 def clasificar_temas_lote(textos, lote=None, ejemplos=None):
     """Clasifica una lista de comentarios devolviendo un dict por comentario.
 
-    Cada dict: {categoria, tono, confianza, motor, ...}, alineado 1 a 1 con
-    `textos`. Usa el modelo (con cascada si esta activa) si el proveedor esta
-    disponible; si no, cae a palabras clave. `ejemplos` (few-shot) afina la
+    Cada dict: {categoria, tono, postura, confianza, motor, ...}, alineado 1 a 1
+    con `textos`. Usa el modelo (con cascada si esta activa) si el proveedor
+    esta disponible; si no, cae a palabras clave. `ejemplos` (few-shot) afina la
     sugerencia con el criterio aprobado por el usuario.
     """
     if not textos:

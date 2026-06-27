@@ -13,7 +13,15 @@ nombres antiguos GROQ_* como respaldo para no romper despliegues en transición:
   Base URL:   LLM_BASE_URL  -> GROQ_BASE_URL  -> https://integrate.api.nvidia.com/v1
   Texto:      LLM_TEXT_MODEL     -> GROQ_TEXT_MODEL   -> deepseek-ai/deepseek-v4-flash
   Verificador (cascada): LLM_VERIFIER_MODEL          -> z-ai/glm-5.1
-  Visión:     LLM_VISION_MODEL   -> GROQ_VISION_MODEL -> nvidia/llama-3.1-nemotron-nano-vl-8b-v1
+  Visión:     LLM_VISION_MODEL   -> GROQ_VISION_MODEL -> microsoft/phi-3-vision-128k-instruct
+  Visión (respaldo): LLM_VISION_FALLBACK            -> meta/llama-3.2-11b-vision-instruct
+
+Cascada de visión: si el modelo primario de visión falla con un error de
+servidor/modelo (5xx, 404, "modelo no disponible"), se reintenta automáticamente
+con los modelos de LLM_VISION_FALLBACK en orden. Esto evita que un modelo roto
+server-side (como el viejo nemotron-nano-vl-8b) tumbe la ingesta por PDF. Los
+errores de otra índole (auth, 400, etc.) se propagan sin probar respaldos.
+LLM_VISION_FALLBACK admite una lista separada por comas.
 
 En local, las variables se leen de un archivo .env (cargado con load_dotenv).
 En HF Spaces / Railway vienen del entorno del contenedor. Si el primario
@@ -48,6 +56,14 @@ def _primer_env(*nombres, default=None):
     return default
 
 
+def _lista_env(nombre, default):
+    """Lista separada por comas desde el entorno; `default` (lista) si no está."""
+    raw = os.environ.get(nombre)
+    if not raw:
+        return list(default)
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
+
 # ── Configuración desde entorno ──
 
 TEXT_MODEL = _primer_env(
@@ -60,7 +76,14 @@ VERIFIER_MODEL = _primer_env(
 )
 VISION_MODEL = _primer_env(
     "LLM_VISION_MODEL", "GROQ_VISION_MODEL",
-    default="nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+    default="microsoft/phi-3-vision-128k-instruct",
+)
+# Modelos de respaldo de visión: se prueban en orden si el primario falla con
+# un error de servidor/modelo (5xx/404). meta/llama-3.2-11b-vision-instruct es
+# un fallback verificado que responde en NIM.
+VISION_FALLBACKS = _lista_env(
+    "LLM_VISION_FALLBACK",
+    ["meta/llama-3.2-11b-vision-instruct"],
 )
 VENTANA = int(os.environ.get("GROQ_VENTANA_PAGINAS", "4"))
 SOLAPE = int(os.environ.get("GROQ_SOLAPE_PAGINAS", "1"))
@@ -135,6 +158,40 @@ def _retry_with_backoff(func, *args, max_retries=3, **kwargs):
     raise last_exc
 
 
+# ── Cascada de visión: selección de modelos y clasificación de errores ──
+
+def _es_error_modelo(exc) -> bool:
+    """True si el error sugiere que el modelo no está disponible (5xx/404/desconocido).
+
+    Se usa para decidir si conviene caer al siguiente modelo de la cascada de
+    visión. Errores de otra índole (auth, 400 de petición, etc.) se propagan
+    sin probar respaldos.
+    """
+    s = str(exc).lower()
+    señales = (
+        "500", "502", "503", "504", "404",
+        "internal server error", "bad gateway", "service unavailable",
+        "gateway timeout", "not found", "does not exist", "unknown model",
+        "model_not_found", "no longer supported", "decommission",
+    )
+    return any(x in s for x in señales)
+
+
+def _modelos_vision(model: str | None = None) -> list:
+    """Orden de modelos a intentar para visión.
+
+    Si `model` es explícito, se respeta sin cascada. Si no, se usa el primario
+    (VISION_MODEL) seguido de los respaldos (VISION_FALLBACKS), sin duplicados.
+    """
+    if model:
+        return [model]
+    modelos = [VISION_MODEL]
+    for m in VISION_FALLBACKS:
+        if m and m not in modelos:
+            modelos.append(m)
+    return modelos
+
+
 # ── chat_vision: prompt + imágenes → JSON ──
 
 def _paginas_a_contenido(prompt: str, paginas: list) -> list:
@@ -176,6 +233,10 @@ def chat_vision(
 
     paginas: list[{"mime_type": str, "data": bytes}]
     Devuelve el texto de la respuesta.
+
+    Si `model` no se especifica, usa el primario (VISION_MODEL) y, ante un error
+    de servidor/modelo (5xx/404), cae automáticamente a los modelos de
+    VISION_FALLBACKS en orden. Con `model` explícito no hay cascada.
     Lanza ValueError si no hay API key configurada.
     """
     client = _get_groq_client()
@@ -187,20 +248,42 @@ def chat_vision(
     contenido = _paginas_a_contenido(prompt, paginas)
     messages = [{"role": "user", "content": contenido}]
 
-    kwargs = {
-        "model": model or VISION_MODEL,
-        "messages": messages,
-        "temperature": 0,
-        "max_tokens": max_tokens,
-    }
-    if JSON_MODE:
-        kwargs["response_format"] = {"type": "json_object"}
+    modelos = _modelos_vision(model)
+    ultimo_exc = None
+    for idx, m in enumerate(modelos):
+        kwargs = {
+            "model": m,
+            "messages": messages,
+            "temperature": 0,
+            "max_tokens": max_tokens,
+        }
+        if JSON_MODE:
+            kwargs["response_format"] = {"type": "json_object"}
 
-    def _call():
-        resp = client.chat.completions.create(**kwargs)
-        return resp.choices[0].message.content
+        def _call():
+            resp = client.chat.completions.create(**kwargs)
+            return resp.choices[0].message.content
 
-    return _retry_with_backoff(_call)
+        try:
+            respuesta = _retry_with_backoff(_call)
+            if idx > 0:
+                print(
+                    f"[llm_groq] visión: usando modelo de respaldo '{m}' "
+                    f"(el primario falló)."
+                )
+            return respuesta
+        except Exception as e:
+            ultimo_exc = e
+            es_ultimo = idx == len(modelos) - 1
+            if _es_error_modelo(e) and not es_ultimo:
+                print(
+                    f"[llm_groq] visión: modelo '{m}' no disponible ({e}); "
+                    f"probando respaldo…"
+                )
+                continue
+            raise
+    if ultimo_exc:
+        raise ultimo_exc
 
 
 # ── chat_texto: prompt textual → texto ──

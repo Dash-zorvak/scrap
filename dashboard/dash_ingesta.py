@@ -29,7 +29,7 @@ def _activas():
 
 # ═══════════════════════
 # Helpers de revisión (Fase 3)
-# ════════════════════════
+# ═════════════════════════
 
 def _campo_numero(label: str, dato_confianza: dict, key_suffix: str, id_temporal: str) -> None:
     """Renderiza st.number_input con resaltado por confianza.
@@ -88,9 +88,9 @@ def _contrato_vacio(plataforma: str) -> dict:
         }
 
 
-# ════════════════════════
+# ═════════════════════════
 # Fase 3 — Revisión editable del lote
-# ════════════════════════
+# ═════════════════════════
 
 def seccion_revisar_lote() -> None:
     """Pantalla de revisión editable post-extracción (Fase 3).
@@ -121,10 +121,18 @@ def seccion_revisar_lote() -> None:
             n = len(pendientes)
             status = st.status(f"Extrayendo datos de los archivos… 0/{n}", expanded=True)
             nuevos_items = []
+            procesados = 0
             for item in st.session_state["lote_ingreso"]:
                 if item.get("estado") != "pendiente":
                     nuevos_items.append(item)
                     continue
+
+                fuente_item = item.get("fuente", "?")
+                # Mostrar avance ANTES de procesar este archivo: el contador i/n
+                # se mueve en vivo en vez de quedarse pegado en 0/n hasta el final.
+                status.update(
+                    label=f"Extrayendo datos de los archivos… {procesados}/{n} — {fuente_item}"
+                )
 
                 # Externos usa el mismo layout de extracción que Facebook
                 plat_extraccion = "facebook" if item["plataforma"] == "externos" else item["plataforma"]
@@ -134,6 +142,8 @@ def seccion_revisar_lote() -> None:
                     item["estado"] = "error"
                     item["error_msg"] = resultado["error"]
                     nuevos_items.append(item)
+                    procesados += 1
+                    status.write(f"❌ {procesados}/{n} · {fuente_item}: {resultado['error']}")
                     continue
 
                 posts = resultado.get("posts", [])
@@ -141,6 +151,8 @@ def seccion_revisar_lote() -> None:
                     item["estado"] = "error"
                     item["error_msg"] = "No se detectaron posts en el archivo"
                     nuevos_items.append(item)
+                    procesados += 1
+                    status.write(f"❌ {procesados}/{n} · {fuente_item}: sin posts detectados")
                     continue
 
                 for datos in posts:
@@ -155,6 +167,10 @@ def seccion_revisar_lote() -> None:
                         "estado": "extraido",
                         "datos_extraidos": datos,
                     })
+
+                procesados += 1
+                # Liberar/mostrar lo ya procesado en vivo mientras el resto sigue.
+                status.write(f"✅ {procesados}/{n} · {fuente_item} ({len(posts)} post(s))")
 
             st.session_state["lote_ingreso"] = nuevos_items
             n_total = sum(1 for p in nuevos_items if p["estado"] == "extraido")
@@ -568,7 +584,14 @@ def seccion_cargar_contenido():
         st.markdown("### 💾 Paso 4 — Guardar en base de datos")
         st.caption(f"{len(revisados)} post(s) confirmados listos para guardar.")
         if st.button("💾 Guardar lote en base de datos", type="primary"):
-            resumen = guardar_lote(lote)
+            estado_guardado = st.status("Guardando lote en base de datos…", expanded=True)
+
+            def _progreso_guardado(i, total, etiqueta):
+                estado_guardado.update(label=f"Guardando… {i}/{total} — {etiqueta}")
+                estado_guardado.write(f"💾 {i}/{total} · {etiqueta}")
+
+            resumen = guardar_lote(lote, progreso_cb=_progreso_guardado)
+            estado_guardado.update(label="Guardado finalizado", state="complete", expanded=False)
             partes = []
             if resumen["fb_posts"]:
                 partes.append(f"{resumen['fb_posts']} posts FB")

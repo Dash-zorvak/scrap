@@ -47,7 +47,14 @@ def _fb_comment_insert_dict(comentario: dict, comment_id: str, post_id: str) -> 
     }
 
 
-def guardar_lote(lote: list) -> dict:
+def guardar_lote(lote: list, progreso_cb=None) -> dict:
+    """Guarda un lote de items revisados en sus bases de datos.
+
+    progreso_cb (opcional): callable(i, total, etiqueta) que se invoca una vez
+    por cada item revisado procesado (haya tenido éxito o error), para que la UI
+    pueda mostrar un contador real i/total en vez de quedarse en 0/total hasta
+    el final. Cualquier excepción del callback se ignora.
+    """
     ruta_fb = _cfg.FACEBOOK_DB
     ruta_tk = _cfg.TIKTOK_DB
     ruta_ext = _cfg.EXTERNOS_DB
@@ -62,6 +69,8 @@ def guardar_lote(lote: list) -> dict:
     revisados = [item for item in lote if item.get("estado") == "revisado"]
     if not revisados:
         return resumen
+
+    total = len(revisados)
 
     store = LocalStorage(db_path=ruta_fb)
     fb_ids_existentes = store.get_all_ids("fb_posts", "post_id")
@@ -79,7 +88,7 @@ def guardar_lote(lote: list) -> dict:
     except Exception:
         ext_ids_existentes = set()
 
-    for item in revisados:
+    for _idx, item in enumerate(revisados, start=1):
         datos = item.get("datos_revisados", {})
         plataforma = datos.get("plataforma")
 
@@ -173,6 +182,17 @@ def guardar_lote(lote: list) -> dict:
         except Exception as e:
             resumen["errores"].append(f"Error procesando item {item.get('id_temporal','?')}: {e}")
             logger.exception(f"Error en guardar_lote para item {item.get('id_temporal')}")
+
+        if progreso_cb is not None:
+            etiqueta = (
+                datos.get("page_name")
+                or datos.get("account_id")
+                or item.get("id_temporal", "")
+            )
+            try:
+                progreso_cb(_idx, total, etiqueta)
+            except Exception:
+                pass
 
     conn_tk.close()
     conn_ext.close()

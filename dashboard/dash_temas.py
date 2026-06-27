@@ -7,6 +7,8 @@ Cambios respecto a la versión anterior:
     tarjetas. El sistema aprende de las aprobaciones (few-shot).
   - Se elimina el semáforo de confianza. El badge de cada tema ahora muestra el
     porcentaje y la cantidad de comentarios: '%·N comentarios'.
+  - Las sugerencias de la IA se cachean por comentario durante la sesión: aprobar
+    un comentario ya no reclasifica a los demás (el bloque no se congela).
 """
 
 import sqlite3
@@ -15,7 +17,7 @@ import streamlit as st
 
 from dashboard.dash_inteligencia import (
     cargar_temas_aprobados,
-    sugerir_temas_pendientes,
+    sugerir_temas_pendientes_cacheado,
 )
 from dashboard.tema_aprobaciones import guardar_aprobacion, resumen_revision
 from dashboard.tema_taxonomia import TEMAS_VISIBLES, TEMA_LABELS
@@ -116,7 +118,23 @@ def render_temas_emergentes(db_path):
 
 def _render_revisor(db_path):
     with st.expander("✍️ Revisar y aprobar temas — la IA sugiere, tú confirmas", expanded=False):
-        pendientes = sugerir_temas_pendientes(db_path)
+        # Cache de sugerencias por comment_id durante la sesión. Sin esto, cada
+        # aprobación dispara un rerun que reclasificaba TODOS los pendientes con
+        # el LLM, dejando el bloque congelado mientras cargaba. Con el cache,
+        # aprobar un comentario no vuelve a llamar al LLM por los demás.
+        cache = st.session_state.setdefault("sugerencias_temas_cache", {})
+
+        _, col_btn = st.columns([3, 1])
+        with col_btn:
+            if st.button(
+                "🔄 Re-sugerir", key="resugerir_temas",
+                help="Vuelve a pedir sugerencias a la IA usando tus aprobaciones "
+                     "recientes como ejemplos.",
+            ):
+                cache.clear()
+                st.rerun()
+
+        pendientes = sugerir_temas_pendientes_cacheado(db_path, cache=cache)
         if not pendientes:
             st.markdown(
                 '<div class="status-info">No hay comentarios pendientes de revisión.</div>',
@@ -138,6 +156,7 @@ def _render_revisor(db_path):
                     texto=p["texto"], tema_sugerido=p["sugerencia"],
                     tono=p["tono"], confianza=p["confianza"],
                 )
+                cache.pop(p["comment_id"], None)
             st.rerun()
 
         for p in pendientes:
@@ -167,4 +186,5 @@ def _render_revisor(db_path):
                         tema_sugerido=p["sugerencia"], tono=p["tono"],
                         confianza=p["confianza"],
                     )
+                    cache.pop(cid, None)
                     st.rerun()

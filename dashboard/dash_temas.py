@@ -1,17 +1,18 @@
-"""UI de Temas Emergentes con aprobación manual (la IA sugiere, el usuario aprueba).
+"""UI de Temas Emergentes con aprobación manual (el sistema sugiere, el usuario aprueba).
 
 Cambios respecto a la versión anterior:
   - Temas englobantes por defecto (tema_taxonomia), no descubiertos libremente.
-  - La IA SUGIERE un tema y una POSTURA (apoyo/crítica/neutral) por comentario;
-    el usuario APRUEBA/corrige ambos y eso se guarda (tema_aprobaciones). Solo
-    los comentarios aprobados cuentan en las tarjetas. El sistema aprende de las
-    aprobaciones (few-shot).
+  - El sistema SUGIERE un tema y una POSTURA (apoyo/crítica/neutral) por
+    comentario; el usuario APRUEBA/corrige ambos y eso se guarda
+    (tema_aprobaciones). Solo los comentarios aprobados cuentan en las tarjetas.
   - Cada tarjeta de tema se divide en apoyo / crítica / neutral, de modo que una
     crítica no se lee como impulso positivo del tema.
-  - Las sugerencias de la IA se cachean por comentario durante la sesión: aprobar
-    un comentario ya no reclasifica a los demás (el bloque no se congela).
+  - Las sugerencias se cachean por comentario durante la sesión y se revisan en
+    lotes pequeños: aprobar un comentario NO vuelve a procesar a los demás, así
+    el bloque no se congela ni deja de clasificar nuevos comentarios.
 """
 
+import os
 import sqlite3
 
 import streamlit as st
@@ -22,6 +23,15 @@ from dashboard.dash_inteligencia import (
 )
 from dashboard.tema_aprobaciones import guardar_aprobacion, resumen_revision
 from dashboard.tema_taxonomia import TEMAS_VISIBLES, TEMA_LABELS
+
+# Cuántos comentarios se preparan para revisión por pantalla. Un lote pequeño
+# mantiene la revisión ágil: al aprobar uno, solo se prepara el siguiente, en
+# lugar de volver a procesar cientos de comentarios de golpe (lo que congelaba
+# el bloque).
+try:
+    _LOTE_REVISION = int(os.environ.get("TEMAS_REVISION_LOTE", "10"))
+except (TypeError, ValueError):
+    _LOTE_REVISION = 10
 
 # Opciones del selector de tema: temas englobantes + 'sin tema'.
 _OPCIONES = list(TEMAS_VISIBLES) + ["no_aplica"]
@@ -61,7 +71,7 @@ def _contar_comentarios(db_path):
 def render_temas_emergentes(db_path):
     st.markdown(
         '<div class="section-header"><div class="section-title">06 · Temas Emergentes</div>'
-        '<div class="section-subtitle">Temas englobantes definidos por defecto. La IA sugiere '
+        '<div class="section-subtitle">Temas englobantes definidos por defecto. El sistema sugiere '
         'en qué tema va cada comentario y con qué postura (apoyo/crítica/neutral); tú lo apruebas. '
         'Solo lo aprobado cuenta.</div></div>',
         unsafe_allow_html=True,
@@ -72,7 +82,7 @@ def render_temas_emergentes(db_path):
     if not temas:
         st.markdown(
             '<div class="status-info">Aún no hay comentarios aprobados en ningún tema. '
-            'Usa el revisor de abajo para aprobar las sugerencias de la IA.</div>',
+            'Usa el revisor de abajo para aprobar las sugerencias.</div>',
             unsafe_allow_html=True,
         )
     else:
@@ -152,24 +162,26 @@ def render_temas_emergentes(db_path):
 
 
 def _render_revisor(db_path):
-    with st.expander("✍️ Revisar y aprobar temas — la IA sugiere, tú confirmas", expanded=False):
-        # Cache de sugerencias por comment_id durante la sesión. Sin esto, cada
-        # aprobación dispara un rerun que reclasificaba TODOS los pendientes con
-        # el LLM, dejando el bloque congelado mientras cargaba. Con el cache,
-        # aprobar un comentario no vuelve a llamar al LLM por los demás.
+    with st.expander("✍️ Revisar y aprobar temas — revisa el lote y confirma", expanded=False):
+        # Cache de sugerencias por comment_id durante la sesión. Además, se
+        # revisa en lotes pequeños (_LOTE_REVISION): al aprobar un comentario
+        # solo se prepara el siguiente, en vez de reprocesar todos los
+        # pendientes. Así el bloque no se congela ni deja de avanzar.
         cache = st.session_state.setdefault("sugerencias_temas_cache", {})
 
         _, col_btn = st.columns([3, 1])
         with col_btn:
             if st.button(
                 "🔄 Re-sugerir", key="resugerir_temas",
-                help="Vuelve a pedir sugerencias a la IA usando tus aprobaciones "
+                help="Vuelve a generar las sugerencias usando tus aprobaciones "
                      "recientes como ejemplos.",
             ):
                 cache.clear()
                 st.rerun()
 
-        pendientes = sugerir_temas_pendientes_cacheado(db_path, cache=cache)
+        pendientes = sugerir_temas_pendientes_cacheado(
+            db_path, cache=cache, limite=_LOTE_REVISION,
+        )
         if not pendientes:
             st.markdown(
                 '<div class="status-info">No hay comentarios pendientes de revisión.</div>',
@@ -178,13 +190,14 @@ def _render_revisor(db_path):
             return
 
         st.markdown(
-            '<p style="font-size:11px;color:var(--fg-muted)">La IA propone un tema y una '
-            'postura para cada comentario (según tus aprobaciones previas). Ajusta lo que haga '
-            'falta y aprueba. Cada aprobación enseña al sistema para que a futuro sugiera mejor.</p>',
+            f'<p style="font-size:11px;color:var(--fg-muted)">Se propone un tema y una '
+            f'postura para cada comentario (según tus aprobaciones previas). Revisa este lote de '
+            f'{len(pendientes)}, ajusta lo que haga falta y aprueba. Cada aprobación afina las '
+            f'siguientes sugerencias.</p>',
             unsafe_allow_html=True,
         )
 
-        if st.button("✅ Aprobar todos con la sugerencia de la IA", key="aprobar_todos"):
+        if st.button("✅ Aprobar todo el lote con la sugerencia", key="aprobar_todos"):
             for p in pendientes:
                 guardar_aprobacion(
                     db_path, p["comment_id"], p["sugerencia"],
@@ -202,7 +215,7 @@ def _render_revisor(db_path):
                 f'<div style="font-size:13px;padding:8px 10px;margin:8px 0 4px 0;'
                 f'background:var(--bg-elevated);border-radius:6px;border-left:3px solid var(--accent)">'
                 f'«{texto}»<div style="font-size:10px;color:var(--fg-muted);margin-top:4px">'
-                f'Sugerencia IA: {p["sugerencia_label"]} · {p.get("postura_label", "Neutral")}</div></div>',
+                f'Sugerencia: {p["sugerencia_label"]} · {p.get("postura_label", "Neutral")}</div></div>',
                 unsafe_allow_html=True,
             )
             c1, c2, c3 = st.columns([2, 1, 1])

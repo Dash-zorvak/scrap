@@ -8,9 +8,13 @@ generación no está disponible, se devuelve un mensaje neutro, sin mencionar
 ninguna tecnología.
 """
 
+import hashlib
 import json
 import logging
+import os
 import re
+import threading
+import time
 
 try:
     from dashboard.llm_groq import chat_texto, groq_disponible, VERIFIER_MODEL
@@ -108,6 +112,39 @@ _PROHIBIDAS = [
 ]
 
 
+# ── Caché + espaciado para no saturar el límite de la API ──
+# El Memo genera ~8 textos y Streamlit re-ejecuta el script en CADA interacción.
+# Sin caché eso redispara todas las llamadas y agota el tier gratis (~40 req/min
+# -> error 429). Cacheamos por (tipo + datos del período): los éxitos se reutilizan
+# durante _TTL_OK segundos y, tras un fallo, aplicamos un breve _COOLDOWN_FALLO
+# para no reintentar en cada recarga. Además espaciamos las llamadas al menos
+# _MIN_INTERVALO segundos. No cambia ningún cálculo: solo evita el bombardeo.
+_CACHE: dict = {}
+_LOCK = threading.Lock()
+_ULTIMA = [0.0]
+_TTL_OK = float(os.environ.get("NARRATIVA_TTL_OK", "3600"))
+_COOLDOWN_FALLO = float(os.environ.get("NARRATIVA_COOLDOWN", "90"))
+_MIN_INTERVALO = float(os.environ.get("NARRATIVA_MIN_INTERVALO", "1.6"))
+
+
+def _es_rate_limit(exc) -> bool:
+    s = str(exc).lower()
+    return any(x in s for x in ("429", "rate limit", "ratelimit", "too many", "quota"))
+
+
+def _throttle():
+    """Espacia las llamadas al modelo para respetar el límite por minuto."""
+    with _LOCK:
+        espera = _MIN_INTERVALO - (time.monotonic() - _ULTIMA[0])
+        if espera > 0:
+            time.sleep(espera)
+        _ULTIMA[0] = time.monotonic()
+
+
+def _clave_cache(tipo, ctx_str):
+    return tipo + ":" + hashlib.sha1(ctx_str.encode("utf-8")).hexdigest()
+
+
 def _limpiar(texto):
     if not texto:
         return ""
@@ -122,24 +159,47 @@ def generar_narrativa(tipo: str, contexto: dict) -> str:
     """Devuelve una conclusión ejecutiva para la estación `tipo`.
 
     Tipos: eco_historico, leccion, brecha, contexto, correlacion, proyeccion,
-    recomendacion. Si la generación no está disponible, devuelve un mensaje
-    neutro (sin mencionar ninguna tecnología).
+    recomendacion. Cachea el resultado por (tipo + datos del período) para no
+    repetir llamadas en cada recarga de Streamlit. Si la generación no está
+    disponible, devuelve un mensaje neutro (sin mencionar ninguna tecnología).
     """
     if chat_texto is None or not groq_disponible():
         return _FALLBACK
     base = _PROMPTS.get(tipo, _PROMPTS["recomendacion"]) + _REGLAS
     ctx_str = json.dumps(contexto, ensure_ascii=False, default=str)[:3500]
+    clave = _clave_cache(tipo, ctx_str)
+    ahora = time.time()
+    with _LOCK:
+        ent = _CACHE.get(clave)
+    if ent:
+        texto, es_fallback, ts = ent
+        if not es_fallback and (ahora - ts) < _TTL_OK:
+            return texto
+        if es_fallback and (ahora - ts) < _COOLDOWN_FALLO:
+            return texto
     prompt = f"{base}\n\nDATOS DEL PERÍODO (JSON):\n{ctx_str}"
-    modelos = [None]
-    if VERIFIER_MODEL:
-        modelos.append(VERIFIER_MODEL)
-    for modelo in modelos:
-        try:
-            salida = chat_texto(prompt, max_tokens=600, temperature=0.5, json=False, model=modelo)
-            salida = _limpiar(salida)
-            if salida:
-                return salida
-        except Exception as e:  # pragma: no cover
-            logging.warning("generar_narrativa(%s) falló: %r", tipo, e)
-            continue
+    # Una sola llamada al modelo principal. Solo si el fallo NO es de límite
+    # (429) probamos el verificador; ante un 429 reintentar duplicaría la
+    # presión sobre la misma cuota y empeoraría el problema.
+    try:
+        _throttle()
+        salida = _limpiar(chat_texto(prompt, max_tokens=600, temperature=0.5, json=False))
+        if salida:
+            with _LOCK:
+                _CACHE[clave] = (salida, False, time.time())
+            return salida
+    except Exception as e:  # pragma: no cover
+        logging.warning("generar_narrativa(%s) falló: %r", tipo, e)
+        if not _es_rate_limit(e) and VERIFIER_MODEL:
+            try:
+                _throttle()
+                salida = _limpiar(chat_texto(prompt, max_tokens=600, temperature=0.5, json=False, model=VERIFIER_MODEL))
+                if salida:
+                    with _LOCK:
+                        _CACHE[clave] = (salida, False, time.time())
+                    return salida
+            except Exception as e2:  # pragma: no cover
+                logging.warning("generar_narrativa(%s) verificador falló: %r", tipo, e2)
+    with _LOCK:
+        _CACHE[clave] = (_FALLBACK, True, time.time())
     return _FALLBACK

@@ -117,26 +117,45 @@ class TestDeduplicar:
 
     def test_conserva_canonico_permalink(self, tmp_path):
         conn = _crear_db(tmp_path)
-        _post(conn, "MAN_0002_aaaa", "https://fb.com/posts/123")
-        _post(conn, "MAN_0003_bbbb", "https://fb.com/share/p/XXXX/")
-        conn.commit()
-        assert elegir_canonico(conn, ["MAN_0003_bbbb", "MAN_0002_aaaa"]) == "MAN_0002_aaaa"
-        conn.close()
-
-    def test_comentario_unico_del_duplicado_se_conserva(self, tmp_path):
-        conn = _crear_db(tmp_path)
+        # Mismo numero de comentarios -> el permalink desempata como canonico.
         _post(conn, "MAN_0002_aaaa", "https://fb.com/posts/123")
         _post(conn, "MAN_0003_bbbb", "https://fb.com/share/p/XXXX/")
         _com(conn, "MAN_0002_aaaa", 0, "Comentario comun", "Ana")
         _com(conn, "MAN_0003_bbbb", 0, "Comentario comun", "Ana")
-        _com(conn, "MAN_0003_bbbb", 1, "Solo en la copia", "Beto")
+        conn.commit()
+        assert elegir_canonico(conn, ["MAN_0003_bbbb", "MAN_0002_aaaa"]) == "MAN_0002_aaaa"
+        conn.close()
+
+    def test_canonico_es_el_de_mas_comentarios(self, tmp_path):
+        conn = _crear_db(tmp_path)
+        # El post con MAS comentarios gana, aunque sea el enlace de compartir.
+        _post(conn, "MAN_0002_aaaa", "https://fb.com/posts/123")
+        _post(conn, "MAN_0003_bbbb", "https://fb.com/share/p/XXXX/")
+        _com(conn, "MAN_0002_aaaa", 0, "Uno", "Ana")
+        _com(conn, "MAN_0003_bbbb", 0, "Uno", "Ana")
+        _com(conn, "MAN_0003_bbbb", 1, "Dos", "Beto")
+        conn.commit()
+        assert elegir_canonico(conn, ["MAN_0002_aaaa", "MAN_0003_bbbb"]) == "MAN_0003_bbbb"
+        conn.close()
+
+    def test_comentario_unico_del_duplicado_se_conserva(self, tmp_path):
+        conn = _crear_db(tmp_path)
+        # Igualamos conteos para que el permalink (MAN_0002) sea el canonico y
+        # comprobar que el comentario unico del duplicado se mueve al canonico.
+        _post(conn, "MAN_0002_aaaa", "https://fb.com/posts/123")
+        _post(conn, "MAN_0003_bbbb", "https://fb.com/share/p/XXXX/")
+        _com(conn, "MAN_0002_aaaa", 0, "Comentario comun", "Ana")
+        _com(conn, "MAN_0002_aaaa", 1, "Otro comentario", "Beto")
+        _com(conn, "MAN_0003_bbbb", 0, "Comentario comun", "Ana")
+        _com(conn, "MAN_0003_bbbb", 1, "Solo en la copia", "Carlos")
         conn.commit()
         deduplicar(conn)
         row = conn.execute(
             "SELECT post_id FROM fb_comments WHERE message='Solo en la copia'"
         ).fetchone()
         assert row is not None and row[0] == "MAN_0002_aaaa"
-        assert conn.execute("SELECT COUNT(*) FROM fb_comments").fetchone()[0] == 2
+        # 4 originales - 1 copia exacta eliminada = 3 comentarios distintos
+        assert conn.execute("SELECT COUNT(*) FROM fb_comments").fetchone()[0] == 3
         conn.close()
 
     def test_no_toca_posts_distintos(self, tmp_path):

@@ -8,10 +8,14 @@ otros de toda la historia. Eso producia porcentajes que no coincidian entre si
 
 Reglas de la fuente unica:
   - Se cuenta el 100% de los comentarios del periodo, nunca una muestra.
-  - El sentimiento se toma del propio comentario (fb_comments.sentiment /
-    sentiment_score), no del promedio de la publicacion.
-  - Un comentario sin sentimiento clasificable cuenta como NEUTRAL, de modo que
-    favorable + neutral + critico siempre suma 100%.
+  - El sentimiento se toma de fb_sentimiento (pct_positivo / pct_negativo ya
+    calculados por publicacion), ponderado por la cantidad de comentarios de
+    cada publicacion. Esta es la misma fuente confiable que usaba el panel
+    original; la etiqueta por comentario (fb_comments.sentiment) esta poco
+    poblada y por si sola daba 0% a favor.
+  - Si fb_sentimiento no tuviera datos para las publicaciones del periodo, se
+    cae a clasificar comentario por comentario como respaldo.
+  - favorable + neutral + critico siempre suma 100%.
   - El periodo se aplica por la fecha de la publicacion a la que pertenece el
     comentario (fb_comments no guarda fecha propia). La fecha se toma de
     fb_posts y, si faltara, de fb_engagement, para no descartar comentarios
@@ -95,8 +99,65 @@ def clasificar_comentario(row):
     return "neutral"
 
 
-def distribucion_sentimiento(df):
-    """Distribucion favorable/neutral/critico sobre el 100% de df."""
+def _dist_por_comentario(df, n):
+    """Respaldo: distribucion contando la etiqueta de cada comentario."""
+    etiquetas = df.apply(clasificar_comentario, axis=1)
+    nf = int((etiquetas == "favorable").sum())
+    nc = int((etiquetas == "critico").sum())
+    nn = n - nf - nc
+    return (
+        round(100 * nf / n, 1),
+        round(100 * nn / n, 1),
+        round(100 * nc / n, 1),
+    )
+
+
+def _dist_desde_fb_sentimiento(post_ids, db_path):
+    """Porcentajes favorable/neutral/critico desde fb_sentimiento.
+
+    Pondera pct_positivo / pct_negativo de cada publicacion por su numero de
+    comentarios. Devuelve None si no hay datos utilizables.
+    """
+    if not post_ids:
+        return None
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        marcadores = ",".join(["?"] * len(post_ids))
+        sdf = pd.read_sql(
+            "SELECT post_id, pct_positivo, pct_negativo, total_comentarios "
+            f"FROM fb_sentimiento WHERE post_id IN ({marcadores})",
+            conn,
+            params=list(post_ids),
+        )
+    except Exception:
+        return None
+    finally:
+        if conn is not None:
+            conn.close()
+    if sdf is None or sdf.empty:
+        return None
+    peso = pd.to_numeric(sdf["total_comentarios"], errors="coerce").fillna(0)
+    peso = peso.clip(lower=0)
+    total = peso.sum()
+    if total <= 0:
+        # Sin pesos utiles: promedio simple entre publicaciones.
+        peso = pd.Series([1.0] * len(sdf))
+        total = peso.sum()
+    pos = pd.to_numeric(sdf["pct_positivo"], errors="coerce").fillna(0)
+    neg = pd.to_numeric(sdf["pct_negativo"], errors="coerce").fillna(0)
+    fav = float((pos * peso).sum() / total)
+    cri = float((neg * peso).sum() / total)
+    neu = max(0.0, 100.0 - fav - cri)
+    return round(fav, 1), round(neu, 1), round(cri, 1)
+
+
+def distribucion_sentimiento(df, db_path=None):
+    """Distribucion favorable/neutral/critico sobre el 100% de df.
+
+    Usa fb_sentimiento (fuente confiable) ponderado por comentarios y, si no
+    hay datos, cae a la etiqueta de cada comentario.
+    """
     n = 0 if df is None else len(df)
     base = {
         "n_total": n, "n_favorable": 0, "n_neutral": 0, "n_critico": 0,
@@ -104,15 +165,22 @@ def distribucion_sentimiento(df):
     }
     if n == 0:
         return base
-    etiquetas = df.apply(clasificar_comentario, axis=1)
-    nf = int((etiquetas == "favorable").sum())
-    nc = int((etiquetas == "critico").sum())
-    nn = n - nf - nc
+    db_path = db_path or FACEBOOK_DB
+
+    pcts = None
+    if "post_id" in df.columns:
+        post_ids = [p for p in df["post_id"].dropna().unique().tolist()]
+        pcts = _dist_desde_fb_sentimiento(post_ids, db_path)
+    if pcts is None:
+        pcts = _dist_por_comentario(df, n)
+    pf, pn, pc = pcts
+
+    nf = int(round(n * pf / 100))
+    nc = int(round(n * pc / 100))
+    nn = max(0, n - nf - nc)
     base.update({
         "n_favorable": nf, "n_neutral": nn, "n_critico": nc,
-        "pct_favorable": round(100 * nf / n, 1),
-        "pct_neutral": round(100 * nn / n, 1),
-        "pct_critico": round(100 * nc / n, 1),
+        "pct_favorable": pf, "pct_neutral": pn, "pct_critico": pc,
     })
     return base
 

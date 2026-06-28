@@ -112,11 +112,13 @@ def calcular_intensidad_vs_promedio(df_fb, df_tk):
 
 
 def calcular_concentracion(conteo):
-    """Proporcion del tema principal vs el resto.
+    """Proporcion del tema principal vs el resto, con el desglose completo.
 
     conteo: dict o pd.Series de categoria -> conteo. Devuelve share del tema
-    principal, share del resto, HHI (0-1), numero de temas y un estado
-    (dominado / liderado / fragmentado). None si no hay datos.
+    principal, share del resto, HHI (0-1), numero de temas, un estado
+    (dominado / liderado / fragmentado) y `ramas`: la lista COMPLETA de temas
+    con su conteo y proporcion (ordenada de mayor a menor), para no dejar el
+    resto agrupado como una sola barra opaca. None si no hay datos.
     """
     if conteo is None:
         return None
@@ -128,6 +130,14 @@ def calcular_concentracion(conteo):
     top_tema = str(s.index[0])
     share_top = float(s.iloc[0] / total * 100)
     hhi = float(sum((c / total * 100) ** 2 for c in s) / 10000)
+    ramas = [
+        {
+            "tema": str(idx),
+            "n": int(round(float(val))),
+            "share": round(float(val / total * 100), 1),
+        }
+        for idx, val in s.items()
+    ]
     if share_top >= 50:
         estado, nivel = f"Dominado por \u00ab{top_tema}\u00bb", "dominado"
     elif share_top >= 33:
@@ -140,6 +150,7 @@ def calcular_concentracion(conteo):
         "share_resto": round(100 - share_top, 1),
         "hhi": round(hhi, 2),
         "n_temas": int(len(s)),
+        "ramas": ramas,
         "estado": estado,
         "nivel": nivel,
     }

@@ -62,7 +62,7 @@ from dashboard.dash_memoria import (
     comparar_sectorial,
 )
 
-# ─── Estado de sesión ─────────────────
+# ─── Estado de sesión ───────────────────
 if "lote_ingreso" not in st.session_state:
     st.session_state["lote_ingreso"] = []
 
@@ -70,12 +70,12 @@ if "lote_ingreso" not in st.session_state:
 def leyenda_grafica(elementos):
     items_html = "".join(
         '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">'
-        '<span style="font-size:14px;color:{};min-width:18px;font-weight:600;line-height:1.4;font-family:\'IBM Plex Mono\',monospace">'
+        '<span style="font-size:14px;color:{};min-width:18px;font-weight:600;line-height:1.4;font-family:IBM Plex Mono,monospace">'
         '{}</span>'
         '<div>'
-        '<span style="font-size:11px;color:var(--fg-primary);font-weight:600;font-family:\'Inter\',sans-serif">'
+        '<span style="font-size:11px;color:var(--fg-primary);font-weight:600;font-family:Inter,sans-serif">'
         '{}</span>'
-        '<span style="font-size:11px;color:var(--fg-muted);margin-left:4px;font-family:\'Inter\',sans-serif">'
+        '<span style="font-size:11px;color:var(--fg-muted);margin-left:4px;font-family:Inter,sans-serif">'
         '— {}</span></div></div>'.format(
             e['color'], e['simbolo'], e['label'], e['descripcion']
         )
@@ -85,7 +85,7 @@ def leyenda_grafica(elementos):
         '<div style="background:var(--bg-card);border:1px solid var(--border);'
         'padding:12px 16px;margin-bottom:10px">'
         '<p style="font-size:9px;color:var(--fg-muted);margin:0 0 8px 0;'
-        'font-weight:600;letter-spacing:1.5px;text-transform:uppercase;font-family:\'IBM Plex Mono\',monospace">'
+        'font-weight:600;letter-spacing:1.5px;text-transform:uppercase;font-family:IBM Plex Mono,monospace">'
         'QUÉ ESTÁS VIENDO</p>{}</div>'
     ).format(items_html)
 
@@ -119,7 +119,7 @@ except Exception:
     fecha_str = "No disponible"
     fecha_corta = "N/D"
 
-# ─── Topbar institucional ─────────────────
+# ─── Topbar institucional ──────────────────
 st.markdown(f"""
 <div class="topbar">
     <div class="topbar-brand">PANEL <span class="sep">·</span> SANTA ANA <span class="sep">/</span> <span class="who">Inteligencia Ciudadana</span></div>
@@ -237,7 +237,7 @@ def hay_datos(df, mensaje: str = "Aún no hay datos suficientes para esta secci�
 
 def card_explicativa(que_es: str, como_leerlo: str, ojo=None):
     ojo_html = (
-        f'<div style="margin-top:8px;font-size:11px;color:var(--amber);font-family:\'Inter\',sans-serif;border-top:1px solid var(--border);padding-top:6px">'
+        f'<div style="margin-top:8px;font-size:11px;color:var(--amber);font-family:Inter,sans-serif;border-top:1px solid var(--border);padding-top:6px">'
         f'{ojo}</div>'
         if ojo else ""
     )
@@ -262,6 +262,124 @@ def que_ves_box(texto: str):
         f'<p class="wys-text">{texto}</p></div>',
         unsafe_allow_html=True,
     )
+
+
+# ─── REFERENCIAS A PUBLICACIONES (verificación de origen) ──────────
+# Permiten al lector abrir el post real en Facebook y comprobar de dónde salen
+# los datos (que no se inventan). La DB guarda post_url al cargar contenido.
+
+def _post_links_html(rows, max_links=8):
+    chips = ""
+    vistos = set()
+    for r in rows:
+        try:
+            url = str((r.get("post_url") if hasattr(r, "get") else r["post_url"]) or "").strip()
+        except Exception:
+            url = ""
+        if not url or url in vistos:
+            continue
+        vistos.add(url)
+        try:
+            page = str((r.get("page_name") if hasattr(r, "get") else r["page_name"]) or "Publicación")
+        except Exception:
+            page = "Publicación"
+        try:
+            ft = r.get("created_time") if hasattr(r, "get") else r["created_time"]
+        except Exception:
+            ft = None
+        etiqueta = page[:32]
+        if ft is not None and str(ft) not in ("", "NaT", "None"):
+            try:
+                etiqueta += " · " + pd.Timestamp(ft).strftime("%d %b")
+            except Exception:
+                pass
+        chips += (
+            '<a href="' + url + '" target="_blank" rel="noopener" '
+            'style="display:inline-block;font-size:11px;padding:3px 9px;margin:3px 4px 0 0;'
+            'background:var(--bg-elevated);border:1px solid var(--border);border-radius:12px;'
+            'color:var(--accent);text-decoration:none;font-family:Inter,sans-serif">'
+            '🔗 ' + etiqueta + '</a>'
+        )
+        if chips.count("<a ") >= max_links:
+            break
+    return chips
+
+
+def referencias_publicaciones(post_ids=None, limit=8, titulo="PUBLICACIONES DE ORIGEN"):
+    """Renderiza enlaces clickeables a las publicaciones que sustentan un dato.
+
+    Si post_ids viene dado, enlaza esas publicaciones; si no, las más recientes
+    con enlace. No muestra nada si no hay URLs guardadas.
+    """
+    try:
+        if post_ids is not None:
+            ids = [str(p) for p in post_ids if p is not None and str(p) != ""]
+            if not ids:
+                return
+            ids = list(dict.fromkeys(ids))[:limit]
+            marcadores = ",".join("?" for _ in ids)
+            df = safe_query(
+                "SELECT post_id, page_name, created_time, post_url FROM fb_posts "
+                "WHERE post_id IN (" + marcadores + ") "
+                "AND post_url IS NOT NULL AND TRIM(post_url) != ''",
+                FACEBOOK_DB, params=ids,
+            )
+        else:
+            df = safe_query(
+                "SELECT post_id, page_name, created_time, post_url FROM fb_posts "
+                "WHERE post_url IS NOT NULL AND TRIM(post_url) != '' "
+                "ORDER BY created_time DESC LIMIT ?",
+                FACEBOOK_DB, params=[int(limit)],
+            )
+    except Exception:
+        df = None
+    if df is None or len(df) == 0:
+        return
+    chips = _post_links_html(df.to_dict("records"), max_links=limit)
+    if not chips:
+        return
+    st.markdown(
+        '<div style="margin:2px 0 16px 0">'
+        '<div style="font-size:9px;color:var(--fg-muted);font-weight:600;'
+        'letter-spacing:1.5px;text-transform:uppercase;'
+        'font-family:IBM Plex Mono,monospace;margin-bottom:4px">'
+        + titulo + ' — abrí el post para verificar</div>' + chips + '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _post_ids_por_categoria(tema):
+    try:
+        df = safe_query(
+            "SELECT item_id FROM post_categorias WHERE categoria_nombre = ?",
+            FACEBOOK_DB, params=[str(tema)],
+        )
+        return df["item_id"].tolist() if df is not None and not df.empty else []
+    except Exception:
+        return []
+
+
+def _post_ids_por_tema_comentarios(tema):
+    try:
+        df = safe_query(
+            "SELECT DISTINCT post_id FROM fb_comments WHERE topic_category = ?",
+            FACEBOOK_DB, params=[str(tema)],
+        )
+        return df["post_id"].tolist() if df is not None and not df.empty else []
+    except Exception:
+        return []
+
+
+def referencias_por_categoria(tema, limit=8):
+    ids = _post_ids_por_categoria(tema)
+    if ids:
+        referencias_publicaciones(post_ids=ids, limit=limit, titulo="PUBLICACIONES SOBRE «" + str(tema) + "»")
+
+
+def referencias_por_tema_comentarios(tema, limit=6):
+    ids = _post_ids_por_tema_comentarios(tema)
+    if ids:
+        referencias_publicaciones(post_ids=ids, limit=limit, titulo="PUBLICACIONES DE «" + str(tema) + "»")
 
 
 def bloom_subheader(texto: str):
@@ -317,9 +435,9 @@ def _docstrip(periodo_lbl: str, plataforma_lbl: str, fecha_lbl: str):
     """, unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
 # NOTAS METODOLÓGICAS
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
 
 def render_notas_metodologicas():
     _page_head(
@@ -373,9 +491,9 @@ def render_notas_metodologicas():
     )
 
 
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
 # Serie temporal helper
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
 
 def _build_serie_chart(df_fb_s, df_tk_s, periodo):
     if df_fb_s.empty and df_tk_s.empty:
@@ -417,9 +535,9 @@ def _build_serie_chart(df_fb_s, df_tk_s, periodo):
     return fig
 
 
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
 # BLOQUE I — PULSO GENERAL
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
 
 def render_bloque1_pulso():
     _warn_dropped_null_dates()
@@ -428,7 +546,7 @@ def render_bloque1_pulso():
     df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
 
     _page_head(
-        "RESUMEN EJECUTIVO / LECTURA CIUDADANA",
+        "PULSO GENERAL / LECTURA CIUDADANA",
         "Pulso general de la conversación pública",
         "Síntesis ejecutiva del clima narrativo, intensidad de la conversación y concentración temática observada en el período seleccionado.",
         f'PERÍODO <span class="acc">{periodo.upper()}</span> <span class="sep">·</span> PLATAFORMA <span class="acc">{plataforma.upper()}</span>'
@@ -438,7 +556,7 @@ def render_bloque1_pulso():
         hay_datos(df_fb, "No hay datos para este período.")
         return
 
-    # Métricas de sentimiento (alimentan el Termómetro y el cierre factual).
+    # Métricas de sentimiento (alimentan el cierre factual).
     df_sent = cargar_sentimiento_fb(FACEBOOK_DB)
     score_val = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
     pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
@@ -448,6 +566,11 @@ def render_bloque1_pulso():
 
     # ── 1. CLIMA NARRATIVO — tono dominante del día + tendencia vs ayer ──
     st.markdown('<div class="section-header"><div class="section-title">01 · Clima Narrativo</div><div class="section-subtitle">Tono dominante del día y su tendencia frente al día anterior.</div></div>', unsafe_allow_html=True)
+    card_explicativa(
+        "El tono (favorable, neutro o adverso) de los comentarios del último día con datos, y si mejoró o empeoró frente al día anterior.",
+        "La barra reparte los comentarios en favorables, neutros y adversos. La flecha dice si lo favorable subió o bajó respecto al día previo.",
+        "Se pondera por la cantidad de comentarios de cada publicación, no por número de publicaciones.",
+    )
     clima = calcular_clima_diario(safe_query(
         "SELECT fs.pct_positivo, fs.pct_negativo, fs.total_comentarios, fe.created_time "
         "FROM fb_sentimiento fs JOIN fb_engagement fe ON fs.post_id = fe.post_id",
@@ -488,6 +611,10 @@ def render_bloque1_pulso():
 
     # ── 2. INTENSIDAD — volumen del último día vs promedio diario de la semana ──
     st.markdown('<div class="section-header"><div class="section-title">02 · Intensidad de la Conversación</div><div class="section-subtitle">Volumen de interacción del último día frente al promedio diario de la semana.</div></div>', unsafe_allow_html=True)
+    card_explicativa(
+        "Cuánta interacción (reacciones, comentarios, compartidos) generó el último día frente al promedio diario de la semana.",
+        "Si la barra del último día es más larga que la del promedio, hubo más movimiento de lo habitual; si es más corta, hubo menos.",
+    )
     intens = calcular_intensidad_vs_promedio(df_fb, df_tk)
     if intens:
         vol_hoy = intens['vol_hoy']; prom = intens['promedio']; pct = intens['pct_dif']
@@ -509,109 +636,61 @@ def render_bloque1_pulso():
     else:
         st.markdown('<div class="status-info">Aún no hay suficientes días con interacción para comparar contra el promedio semanal.</div>', unsafe_allow_html=True)
 
-    # ── 3. CONCENTRACIÓN TEMÁTICA — proporción tema principal vs resto ──
-    st.markdown('<div class="section-header"><div class="section-title">03 · Concentración Temática</div><div class="section-subtitle">Qué parte de la conversación se la lleva el tema principal frente a todos los demás.</div></div>', unsafe_allow_html=True)
+    # ── 3. CONCENTRACIÓN TEMÁTICA — desglose completo de todos los temas ──
+    st.markdown('<div class="section-header"><div class="section-title">03 · Concentración Temática</div><div class="section-subtitle">Cómo se reparte la conversación entre todos los temas, no solo el principal.</div></div>', unsafe_allow_html=True)
+    card_explicativa(
+        "Si la conversación gira en torno a un solo tema o está repartida entre varios.",
+        "Cada color es un tema y su porcentaje es la parte de la conversación que ocupa. Mientras más repartidos los colores, más diversa es la conversación.",
+        "HHI alto = un tema concentra casi todo; HHI bajo = conversación fragmentada.",
+    )
     df_cat = safe_query("SELECT item_id, categoria_nombre FROM post_categorias", FACEBOOK_DB)
     conc = calcular_concentracion(df_cat['categoria_nombre'].value_counts().to_dict()) if not df_cat.empty else None
     if conc:
         col_estado = {'dominado': 'var(--red)', 'liderado': 'var(--amber)', 'fragmentado': 'var(--green)'}.get(conc['nivel'], 'var(--accent)')
+        ramas = conc.get('ramas', [])
+        paleta = ['var(--accent)', '#a78bfa', '#f59e0b', '#34d399', '#f472b6', '#60a5fa', '#fbbf24', '#4ade80', '#fb7185', '#818cf8']
+        segmentos = ""
+        filas = ""
+        for i, rama in enumerate(ramas):
+            c = paleta[i % len(paleta)]
+            segmentos += f'<span title="{rama["tema"]} {rama["share"]:.0f}%" style="display:inline-block;height:100%;background:{c};width:{rama["share"]:.1f}%"></span>'
+            filas += (
+                '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px">'
+                f'<span style="width:10px;height:10px;border-radius:2px;background:{c};display:inline-block;flex:none"></span>'
+                f'<span style="flex:1;color:var(--fg-primary)">{rama["tema"]}</span>'
+                f'<span style="color:var(--fg-secondary)">{rama["n"]} publicaciones · {rama["share"]:.0f}%</span>'
+                '</div>'
+            )
         st.markdown(f"""
         <div class="panel">
             <div class="panel-head"><div class="panel-title" style="color:{col_estado}">{conc['estado'].upper()}</div><div class="panel-meta">{conc['n_temas']} TEMAS · HHI {conc['hhi']:.2f}</div></div>
-            <div class="bar-tri" style="height:16px;border-radius:3px">
-                <span style="display:inline-block;height:100%;background:var(--accent);width:{conc['share_top']:.1f}%"></span>
-                <span style="display:inline-block;height:100%;background:var(--border);width:{conc['share_resto']:.1f}%"></span>
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px">
-                <span style="color:var(--accent)">{conc['top_tema']} · {conc['share_top']:.0f}%</span>
-                <span style="color:var(--fg-muted)">Resto de temas · {conc['share_resto']:.0f}%</span>
-            </div>
+            <div class="bar-tri" style="height:16px;border-radius:3px">{segmentos}</div>
+            <div style="margin-top:12px">{filas}</div>
         </div>
         """, unsafe_allow_html=True)
+        referencias_por_categoria(conc['top_tema'])
     else:
         st.markdown('<div class="status-info">Clasificación de temas no disponible para este período.</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="status-info">Este análisis está basado al 100% en los comentarios extraídos y analizados de las publicaciones revisadas.</div>', unsafe_allow_html=True)
 
-    # ── 3.2 TERMÓMETRO DE COLONIAS ──
-    st.markdown('<div class="section-header"><div class="section-title">03 · Termómetro de Colonias</div><div class="section-subtitle">Zonas donde más se apoya o critica la gestión municipal.</div></div>', unsafe_allow_html=True)
-    dz = cargar_zonas_resumen(FACEBOOK_DB)
-    apoyo = dz.get("apoyo", [])
-    enojo = dz.get("enojo", [])
-    if apoyo or enojo:
-        html_term = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
-        html_term += '<div><div style="font-weight:600;font-size:13px;margin-bottom:6px">🟢 Apoyo</div>'
-        if apoyo:
-            html_term += '<div style="display:flex;flex-direction:column;gap:4px">'
-            for z in apoyo:
-                html_term += f'<div style="font-size:13px;padding:4px 8px;background:var(--bg-elevated);border-radius:6px;border-left:3px solid #22c55e">⬤ {z["zona"]} <span style="float:right;font-weight:600;color:#22c55e">{100 - z["pct_negativos"]:.0f}%</span></div>'
-            html_term += '</div>'
-        else:
-            html_term += '<div style="font-size:12px;color:var(--fg-muted)">Sin datos de apoyo</div>'
-        html_term += '</div>'
-        html_term += '<div><div style="font-weight:600;font-size:13px;margin-bottom:6px">🔴 Enojo</div>'
-        if enojo:
-            html_term += '<div style="display:flex;flex-direction:column;gap:4px">'
-            for z in enojo:
-                html_term += f'<div style="font-size:13px;padding:4px 8px;background:var(--bg-elevated);border-radius:6px;border-left:3px solid #ef4444">⬤ {z["zona"]} <span style="float:right;font-weight:600;color:#ef4444">{z["pct_negativos"]:.0f}%</span></div>'
-            html_term += '</div>'
-        else:
-            html_term += '<div style="font-size:12px;color:var(--fg-muted)">Sin datos de enojo</div>'
-        html_term += '</div></div>'
-        st.markdown(html_term, unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="status-info">No hay suficientes datos georreferenciados para este período.</div>', unsafe_allow_html=True)
-
-    # ── 3.3 PULSO EN UN NÚMERO ──
-    st.markdown('<div class="section-header"><div class="section-title">03 · Pulso en un Número</div><div class="section-subtitle">Indicador sintético de salud narrativa — basado en diversidad, sentimiento y engagement.</div></div>', unsafe_allow_html=True)
-    iq_result = cargar_iq(FACEBOOK_DB)
-    if iq_result and iq_result.get("iq") is not None:
-        iq = iq_result["iq"]
-        quad = iq_result.get("cuadrante", "")
-        quad_map = {
-            "alto_apoyo": ("🟢", "Apoyo Alto"),
-            "bajo_apoyo": ("🟡", "Apoyo Moderado"),
-            "alta_friccion": ("🔴", "Fricción Alta"),
-            "baja_friccion": ("🟡", "Fricción Moderada"),
-        }
-        q_emoji, q_label = quad_map.get(quad, ("⚪", "Sin clasificar"))
-        st.markdown(f"""
-        <div class="panel">
-            <div class="panel-head"><div class="panel-title">IQ DE CONVERSACIÓN</div></div>
-            <div style="display:flex;align-items:baseline;gap:8px;margin:8px 0">
-                <span style="font-size:36px;font-weight:700;color:var(--fg-primary)">{iq:.1f}</span>
-                <span style="font-size:14px;color:var(--fg-muted)">/ 100</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;font-size:14px;color:var(--fg-secondary)">
-                {q_emoji} {q_label}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        dims = iq_result.get("dimensiones", [])
-        if dims:
-            st.markdown('<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">', unsafe_allow_html=True)
-            for d in dims:
-                st.markdown(f'<span style="font-size:11px;padding:2px 8px;background:var(--bg-elevated);border-radius:10px;color:var(--fg-secondary)">{d["label"]} <strong>{d["valor"]:.1f}</strong></span>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="status-info">El IQ de conversación no está disponible para el período actual.</div>', unsafe_allow_html=True)
-
-    # ── 3.4 CIERRE FACTUAL ──
+    # ── CIERRE FACTUAL — lectura en una frase ──
     interp_cierre = generar_interpretacion("semaforo", {
         'score': score_val, 'pct_negativo': pct_neg_val,
         'pct_positivo': pct_pos_val, 'indice_enojo': enojo_val,
         'total_comentarios': int(total_comentarios),
     })
     st.markdown(f'<div class="interpretation" style="margin-top:16px"><div class="interpretation-label">🔎 En una frase:</div><div class="interpretation-texto">{interp_cierre}</div></div>', unsafe_allow_html=True)
+    referencias_publicaciones(limit=10, titulo="PUBLICACIONES ANALIZADAS")
 
 
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
 # BLOQUE II — SEGMENTACIÓN DE AUDIENCIA
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
 
 def render_bloque2_audiencia():
     _page_head(
-        "SEGMENTACIÓN / ANÁLISIS DE AUDIENCIA",
+        "SEGMENTACIÓN DE AUDIENCIA / ANÁLISIS DE PÚBLICOS",
         "Estructura de públicos y voces de influencia",
         "Composición emocional de quienes participan en la conversación: simpatizantes, neutrales y críticos; nivel de polarización y páginas que concentran la interacción.",
         f'PERÍODO <span class="acc">{periodo.upper()}</span> <span class="sep">·</span> PLATAFORMA <span class="acc">{plataforma.upper()}</span>'
@@ -623,6 +702,10 @@ def render_bloque2_audiencia():
 
     # ── 1. MAPA DE PÚBLICOS ──
     st.markdown('<div class="section-header"><div class="section-title">01 · Mapa de Públicos</div><div class="section-subtitle">Composición de la audiencia según el tono de sus comentarios.</div></div>', unsafe_allow_html=True)
+    card_explicativa(
+        "Cómo se divide la audiencia según el tono de sus comentarios: simpatizantes (positivos), neutrales y críticos (negativos).",
+        "Cada porcentaje es la proporción de comentarios de ese tipo. La base son comentarios analizados, no personas únicas.",
+    )
     df_tmp = df_comentarios.dropna(subset=['score_sentimiento'])
     if not df_tmp.empty:
         n_pos = (df_tmp['score_sentimiento'] > 0.1).sum()
@@ -655,9 +738,14 @@ def render_bloque2_audiencia():
 
         m = evaluar_muestra(len(df_comentarios))
         st.markdown(f'<p style="font-size:11px;color:var(--fg-muted)">{m["etiqueta"]}</p>', unsafe_allow_html=True)
+        referencias_publicaciones(limit=10, titulo="PUBLICACIONES ANALIZADAS")
 
     # ── 2. POLARIZACIÓN — consenso vs confrontación ──
     st.markdown('<div class="section-header"><div class="section-title">02 · Polarización</div><div class="section-subtitle">Consenso vs. confrontación: si la conversación se parte en dos bandos enfrentados.</div></div>', unsafe_allow_html=True)
+    card_explicativa(
+        "Si la conversación está en consenso o partida en dos bandos enfrentados (a favor vs. en contra).",
+        "Mientras más parejos sean los dos lados, mayor la confrontación. Si un lado domina o casi todo es neutral, hay consenso.",
+    )
     pol = calcular_polarizacion(df_tmp['score_sentimiento']) if not df_tmp.empty else None
     if pol:
         col_nivel = {'confrontacion': 'var(--red)', 'dividida': 'var(--amber)', 'consenso': 'var(--green)'}.get(pol['nivel'], 'var(--accent)')
@@ -681,6 +769,10 @@ def render_bloque2_audiencia():
 
     # ── 3. VOCES DE INFLUENCIA ──
     st.markdown('<div class="section-header"><div class="section-title">03 · Voces de Influencia</div><div class="section-subtitle">Páginas oficiales con mayor concentración de interacción.</div></div>', unsafe_allow_html=True)
+    card_explicativa(
+        "Qué páginas oficiales concentran la mayor parte de la interacción ciudadana.",
+        "La barra más larga es la página con más reacciones y comentarios. Son páginas o cuentas, no personas.",
+    )
     df_fb_raw = cargar_fb_engagement(FACEBOOK_DB)
     if not df_fb_raw.empty:
         top_pages = df_fb_raw.groupby('page_name').agg(
@@ -699,6 +791,10 @@ def render_bloque2_audiencia():
 
     # ── 4. CRUCE TEMA × ZONA ──
     st.markdown('<div class="section-header"><div class="section-title">04 · Cruce Tema × Zona</div><div class="section-subtitle">Combinaciones de tema y zona con mayor volumen de comentarios.</div></div>', unsafe_allow_html=True)
+    card_explicativa(
+        "Qué combinaciones de tema y zona generan más comentarios.",
+        "Cada fila es una zona y un tema; el número es cuántos comentarios hubo y el color su tono general.",
+    )
     cruce = cargar_cruce_tema_zona(FACEBOOK_DB)
     if cruce:
         rows_html = ""
@@ -711,6 +807,10 @@ def render_bloque2_audiencia():
 
     # ── 5. PERFIL DE AUDIENCIA (OCEAN) ──
     st.markdown('<div class="section-header"><div class="section-title">05 · Perfil de Audiencia</div><div class="section-subtitle">Segmentos de público identificados por su comportamiento narrativo.</div></div>', unsafe_allow_html=True)
+    card_explicativa(
+        "Grupos de público que se comportan parecido al comentar (su tema y tono dominante).",
+        "Cada segmento agrupa comentarios similares; se indica su tamaño, tono y tema más frecuente.",
+    )
     perfil = cargar_perfil_ocean(FACEBOOK_DB)
     if perfil.get("has_sklearn") and perfil.get("clusters"):
         sent_map = {"positive": "🟢 positivo", "negative": "🔴 negativo", "neutral": "⚪ neutral"}
@@ -734,13 +834,13 @@ def render_bloque2_audiencia():
     render_temas_emergentes(FACEBOOK_DB)
 
 
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
 # BLOQUE III — RIESGO Y AUTENTICIDAD
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
 
 def render_bloque3_riesgo():
     _page_head(
-        "ALERTAS / GESTIÓN DE RIESGO REPUTACIONAL",
+        "RIESGO Y AUTENTICIDAD / GESTIÓN DE RIESGO REPUTACIONAL",
         "Riesgo, autenticidad y velocidad de propagación",
         "Señales tempranas sobre la salud de la conversación: patrones coordinados, necesidad de respuesta institucional, proyección a 24-48h y puntos críticos de fricción.",
         f'PERÍODO <span class="acc">{periodo.upper()}</span> <span class="sep">·</span> PLATAFORMA <span class="acc">{plataforma.upper()}</span>'
@@ -759,6 +859,11 @@ def render_bloque3_riesgo():
 
     # ── 1. AUTENTICIDAD — orgánico vs coordinado/sospechoso ──
     st.markdown('<div class="section-header"><div class="section-title">01 · Índice de Autenticidad</div><div class="section-subtitle">Proporción de conversación orgánica frente a patrones coordinados o sospechosos (mensajes repetidos).</div></div>', unsafe_allow_html=True)
+    card_explicativa(
+        "Qué parte de la conversación parece orgánica y qué parte parece copia-pega coordinado (mensajes idénticos repetidos).",
+        "La barra verde es lo orgánico; la roja, lo sospechoso. Abajo se listan los mensajes que más se repiten.",
+        "No detecta bots: solo mide repetición de texto idéntico.",
+    )
     aut = calcular_autenticidad(df_coment_raw['message']) if not df_coment_raw.empty and 'message' in df_coment_raw.columns else None
     if aut:
         col_aut = {'organico': 'var(--green)', 'mixto': 'var(--amber)', 'coordinado': 'var(--red)'}.get(aut['nivel'], 'var(--accent)')
@@ -783,17 +888,32 @@ def render_bloque3_riesgo():
         st.markdown('<div class="status-info">Aún no hay suficientes comentarios para evaluar autenticidad.</div>', unsafe_allow_html=True)
 
     # ── 2. NIVEL DE ALERTA — necesidad de respuesta institucional ──
-    st.markdown('<div class="section-header"><div class="section-title">02 · Nivel de Alerta</div><div class="section-subtitle">Necesidad de respuesta institucional, en semáforo (verde / amarillo / rojo).</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header"><div class="section-title">02 · Nivel de Alerta</div><div class="section-subtitle">Qué tan urgente es responder y, sobre todo, a qué responder.</div></div>', unsafe_allow_html=True)
+    card_explicativa(
+        "Qué tan urgente es que la institución responda, en semáforo: verde (tranquilo), amarillo (preparar) o rojo (responder ya).",
+        "El color resume el nivel de molestia. Abajo se nombran los temas concretos a los que habría que responder y qué podría crecer.",
+    )
     pct_neg_val = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
     enojo_val = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
     pol_b3 = calcular_polarizacion(df_coment['score_sentimiento']) if not df_coment.empty and 'score_sentimiento' in df_coment.columns else None
     balance_b3 = pol_b3['balance'] if pol_b3 else None
     fricciones = agrupar_fricciones(df_coment_raw)
-    alerta = calcular_nivel_alerta(pct_negativo=pct_neg_val, indice_enojo=enojo_val, balance_confrontacion=balance_b3, n_fricciones=len(fricciones))
+    alerta = calcular_nivel_alerta(pct_negativo=pct_neg_val, indice_enojo=enojo_val, balance_confrontacion=balance_b3, n_fricciones=len(fricciones), temas_friccion=fricciones)
     sem_class = {'verde': 'positive', 'amarillo': 'warning', 'rojo': 'critical'}.get(alerta['color'], 'positive')
     emoji_sem = {'verde': '🟢', 'amarillo': '🟡', 'rojo': '🔴'}.get(alerta['color'], '⚪')
     st.markdown(f'<div class="indicator indicator-{sem_class}"><div class="indicator-dot"></div><div style="flex:1"><div style="font-weight:600;font-size:14px;margin-bottom:2px">{emoji_sem} {alerta["titular"]}</div><div style="font-size:13px;color:var(--fg-secondary)">{alerta["accion"]}</div></div></div>', unsafe_allow_html=True)
-    st.markdown(f'<p style="font-size:11px;color:var(--fg-muted);margin-top:6px">Índice de necesidad de respuesta: {alerta["riesgo"]:.0f}/100 — combina % de comentarios negativos, enojo en reacciones, confrontación y temas de fricción.</p>', unsafe_allow_html=True)
+    if alerta.get("detalle"):
+        st.markdown(f'<div class="interpretation" style="margin-top:10px"><div class="interpretation-label">QUÉ SIGNIFICA</div><div class="interpretation-texto">{alerta["detalle"]}</div></div>', unsafe_allow_html=True)
+    factores = alerta.get("factores", [])
+    if factores:
+        chips = "".join(f'<span style="font-size:11px;padding:3px 9px;margin:3px 4px 0 0;display:inline-block;background:var(--bg-elevated);border:1px solid var(--border);border-radius:12px;color:var(--fg-secondary)">{f}</span>' for f in factores)
+        st.markdown(f'<div style="margin-top:8px"><div style="font-size:9px;color:var(--fg-muted);font-weight:600;letter-spacing:1.5px;text-transform:uppercase;font-family:IBM Plex Mono,monospace;margin-bottom:4px">POR QUÉ ESTE NIVEL</div>{chips}</div>', unsafe_allow_html=True)
+    st.markdown(f'<p style="font-size:11px;color:var(--fg-muted);margin-top:8px">Índice de necesidad de respuesta: {alerta["riesgo"]:.0f}/100 — combina cuántos comentarios son negativos, el enojo en las reacciones, la confrontación y los temas de fricción.</p>', unsafe_allow_html=True)
+    if fricciones:
+        ids_alerta = []
+        for fr in fricciones[:3]:
+            ids_alerta.extend(_post_ids_por_tema_comentarios(fr["tema"]))
+        referencias_publicaciones(post_ids=ids_alerta, limit=8, titulo="PUBLICACIONES DETRÁS DE LA ALERTA")
 
     alertas = cargar_alertas_cambridge(FACEBOOK_DB)
     if alertas:
@@ -805,6 +925,10 @@ def render_bloque3_riesgo():
 
     # ── 3. VELOCIDAD DE PROPAGACIÓN — proyección 24-48h ──
     st.markdown('<div class="section-header"><div class="section-title">03 · Velocidad de Propagación</div><div class="section-subtitle">Hacia dónde va la conversación en las próximas 24 a 48 horas.</div></div>', unsafe_allow_html=True)
+    card_explicativa(
+        "Hacia dónde va la interacción en las próximas 24 a 48 horas si sigue la tendencia actual.",
+        "Compara hoy con la proyección a 24h y 48h. Es una estimación por tendencia, no una certeza.",
+    )
     prop = calcular_propagacion_24_48(df_fb)
     if prop:
         col_p = {'acelerando': 'var(--red)', 'desacelerando': 'var(--blue)', 'estable': 'var(--fg-secondary)'}.get(prop['tendencia'], 'var(--accent)')
@@ -814,247 +938,4 @@ def render_bloque3_riesgo():
             <div class="panel-head"><div class="panel-title" style="color:{col_p}">{prop['flecha']} {prop['tendencia'].upper()}</div><div class="panel-meta">{prop['n_dias']} DÍAS DE TENDENCIA</div></div>
             <div class="bar-row"><div class="bar-row-label">HOY</div><div class="bar-track"><div class="bar-fill bar-fill-cy" style="width:{prop['hoy'] / maxv * 100:.1f}%"></div></div><div class="bar-row-val">{prop['hoy']:,.0f}</div></div>
             <div class="bar-row"><div class="bar-row-label">PROY. +24H</div><div class="bar-track"><div class="bar-fill" style="width:{prop['proy_24h'] / maxv * 100:.1f}%;background:{col_p}"></div></div><div class="bar-row-val">{prop['proy_24h']:,.0f} ({prop['pct_24h']:+.0f}%)</div></div>
-            <div class="bar-row"><div class="bar-row-label">PROY. +48H</div><div class="bar-track"><div class="bar-fill" style="width:{prop['proy_48h'] / maxv * 100:.1f}%;background:{col_p}"></div></div><div class="bar-row-val">{prop['proy_48h']:,.0f} ({prop['pct_48h']:+.0f}%)</div></div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown('<p style="font-size:11px;color:var(--fg-muted)">Proyección por tendencia lineal de la interacción diaria reciente. Es una estimación, no una certeza; se actualiza con cada nuevo día de datos.</p>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="status-info">Se necesitan al menos 3 días con interacción para proyectar a 24-48h.</div>', unsafe_allow_html=True)
-
-    # ── 4. PUNTOS DE FRICCIÓN — 2-3 temas con más reacción negativa ──
-    st.markdown('<div class="section-header"><div class="section-title">04 · Puntos de Fricción</div><div class="section-subtitle">Los 2-3 temas que más reacción negativa generan, con un comentario representativo.</div></div>', unsafe_allow_html=True)
-    if fricciones:
-        for fr in fricciones:
-            st.markdown(f'<div class="pattern-card pattern-card-critical"><div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.4px;color:var(--red);font-weight:700;margin-bottom:6px">{fr["tema"].upper()} · {fr["n"]} COMENTARIOS NEGATIVOS</div><p style="font-size:13px;color:var(--fg-primary);line-height:1.55;margin:0">\"{fr["cita"]}\"</p></div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="status-info">No se detectaron temas con reacción negativa relevante en este período. Si esperabas ver fricción, puede faltar volumen de comentarios clasificados.</div>', unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════════
-# BLOQUE IV — MEMORIA E INTELIGENCIA APLICADA
-# ═══════════════════════════════════════════════════════════════
-
-def _b4_header(num: int, titulo: str, subtitulo: str = ""):
-    st.markdown(
-        f'<div class="memo-section"><div class="memo-section-number">{num:02d}</div>'
-        f'<div class="memo-section-title">{titulo}</div></div>',
-        unsafe_allow_html=True,
-    )
-
-
-def _b4_card_ia(num: int, titulo: str, tipo: str, ctx: dict):
-    _b4_header(num, titulo)
-    with st.spinner(f"Generando {titulo}…"):
-        narrativa = generar_narrativa_ia(tipo, ctx)
-    st.markdown(f'<p class="memo-body">{narrativa}</p>', unsafe_allow_html=True)
-
-
-def render_bloque4_inteligencia():
-    _page_head(
-        "MEMORÁNDUM / INTELIGENCIA APLICADA",
-        "Memo estratégico para toma de decisiones",
-        "Síntesis ejecutiva en formato briefing: eco histórico, brechas percepción-realidad, temas emergentes, proyección y recomendación estratégica.",
-        f'PERÍODO <span class="acc">{periodo.upper()}</span> <span class="sep">·</span> PLATAFORMA <span class="acc">{plataforma.upper()}</span>'
-    )
-
-    st.markdown("""
-    <div class="memo-container">
-        <div class="memo-header">
-            <div class="memo-title">MEMORÁNDUM EJECUTIVO</div>
-            <div class="memo-ref">PANEL·SANTA ANA · Inteligencia Ciudadana · Análisis Estratégico</div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    df_sent = cargar_sentimiento_fb(FACEBOOK_DB)
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB)
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB)
-    df_fb, df_tk = filtrar_por_periodo_plataforma(df_fb_raw, df_tk_raw, periodo, plataforma)
-
-    score = df_sent['score_sentimiento'].mean() if not df_sent.empty else 0
-    pct_neg = df_sent['pct_negativo'].mean() if not df_sent.empty else 0
-    pct_pos = df_sent['pct_positivo'].mean() if not df_sent.empty else 0
-    enojo = df_fb['indice_enojo'].mean() if not df_fb.empty and 'indice_enojo' in df_fb.columns else 0
-    total_eng = (int(df_fb['engagement_total'].sum()) if not df_fb.empty else 0) + (int(df_tk['engagement_total'].sum()) if not df_tk.empty else 0)
-
-    ctx = {
-        "score": round(float(score), 3),
-        "pct_negativo": round(float(pct_neg), 1),
-        "pct_positivo": round(float(pct_pos), 1),
-        "indice_enojo": round(float(enojo), 3),
-        "interacciones": int(total_eng),
-        "periodo": periodo,
-    }
-
-    _b4_card_ia(1, "Eco Histórico", "eco_historico", ctx)
-    _b4_card_ia(2, "Lección Aprendida", "leccion", ctx)
-    _b4_card_ia(3, "Brecha Percepción-Realidad", "brecha", ctx)
-
-    # ── 04 + 05 Temas (emergentes / en auge / en declive / en extinción) ──
-    evol = None
-    temas_disponibles = False
-    df_cat = safe_query(
-        "SELECT item_id, categoria_nombre, created_time FROM fb_posts "
-        "LEFT JOIN post_categorias ON fb_posts.post_id = post_categorias.item_id",
-        FACEBOOK_DB,
-    )
-    if not df_cat.empty and 'created_time' in df_cat.columns and 'categoria_nombre' in df_cat.columns:
-        df_cat['created_time'] = pd.to_datetime(df_cat['created_time'], errors='coerce')
-        df_cat['semana'] = df_cat['created_time'].dt.to_period('W').dt.start_time
-        df_cat = df_cat.dropna(subset=['categoria_nombre', 'semana'])
-        if not df_cat.empty:
-            temas_disponibles = True
-            ultima_sem = df_cat['semana'].max()
-            sem_actual = df_cat[df_cat['semana'] == ultima_sem]
-            sem_prev = df_cat[df_cat['semana'] == ultima_sem - pd.Timedelta(days=7)]
-            evol = clasificar_evolucion_temas(
-                sem_actual['categoria_nombre'].value_counts().to_dict(),
-                sem_prev['categoria_nombre'].value_counts().to_dict(),
-            )
-
-    _b4_header(4, "Temas Emergentes")
-    if temas_disponibles and evol is not None:
-        filas = []
-        for it in evol['emergentes'][:6]:
-            filas.append(f'<div class="memo-item memo-item-positivo">+ {it["tema"]} <span style="color:var(--fg-muted)">· nuevo, {it["n_actual"]} menciones</span></div>')
-        for it in evol['en_auge'][:4]:
-            filas.append(f'<div class="memo-item memo-item-positivo">▲ {it["tema"]} <span style="color:var(--fg-muted)">· ganando fuerza, {it["cambio_pct"]:+.0f}% ({it["n_previo"]}→{it["n_actual"]})</span></div>')
-        if filas:
-            st.markdown("".join(filas), unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="memo-item memo-item-neutral">Sin temas nuevos ni en alza esta semana.</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="memo-item memo-item-neutral">Clasificación de temas no disponible para este período.</div>', unsafe_allow_html=True)
-
-    _b4_header(5, "Temas en Extinción")
-    if temas_disponibles and evol is not None:
-        filas = []
-        for it in evol['en_extincion'][:6]:
-            filas.append(f'<div class="memo-item memo-item-negativo">- {it["tema"]} <span style="color:var(--fg-muted)">· desapareció, {it["n_previo"]} → 0</span></div>')
-        for it in evol['en_declive'][:4]:
-            filas.append(f'<div class="memo-item memo-item-negativo">▼ {it["tema"]} <span style="color:var(--fg-muted)">· perdiendo tracción, {it["cambio_pct"]:+.0f}% ({it["n_previo"]}→{it["n_actual"]})</span></div>')
-        if filas:
-            st.markdown("".join(filas), unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="memo-item memo-item-neutral">Ningún tema perdió tracción esta semana.</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="memo-item memo-item-neutral">Clasificación de temas no disponible para este período.</div>', unsafe_allow_html=True)
-
-    _b4_card_ia(6, "Contexto No Visible", "contexto", ctx)
-
-    _b4_header(7, "Correlación Contenido/Reacción")
-    df_posts, conteo_tipos, distorsion_alta, _por_semana = calcular_contagio_emocional()
-    if not df_posts.empty:
-        resonancia_pos = int(conteo_tipos.get('resonancia_positiva', 0))
-        rechazo = int(conteo_tipos.get('rechazo_a_positivo', 0))
-        total_p = len(df_posts)
-        st.markdown(
-            f'<div class="memo-item memo-item-positivo">Resonancia positiva: {resonancia_pos}/{total_p}</div>'
-            f'<div class="memo-item memo-item-negativo">Rechazo a positivo: {rechazo}/{total_p}</div>',
-            unsafe_allow_html=True,
-        )
-        if not distorsion_alta.empty:
-            st.markdown('<div class="memo-section-number" style="margin-top:8px">DISTORSIÓN ALTA</div>', unsafe_allow_html=True)
-            for _, r in distorsion_alta.head(3).iterrows():
-                msg = str(r.get('message', '') or '')[:100]
-                st.markdown(
-                    f'<div class="memo-item memo-item-negativo">\"{msg}\"</div>',
-                    unsafe_allow_html=True,
-                )
-    else:
-        st.markdown('<div class="memo-item memo-item-neutral">Sin datos suficientes para correlación contenido-reacción.</div>', unsafe_allow_html=True)
-
-    _b4_header(8, "Comparativa Sectorial")
-    df_ext = cargar_externos(EXTERNOS_DB)
-    comp = None
-    if df_ext is not None and not df_ext.empty:
-        col_fuente = 'page_name' if 'page_name' in df_ext.columns else ('source' if 'source' in df_ext.columns else None)
-        n_fuentes = int(df_ext[col_fuente].nunique()) if col_fuente else 0
-        n_menciones = len(df_ext)
-        score_ext = float(df_ext['score_sentimiento'].mean()) if 'score_sentimiento' in df_ext.columns else 0.0
-        comp = comparar_sectorial(score, score_ext, n_fuentes, n_menciones)
-    if comp:
-        tono_color = {"favorable": "var(--green)", "mixto": "var(--amber)", "crítico": "var(--red)"}
-        c_int = tono_color.get(comp['tono_interno'], 'var(--amber)')
-        c_ext = tono_color.get(comp['tono_externo'], 'var(--amber)')
-        st.markdown(
-            f'<div class="memo-item" style="border-left-color:{c_int}">Tus páginas: tono <strong style="color:{c_int}">{comp["tono_interno"]}</strong> (índice {comp["score_interno"]:+.2f})</div>'
-            f'<div class="memo-item" style="border-left-color:{c_ext}">Fuentes externas: tono <strong style="color:{c_ext}">{comp["tono_externo"]}</strong> (índice {comp["score_externo"]:+.2f}) · {comp["n_fuentes"]} fuentes, {comp["n_menciones"]} menciones</div>'
-            f'<div class="memo-item memo-item-neutral">{comp["lectura"]}</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown('<div class="memo-item memo-item-neutral">Aún no hay menciones en fuentes externas para comparar con la conversación propia.</div>', unsafe_allow_html=True)
-
-    # ── 09. FRAGILIDAD DE LA NARRATIVA ──
-    _b4_header(9, "Fragilidad de la Narrativa",
-               "Factores que hacen vulnerable la lectura actual.")
-    frag_indicators = []
-    if not df_sent.empty:
-        pol = ((df_sent['score_sentimiento'].abs() > 0.5).sum() / len(df_sent) * 100)
-        frag_indicators.append(("Polarización", f"{pol:.0f}%", "alto" if pol > 40 else "moderado"))
-    iq_res = cargar_iq(FACEBOOK_DB)
-    if iq_res and iq_res.get("iq") is not None:
-        iq = iq_res["iq"]
-        frag_indicators.append(("IQ Narrativo", f"{iq:.1f}/100", "frágil" if iq < 40 else "estable"))
-    if not df_fb.empty and 'indice_enojo' in df_fb.columns:
-        eno = df_fb['indice_enojo'].mean()
-        frag_indicators.append(("Enojo en reacciones", f"{eno*100:.0f}%", "crítico" if eno > 0.3 else "controlado"))
-    for label, val, nivel in frag_indicators:
-        color = {"crítico": "var(--red)", "alto": "var(--red)", "frágil": "var(--red)",
-                 "moderado": "var(--amber)", "estable": "var(--green)", "controlado": "var(--green)"}.get(nivel, "var(--amber)")
-        st.markdown(
-            f'<div class="memo-item" style="border-left-color:{color}">'
-            f'<strong>{label}:</strong> {val} <span style="color:{color}">({nivel})</span></div>',
-            unsafe_allow_html=True,
-        )
-
-    _b4_card_ia(10, "Proyección de Escenario", "proyeccion", ctx)
-    _b4_card_ia(11, "Recomendación Estratégica", "recomendacion", ctx)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════════
-# DISPATCH PRINCIPAL
-# ═══════════════════════════════════════════════════════════════
-
-if vista == "Dashboard":
-    tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs([
-        "RESUMEN EJECUTIVO", "AUDIENCIA",
-        "ALERTAS", "MEMO ESTRATÉGICO"
-    ])
-    with tab_pulso:
-        render_bloque1_pulso()
-    with tab_audiencia:
-        render_bloque2_audiencia()
-    with tab_riesgo:
-        render_bloque3_riesgo()
-    with tab_inteligencia:
-        render_bloque4_inteligencia()
-
-    # Docstrip footer ejecutivo
-    _docstrip(periodo, plataforma, fecha_str)
-
-elif vista == "Cargar contenido":
-    _page_head(
-        "OPERACIÓN / CARGA DE CONTENIDO",
-        "Centro de ingesta de informes y evidencia",
-        "Cargue informes consolidados, evidencia documental y briefings diarios. Cada documento se incorpora al pipeline de inteligencia."
-    )
-    st.markdown("""
-    <div class="doc-center">
-        <div class="doc-label">
-            <div class="doc-icon-box">PDF</div>
-            <div class="doc-info">
-                <div class="doc-filename">Informe Consolidado del Día</div>
-                <div class="doc-meta">CENTRO DE DOCUMENTACIÓN EJECUTIVA · BRIEFING DIARIO CORPORATIVO</div>
-            </div>
-        </div>
-        <div class="doc-empty">
-            <div class="doc-empty-label">Sin documento disponible. El informe consolidado se genera automáticamente al procesar los datos del día.</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    seccion_cargar_contenido()
-
-elif vista == "Notas metodológicas":
-    render_notas_metodologicas()
+            <div class="bar-row"><div class="bar-row-label">PROY. +

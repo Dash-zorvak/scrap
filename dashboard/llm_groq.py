@@ -16,6 +16,14 @@ nombres antiguos GROQ_* como respaldo para no romper despliegues en transición:
   Visión:     LLM_VISION_MODEL   -> GROQ_VISION_MODEL -> microsoft/phi-3-vision-128k-instruct
   Visión (respaldo): LLM_VISION_FALLBACK            -> meta/llama-3.2-11b-vision-instruct
 
+  Proveedor de TEXTO separado (opcional). Permite enviar el TEXTO a otro
+  proveedor (p. ej. OpenCode Zen) y mantener la VISIÓN (Phi) en NVIDIA:
+    Texto API key:  LLM_TEXT_API_KEY -> OPENCODE_API_KEY  (si faltan, usa la key principal)
+    Texto Base URL: LLM_TEXT_BASE_URL (si hay OPENCODE_API_KEY y no se define,
+                    usa https://opencode.ai/zen/v1)
+  Si no defines nada de lo anterior, texto y visión comparten el mismo cliente
+  que antes (sin cambios de comportamiento).
+
 Cascada de visión: si el modelo primario de visión falla con un error de
 servidor/modelo (5xx, 404, "modelo no disponible"), se reintenta automáticamente
 con los modelos de LLM_VISION_FALLBACK en orden. Esto evita que un modelo roto
@@ -99,9 +107,11 @@ JSON_MODE = os.environ.get("LLM_JSON_MODE", "1") not in ("0", "false", "False", 
 # ── Cliente lazy ──
 
 _cliente: OpenAI | None = None
+_cliente_texto: OpenAI | None = None
 
 
 def _get_groq_client() -> OpenAI | None:
+    """Cliente principal (visión y, por defecto, texto). Usa el endpoint NVIDIA."""
     global _cliente
     if _cliente is not None:
         return _cliente
@@ -132,8 +142,50 @@ def _get_groq_client() -> OpenAI | None:
     return _cliente
 
 
+def _get_text_client() -> OpenAI | None:
+    """Cliente para el modelo de TEXTO.
+
+    Permite un proveedor distinto al de visión (p. ej. OpenCode Zen para el
+    análisis de texto y NVIDIA/Phi para las imágenes). Si no hay configuración
+    específica de texto (LLM_TEXT_API_KEY / OPENCODE_API_KEY / LLM_TEXT_BASE_URL),
+    reutiliza el cliente principal y conserva el comportamiento anterior.
+    """
+    global _cliente_texto
+    if _cliente_texto is not None:
+        return _cliente_texto
+
+    text_key = _primer_env("LLM_TEXT_API_KEY", "OPENCODE_API_KEY")
+    text_base = _primer_env("LLM_TEXT_BASE_URL")
+
+    # Sin configuración específica de texto: comparte el cliente principal.
+    if not text_key and not text_base:
+        return _get_groq_client()
+
+    api_key = text_key or _primer_env("LLM_API_KEY", "NVIDIA_API_KEY", "GROQ_API_KEY")
+    if not api_key:
+        try:
+            import streamlit as st
+
+            api_key = (
+                st.secrets.get("LLM_TEXT_API_KEY")
+                or st.secrets.get("OPENCODE_API_KEY")
+                or st.secrets.get("LLM_API_KEY")
+            )
+        except Exception:
+            api_key = None
+    if not api_key:
+        return _get_groq_client()
+
+    # Si hay key de OpenCode y no se define base, usa el endpoint de Zen.
+    base_url = text_base or "https://opencode.ai/zen/v1"
+    _cliente_texto = OpenAI(
+        api_key=api_key, base_url=base_url, timeout=90.0, max_retries=0
+    )
+    return _cliente_texto
+
+
 def groq_disponible() -> bool:
-    return _get_groq_client() is not None
+    return _get_text_client() is not None or _get_groq_client() is not None
 
 
 # Alias con nombre neutral de proveedor (el backend ya no es necesariamente Groq).
@@ -300,12 +352,14 @@ def chat_texto(
     `model` permite forzar un modelo distinto al TEXT_MODEL por defecto (lo usa
     la cascada para invocar al verificador). Si json=True y el modo JSON está
     activo, pide response_format json_object.
+    Usa el cliente de texto (`_get_text_client`), que puede apuntar a un
+    proveedor distinto del de visión.
     Lanza ValueError si no hay API key configurada.
     """
-    client = _get_groq_client()
+    client = _get_text_client()
     if not client:
         raise ValueError(
-            "LLM API key no configurada (LLM_API_KEY / NVIDIA_API_KEY / GROQ_API_KEY)"
+            "LLM API key no configurada (LLM_TEXT_API_KEY / OPENCODE_API_KEY / LLM_API_KEY)"
         )
 
     messages = [{"role": "user", "content": prompt}]

@@ -2,8 +2,10 @@
 
 Estaciones: Mapa de Públicos, Polarización, Voces de Influencia y Temas
 Emergentes. Mapa y Polarización usan la fuente unica (dash_fuente) filtrada por
-el periodo, sobre el 100% de los comentarios y con el sentimiento por
-comentario (no el promedio de la publicacion).
+el periodo, sobre el 100% de los comentarios. La Polarizacion parte de la MISMA
+distribucion de sentimiento que el Mapa/Clima (dash_fuente.distribucion_sentimiento,
+derivada de fb_sentimiento), no de fb_comments.sentiment_score, que esta poco
+poblado y hacia que todo cayera en "neutral".
 
 Nota: el Cruce Tema x Zona y el Perfil de Audiencia (OCEAN) se retiraron por
 falta de datos confiables (geografia / clasificacion incompleta). Las "Voces de
@@ -15,7 +17,7 @@ import streamlit as st
 
 from config import FACEBOOK_DB
 from dashboard.dash_metrics import cargar_fb_engagement
-from dashboard.dash_audiencia import calcular_polarizacion
+from dashboard.dash_audiencia import polarizacion_desde_conteos
 from dashboard.dash_periodos import rango_periodo, filtrar_por_fecha, etiqueta_rango
 from dashboard.dash_fuente import cargar_comentarios_periodo, distribucion_sentimiento
 from dashboard.dash_temas import render_temas_emergentes
@@ -82,7 +84,7 @@ def render_bloque2_audiencia(periodo, plataforma):
         "Qué está ocurriendo: si la ciudadanía opina de forma parecida o está partida entre apoyo y crítica.",
         "Mientras más parejas sean las dos posturas, más dividida está la conversación; si una domina, hay consenso.",
     )
-    pol = calcular_polarizacion(df_coment["sentiment_score"]) if dist["n_total"] > 0 and "sentiment_score" in df_coment.columns else None
+    pol = polarizacion_desde_conteos(dist["n_favorable"], dist["n_critico"], dist["n_total"]) if dist["n_total"] > 0 else None
     if pol and (pol["n_favor"] + pol["n_contra"]) > 0:
         comprometidos = pol["n_favor"] + pol["n_contra"]
         lado_favor = pol["lado"] == "favor"
@@ -103,6 +105,7 @@ def render_bloque2_audiencia(periodo, plataforma):
                 titular = "Consenso a favor"
                 conclusion = "Hay consenso: casi todos los comentarios con postura son de apoyo."
             else:
+                col_nivel = "var(--red)"
                 titular = "Consenso crítico"
                 conclusion = "Hay consenso en contra: casi todos los comentarios con postura son críticos."
         st.markdown(f"""

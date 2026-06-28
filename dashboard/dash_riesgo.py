@@ -62,34 +62,143 @@ def calcular_autenticidad(mensajes, min_repeticiones=2, min_len=4):
     }
 
 
+def _nombres_temas(temas_friccion):
+    """Extrae nombres de tema legibles desde la lista de fricciones.
+
+    Acepta dicts (con clave 'tema') o strings. Ignora vacíos y el comodín
+    'general', y elimina duplicados conservando el orden.
+    """
+    nombres = []
+    for t in (temas_friccion or []):
+        if isinstance(t, dict):
+            nombre = t.get("tema", "")
+        else:
+            nombre = t
+        nombre = str(nombre or "").strip()
+        if not nombre or nombre.lower() == "general":
+            continue
+        if nombre not in nombres:
+            nombres.append(nombre)
+    return nombres
+
+
+def _listar_natural(nombres):
+    """Une nombres en lenguaje natural: «A»; «A» y «B»; «A», «B» y «C»."""
+    marcados = [f"\u00ab{n}\u00bb" for n in nombres]
+    if not marcados:
+        return ""
+    if len(marcados) == 1:
+        return marcados[0]
+    if len(marcados) == 2:
+        return f"{marcados[0]} y {marcados[1]}"
+    return ", ".join(marcados[:-1]) + f" y {marcados[-1]}"
+
+
 def calcular_nivel_alerta(pct_negativo=0.0, indice_enojo=0.0,
-                          balance_confrontacion=None, n_fricciones=0):
+                          balance_confrontacion=None, n_fricciones=0,
+                          temas_friccion=None):
     """Necesidad de respuesta institucional, como semáforo verde/amarillo/rojo.
 
     Combina señales de riesgo: % de comentarios negativos, enojo en reacciones,
     nivel de confrontación (balance de polarización) y cantidad de temas de
-    fricción. Devuelve un índice 0-100 y el color/acción recomendada.
+    fricción. Devuelve un índice 0-100, el color y, en lenguaje natural, qué
+    significa la alerta: a QUÉ responder, qué podría ESCALAR y POR QUÉ está en
+    ese nivel.
+
+    temas_friccion: lista opcional de los temas que más molestia generan (dicts
+    con clave 'tema' o strings). Si se entregan, la alerta los nombra para que
+    quede claro a qué hay que responder.
     """
     neg = max(0.0, float(pct_negativo or 0))
     eno = max(0.0, float(indice_enojo or 0)) * 100
     conf = (float(balance_confrontacion) * 100) if balance_confrontacion is not None else 0.0
     riesgo = 0.45 * neg + 0.35 * eno + 0.20 * conf
     riesgo = min(100.0, riesgo + min(int(n_fricciones or 0), 3) * 3)
+
+    nombres = _nombres_temas(temas_friccion)
+    foco = _listar_natural(nombres[:3])
+    una_cosa = len(nombres[:3]) <= 1
+
+    # Factores en lenguaje natural: por qué el semáforo está en este color.
+    factores = [f"{neg:.0f}% de los comentarios son negativos"]
+    nivel_enojo = "alto" if eno >= 30 else ("moderado" if eno >= 10 else "bajo")
+    factores.append(f"el enojo en las reacciones es {nivel_enojo}")
+    if balance_confrontacion is not None and conf >= 30:
+        factores.append("la conversación está partida en dos bandos enfrentados")
+    if n_fricciones:
+        n_fr = int(n_fricciones)
+        factores.append(
+            f"{n_fr} tema concentra la mayor molestia" if n_fr == 1
+            else f"{n_fr} temas concentran la mayor molestia"
+        )
+
     if riesgo < 20:
         color, nivel = "verde", "bajo"
-        titular = "Sin necesidad de respuesta institucional"
-        accion = "Mantener monitoreo de rutina."
+        titular = "Todo en calma: no hace falta una respuesta institucional"
+        if foco:
+            accion = (
+                f"La conversación está tranquila. Lo que más se menciona es {foco}, "
+                "pero sin rechazo importante. Basta con seguir observando."
+            )
+        else:
+            accion = "La conversación está tranquila. Basta con seguir el monitoreo de rutina."
+        detalle = (
+            "No hay un tema generando molestia fuerte ni señales de que algo vaya a "
+            "crecer en las próximas horas."
+        )
     elif riesgo < 45:
         color, nivel = "amarillo", "medio"
-        titular = "Atención: preparar respuesta preventiva"
-        accion = "Monitorear de cerca y tener mensajes listos por si escala."
+        titular = "Conviene preparar una respuesta preventiva"
+        if foco:
+            cosa = "ese tema" if una_cosa else "esos temas"
+            accion = (
+                f"Lo que más molestia está generando ahora es {foco}. Conviene tener "
+                f"listos mensajes claros sobre {cosa} por si la conversación crece, "
+                "aunque todavía no se ha disparado."
+            )
+            detalle = (
+                f"\u00abPreparar respuesta preventiva\u00bb quiere decir dejar decidido qué se "
+                f"va a decir y quién lo dice sobre {foco}, para no improvisar si mañana "
+                "sube el volumen. \u00abPor si escala\u00bb se refiere a que más gente empiece a "
+                "comentar molesta sobre lo mismo."
+            )
+        else:
+            accion = (
+                "Hay señales de molestia en aumento. Conviene tener mensajes listos por "
+                "si la conversación crece."
+            )
+            detalle = (
+                "Aún no hay un tema claramente dominante en el rechazo, pero el nivel "
+                "general de molestia sugiere preparar mensajes por si sube el volumen."
+            )
     else:
         color, nivel = "rojo", "alto"
-        titular = "Requiere respuesta institucional activa"
-        accion = "Definir vocería y responder los temas que generan rechazo."
+        titular = "Requiere una respuesta institucional activa"
+        if foco:
+            accion = (
+                f"Los temas que más rechazo están generando son {foco}. Conviene definir "
+                "ya quién responde y salir a atender o aclarar estos puntos antes de que "
+                "la molestia siga creciendo."
+            )
+            detalle = (
+                f"El rechazo se concentra en {foco}. Responder de forma activa aquí es "
+                "asignar quien dé la cara, dar una respuesta pública concreta sobre estos "
+                "temas y darle seguimiento, no solo observar."
+            )
+        else:
+            accion = (
+                "El nivel de rechazo es alto. Conviene definir quién responde y atender "
+                "los temas que generan molestia."
+            )
+            detalle = (
+                "El rechazo es alto y está repartido en varios temas; conviene priorizar "
+                "los de mayor volumen y responder de forma pública y concreta."
+            )
+
     return {
         "riesgo": round(riesgo, 1), "color": color, "nivel": nivel,
         "titular": titular, "accion": accion,
+        "detalle": detalle, "factores": factores, "foco": foco,
     }
 
 

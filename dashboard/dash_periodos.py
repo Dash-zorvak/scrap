@@ -6,15 +6,24 @@ elegido a un rango [inicio, fin] concreto. Todos los bloques deben filtrar sus
 datos con ESTE rango para que los numeros coincidan entre si.
 
 Los periodos relativos se anclan a la fecha mas reciente con datos (no al reloj
-del servidor), para que "Hoy" muestre el ultimo dia con informacion y nunca
-aparezca vacio por falta de actualizacion.
+del servidor), para que la ventana muestre siempre informacion y nunca aparezca
+vacia por falta de actualizacion. Se usan ventanas moviles (p. ej. "Esta
+semana" = los ultimos 7 dias con datos) porque las ventanas de calendario muy
+cortas dejaban tramos sin comentarios y arruinaban los porcentajes.
 """
 
 from datetime import datetime, timedelta
 
 import pandas as pd
 
-OPCIONES_PERIODO = ["Hoy", "Ayer", "Esta semana", "Este mes", "Personalizado"]
+# Opciones oficiales (mismas que el panel usaba originalmente).
+OPCIONES_PERIODO = [
+    "Esta semana",
+    "Ultimos 15 dias",
+    "Ultimo mes",
+    "Ultimos 3 meses",
+    "Todo el periodo",
+]
 
 _MESES = [
     "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
@@ -46,25 +55,34 @@ def _fin_dia(d):
 def rango_periodo(periodo, fecha_ref=None, fecha_desde=None, fecha_hasta=None):
     """Traduce un periodo a (inicio, fin) como datetimes.
 
-    `fecha_ref` es la fecha mas reciente con datos; ancla los periodos
-    relativos. Si no se pasa, se usa la fecha actual.
+    `fecha_ref` es la fecha mas reciente con datos; ancla las ventanas
+    moviles. Si no se pasa, se usa la fecha actual.
     """
     if fecha_ref is None:
         fecha_ref = datetime.now()
     fecha_ref = pd.Timestamp(fecha_ref).to_pydatetime()
     ref = fecha_ref.date()
+    fin = _fin_dia(ref)
 
+    if periodo == "Esta semana":
+        return _inicio_dia(ref - timedelta(days=6)), fin
+    if periodo == "Ultimos 15 dias":
+        return _inicio_dia(ref - timedelta(days=14)), fin
+    if periodo == "Ultimo mes":
+        return _inicio_dia(ref - timedelta(days=29)), fin
+    if periodo == "Ultimos 3 meses":
+        return _inicio_dia(ref - timedelta(days=89)), fin
+    if periodo == "Todo el periodo":
+        return datetime(2020, 1, 1, 0, 0, 0), fin
+
+    # --- Compatibilidad con nombres antiguos (no se muestran en el panel) ---
     if periodo == "Hoy":
-        return _inicio_dia(ref), _fin_dia(ref)
+        return _inicio_dia(ref), fin
     if periodo == "Ayer":
         ayer = ref - timedelta(days=1)
         return _inicio_dia(ayer), _fin_dia(ayer)
-    if periodo == "Esta semana":
-        lunes = ref - timedelta(days=ref.weekday())
-        return _inicio_dia(lunes), _fin_dia(ref)
     if periodo == "Este mes":
-        primero = ref.replace(day=1)
-        return _inicio_dia(primero), _fin_dia(ref)
+        return _inicio_dia(ref.replace(day=1)), fin
     if periodo == "Personalizado":
         d = (
             pd.Timestamp(fecha_desde).to_pydatetime().date()
@@ -77,8 +95,9 @@ def rango_periodo(periodo, fecha_ref=None, fecha_desde=None, fecha_hasta=None):
         if d > h:
             d, h = h, d
         return _inicio_dia(d), _fin_dia(h)
+
     # Por defecto: todo el historial.
-    return datetime(2020, 1, 1, 0, 0, 0), _fin_dia(ref)
+    return datetime(2020, 1, 1, 0, 0, 0), fin
 
 
 def filtrar_por_fecha(df, col, inicio, fin):

@@ -28,8 +28,37 @@ def calcular_polarizacion(scores):
     n_total = int(len(s))
     n_favor = int((s > 0.1).sum())
     n_contra = int((s < -0.1).sum())
+    return _armar_polarizacion(n_favor, n_contra, n_total)
+
+
+def polarizacion_desde_conteos(n_favor, n_contra, n_total):
+    """Polarizacion a partir de conteos ya clasificados (fuente unica).
+
+    Misma logica que calcular_polarizacion pero partiendo de los conteos
+    favorable/critico/total que produce dash_fuente.distribucion_sentimiento
+    (derivados de fb_sentimiento, la fuente confiable). Se usa para que la
+    Polarizacion cuente EXACTAMENTE lo mismo que el Clima, en vez de leer
+    fb_comments.sentiment_score, que esta poco poblado y daba 0 posturas
+    (falso "mayoritariamente neutral").
+    """
+    try:
+        n_favor = int(n_favor or 0)
+        n_contra = int(n_contra or 0)
+        n_total = int(n_total or 0)
+    except (TypeError, ValueError):
+        return None
+    if n_total <= 0:
+        return None
+    return _armar_polarizacion(n_favor, n_contra, n_total)
+
+
+def _armar_polarizacion(n_favor, n_contra, n_total):
+    """Construye el dict de polarizacion a partir de conteos crudos."""
+    n_favor = max(int(n_favor), 0)
+    n_contra = max(int(n_contra), 0)
+    n_total = max(int(n_total), 0)
     comprometidos = n_favor + n_contra
-    if comprometidos == 0:
+    if n_total == 0 or comprometidos == 0:
         return {
             "n_total": n_total, "n_favor": 0, "n_contra": 0,
             "pct_favor": 0.0, "pct_contra": 0.0,

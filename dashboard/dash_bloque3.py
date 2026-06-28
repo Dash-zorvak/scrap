@@ -12,7 +12,7 @@ import streamlit as st
 
 from config import FACEBOOK_DB, TIKTOK_DB
 from dashboard.dash_metrics import cargar_fb_engagement, cargar_tk_engagement
-from dashboard.dash_audiencia import calcular_polarizacion
+from dashboard.dash_audiencia import polarizacion_desde_conteos
 from dashboard.dash_riesgo import (
     calcular_autenticidad,
     calcular_nivel_alerta,
@@ -144,7 +144,7 @@ def render_bloque3_riesgo(periodo, plataforma):
     fricciones = _detectar_fricciones(df_coment)
     pct_neg_val = dist["pct_critico"]
     enojo_val = df_eng_fb['indice_enojo'].mean() if df_eng_fb is not None and not df_eng_fb.empty and 'indice_enojo' in df_eng_fb.columns else 0
-    pol_b3 = calcular_polarizacion(df_coment['sentiment_score']) if dist["n_total"] > 0 and 'sentiment_score' in df_coment.columns else None
+    pol_b3 = polarizacion_desde_conteos(dist["n_favorable"], dist["n_critico"], dist["n_total"]) if dist["n_total"] > 0 else None
     balance_b3 = pol_b3['balance'] if pol_b3 else None
     alerta = calcular_nivel_alerta(pct_negativo=pct_neg_val, indice_enojo=enojo_val, balance_confrontacion=balance_b3, n_fricciones=len(fricciones), temas_friccion=fricciones)
     sem_class = {'verde': 'positive', 'amarillo': 'warning', 'rojo': 'critical'}.get(alerta['color'], 'positive')

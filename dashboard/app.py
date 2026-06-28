@@ -18,6 +18,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from config import FACEBOOK_DB, TIKTOK_DB
 from dashboard.estilos import CSS
+from dashboard.estilos_override import CSS_OVERRIDE
+from dashboard.dash_periodos import OPCIONES_PERIODO
 from dashboard.dash_ingesta import seccion_cargar_contenido
 from dashboard.dash_ui import _page_head, _docstrip, render_notas_metodologicas
 from dashboard.dash_bloque1 import render_bloque1_pulso
@@ -25,7 +27,7 @@ from dashboard.dash_bloque2 import render_bloque2_audiencia
 from dashboard.dash_bloque3 import render_bloque3_riesgo
 from dashboard.dash_bloque4 import render_bloque4_inteligencia
 
-# ─── Estado de sesión ────────────────
+# ─── Estado de sesión ────────────
 if "lote_ingreso" not in st.session_state:
     st.session_state["lote_ingreso"] = []
 
@@ -36,8 +38,10 @@ st.set_page_config(
 )
 
 st.markdown(CSS, unsafe_allow_html=True)
+st.markdown(CSS_OVERRIDE, unsafe_allow_html=True)
 
 # ─── Fecha de actualización (usada en topbar y sidebar) ─────
+ultima_fecha = datetime.now()
 try:
     conn = sqlite3.connect(FACEBOOK_DB)
     max_fb = pd.read_sql("SELECT MAX(created_time) as m FROM fb_engagement", conn).iloc[0]['m']
@@ -58,7 +62,9 @@ except Exception:
     fecha_str = "No disponible"
     fecha_corta = "N/D"
 
-# ─── Topbar institucional ──────────────────
+st.session_state["fecha_ref"] = ultima_fecha
+
+# ─── Topbar institucional ──────────────
 st.markdown(f"""
 <div class="topbar">
     <div class="topbar-brand">PANEL <span class="sep">·</span> SANTA ANA <span class="sep">/</span> <span class="who">Inteligencia Ciudadana</span></div>
@@ -66,7 +72,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ─── SIDEBAR · CONSOLA EJECUTIVA ─────────────
+# ─── SIDEBAR · CONSOLA EJECUTIVA ───────────
 
 st.sidebar.markdown("""
 <div class="sys-header">
@@ -77,14 +83,14 @@ st.sidebar.markdown("""
 
 st.sidebar.markdown(f"""
 <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-sm);padding:11px 13px;margin-bottom:18px">
-    <div style="display:flex;align-items:center;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:1.4px;color:var(--fg-muted);font-weight:600;text-transform:uppercase">
+    <div style="display:flex;align-items:center;justify-content:space-between;font-family:var(--font-mono);font-size:11px;letter-spacing:1.4px;color:var(--fg-muted);font-weight:600;text-transform:uppercase">
         <span>SYS</span>
         <span style="display:flex;align-items:center;gap:6px">
             <span style="width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,0.18);display:inline-block"></span>
             <span style="color:var(--green);letter-spacing:1.2px">OPERACIONAL</span>
         </span>
     </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:1.2px;color:var(--fg-muted);font-weight:600;margin-top:9px;text-transform:uppercase">
+    <div style="display:flex;align-items:center;justify-content:space-between;font-family:var(--font-mono);font-size:11px;letter-spacing:1.2px;color:var(--fg-muted);font-weight:600;margin-top:9px;text-transform:uppercase">
         <span>FEED</span>
         <span style="color:var(--accent)">{fecha_corta}</span>
     </div>
@@ -93,13 +99,20 @@ st.sidebar.markdown(f"""
 
 st.sidebar.markdown('<div class="sys-section-label" style="color:var(--accent);display:flex;align-items:center;gap:6px"><span style="font-size:8px">▣</span><span>PARÁMETROS</span></div>', unsafe_allow_html=True)
 
-periodo = st.sidebar.selectbox("PERÍODO", [
-    "Esta semana",
-    "Últimos 15 días",
-    "Último mes",
-    "Últimos 3 meses",
-    "Todo el período"
-])
+periodo = st.sidebar.selectbox("PERÍODO", OPCIONES_PERIODO)
+
+if periodo == "Personalizado":
+    _ref_date = pd.Timestamp(ultima_fecha).date()
+    _c1, _c2 = st.sidebar.columns(2)
+    with _c1:
+        _desde = st.date_input("DESDE", value=_ref_date.replace(day=1), key="fp_desde")
+    with _c2:
+        _hasta = st.date_input("HASTA", value=_ref_date, key="fp_hasta")
+    st.session_state["fecha_desde"] = _desde
+    st.session_state["fecha_hasta"] = _hasta
+else:
+    st.session_state["fecha_desde"] = None
+    st.session_state["fecha_hasta"] = None
 
 plataforma = st.sidebar.selectbox("PLATAFORMA", [
     "Ambas", "Facebook", "TikTok"
@@ -113,18 +126,18 @@ vista = st.sidebar.radio("VISTA", [
 
 st.sidebar.markdown(f"""
 <div style="margin-top:26px;padding-top:14px;border-top:1px solid var(--border);font-family:var(--font-mono);color:var(--fg-muted);letter-spacing:0.4px;line-height:1.6">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:9px;text-transform:uppercase;letter-spacing:1.4px;font-weight:600">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:1.4px;font-weight:600">
         <span>ACTUALIZADO</span>
         <span style="color:var(--accent)">{fecha_corta}</span>
     </div>
-    <div style="color:var(--fg-secondary);font-size:9px;line-height:1.5">{fecha_str}</div>
-    <div style="color:var(--fg-dim);font-size:8.5px;margin-top:12px;letter-spacing:1px;text-transform:uppercase;border-top:1px solid var(--border-soft);padding-top:8px">PANEL·SANTA ANA <span style="color:var(--accent-2)">·</span> v1.0 <span style="color:var(--accent-2)">·</span> CONFIDENCIAL</div>
+    <div style="color:var(--fg-secondary);font-size:10.5px;line-height:1.5">{fecha_str}</div>
+    <div style="color:var(--fg-dim);font-size:10px;margin-top:12px;letter-spacing:1px;text-transform:uppercase;border-top:1px solid var(--border-soft);padding-top:8px">PANEL·SANTA ANA <span style="color:var(--accent-2)">·</span> v1.0 <span style="color:var(--accent-2)">·</span> CONFIDENCIAL</div>
 </div>
 """, unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════
 # DISPATCH PRINCIPAL
-# ════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════
 
 if vista == "Dashboard":
     tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs([

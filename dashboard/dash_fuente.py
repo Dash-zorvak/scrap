@@ -13,7 +13,9 @@ Reglas de la fuente unica:
   - Un comentario sin sentimiento clasificable cuenta como NEUTRAL, de modo que
     favorable + neutral + critico siempre suma 100%.
   - El periodo se aplica por la fecha de la publicacion a la que pertenece el
-    comentario (fb_comments no guarda fecha propia).
+    comentario (fb_comments no guarda fecha propia). La fecha se toma de
+    fb_posts y, si faltara, de fb_engagement, para no descartar comentarios
+    cuyo post solo aparece en una de las dos tablas.
 """
 
 import sqlite3
@@ -22,9 +24,15 @@ import pandas as pd
 
 from config import FACEBOOK_DB
 
-_POS = {"positivo", "muy_positivo", "positiva", "apoyo"}
-_NEG = {"negativo", "muy_negativo", "negativa", "critica", "critico"}
-_NEU = {"neutral", "neutro", "neutra"}
+_POS = {
+    "positivo", "muy_positivo", "positiva", "apoyo",
+    "positive", "pos",
+}
+_NEG = {
+    "negativo", "muy_negativo", "negativa", "critica", "critico",
+    "negative", "neg",
+}
+_NEU = {"neutral", "neutro", "neutra", "mixto", "mixed"}
 
 
 def cargar_comentarios_periodo(inicio, fin, db_path=None):
@@ -32,6 +40,9 @@ def cargar_comentarios_periodo(inicio, fin, db_path=None):
 
     Columnas: comment_id, post_id, message, sentiment, sentiment_score,
     topic_category, zona, created_time.
+
+    La fecha del comentario se hereda de su publicacion: se prefiere
+    fb_posts.created_time y, si falta, fb_engagement.created_time.
     """
     db_path = db_path or FACEBOOK_DB
     conn = None
@@ -41,8 +52,9 @@ def cargar_comentarios_periodo(inicio, fin, db_path=None):
             """
             SELECT fc.comment_id, fc.post_id, fc.message,
                    fc.sentiment, fc.sentiment_score, fc.topic_category, fc.zona,
-                   fe.created_time
+                   COALESCE(fp.created_time, fe.created_time) AS created_time
             FROM fb_comments fc
+            LEFT JOIN fb_posts fp ON fc.post_id = fp.post_id
             LEFT JOIN fb_engagement fe ON fc.post_id = fe.post_id
             """,
             conn,

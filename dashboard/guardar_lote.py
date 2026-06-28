@@ -3,7 +3,13 @@ import sqlite3
 
 from src.storage.db import LocalStorage
 from dashboard import config as _cfg
-from dashboard._generar_id import generar_id_post, generar_id_comentario, _base_para_hash
+from dashboard._generar_id import (
+    generar_id_post,
+    generar_id_comentario,
+    _base_para_hash,
+    firma_contenido,
+    resolver_id_post,
+)
 from dashboard.escritura_tiktok import insertar_video, insertar_comentario_tiktok, obtener_ids_videos
 from dashboard.externos_store import (
     asegurar_tablas_externas,
@@ -47,13 +53,45 @@ def _fb_comment_insert_dict(comentario: dict, comment_id: str, post_id: str) -> 
     }
 
 
+def _cargar_firmas_fb(ruta_fb: str) -> dict:
+    """Precarga {firma_contenido -> post_id} de los posts FB ya guardados.
+
+    Permite que `resolver_id_post` reutilice un post existente cuando el mismo
+    contenido se vuelve a subir con otra URL (permalink vs enlace de compartir),
+    evitando duplicar el post y sus comentarios entre sesiones distintas.
+    """
+    firmas: dict = {}
+    try:
+        conn = sqlite3.connect(ruta_fb)
+        try:
+            filas = conn.execute(
+                "SELECT post_id, page_name, created_time, message FROM fb_posts"
+            ).fetchall()
+        finally:
+            conn.close()
+        for post_id, page_name, created_time, message in filas:
+            firma = firma_contenido({
+                "plataforma": "facebook",
+                "page_name": page_name,
+                "created_time": created_time,
+                "message": message,
+            })
+            if firma:
+                firmas.setdefault(firma, post_id)
+    except Exception:
+        # Tabla aun inexistente (base nueva) u otro problema de lectura: sin
+        # firmas previas la ingesta sigue funcionando, solo sin dedup por contenido.
+        return {}
+    return firmas
+
+
 def guardar_lote(lote: list, progreso_cb=None) -> dict:
     """Guarda un lote de items revisados en sus bases de datos.
 
     progreso_cb (opcional): callable(i, total, etiqueta) que se invoca una vez
-    por cada item revisado procesado (haya tenido éxito o error), para que la UI
+    por cada item revisado procesado (haya tenido exito o error), para que la UI
     pueda mostrar un contador real i/total en vez de quedarse en 0/total hasta
-    el final. Cualquier excepción del callback se ignora.
+    el final. Cualquier excepcion del callback se ignora.
     """
     ruta_fb = _cfg.FACEBOOK_DB
     ruta_tk = _cfg.TIKTOK_DB
@@ -74,6 +112,7 @@ def guardar_lote(lote: list, progreso_cb=None) -> dict:
 
     store = LocalStorage(db_path=ruta_fb)
     fb_ids_existentes = store.get_all_ids("fb_posts", "post_id")
+    fb_firmas = _cargar_firmas_fb(ruta_fb)
 
     conn_tk = sqlite3.connect(ruta_tk)
     try:
@@ -94,8 +133,7 @@ def guardar_lote(lote: list, progreso_cb=None) -> dict:
 
         try:
             if plataforma == "facebook":
-                base = _base_para_hash(datos)
-                post_id = generar_id_post(base, fb_ids_existentes)
+                post_id = resolver_id_post(datos, fb_ids_existentes, fb_firmas)
                 fb_ids_existentes.add(post_id)
                 post_dict = _fb_post_insert_dict(datos, post_id)
                 ok = store.insert_fb_post(post_dict)
@@ -197,7 +235,7 @@ def guardar_lote(lote: list, progreso_cb=None) -> dict:
     conn_tk.close()
     conn_ext.close()
 
-    # Persistir en HF Dataset si la sincronización está activa (no-op en local/Railway).
+    # Persistir en HF Dataset si la sincronizacion esta activa (no-op en local/Railway).
     try:
         from dashboard.hf_sync import push_dbs as _hf_push_dbs
         _hf_push_dbs()

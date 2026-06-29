@@ -7,6 +7,11 @@ que los datos no se inventan.
 
 Estos helpers no dependen de los selectores globales del sidebar; cuando un
 bloque necesita el período o la plataforma, los recibe como argumentos.
+
+Nota sobre plataforma: las referencias de origen consultan publicaciones de
+Facebook (tabla fb_posts). Cuando el filtro activo es solo TikTok, NO se muestran
+esas referencias para no exhibir evidencia de una plataforma distinta a la
+seleccionada. Las funciones aceptan `plataforma` y hacen early-return en ese caso.
 """
 
 import os
@@ -18,6 +23,11 @@ import streamlit as st
 
 from config import FACEBOOK_DB, TIKTOK_DB
 from dashboard.dash_metrics import safe_query
+
+
+def _es_solo_tiktok(plataforma):
+    """True si el filtro activo es exclusivamente TikTok."""
+    return plataforma is not None and str(plataforma).strip().lower().startswith("tik")
 
 
 def formato_fecha_espanol(fecha):
@@ -126,7 +136,8 @@ def _docstrip(periodo_lbl: str, plataforma_lbl: str, fecha_lbl: str):
 
 # ─── REFERENCIAS A PUBLICACIONES (verificación de origen) ──────────
 # Permiten al lector abrir el post real en Facebook y comprobar de dónde salen
-# los datos. La DB guarda post_url al cargar contenido.
+# los datos. La DB guarda post_url al cargar contenido. Solo aplican a Facebook,
+# por lo que se ocultan cuando el filtro activo es exclusivamente TikTok.
 
 def _post_links_html(rows, max_links=8):
     chips = ""
@@ -165,12 +176,16 @@ def _post_links_html(rows, max_links=8):
     return chips
 
 
-def referencias_publicaciones(post_ids=None, limit=8, titulo="PUBLICACIONES DE ORIGEN"):
+def referencias_publicaciones(post_ids=None, limit=8, titulo="PUBLICACIONES DE ORIGEN", plataforma=None):
     """Renderiza enlaces clickeables a las publicaciones que sustentan un dato.
 
     Si post_ids viene dado, enlaza esas publicaciones; si no, las más recientes
-    con enlace. No muestra nada si no hay URLs guardadas.
+    con enlace. No muestra nada si no hay URLs guardadas. Las referencias provienen
+    de fb_posts (Facebook): en la vista de solo TikTok se omiten para no mostrar
+    evidencia de otra plataforma.
     """
+    if _es_solo_tiktok(plataforma):
+        return
     try:
         if post_ids is not None:
             ids = [str(p) for p in post_ids if p is not None and str(p) != ""]
@@ -230,16 +245,20 @@ def _post_ids_por_tema_comentarios(tema):
         return []
 
 
-def referencias_por_categoria(tema, limit=8):
+def referencias_por_categoria(tema, limit=8, plataforma=None):
+    if _es_solo_tiktok(plataforma):
+        return
     ids = _post_ids_por_categoria(tema)
     if ids:
-        referencias_publicaciones(post_ids=ids, limit=limit, titulo="PUBLICACIONES SOBRE «" + str(tema) + "»")
+        referencias_publicaciones(post_ids=ids, limit=limit, titulo="PUBLICACIONES SOBRE «" + str(tema) + "»", plataforma=plataforma)
 
 
-def referencias_por_tema_comentarios(tema, limit=6):
+def referencias_por_tema_comentarios(tema, limit=6, plataforma=None):
+    if _es_solo_tiktok(plataforma):
+        return
     ids = _post_ids_por_tema_comentarios(tema)
     if ids:
-        referencias_publicaciones(post_ids=ids, limit=limit, titulo="PUBLICACIONES DE «" + str(tema) + "»")
+        referencias_publicaciones(post_ids=ids, limit=limit, titulo="PUBLICACIONES DE «" + str(tema) + "»", plataforma=plataforma)
 
 
 def render_notas_metodologicas():

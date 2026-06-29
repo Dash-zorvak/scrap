@@ -2,7 +2,8 @@
 
 Esta guía deja el **dashboard del alcalde** accesible desde internet con una
 URL propia y **login por correo**, mientras la **base de datos nunca sale de tu
-Mac**. El **panel de carga** del analista corre solo en local.
+Mac**. El **panel de carga** del analista corre solo en local (y, opcionalmente,
+de forma remota y blindada — ver §7).
 
 > Modelo "on-demand": el dashboard está en línea **mientras tu Mac esté
 > encendida y el script corriendo**. Si la apagas, la URL deja de responder
@@ -25,11 +26,12 @@ Mac**. El **panel de carga** del analista corre solo en local.
         └─ lee la DB LOCAL (config.py)  ← nunca se sube
 
   Panel de carga (solo tú):  http://localhost:8502  (dashboard/panel_carga.py)
-        └─ NO pasa por el túnel, se queda en tu Mac
+        └─ por defecto NO pasa por el túnel (ver §7 para acceso remoto seguro)
 ```
 
 - **Dashboard del alcalde** → puerto **8501** → expuesto por el túnel.
-- **Panel de carga** → puerto **8502** → **solo localhost**, jamás se expone.
+- **Panel de carga** → puerto **8502** → **solo localhost** por defecto
+  (opcionalmente remoto y blindado, ver §7).
 - **DB** → archivos locales leídos por `config.py`. No se sube a ningún lado.
 
 ---
@@ -128,7 +130,7 @@ Para apagarlo: `Ctrl + C` (cierra el túnel y el dashboard).
 ```
 
 Abre `http://localhost:8502` solo en tu Mac. Aquí subes el contenido; **no se
-expone por el túnel**.
+expone por el túnel** (salvo que actives el acceso remoto del §7).
 
 ---
 
@@ -139,8 +141,63 @@ expone por el túnel**.
 - **On-demand.** El dashboard responde solo con tu Mac encendida y
   `run_dashboard.sh` corriendo. Para tenerlo 24/7 necesitarías una máquina
   siempre encendida (un mini-PC o Raspberry con la DB local + el mismo túnel).
-- **Seguridad.** El panel de carga nunca se enruta en `config.yml`, así que no
-  es alcanzable desde internet aunque alguien tenga la URL del dashboard.
+- **Seguridad.** El panel de carga no se enruta por defecto en `config.yml`,
+  así que no es alcanzable desde internet a menos que actives el §7.
+
+---
+
+## 7. (Opcional) Subir contenido desde el celular — panel remoto seguro
+
+Por defecto el panel es solo local. Si quieres poder subir contenido desde tu
+iPhone, expón el panel en su **propio subdominio** con un candado **más
+estricto** que el del dashboard, porque el panel **ESCRIBE en la base de datos**.
+
+> ⚠️ El panel escribe en la DB. Su política de acceso debe permitir **SOLO tu
+> correo**. **Nunca** agregues el del alcalde aquí.
+
+### 7.1 Agregar el panel al túnel
+
+Edita `~/.cloudflared/config.yml` y añade una segunda regla de ingress (usa un
+subdominio poco obvio):
+
+```yaml
+ingress:
+  - hostname: dashboard.tudominio.com
+    service: http://localhost:8501
+  - hostname: carga-x7.tudominio.com     # panel (subdominio no obvio)
+    service: http://localhost:8502
+  - service: http_status:404
+```
+
+### 7.2 Ruta DNS del subdominio del panel
+
+```bash
+cloudflared tunnel route dns santaana-dashboard carga-x7.tudominio.com
+```
+
+### 7.3 Segunda app en Cloudflare Access (solo tú)
+
+1. Zero Trust → Access → Applications → Add an application → Self-hosted.
+2. **Application domain**: `carga-x7.tudominio.com`.
+3. **Policy**: Action **Allow**, Include → **Emails** → **SOLO tu correo**.
+4. (Refuerzo) Baja la **duración de sesión** de la app (p. ej. 1–8 h) para que
+   caduque pronto.
+5. Login por **One-time PIN** (código al correo), igual que el dashboard.
+
+### 7.4 Cómo subir desde el celular
+
+Con tu Mac encendida:
+
+1. Arranca el túnel (lo levanta `run_dashboard.sh`, que sirve **ambos**
+   hostnames del `config.yml`).
+2. En otra terminal, arranca el panel: `./run_panel.sh`.
+3. En el iPhone abre `https://carga-x7.tudominio.com`, ingresa tu correo y el
+   código, y sube el contenido. El selector del iPhone permite **Fotos**,
+   **Archivos** e **iCloud**.
+
+> La DB sigue en tu Mac: el panel escribe en los archivos locales; por el túnel
+> solo viaja tráfico HTTP cifrado, ningún `.db`. Solo funciona mientras tu Mac
+> esté encendida con el túnel y el panel corriendo.
 
 ---
 

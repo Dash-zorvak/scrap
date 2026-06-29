@@ -13,7 +13,7 @@ nombres antiguos GROQ_* como respaldo para no romper despliegues en transición:
   Base URL:   LLM_BASE_URL  -> GROQ_BASE_URL  -> https://integrate.api.nvidia.com/v1
   Texto:      LLM_TEXT_MODEL     -> GROQ_TEXT_MODEL   -> deepseek-ai/deepseek-v4-flash
   Verificador (cascada): LLM_VERIFIER_MODEL          -> z-ai/glm-5.1
-  Visión:     LLM_VISION_MODEL   -> GROQ_VISION_MODEL -> microsoft/phi-4-multimodal-instruct
+  Visión:     LLM_VISION_MODEL   -> GROQ_VISION_MODEL -> qwen/qwen3.5-397b-a17b
   Visión (respaldo): LLM_VISION_FALLBACK            -> (sin respaldo por defecto; solo modelos multi-imagen)
 
   Proveedor de TEXTO separado (opcional). Permite enviar el TEXTO a otro
@@ -25,18 +25,24 @@ nombres antiguos GROQ_* como respaldo para no romper despliegues en transición:
   que antes (sin cambios de comportamiento).
 
 Cascada de visión: si el modelo primario de visión falla con un error de
-servidor/modelo (5xx, 404, "modelo no disponible"), se reintenta automáticamente
-con los modelos de LLM_VISION_FALLBACK en orden. Esto evita que un modelo roto
-server-side (como el viejo nemotron-nano-vl-8b) tumbe la ingesta por PDF. Los
-errores de otra índole (auth, 400, etc.) se propagan sin probar respaldos.
-LLM_VISION_FALLBACK admite una lista separada por comas.
+servidor/modelo (5xx, 404, función DEGRADED "cannot be invoked", "modelo no
+disponible") o porque el modelo solo admite UNA imagen ("at most 1 image"), se
+cae automáticamente al siguiente modelo de LLM_VISION_FALLBACK en orden. Esto
+evita que un modelo roto server-side (como el viejo nemotron-nano-vl-8b) o una
+función degradada tumbe la ingesta por PDF. Reintentar el mismo modelo roto no
+sirve, así que esos errores NO se reintentan in situ: disparan la cascada. Solo
+los errores transitorios de rate-limit y timeouts se reintentan con backoff
+(LLM_MAX_REINTENTOS, por defecto 3) antes de propagarse. Los errores de
+autenticación y los 400 de petición (salvo el de multi-imagen) se propagan sin
+probar respaldos. LLM_VISION_FALLBACK admite una lista separada por comas.
 
 IMPORTANTE (multi-imagen): la ingesta envía VARIAS imágenes por llamada
 (ventanas de páginas/posts). El modelo de visión y cualquier respaldo DEBEN
-admitir múltiples imágenes por prompt. No uses modelos de una sola imagen como
-meta/llama-3.2-11b-vision-instruct: NIM los rechaza con 400 ("At most 1
-image(s) may be provided in one prompt") y, al no ser 5xx/404, ese error se
-propaga sin caer al siguiente respaldo.
+admitir múltiples imágenes por prompt. Si configuras un modelo de una sola
+imagen como meta/llama-3.2-11b-vision-instruct, NIM lo rechaza con 400 ("At most
+1 image(s) may be provided in one prompt"); ese error ahora también dispara la
+cascada hacia el siguiente respaldo, pero si TODOS los modelos configurados son
+de una sola imagen la ingesta fallará. Configura siempre modelos multi-imagen.
 
 En local, las variables se leen de un archivo .env (cargado con load_dotenv).
 En HF Spaces / Railway vienen del entorno del contenedor. Si el primario
@@ -91,15 +97,16 @@ VERIFIER_MODEL = _primer_env(
 )
 VISION_MODEL = _primer_env(
     "LLM_VISION_MODEL", "GROQ_VISION_MODEL",
-    default="microsoft/phi-4-multimodal-instruct",
+    default="qwen/qwen3.5-397b-a17b",
 )
 # Modelos de respaldo de visión: se prueban en orden si el primario falla con
-# un error de servidor/modelo (5xx/404). IMPORTANTE: la ingesta envía VARIAS
-# imágenes por llamada (ventanas de páginas/posts), así que el respaldo debe ser
-# un modelo MULTI-IMAGEN. NO uses modelos de una sola imagen como
-# meta/llama-3.2-11b-vision-instruct: NIM los rechaza con 400 ("At most 1
-# image(s) may be provided in one prompt") y, al no ser 5xx/404, el error se
-# propaga sin caer al siguiente. Por defecto no hay respaldo; configúralo con
+# un error de servidor/modelo (5xx/404/DEGRADED) o si solo admite una imagen.
+# IMPORTANTE: la ingesta envía VARIAS imágenes por llamada (ventanas de
+# páginas/posts), así que el respaldo debe ser un modelo MULTI-IMAGEN. NO uses
+# modelos de una sola imagen como meta/llama-3.2-11b-vision-instruct: NIM los
+# rechaza con 400 ("At most 1 image(s) may be provided in one prompt"); ese
+# error ahora dispara la cascada, pero si todos los modelos son de una imagen la
+# ingesta fallará. Por defecto no hay respaldo; configúralo con
 # LLM_VISION_FALLBACK solo con otro modelo multi-imagen.
 VISION_FALLBACKS = _lista_env(
     "LLM_VISION_FALLBACK",
@@ -114,6 +121,11 @@ GROQ_JPEG_QUALITY = int(os.environ.get("GROQ_JPEG_QUALITY", "82"))
 # pon LLM_JSON_MODE=0: se omite el response_format pero el prompt sigue pidiendo
 # JSON, y el parseo (json.loads) sigue funcionando.
 JSON_MODE = os.environ.get("LLM_JSON_MODE", "1") not in ("0", "false", "False", "")
+
+# Reintentos con backoff ante errores transitorios (rate limit y timeouts) antes
+# de propagar el error. Los 5xx y las funciones DEGRADED NO se reintentan in
+# situ: los maneja la cascada de visión cayendo a otro modelo (_es_error_modelo).
+_MAX_REINTENTOS = int(os.environ.get("LLM_MAX_REINTENTOS", "3"))
 
 
 # ── Cliente lazy ──
@@ -206,7 +218,9 @@ llm_disponible = groq_disponible
 
 # ── Reintento con backoff ──
 
-def _retry_with_backoff(func, *args, max_retries=3, **kwargs):
+def _retry_with_backoff(func, *args, max_retries=None, **kwargs):
+    if max_retries is None:
+        max_retries = _MAX_REINTENTOS
     last_exc = None
     for attempt in range(max_retries):
         try:
@@ -223,7 +237,9 @@ def _retry_with_backoff(func, *args, max_retries=3, **kwargs):
             )
             if (es_rate or es_timeout) and attempt < max_retries - 1:
                 # Rate limit: espera exponencial. Timeout/conexión: espera más
-                # corta, suele ser una lentitud puntual del proveedor.
+                # corta, suele ser una lentitud puntual del proveedor. Los 5xx y
+                # las funciones DEGRADED NO se reintentan aquí: los maneja la
+                # cascada de visión cayendo a otro modelo (ver _es_error_modelo).
                 time.sleep(2 ** (attempt + 1) if es_rate else (attempt + 1) * 2)
                 continue
             raise
@@ -233,11 +249,12 @@ def _retry_with_backoff(func, *args, max_retries=3, **kwargs):
 # ── Cascada de visión: selección de modelos y clasificación de errores ──
 
 def _es_error_modelo(exc) -> bool:
-    """True si el error sugiere que el modelo no está disponible (5xx/404/desconocido).
+    """True si el error sugiere que conviene caer al siguiente modelo de visión.
 
-    Se usa para decidir si conviene caer al siguiente modelo de la cascada de
-    visión. Errores de otra índole (auth, 400 de petición, etc.) se propagan
-    sin probar respaldos.
+    Cubre modelos no disponibles (5xx/404/desconocido), funciones DEGRADED de
+    NIM (400 "DEGRADED function cannot be invoked") y modelos que solo admiten
+    una imagen (la ingesta envía varias). Los demás errores (auth, 400 de
+    petición) se propagan sin probar respaldos.
     """
     s = str(exc).lower()
     señales = (
@@ -245,6 +262,10 @@ def _es_error_modelo(exc) -> bool:
         "internal server error", "bad gateway", "service unavailable",
         "gateway timeout", "not found", "does not exist", "unknown model",
         "model_not_found", "no longer supported", "decommission",
+        # Función temporalmente degradada en NIM: el modelo no está operativo.
+        "degraded", "cannot be invoked",
+        # Modelo de una sola imagen: cae al siguiente (que debe ser multi-imagen).
+        "at most 1 image", "at most one image", "only one image",
     )
     return any(x in s for x in señales)
 
@@ -307,9 +328,9 @@ def chat_vision(
     Devuelve el texto de la respuesta.
 
     Si `model` no se especifica, usa el primario (VISION_MODEL) y, ante un error
-    de servidor/modelo (5xx/404), cae automáticamente a los modelos de
-    VISION_FALLBACKS en orden. Con `model` explícito no hay cascada.
-    Lanza ValueError si no hay API key configurada.
+    de servidor/modelo (5xx/404/DEGRADED) o de modelo de una sola imagen, cae
+    automáticamente a los modelos de VISION_FALLBACKS en orden. Con `model`
+    explícito no hay cascada. Lanza ValueError si no hay API key configurada.
     """
     client = _get_groq_client()
     if not client:

@@ -25,15 +25,16 @@ nombres antiguos GROQ_* como respaldo para no romper despliegues en transición:
   que antes (sin cambios de comportamiento).
 
 Cascada de visión: si el modelo primario de visión falla con un error de
-servidor/modelo (5xx, 404, función DEGRADED, "modelo no disponible") o porque el
-modelo solo admite UNA imagen ("at most 1 image"), se reintenta automáticamente
-con los modelos de LLM_VISION_FALLBACK en orden. Antes de caer al respaldo, los
-errores transitorios (5xx, timeouts y funciones DEGRADED) se reintentan con
-backoff (LLM_MAX_REINTENTOS, por defecto 3). Esto evita que un modelo roto
-server-side (como el viejo nemotron-nano-vl-8b) o una función temporalmente
-degradada tumbe la ingesta por PDF. Los errores de autenticación y los 400 de
-petición (salvo el de multi-imagen) se propagan sin probar respaldos.
-LLM_VISION_FALLBACK admite una lista separada por comas.
+servidor/modelo (5xx, 404, función DEGRADED "cannot be invoked", "modelo no
+disponible") o porque el modelo solo admite UNA imagen ("at most 1 image"), se
+cae automáticamente al siguiente modelo de LLM_VISION_FALLBACK en orden. Esto
+evita que un modelo roto server-side (como el viejo nemotron-nano-vl-8b) o una
+función degradada tumbe la ingesta por PDF. Reintentar el mismo modelo roto no
+sirve, así que esos errores NO se reintentan in situ: disparan la cascada. Solo
+los errores transitorios de rate-limit y timeouts se reintentan con backoff
+(LLM_MAX_REINTENTOS, por defecto 3) antes de propagarse. Los errores de
+autenticación y los 400 de petición (salvo el de multi-imagen) se propagan sin
+probar respaldos. LLM_VISION_FALLBACK admite una lista separada por comas.
 
 IMPORTANTE (multi-imagen): la ingesta envía VARIAS imágenes por llamada
 (ventanas de páginas/posts). El modelo de visión y cualquier respaldo DEBEN
@@ -121,8 +122,9 @@ GROQ_JPEG_QUALITY = int(os.environ.get("GROQ_JPEG_QUALITY", "82"))
 # JSON, y el parseo (json.loads) sigue funcionando.
 JSON_MODE = os.environ.get("LLM_JSON_MODE", "1") not in ("0", "false", "False", "")
 
-# Reintentos con backoff ante errores transitorios (rate limit, timeouts, 5xx y
-# funciones DEGRADED) antes de propagar el error o caer al modelo de respaldo.
+# Reintentos con backoff ante errores transitorios (rate limit y timeouts) antes
+# de propagar el error. Los 5xx y las funciones DEGRADED NO se reintentan in
+# situ: los maneja la cascada de visión cayendo a otro modelo (_es_error_modelo).
 _MAX_REINTENTOS = int(os.environ.get("LLM_MAX_REINTENTOS", "3"))
 
 
@@ -233,22 +235,11 @@ def _retry_with_backoff(func, *args, max_retries=None, **kwargs):
                 or "connection" in err_str
                 or e.__class__.__name__ in ("APITimeoutError", "APIConnectionError")
             )
-            es_servidor = (
-                "500" in err_str
-                or "502" in err_str
-                or "503" in err_str
-                or "504" in err_str
-                or "internal server error" in err_str
-                or "bad gateway" in err_str
-                or "service unavailable" in err_str
-                or "gateway timeout" in err_str
-                or "enginecore" in err_str
-                or "degraded" in err_str
-            )
-            if (es_rate or es_timeout or es_servidor) and attempt < max_retries - 1:
-                # Rate limit: espera exponencial. Timeout/conexión y errores de
-                # servidor (5xx) o función DEGRADED: espera más corta, suele ser
-                # una indisponibilidad puntual del proveedor.
+            if (es_rate or es_timeout) and attempt < max_retries - 1:
+                # Rate limit: espera exponencial. Timeout/conexión: espera más
+                # corta, suele ser una lentitud puntual del proveedor. Los 5xx y
+                # las funciones DEGRADED NO se reintentan aquí: los maneja la
+                # cascada de visión cayendo a otro modelo (ver _es_error_modelo).
                 time.sleep(2 ** (attempt + 1) if es_rate else (attempt + 1) * 2)
                 continue
             raise

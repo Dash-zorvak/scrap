@@ -1,11 +1,13 @@
-"""Edición directa de fb_posts (correcciones del analista), vía sqlite3.
+"""Edicion directa de registros (correcciones del analista), via sqlite3.
 
 Se mantiene aparte de src/storage/db.py (modelo SQLAlchemy usado en la ingesta)
-para no tocar el flujo de carga. Cubre tres cosas:
-  - update_fb_post: corregir campos de un registro (p.ej. el autor/página).
-  - delete_fb_post: borrar un registro y sus comentarios.
-  - leer_post: leer la fila completa (incluye cares_count, que get_fb_post no
-    devuelve) para alimentar correctamente las métricas del informe.
+para no tocar el flujo de carga. Cubre:
+  - Facebook (tabla fb_posts):
+      update_fb_post / delete_fb_post / leer_post.
+  - TikTok (tabla videos en tiktok.db):
+      leer_videos_tiktok / update_video_tiktok / delete_video_tiktok.
+  leer_post lee la fila completa (incluye cares_count, que get_fb_post no
+  devuelve) para alimentar correctamente las metricas del informe.
 """
 
 import os
@@ -15,9 +17,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from config import FACEBOOK_DB  # type: ignore
+    from config import FACEBOOK_DB, TIKTOK_DB  # type: ignore
 except Exception:
     FACEBOOK_DB = os.getenv("FACEBOOK_DB", "facebook.db")
+    TIKTOK_DB = os.getenv("TIKTOK_DB", "tiktok.db")
 
 COLUMNAS_EDITABLES = {
     "page_name", "page_id", "message", "post_url", "sentiment",
@@ -27,9 +30,19 @@ COLUMNAS_EDITABLES = {
     "created_time",
 }
 
+# Columnas editables de la tabla videos (TikTok).
+COLUMNAS_TIKTOK_EDITABLES = {
+    "account_id", "description", "created_at", "views", "likes",
+    "shares", "favorites_count", "comments_count",
+}
+
 
 def _db(db_path=None):
     return db_path or os.getenv("FACEBOOK_DB", "") or FACEBOOK_DB
+
+
+def _db_tiktok(db_path=None):
+    return db_path or os.getenv("TIKTOK_DB", "") or TIKTOK_DB
 
 
 def leer_post(post_id, db_path=None):
@@ -48,7 +61,7 @@ def leer_post(post_id, db_path=None):
 
 
 def update_fb_post(post_id, fields, db_path=None):
-    """Actualiza columnas permitidas de un post. Devuelve True si cambió algo."""
+    """Actualiza columnas permitidas de un post. Devuelve True si cambio algo."""
     campos = {k: v for k, v in (fields or {}).items() if k in COLUMNAS_EDITABLES}
     if not campos:
         return False
@@ -73,6 +86,60 @@ def delete_fb_post(post_id, db_path=None):
     try:
         conn.execute("DELETE FROM fb_comments WHERE post_id = ?", (str(post_id),))
         conn.execute("DELETE FROM fb_posts WHERE post_id = ?", (str(post_id),))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+# ===========================================
+# TikTok (tabla videos en tiktok.db)
+# ===========================================
+
+def leer_videos_tiktok(limit=500, offset=0, db_path=None):
+    """Devuelve los videos de TikTok como lista de dicts (mas recientes primero)."""
+    conn = sqlite3.connect(_db_tiktok(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM videos ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (int(limit), int(offset)),
+        ).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_video_tiktok(video_id, fields, db_path=None):
+    """Actualiza columnas permitidas de un video. Devuelve True si cambio algo."""
+    campos = {k: v for k, v in (fields or {}).items() if k in COLUMNAS_TIKTOK_EDITABLES}
+    if not campos:
+        return False
+    sets = ", ".join(f'"{k}" = ?' for k in campos)
+    valores = list(campos.values()) + [str(video_id)]
+    conn = sqlite3.connect(_db_tiktok(db_path))
+    try:
+        cur = conn.execute(
+            f"UPDATE videos SET {sets} WHERE id = ?", valores
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def delete_video_tiktok(video_id, db_path=None):
+    """Elimina un video y sus comentarios. Devuelve True si no hubo error."""
+    conn = sqlite3.connect(_db_tiktok(db_path))
+    try:
+        conn.execute("DELETE FROM comments WHERE video_id = ?", (str(video_id),))
+        conn.execute("DELETE FROM videos WHERE id = ?", (str(video_id),))
         conn.commit()
         return True
     except Exception:

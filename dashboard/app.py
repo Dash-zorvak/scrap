@@ -1,9 +1,13 @@
-"""PANEL·SANTA ANA — Inteligencia Ciudadana.
+"""PANEL·SANTA ANA — Inteligencia Ciudadana (dashboard del alcalde).
 
-App delgada: arma la barra lateral (período/plataforma/vista) y despacha cada
-bloque. La lógica de cada sección vive en módulos dash_bloque1..4 y los helpers
-de UI/referencias en dash_ui. Esto evita un app.py gigante y facilita el
-mantenimiento.
+App delgada de SOLO LECTURA: arma la barra lateral (período/plataforma) y
+despacha los cuatro bloques de análisis. La lógica de cada sección vive en
+módulos dash_bloque1..4 y los helpers de UI en dash_ui. Esto evita un app.py
+gigante y facilita el mantenimiento.
+
+La carga de contenido vive en una app aparte (dashboard/panel_carga.py) que
+solo usa el analista en local; este dashboard no expone ninguna opción de
+ingesta.
 """
 
 import streamlit as st
@@ -20,16 +24,11 @@ from config import FACEBOOK_DB, TIKTOK_DB
 from dashboard.estilos import CSS
 from dashboard.estilos_override import CSS_OVERRIDE
 from dashboard.dash_periodos import OPCIONES_PERIODO
-from dashboard.dash_ingesta import seccion_cargar_contenido
-from dashboard.dash_ui import _page_head, _docstrip, render_notas_metodologicas
+from dashboard.dash_ui import _docstrip
 from dashboard.dash_bloque1 import render_bloque1_pulso
 from dashboard.dash_bloque2 import render_bloque2_audiencia
 from dashboard.dash_bloque3 import render_bloque3_riesgo
 from dashboard.dash_bloque4 import render_bloque4_inteligencia
-
-# ─── Estado de sesión ────────────
-if "lote_ingreso" not in st.session_state:
-    st.session_state["lote_ingreso"] = []
 
 st.set_page_config(
     page_title="PANEL·SANTA ANA — Inteligencia Ciudadana",
@@ -72,8 +71,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ─── SIDEBAR · CONSOLA EJECUTIVA ───────────
-
+# ─── SIDEBAR · CONSOLA EJECUTIVA ───────
 st.sidebar.markdown("""
 <div class="sys-header">
     <div class="sys-brand">PANEL·SANTA ANA</div>
@@ -118,12 +116,6 @@ plataforma = st.sidebar.selectbox("PLATAFORMA", [
     "Ambas", "Facebook", "TikTok"
 ])
 
-st.sidebar.markdown('<div class="sys-section-label" style="color:var(--accent);margin-top:18px;display:flex;align-items:center;gap:6px"><span style="font-size:8px">▣</span><span>CONSOLA</span></div>', unsafe_allow_html=True)
-
-vista = st.sidebar.radio("VISTA", [
-    "Dashboard", "Cargar contenido", "Notas metodológicas"
-])
-
 st.sidebar.markdown(f"""
 <div style="margin-top:26px;padding-top:14px;border-top:1px solid var(--border);font-family:var(--font-mono);color:var(--fg-muted);letter-spacing:0.4px;line-height:1.6">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:1.4px;font-weight:600">
@@ -135,47 +127,21 @@ st.sidebar.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ═════════════════════════════════════════════════════════
-# DISPATCH PRINCIPAL
-# ═════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════
+# DASHBOARD (solo lectura)
+# ═══════════════════════════════════════════════════════
 
-if vista == "Dashboard":
-    tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs([
-        "PULSO GENERAL", "SEGMENTACIÓN DE AUDIENCIA",
-        "RIESGO Y AUTENTICIDAD", "MEMORIA E INTELIGENCIA APLICADA"
-    ])
-    with tab_pulso:
-        render_bloque1_pulso(periodo, plataforma)
-    with tab_audiencia:
-        render_bloque2_audiencia(periodo, plataforma)
-    with tab_riesgo:
-        render_bloque3_riesgo(periodo, plataforma)
-    with tab_inteligencia:
-        render_bloque4_inteligencia(periodo, plataforma)
+tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs([
+    "PULSO GENERAL", "SEGMENTACIÓN DE AUDIENCIA",
+    "RIESGO Y AUTENTICIDAD", "MEMORIA E INTELIGENCIA APLICADA"
+])
+with tab_pulso:
+    render_bloque1_pulso(periodo, plataforma)
+with tab_audiencia:
+    render_bloque2_audiencia(periodo, plataforma)
+with tab_riesgo:
+    render_bloque3_riesgo(periodo, plataforma)
+with tab_inteligencia:
+    render_bloque4_inteligencia(periodo, plataforma)
 
-    _docstrip(periodo, plataforma, fecha_str)
-
-elif vista == "Cargar contenido":
-    _page_head(
-        "OPERACIÓN / CARGA DE CONTENIDO",
-        "Centro de ingesta de informes y evidencia",
-        "Cargue informes consolidados, evidencia documental y briefings diarios. Cada documento se incorpora al pipeline de inteligencia."
-    )
-    st.markdown("""
-    <div class="doc-center">
-        <div class="doc-label">
-            <div class="doc-icon-box">PDF</div>
-            <div class="doc-info">
-                <div class="doc-filename">Informe Consolidado del Día</div>
-                <div class="doc-meta">CENTRO DE DOCUMENTACIÓN EJECUTIVA · BRIEFING DIARIO CORPORATIVO</div>
-            </div>
-        </div>
-        <div class="doc-empty">
-            <div class="doc-empty-label">Sin documento disponible. El informe consolidado se genera automáticamente al procesar los datos del día.</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    seccion_cargar_contenido()
-
-elif vista == "Notas metodológicas":
-    render_notas_metodologicas()
+_docstrip(periodo, plataforma, fecha_str)

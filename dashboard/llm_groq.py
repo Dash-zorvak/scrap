@@ -13,8 +13,8 @@ nombres antiguos GROQ_* como respaldo para no romper despliegues en transición:
   Base URL:   LLM_BASE_URL  -> GROQ_BASE_URL  -> https://integrate.api.nvidia.com/v1
   Texto:      LLM_TEXT_MODEL     -> GROQ_TEXT_MODEL   -> deepseek-ai/deepseek-v4-flash
   Verificador (cascada): LLM_VERIFIER_MODEL          -> z-ai/glm-5.1
-  Visión:     LLM_VISION_MODEL   -> GROQ_VISION_MODEL -> microsoft/phi-3-vision-128k-instruct
-  Visión (respaldo): LLM_VISION_FALLBACK            -> meta/llama-3.2-11b-vision-instruct
+  Visión:     LLM_VISION_MODEL   -> GROQ_VISION_MODEL -> microsoft/phi-4-multimodal-instruct
+  Visión (respaldo): LLM_VISION_FALLBACK            -> (sin respaldo por defecto; solo modelos multi-imagen)
 
   Proveedor de TEXTO separado (opcional). Permite enviar el TEXTO a otro
   proveedor (p. ej. OpenCode Zen) y mantener la VISIÓN (Phi) en NVIDIA:
@@ -30,6 +30,13 @@ con los modelos de LLM_VISION_FALLBACK en orden. Esto evita que un modelo roto
 server-side (como el viejo nemotron-nano-vl-8b) tumbe la ingesta por PDF. Los
 errores de otra índole (auth, 400, etc.) se propagan sin probar respaldos.
 LLM_VISION_FALLBACK admite una lista separada por comas.
+
+IMPORTANTE (multi-imagen): la ingesta envía VARIAS imágenes por llamada
+(ventanas de páginas/posts). El modelo de visión y cualquier respaldo DEBEN
+admitir múltiples imágenes por prompt. No uses modelos de una sola imagen como
+meta/llama-3.2-11b-vision-instruct: NIM los rechaza con 400 ("At most 1
+image(s) may be provided in one prompt") y, al no ser 5xx/404, ese error se
+propaga sin caer al siguiente respaldo.
 
 En local, las variables se leen de un archivo .env (cargado con load_dotenv).
 En HF Spaces / Railway vienen del entorno del contenedor. Si el primario
@@ -84,14 +91,19 @@ VERIFIER_MODEL = _primer_env(
 )
 VISION_MODEL = _primer_env(
     "LLM_VISION_MODEL", "GROQ_VISION_MODEL",
-    default="microsoft/phi-3-vision-128k-instruct",
+    default="microsoft/phi-4-multimodal-instruct",
 )
 # Modelos de respaldo de visión: se prueban en orden si el primario falla con
-# un error de servidor/modelo (5xx/404). meta/llama-3.2-11b-vision-instruct es
-# un fallback verificado que responde en NIM.
+# un error de servidor/modelo (5xx/404). IMPORTANTE: la ingesta envía VARIAS
+# imágenes por llamada (ventanas de páginas/posts), así que el respaldo debe ser
+# un modelo MULTI-IMAGEN. NO uses modelos de una sola imagen como
+# meta/llama-3.2-11b-vision-instruct: NIM los rechaza con 400 ("At most 1
+# image(s) may be provided in one prompt") y, al no ser 5xx/404, el error se
+# propaga sin caer al siguiente. Por defecto no hay respaldo; configúralo con
+# LLM_VISION_FALLBACK solo con otro modelo multi-imagen.
 VISION_FALLBACKS = _lista_env(
     "LLM_VISION_FALLBACK",
-    ["meta/llama-3.2-11b-vision-instruct"],
+    [],
 )
 VENTANA = int(os.environ.get("GROQ_VENTANA_PAGINAS", "4"))
 SOLAPE = int(os.environ.get("GROQ_SOLAPE_PAGINAS", "1"))

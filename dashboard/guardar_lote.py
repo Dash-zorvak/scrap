@@ -85,6 +85,38 @@ def _cargar_firmas_fb(ruta_fb: str) -> dict:
     return firmas
 
 
+def _cargar_firmas_tk(ruta_tk: str) -> dict:
+    """Precarga {firma_contenido -> video_id} de los videos TikTok ya guardados.
+
+    Espejo de `_cargar_firmas_fb` para que TikTok deduplique igual que Facebook:
+    re-subir un video con identidad fiable (misma cuenta+fecha+descripcion)
+    reutiliza su id (upsert) en vez de crear una copia. Los videos SIN
+    descripcion no producen firma (firma_contenido devuelve '') y por tanto NO
+    se deduplican por contenido: cada uno recibe un id unico y nunca se pisan.
+    """
+    firmas: dict = {}
+    try:
+        conn = sqlite3.connect(ruta_tk)
+        try:
+            filas = conn.execute(
+                "SELECT id, account_id, created_at, description FROM videos"
+            ).fetchall()
+        finally:
+            conn.close()
+        for video_id, account_id, created_at, description in filas:
+            firma = firma_contenido({
+                "plataforma": "tiktok",
+                "account_id": account_id,
+                "created_at": created_at,
+                "description": description,
+            })
+            if firma:
+                firmas.setdefault(firma, video_id)
+    except Exception:
+        return {}
+    return firmas
+
+
 def guardar_lote(lote: list, progreso_cb=None) -> dict:
     """Guarda un lote de items revisados en sus bases de datos.
 
@@ -119,6 +151,7 @@ def guardar_lote(lote: list, progreso_cb=None) -> dict:
         tk_ids_existentes = obtener_ids_videos(conn_tk)
     except Exception:
         tk_ids_existentes = set()
+    tk_firmas = _cargar_firmas_tk(ruta_tk)
 
     asegurar_tablas_externas(ruta_ext)
     conn_ext = sqlite3.connect(ruta_ext)
@@ -167,8 +200,11 @@ def guardar_lote(lote: list, progreso_cb=None) -> dict:
                 item["estado"] = "guardado"
 
             elif plataforma == "tiktok":
-                base = _base_para_hash(datos)
-                video_id = generar_id_post(base, tk_ids_existentes)
+                # Igual que Facebook: el id se resuelve por contenido
+                # (resolver_id_post + firma_contenido). Re-subir el mismo video
+                # (identidad fiable) reutiliza su id -> upsert; videos distintos
+                # o sin identidad reciben ids unicos -> nunca se sobrescriben.
+                video_id = resolver_id_post(datos, tk_ids_existentes, tk_firmas)
                 tk_ids_existentes.add(video_id)
                 ok = insertar_video(conn_tk, datos, video_id)
                 if not ok:

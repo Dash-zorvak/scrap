@@ -3,16 +3,22 @@
 Estaciones: Clima Narrativo, Intensidad y Concentracion Tematica.
 
 Todas las estaciones que hablan de comentarios usan la MISMA fuente unica
-(dash_fuente) filtrada por el periodo seleccionado, de modo que el clima y el
-cierre "en una frase" cuenten exactamente lo mismo (se acaba la contradiccion
-13/48/39 vs 38/28) y siempre sobre el 100% de los comentarios del periodo.
+(dash_fuente) filtrada por el periodo y la plataforma seleccionados, de modo que
+el clima y el cierre "en una frase" cuenten exactamente lo mismo y siempre sobre
+el 100% de los comentarios del periodo de la(s) plataforma(s) activa(s).
+
+Filtro por plataforma:
+  - Facebook  -> solo datos de Facebook.
+  - TikTok    -> solo datos de TikTok.
+  - Ambas     -> Facebook + TikTok combinados.
+Ninguna estacion mezcla plataformas cuando el filtro no lo indica.
 """
 
+import pandas as pd
 import streamlit as st
 
 from config import FACEBOOK_DB, TIKTOK_DB
 from dashboard.dash_metrics import (
-    safe_query,
     cargar_fb_engagement,
     cargar_tk_engagement,
 )
@@ -47,6 +53,31 @@ def _filtrar_plataforma(df_fb, df_tk, plataforma):
     return df_fb, df_tk
 
 
+def _conteo_categorias(df_fb_raw, df_tk_raw, plataforma, ini, fin):
+    """Conteo de categorias tematicas del periodo respetando la plataforma.
+
+    Reutiliza las columnas categoria_nombre que ya exponen cargar_fb_engagement
+    y cargar_tk_engagement (via post_categorias), de modo que la concentracion
+    tematica nunca mezcla plataformas cuando el filtro no lo indica.
+    """
+    plat = str(plataforma or "").lower()
+    frames = []
+    if "tik" not in plat and df_fb_raw is not None and not df_fb_raw.empty and "categoria_nombre" in df_fb_raw.columns:
+        f = filtrar_por_fecha(df_fb_raw, "created_time", ini, fin)
+        if f is not None and not f.empty:
+            frames.append(f[["categoria_nombre"]])
+    if plat != "facebook" and df_tk_raw is not None and not df_tk_raw.empty and "categoria_nombre" in df_tk_raw.columns:
+        col = "created_time" if "created_time" in df_tk_raw.columns else "created_at"
+        t = filtrar_por_fecha(df_tk_raw, col, ini, fin)
+        if t is not None and not t.empty:
+            frames.append(t[["categoria_nombre"]])
+    if not frames:
+        return {}
+    cat = pd.concat(frames, ignore_index=True)["categoria_nombre"].dropna()
+    cat = cat[cat.astype(str).str.strip() != ""]
+    return cat.value_counts().to_dict()
+
+
 def render_bloque1_pulso(periodo, plataforma):
     _warn_dropped_null_dates()
 
@@ -57,9 +88,10 @@ def render_bloque1_pulso(periodo, plataforma):
         st.session_state.get("fecha_hasta"),
     )
 
-    # Fuente unica de comentarios del periodo (100%, sentimiento por comentario).
-    df_coment = cargar_comentarios_periodo(ini, fin)
-    dist = distribucion_sentimiento(df_coment)
+    # Fuente unica de comentarios del periodo (100%, sentimiento por comentario),
+    # ya filtrada por plataforma.
+    df_coment = cargar_comentarios_periodo(ini, fin, plataforma)
+    dist = distribucion_sentimiento(df_coment, plataforma)
 
     # Engagement para Intensidad: la comparacion ultimo dia vs promedio semanal
     # necesita la ventana semanal completa, asi que solo se filtra por plataforma.
@@ -142,13 +174,8 @@ def render_bloque1_pulso(periodo, plataforma):
         "Qué está ocurriendo: en qué temas se concentra la conversación ciudadana del período.",
         "Cada color es un tema y su porcentaje es la parte de la conversación que ocupa. Mientras más repartidos los colores, más diversa es la conversación.",
     )
-    df_cat = safe_query(
-        "SELECT pc.categoria_nombre, fe.created_time "
-        "FROM post_categorias pc JOIN fb_engagement fe ON pc.item_id = fe.post_id",
-        FACEBOOK_DB,
-    )
-    df_cat = filtrar_por_fecha(df_cat, "created_time", ini, fin)
-    conc = calcular_concentracion(df_cat['categoria_nombre'].value_counts().to_dict()) if df_cat is not None and not df_cat.empty else None
+    conteo_cat = _conteo_categorias(df_fb_raw, df_tk_raw, plataforma, ini, fin)
+    conc = calcular_concentracion(conteo_cat) if conteo_cat else None
     if conc:
         nivel = conc['nivel']
         col_estado = {'dominado': 'var(--red)', 'liderado': 'var(--amber)', 'fragmentado': 'var(--green)'}.get(nivel, 'var(--accent)')
@@ -180,10 +207,10 @@ def render_bloque1_pulso(periodo, plataforma):
             <div style="margin-top:12px">{filas}</div>
         </div>
         """, unsafe_allow_html=True)
-        referencias_por_categoria(conc['top_tema'])
+        referencias_por_categoria(conc['top_tema'], plataforma=plataforma)
     else:
         st.markdown('<div class="status-info">Clasificación de temas no disponible para este período.</div>', unsafe_allow_html=True)
 
     # ── CIERRE — una sola verdad, misma fuente que el Clima ──
     st.markdown(f'<div class="interpretation" style="margin-top:16px"><div class="interpretation-label">En resumen:</div><div class="interpretation-texto">{frase_clima(dist)}</div></div>', unsafe_allow_html=True)
-    referencias_publicaciones(limit=10, titulo="PUBLICACIONES ANALIZADAS")
+    referencias_publicaciones(limit=10, titulo="PUBLICACIONES ANALIZADAS", plataforma=plataforma)

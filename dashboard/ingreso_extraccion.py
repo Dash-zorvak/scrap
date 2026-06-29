@@ -971,7 +971,7 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
                 return {"posts": posts}
 
             except Exception as e:
-                ultimo_error = f"Error en llamada a Groq: {e}"
+                ultimo_error = f"Error en llamada al modelo de visión: {e}"
                 continue
 
         return {"error": ultimo_error or "Error desconocido"}
@@ -1083,7 +1083,7 @@ def extraer_post_desde_capturas(imagenes: list, plataforma: str) -> dict:
             return _aplicar_contrato(parsed, plataforma)
 
         except Exception as e:
-            ultimo_error = f"Error en llamada a Groq: {e}"
+            ultimo_error = f"Error en llamada al modelo de visión: {e}"
             continue
 
     return {"error": ultimo_error or "Error desconocido"}

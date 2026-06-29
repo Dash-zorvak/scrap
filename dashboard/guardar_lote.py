@@ -155,6 +155,14 @@ def guardar_lote(lote: list, progreso_cb=None) -> dict:
                     else:
                         resumen["errores"].append(f"Error insertando comentario FB: {cid}")
 
+                # Persistir las capturas subidas para poder incrustar la
+                # publicacion en el informe PDF de la medalla mas adelante.
+                try:
+                    from dashboard.capturas_store import guardar_capturas
+                    guardar_capturas(post_id, item.get("imagenes"))
+                except Exception:
+                    pass
+
                 item["post_id"] = post_id
                 item["estado"] = "guardado"
 

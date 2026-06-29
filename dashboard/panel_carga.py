@@ -23,8 +23,9 @@ from dashboard.estilos import CSS
 from dashboard.estilos_override import CSS_OVERRIDE
 from dashboard.dash_ui import _page_head
 from dashboard.dash_ingesta import seccion_cargar_contenido
+from dashboard.editor_db import seccion_editar_db
 
-# ─── Estado de sesión ────────────
+# ─── Estado de sesión ────────────────
 if "lote_ingreso" not in st.session_state:
     st.session_state["lote_ingreso"] = []
 
@@ -66,4 +67,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-seccion_cargar_contenido()
+tab_carga, tab_editor = st.tabs([
+    "📥 Cargar contenido", "🛠️ Editar base de datos / Medalla"
+])
+with tab_carga:
+    seccion_cargar_contenido()
+with tab_editor:
+    seccion_editar_db()

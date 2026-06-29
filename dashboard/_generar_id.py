@@ -1,4 +1,5 @@
 import hashlib
+import uuid
 
 
 def generar_id_post(base: str, ids_existentes: set) -> str:
@@ -32,24 +33,26 @@ def _base_para_hash(datos: dict) -> str:
         return post_url
     if datos.get("plataforma") in ("facebook", "externos"):
         return f"{datos.get('page_name','')}|{datos.get('created_time','')}|{(datos.get('message','') or '')[:200]}"
-    # TikTok sin URL: las descripciones suelen venir vacias y varios videos
-    # comparten cuenta y fecha, por lo que account_id|created_at|description
-    # generaba el MISMO hash para videos DISTINTOS -> generar_id_post reutilizaba
-    # el id y insertar_video (INSERT OR REPLACE) sobreescribia unos videos con
-    # otros (se perdian filas; de 5 subidos solo quedaban 2). Incluimos las
-    # metricas en la firma: dos videos distintos difieren en al menos una
-    # metrica -> hashes distintos -> se guardan ambos. Re-subir el MISMO video
-    # (mismas metricas) sigue deduplicandose igual que antes.
-    return "|".join(str(x) for x in [
-        datos.get("account_id", "") or "",
-        datos.get("created_at", "") or "",
-        (datos.get("description", "") or "")[:200],
-        datos.get("views", 0) or 0,
-        datos.get("likes", 0) or 0,
-        datos.get("favorites_count", 0) or 0,
-        datos.get("shares", 0) or 0,
-        datos.get("comments_count", 0) or 0,
-    ])
+    # TikTok: misma estrategia que Facebook -> identidad por CONTENIDO, nunca por
+    # metricas. La descripcion cumple el papel del 'message' de FB. Cuando hay
+    # descripcion la base es determinista, de modo que re-subir el MISMO video
+    # reutiliza su id (upsert) igual que en FB. Cuando NO hay descripcion (ni
+    # URL) no existe identidad fiable: dos videos DISTINTOS de la misma cuenta y
+    # fecha producian la MISMA base -> el mismo id -> insertar_video
+    # (INSERT OR REPLACE) pisaba una fila con otra (el bug reportado: de varios
+    # subidos solo quedaba el ultimo). Para esos casos generamos una base UNICA
+    # por video (uuid4) y asi cada video es SIEMPRE una fila propia y nunca puede
+    # sobrescribir a otro que no le corresponde. Las metricas NO entran en la
+    # firma: son volatiles (cambian con el tiempo / lectura del modelo) y por eso
+    # el intento anterior de diferenciar por metricas no era fiable.
+    desc = (datos.get("description", "") or "").strip()
+    if desc:
+        return "|".join(str(x) for x in [
+            datos.get("account_id", "") or "",
+            _norm_fecha(datos.get("created_at")),
+            desc[:200],
+        ])
+    return f"tiktok-sin-identidad-{uuid.uuid4().hex}"
 
 
 def _norm_fecha(val) -> str:

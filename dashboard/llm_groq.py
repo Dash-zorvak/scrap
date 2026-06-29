@@ -202,9 +202,17 @@ def _retry_with_backoff(func, *args, max_retries=3, **kwargs):
         except Exception as e:
             last_exc = e
             err_str = str(e).lower()
-            if "429" in err_str or "rate" in err_str or "quota" in err_str:
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** (attempt + 1))
+            es_rate = "429" in err_str or "rate" in err_str or "quota" in err_str
+            es_timeout = (
+                "timed out" in err_str
+                or "timeout" in err_str
+                or "connection" in err_str
+                or e.__class__.__name__ in ("APITimeoutError", "APIConnectionError")
+            )
+            if (es_rate or es_timeout) and attempt < max_retries - 1:
+                # Rate limit: espera exponencial. Timeout/conexión: espera más
+                # corta, suele ser una lentitud puntual del proveedor.
+                time.sleep(2 ** (attempt + 1) if es_rate else (attempt + 1) * 2)
                 continue
             raise
     raise last_exc

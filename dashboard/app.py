@@ -29,6 +29,7 @@ from dashboard.dash_bloque1 import render_bloque1_pulso
 from dashboard.dash_bloque2 import render_bloque2_audiencia
 from dashboard.dash_bloque3 import render_bloque3_riesgo
 from dashboard.dash_bloque4 import render_bloque4_inteligencia
+from dashboard.medalla_dashboard import render_descarga_medalla
 
 st.set_page_config(
     page_title="PANEL·SANTA ANA — Inteligencia Ciudadana",
@@ -143,5 +144,8 @@ with tab_riesgo:
     render_bloque3_riesgo(periodo, plataforma)
 with tab_inteligencia:
     render_bloque4_inteligencia(periodo, plataforma)
+    st.markdown("---")
+    with st.expander("📄 Informe de la mejor medalla reciente"):
+        render_descarga_medalla(periodo)
 
 _docstrip(periodo, plataforma, fecha_str)

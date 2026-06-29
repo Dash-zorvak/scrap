@@ -32,7 +32,24 @@ def _base_para_hash(datos: dict) -> str:
         return post_url
     if datos.get("plataforma") in ("facebook", "externos"):
         return f"{datos.get('page_name','')}|{datos.get('created_time','')}|{(datos.get('message','') or '')[:200]}"
-    return f"{datos.get('account_id','')}|{datos.get('created_at','')}|{(datos.get('description','') or '')[:200]}"
+    # TikTok sin URL: las descripciones suelen venir vacias y varios videos
+    # comparten cuenta y fecha, por lo que account_id|created_at|description
+    # generaba el MISMO hash para videos DISTINTOS -> generar_id_post reutilizaba
+    # el id y insertar_video (INSERT OR REPLACE) sobreescribia unos videos con
+    # otros (se perdian filas; de 5 subidos solo quedaban 2). Incluimos las
+    # metricas en la firma: dos videos distintos difieren en al menos una
+    # metrica -> hashes distintos -> se guardan ambos. Re-subir el MISMO video
+    # (mismas metricas) sigue deduplicandose igual que antes.
+    return "|".join(str(x) for x in [
+        datos.get("account_id", "") or "",
+        datos.get("created_at", "") or "",
+        (datos.get("description", "") or "")[:200],
+        datos.get("views", 0) or 0,
+        datos.get("likes", 0) or 0,
+        datos.get("favorites_count", 0) or 0,
+        datos.get("shares", 0) or 0,
+        datos.get("comments_count", 0) or 0,
+    ])
 
 
 def _norm_fecha(val) -> str:

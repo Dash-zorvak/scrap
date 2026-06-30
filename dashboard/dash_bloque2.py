@@ -31,6 +31,7 @@ from dashboard.dash_ui import (
     _page_head,
     hay_datos,
     card_explicativa,
+    card_narrativa,
     referencias_publicaciones,
 )
 
@@ -93,7 +94,12 @@ def render_bloque2_audiencia(periodo, plataforma):
     dist = distribucion_sentimiento(df_coment, plataforma)
 
     # ── 1. MAPA DE PÚBLICOS ──
-    st.markdown('<div class="section-header"><div class="section-title">01 · Mapa de Públicos</div><div class="section-subtitle">Composición de la audiencia según el tono de sus comentarios.</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header"><div class="section-title">01 · Mapa de Públicos</div></div>', unsafe_allow_html=True)
+    if dist["n_total"] > 0:
+        card_narrativa(
+            f"De <strong>{dist['n_total']:,}</strong> comentarios, <strong>{dist['pct_favorable']:.0f}%</strong> son a favor, {dist['pct_neutral']:.0f}% neutrales y <strong>{dist['pct_critico']:.0f}%</strong> críticos.",
+            tono="neutral",
+        )
     card_explicativa(
         "Qué está ocurriendo: cómo se divide la audiencia entre quienes apoyan, quienes son neutrales y quienes critican.",
         "Cada porcentaje es la parte de los comentarios de ese tono, sobre el 100% del período.",
@@ -119,17 +125,38 @@ def render_bloque2_audiencia(periodo, plataforma):
             </div>
         </div>
         """, unsafe_allow_html=True)
-        referencias_publicaciones(limit=10, titulo="PUBLICACIONES ANALIZADAS", plataforma=plataforma)
+        referencias_publicaciones(limit=10, titulo="Enlaces de referencias bibliográficas", plataforma=plataforma)
     else:
         st.markdown('<div class="status-info">No hay comentarios en el período seleccionado.</div>', unsafe_allow_html=True)
 
     # ── 2. POLARIZACIÓN — solo lenguaje natural ──
-    st.markdown('<div class="section-header"><div class="section-title">02 · Polarización</div><div class="section-subtitle">Si la conversación está en consenso o partida en dos posturas enfrentadas.</div></div>', unsafe_allow_html=True)
+    pol = polarizacion_desde_conteos(dist["n_favorable"], dist["n_critico"], dist["n_total"]) if dist["n_total"] > 0 else None
+    st.markdown('<div class="section-header"><div class="section-title">02 · Polarización</div></div>', unsafe_allow_html=True)
+    if pol and (pol["n_favor"] + pol["n_contra"]) > 0:
+        if pol["nivel"] == "confrontacion":
+            _txt = f"La conversación está <strong>dividida</strong>: casi tantos comentarios a favor ({pol['pct_favor']:.0f}%) como en contra ({pol['pct_contra']:.0f}%)."
+            _tono = "neutral"
+        elif pol["nivel"] == "dividida":
+            if pol["lado"] == "favor":
+                _txt = f"<strong>Predomina el apoyo</strong> ({pol['pct_favor']:.0f}%), con una minoría crítica visible ({pol['pct_contra']:.0f}%)."
+                _tono = "favorable"
+            else:
+                _txt = f"<strong>Predomina la crítica</strong> ({pol['pct_contra']:.0f}%), con una minoría que apoya ({pol['pct_favor']:.0f}%)."
+                _tono = "critico"
+        else:
+            if pol["lado"] == "favor":
+                _txt = f"Hay <strong>consenso a favor</strong>: el {pol['pct_favor']:.0f}% de quienes opinan apoyan."
+                _tono = "favorable"
+            else:
+                _txt = f"Hay <strong>consenso crítico</strong>: el {pol['pct_contra']:.0f}% de quienes opinan critican."
+                _tono = "critico"
+        card_narrativa(_txt, tono=_tono)
+    elif dist["n_total"] > 0:
+        card_narrativa("La mayoría de los comentarios son <strong>neutrales</strong>; no hay una confrontación marcada entre posturas.", tono="neutral")
     card_explicativa(
         "Qué está ocurriendo: si la ciudadanía opina de forma parecida o está partida entre apoyo y crítica.",
         "Mientras más parejas sean las dos posturas, más dividida está la conversación; si una domina, hay consenso.",
     )
-    pol = polarizacion_desde_conteos(dist["n_favorable"], dist["n_critico"], dist["n_total"]) if dist["n_total"] > 0 else None
     if pol and (pol["n_favor"] + pol["n_contra"]) > 0:
         comprometidos = pol["n_favor"] + pol["n_contra"]
         lado_favor = pol["lado"] == "favor"
@@ -173,12 +200,18 @@ def render_bloque2_audiencia(periodo, plataforma):
         st.markdown('<div class="status-info">No hay comentarios en el período seleccionado.</div>', unsafe_allow_html=True)
 
     # ── 3. VOCES DE INFLUENCIA (páginas oficiales) ──
-    st.markdown('<div class="section-header"><div class="section-title">03 · Voces de Influencia</div><div class="section-subtitle">Páginas oficiales que concentran la mayor interacción.</div></div>', unsafe_allow_html=True)
+    voces = _voces_influencia(ini, fin, plataforma)
+    st.markdown('<div class="section-header"><div class="section-title">03 · Voces de Influencia</div></div>', unsafe_allow_html=True)
+    if voces is not None and not voces.empty:
+        _top = voces.iloc[0]
+        card_narrativa(
+            f"La página con más interacción es <strong>{_top['page_name']}</strong>, con {int(_top['engagement']):,} interacciones en {int(_top['posts'])} publicaciones.",
+            tono="favorable",
+        )
     card_explicativa(
         "Qué está ocurriendo: qué páginas oficiales concentran la mayor parte de la interacción ciudadana.",
         "La barra más larga es la página con más reacciones y comentarios en el período.",
     )
-    voces = _voces_influencia(ini, fin, plataforma)
     if voces is not None and not voces.empty:
         max_eng = voces['engagement'].max() if not voces.empty else 1
         rows_html = ""
@@ -186,7 +219,7 @@ def render_bloque2_audiencia(periodo, plataforma):
             pct = (r['engagement'] / max_eng * 100) if max_eng > 0 else 0
             rows_html += f'<div class="bar-row"><div class="bar-row-label">{r["page_name"]}</div><div class="bar-track"><div class="bar-fill bar-fill-cy" style="width:{pct:.1f}%"></div></div><div class="bar-row-val">{int(r["engagement"]):,} · {int(r["posts"])}p</div></div>'
         st.markdown(f'<div class="panel"><div class="panel-head"><div class="panel-title">TOP 5 · PÁGINAS OFICIALES</div><div class="panel-meta">INTERACCIÓN · # PUBLICACIONES</div></div>{rows_html}</div>', unsafe_allow_html=True)
-        referencias_publicaciones(limit=8, titulo="PUBLICACIONES DE LAS PÁGINAS", plataforma=plataforma)
+        referencias_publicaciones(limit=8, titulo="Enlaces de referencias bibliográficas", plataforma=plataforma)
     else:
         st.markdown('<div class="status-info">Sin datos de interacción para identificar voces en este período.</div>', unsafe_allow_html=True)
 

@@ -36,6 +36,7 @@ from dashboard.dash_emocional import metricas_emocionales
 from dashboard.dash_ui import (
     _page_head,
     card_explicativa,
+    card_narrativa,
     referencias_publicaciones,
     referencias_por_tema_comentarios,
     _post_ids_por_tema_comentarios,
@@ -116,12 +117,18 @@ def render_bloque3_riesgo(periodo, plataforma):
         return
 
     # ── 1. AUTENTICIDAD ──
-    st.markdown('<div class="section-header"><div class="section-title">01 · Índice de Autenticidad</div><div class="section-subtitle">Qué parte de la conversación es espontánea y qué parte son mensajes idénticos repetidos.</div></div>', unsafe_allow_html=True)
+    aut = calcular_autenticidad(df_coment["message"]) if dist["n_total"] > 0 and "message" in df_coment.columns else None
+    st.markdown('<div class="section-header"><div class="section-title">01 · Índice de Autenticidad</div></div>', unsafe_allow_html=True)
+    if aut:
+        _tono = "favorable" if aut['nivel'] == 'organico' else ("critico" if aut['nivel'] == 'coordinado' else "neutral")
+        card_narrativa(
+            f"El <strong>{aut['pct_organico']:.0f}%</strong> de los comentarios es espontáneo y el {aut['pct_sospechoso']:.0f}% son mensajes idénticos repetidos.",
+            tono=_tono,
+        )
     card_explicativa(
         "Qué está ocurriendo: si los comentarios son espontáneos o si hay mensajes copiados y pegados muchas veces.",
         "La barra verde es lo espontáneo; la roja, los mensajes repetidos. Abajo se destaca el mensaje más repetido.",
     )
-    aut = calcular_autenticidad(df_coment["message"]) if dist["n_total"] > 0 and "message" in df_coment.columns else None
     if aut:
         col_aut = {'organico': 'var(--green)', 'mixto': 'var(--amber)', 'coordinado': 'var(--red)'}.get(aut['nivel'], 'var(--accent)')
         st.markdown(f"""
@@ -148,11 +155,6 @@ def render_bloque3_riesgo(periodo, plataforma):
         st.markdown('<div class="status-info">Aún no hay suficientes comentarios para evaluar autenticidad en este período.</div>', unsafe_allow_html=True)
 
     # ── 2. NIVEL DE ALERTA — solo semáforo ──
-    st.markdown('<div class="section-header"><div class="section-title">02 · Nivel de Alerta</div><div class="section-subtitle">Qué tan urgente es responder y a qué temas responder.</div></div>', unsafe_allow_html=True)
-    card_explicativa(
-        "Qué está ocurriendo: qué tan urgente es que la alcaldía responda, en semáforo (verde tranquilo, amarillo preparar, rojo responder ya).",
-        "El color resume el nivel de molestia. Abajo se nombran los temas concretos a los que conviene responder.",
-    )
     fricciones = _detectar_fricciones(df_coment)
     pct_neg_val = dist["pct_critico"]
     # Indice de enojo desacoplado por plataforma (no se lee solo de FB).
@@ -160,6 +162,17 @@ def render_bloque3_riesgo(periodo, plataforma):
     pol_b3 = polarizacion_desde_conteos(dist["n_favorable"], dist["n_critico"], dist["n_total"]) if dist["n_total"] > 0 else None
     balance_b3 = pol_b3['balance'] if pol_b3 else None
     alerta = calcular_nivel_alerta(pct_negativo=pct_neg_val, indice_enojo=enojo_val, balance_confrontacion=balance_b3, n_fricciones=len(fricciones), temas_friccion=fricciones)
+    st.markdown('<div class="section-header"><div class="section-title">02 · Nivel de Alerta</div></div>', unsafe_allow_html=True)
+    _tono_al = {'verde': 'favorable', 'amarillo': 'neutral', 'rojo': 'critico'}.get(alerta['color'], 'neutral')
+    _senales = f"{dist['pct_critico']:.0f}% de comentarios críticos" + (f" y {len(fricciones)} tema(s) con rechazo" if fricciones else "")
+    card_narrativa(
+        f"El nivel de alerta es <strong>{alerta['titular'].lower()}</strong>: las señales a vigilar son {_senales}.",
+        tono=_tono_al,
+    )
+    card_explicativa(
+        "Qué está ocurriendo: qué tan urgente es que la alcaldía responda, en semáforo (verde tranquilo, amarillo preparar, rojo responder ya).",
+        "El color resume el nivel de molestia. Abajo se nombran los temas concretos a los que conviene responder.",
+    )
     sem_class = {'verde': 'positive', 'amarillo': 'warning', 'rojo': 'critical'}.get(alerta['color'], 'positive')
     emoji_sem = {'verde': '🟢', 'amarillo': '🟡', 'rojo': '🔴'}.get(alerta['color'], '⚪')
     st.markdown(f'<div class="indicator indicator-{sem_class}"><div class="indicator-dot"></div><div style="flex:1"><div style="font-weight:600;font-size:16px;margin-bottom:2px">{emoji_sem} {alerta["titular"]}</div><div style="font-size:14px;color:var(--fg-secondary)">{alerta["accion"]}</div></div></div>', unsafe_allow_html=True)
@@ -172,12 +185,23 @@ def render_bloque3_riesgo(periodo, plataforma):
         referencias_publicaciones(post_ids=ids_alerta, limit=8, titulo="PUBLICACIONES DETRÁS DE LA ALERTA", plataforma=plataforma)
 
     # ── 3. VELOCIDAD DE PROPAGACIÓN — con contexto narrativo ──
-    st.markdown('<div class="section-header"><div class="section-title">03 · Velocidad de Propagación</div><div class="section-subtitle">Hacia dónde va la interacción en las próximas 24 a 48 horas.</div></div>', unsafe_allow_html=True)
+    prop = calcular_propagacion_24_48(df_eng) if df_eng is not None and not df_eng.empty else None
+    st.markdown('<div class="section-header"><div class="section-title">03 · Velocidad de Propagación</div></div>', unsafe_allow_html=True)
+    if prop:
+        if prop['tendencia'] == 'acelerando':
+            _txt = f"La interacción va <strong>en aumento</strong>: de {prop['hoy']:,.0f} hoy a unas {prop['proy_24h']:,.0f} mañana ({prop['pct_24h']:+.0f}%)."
+            _tono = "critico"
+        elif prop['tendencia'] == 'desacelerando':
+            _txt = f"La interacción va <strong>a la baja</strong>: de {prop['hoy']:,.0f} hoy a unas {prop['proy_24h']:,.0f} mañana ({prop['pct_24h']:+.0f}%)."
+            _tono = "favorable"
+        else:
+            _txt = f"La interacción se mantiene <strong>estable</strong>: unas {prop['proy_24h']:,.0f} mañana, similar a las {prop['hoy']:,.0f} de hoy."
+            _tono = "neutral"
+        card_narrativa(_txt, tono=_tono)
     card_explicativa(
         "Qué está ocurriendo: si la interacción (reacciones, comentarios y veces compartido) está creciendo o cayendo.",
         "Se compara la interacción de hoy con una estimación para mañana y pasado mañana, según la tendencia reciente.",
     )
-    prop = calcular_propagacion_24_48(df_eng) if df_eng is not None and not df_eng.empty else None
     if prop:
         col_p = {'acelerando': 'var(--red)', 'desacelerando': 'var(--blue)', 'estable': 'var(--fg-secondary)'}.get(prop['tendencia'], 'var(--accent)')
         maxv = max(prop['hoy'], prop['proy_24h'], prop['proy_48h'], 1)
@@ -196,12 +220,17 @@ def render_bloque3_riesgo(periodo, plataforma):
             <div class="bar-row"><div class="bar-row-label">En 2 días (estimado)</div><div class="bar-track"><div class="bar-fill" style="width:{prop['proy_48h'] / maxv * 100:.1f}%;background:{col_p}"></div></div><div class="bar-row-val">{prop['proy_48h']:,.0f} ({prop['pct_48h']:+.0f}%)</div></div>
         </div>
         """, unsafe_allow_html=True)
-        st.markdown('<p style="font-size:12.5px;color:var(--fg-muted)">Es una estimación basada en la tendencia de los últimos días, no una certeza. Se actualiza con cada nuevo día de datos.</p>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="status-info">Se necesitan al menos 3 días con interacción para estimar hacia dónde va la conversación. Amplía el período (por ejemplo, “Esta semana” o “Este mes”) para ver esta proyección.</div>', unsafe_allow_html=True)
 
     # ── 4. PUNTOS DE FRICCIÓN ──
-    st.markdown('<div class="section-header"><div class="section-title">04 · Puntos de Fricción</div><div class="section-subtitle">Los temas que más rechazo generan, con un comentario real de ejemplo.</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header"><div class="section-title">04 · Puntos de Fricción</div></div>', unsafe_allow_html=True)
+    if fricciones:
+        _top_fr = fricciones[0]
+        card_narrativa(
+            f"El tema con más rechazo es <strong>{_top_fr['tema']}</strong>, con {_top_fr['n']} comentarios críticos en el período.",
+            tono="critico",
+        )
     card_explicativa(
         "Qué está ocurriendo: qué temas concentran más comentarios críticos de la ciudadanía.",
         "Cada tarjeta es un tema; el número son sus comentarios críticos y la frase entre comillas es un comentario representativo.",

@@ -99,6 +99,33 @@ def card_explicativa(que_es: str, como_leerlo: str, ojo=None):
     )
 
 
+def card_narrativa(texto: str, tono: str = None):
+    """Card breve con una lectura en lenguaje natural de lo que dice la gráfica.
+
+    Sustituye a los subtítulos genéricos: en lugar de describir qué es la
+    sección, resume en una frase lo que muestran los datos del período. `texto`
+    admite HTML inline (por ejemplo <strong>). `tono` opcional ('favorable',
+    'critico', 'neutral') ajusta el color del acento; por defecto usa el acento
+    de la marca. La narrativa siempre debe derivarse de datos ya calculados,
+    nunca inventarse.
+    """
+    t = (tono or "").strip().lower()
+    if t in ("favorable", "positivo", "positiva", "verde", "apoyo"):
+        color = "var(--green)"
+    elif t in ("critico", "crítico", "negativo", "rojo", "critica", "crítica"):
+        color = "var(--red)"
+    elif t in ("neutral", "neutro", "amarillo", "mixto"):
+        color = "var(--amber)"
+    else:
+        color = "var(--accent)"
+    st.markdown(
+        f'<div class="panel" style="border-left:3px solid {color};margin:4px 0 16px 0">'
+        f'<p style="font-size:15px;color:var(--fg-primary);line-height:1.5;margin:0">{texto}</p>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def que_ves_box(texto: str):
     st.markdown(
         f'<div class="wys-box"><span class="wys-label">QUÉ ESTÁS VIENDO</span>'
@@ -216,9 +243,9 @@ def referencias_publicaciones(post_ids=None, limit=8, titulo="PUBLICACIONES DE O
     st.markdown(
         '<div style="margin:2px 0 16px 0">'
         '<div style="font-size:9px;color:var(--fg-muted);font-weight:600;'
-        'letter-spacing:1.5px;text-transform:uppercase;'
+        'letter-spacing:1.5px;'
         'font-family:IBM Plex Mono,monospace;margin-bottom:4px">'
-        + titulo + ' — abrí el post para verificar</div>' + chips + '</div>',
+        + titulo + '</div>' + chips + '</div>',
         unsafe_allow_html=True,
     )
 
@@ -250,7 +277,7 @@ def referencias_por_categoria(tema, limit=8, plataforma=None):
         return
     ids = _post_ids_por_categoria(tema)
     if ids:
-        referencias_publicaciones(post_ids=ids, limit=limit, titulo="PUBLICACIONES SOBRE «" + str(tema) + "»", plataforma=plataforma)
+        referencias_publicaciones(post_ids=ids, limit=limit, titulo="Referencias a los post sobre " + str(tema).lower() + ", verifica el post", plataforma=plataforma)
 
 
 def referencias_por_tema_comentarios(tema, limit=6, plataforma=None):

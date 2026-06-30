@@ -105,11 +105,6 @@ def render_bloque4_inteligencia(periodo, plataforma):
         f'PERÍODO <span class="acc">{periodo.upper()}</span> <span class="sep">·</span> {etiqueta_rango(ini, fin).upper()} <span class="sep">·</span> PLATAFORMA <span class="acc">{plataforma.upper()}</span>'
     )
 
-    card_explicativa(
-        "Un resumen estratégico que conecta lo que ocurre hoy con la memoria de períodos anteriores y proyecta lo que viene.",
-        "Léelo como un briefing: cada punto numerado es una conclusión lista para decidir, basada en los datos del período.",
-    )
-
     st.markdown("""
     <div class="memo-container">
         <div class="memo-header">
@@ -288,4 +283,4 @@ def render_bloque4_inteligencia(periodo, plataforma):
     _b4_card(9, "Proyección de Escenario", "proyeccion", ctx)
     _b4_card(10, "Recomendación Estratégica", "recomendacion", ctx)
     st.markdown('</div>', unsafe_allow_html=True)
-    referencias_publicaciones(limit=10, titulo="PUBLICACIONES QUE SUSTENTAN EL MEMO", plataforma=plataforma)
+    referencias_publicaciones(limit=10, titulo="Post bibliográficos", plataforma=plataforma)

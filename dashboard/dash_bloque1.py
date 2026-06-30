@@ -37,6 +37,7 @@ from dashboard.dash_ui import (
     _warn_dropped_null_dates,
     hay_datos,
     card_explicativa,
+    card_narrativa,
     referencias_por_categoria,
     referencias_publicaciones,
 )
@@ -111,7 +112,13 @@ def render_bloque1_pulso(periodo, plataforma):
         return
 
     # ── 1. CLIMA NARRATIVO ──
-    st.markdown('<div class="section-header"><div class="section-title">01 · Clima Narrativo</div><div class="section-subtitle">Tono dominante de los comentarios del período seleccionado.</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header"><div class="section-title">01 · Clima Narrativo</div></div>', unsafe_allow_html=True)
+    if dist["n_total"] > 0:
+        _dom_pct, _dom = max((dist["pct_favorable"], "Favorable"), (dist["pct_neutral"], "Neutral"), (dist["pct_critico"], "Crítico"), key=lambda x: x[0])
+        card_narrativa(
+            f"El tono que más domina es <strong>{_dom}</strong>: {_dom_pct:.0f}% de {dist['n_total']:,} comentarios del período.",
+            tono=_dom.lower(),
+        )
     card_explicativa(
         "Qué está ocurriendo: cómo se reparte el ánimo de la ciudadanía entre comentarios a favor, neutrales y críticos.",
         "La barra reparte el 100% de los comentarios del período. Mientras más verde, más apoyo; mientras más rojo, más crítica.",
@@ -138,12 +145,24 @@ def render_bloque1_pulso(periodo, plataforma):
         st.markdown('<div class="status-info">No hay comentarios en el período seleccionado.</div>', unsafe_allow_html=True)
 
     # ── 2. INTENSIDAD ──
-    st.markdown('<div class="section-header"><div class="section-title">02 · Intensidad de la Conversación</div><div class="section-subtitle">Cuánto se mueve la conversación hoy frente a una semana normal.</div></div>', unsafe_allow_html=True)
+    intens = calcular_intensidad_vs_promedio(df_fb_int, df_tk_int)
+    st.markdown('<div class="section-header"><div class="section-title">02 · Intensidad de la Conversación</div></div>', unsafe_allow_html=True)
+    if intens:
+        _pct = intens['pct_dif']; _prom = intens['promedio']; _vol = intens['vol_hoy']
+        if _pct > 5:
+            _txt = f"El último día hubo un <strong>{_pct:.0f}% más</strong> de interacción que en un día normal, que suele ser de <strong>{_prom:,.0f}</strong>; se registraron {_vol:,.0f}."
+            _tono = "critico"
+        elif _pct < -5:
+            _txt = f"El último día hubo un <strong>{abs(_pct):.0f}% menos</strong> de interacción que en un día normal, que suele ser de <strong>{_prom:,.0f}</strong>; se registraron {_vol:,.0f}."
+            _tono = "favorable"
+        else:
+            _txt = f"El último día la interacción estuvo <strong>en línea</strong> con un día normal, que suele ser de <strong>{_prom:,.0f}</strong>; se registraron {_vol:,.0f}."
+            _tono = "neutral"
+        card_narrativa(_txt, tono=_tono)
     card_explicativa(
         "Qué está ocurriendo: cuánta interacción (reacciones, comentarios y compartidos) generó el último día frente al promedio diario de la semana.",
         "Si el último día superó al promedio, hubo más movimiento de lo habitual; si quedó por debajo, hubo menos.",
     )
-    intens = calcular_intensidad_vs_promedio(df_fb_int, df_tk_int)
     if intens:
         vol_hoy = intens['vol_hoy']; prom = intens['promedio']; pct = intens['pct_dif']
         maxv = max(vol_hoy, prom, 1)
@@ -169,13 +188,23 @@ def render_bloque1_pulso(periodo, plataforma):
         st.markdown('<div class="status-info">Aún no hay suficientes días con interacción para comparar contra el promedio semanal.</div>', unsafe_allow_html=True)
 
     # ── 3. CONCENTRACIÓN TEMÁTICA ──
-    st.markdown('<div class="section-header"><div class="section-title">03 · Concentración Temática</div><div class="section-subtitle">Si la conversación gira en torno a un solo tema o está repartida entre varios.</div></div>', unsafe_allow_html=True)
+    conteo_cat = _conteo_categorias(df_fb_raw, df_tk_raw, plataforma, ini, fin)
+    conc = calcular_concentracion(conteo_cat) if conteo_cat else None
+    st.markdown('<div class="section-header"><div class="section-title">03 · Concentración Temática</div></div>', unsafe_allow_html=True)
+    if conc:
+        _ramas = conc.get('ramas', [])
+        _share = _ramas[0]['share'] if _ramas else conc.get('share_top', 0)
+        if conc['nivel'] == 'dominado':
+            _txt = f"La conversación gira sobre todo en torno a <strong>«{conc['top_tema']}»</strong>, que concentra el {_share:.0f}% de las publicaciones del período."
+        elif conc['nivel'] == 'liderado':
+            _txt = f"El tema <strong>«{conc['top_tema']}»</strong> lidera con el {_share:.0f}%, pero la conversación se reparte entre {conc['n_temas']} temas."
+        else:
+            _txt = f"La conversación está repartida entre <strong>{conc['n_temas']} temas</strong>; ninguno supera el {_share:.0f}% del total."
+        card_narrativa(_txt, tono="neutral")
     card_explicativa(
         "Qué está ocurriendo: en qué temas se concentra la conversación ciudadana del período.",
         "Cada color es un tema y su porcentaje es la parte de la conversación que ocupa. Mientras más repartidos los colores, más diversa es la conversación.",
     )
-    conteo_cat = _conteo_categorias(df_fb_raw, df_tk_raw, plataforma, ini, fin)
-    conc = calcular_concentracion(conteo_cat) if conteo_cat else None
     if conc:
         nivel = conc['nivel']
         col_estado = {'dominado': 'var(--red)', 'liderado': 'var(--amber)', 'fragmentado': 'var(--green)'}.get(nivel, 'var(--accent)')
@@ -213,4 +242,4 @@ def render_bloque1_pulso(periodo, plataforma):
 
     # ── CIERRE — una sola verdad, misma fuente que el Clima ──
     st.markdown(f'<div class="interpretation" style="margin-top:16px"><div class="interpretation-label">En resumen:</div><div class="interpretation-texto">{frase_clima(dist)}</div></div>', unsafe_allow_html=True)
-    referencias_publicaciones(limit=10, titulo="PUBLICACIONES ANALIZADAS", plataforma=plataforma)
+    referencias_publicaciones(limit=10, titulo="Enlaces de referencias bibliográficas", plataforma=plataforma)

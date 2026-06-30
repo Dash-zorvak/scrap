@@ -308,4 +308,157 @@ def _editor_medalla():
 
     periodo = st.selectbox(
         "Período a evaluar", OPCIONES_PERIODO,
-        index=min(2,
+        index=min(2, len(OPCIONES_PERIODO) - 1), key="medalla_periodo",
+    )
+    try:
+        inicio, fin, candidatos = medalla_seleccion.sugerir_candidatos(periodo)
+    except Exception as e:
+        st.error(f"No se pudo calcular la sugerencia: {e}")
+        return
+    st.caption(f"Período: {etiqueta_rango(inicio, fin)}")
+    if not candidatos:
+        st.info("No hay publicaciones oficiales en este período.")
+        return
+
+    # Sugerencia de la IA sobre cuál es la medalla (afinada con el historial).
+    if st.button("Sugerir con IA cuál es la medalla", key="btn_ia_medalla"):
+        with st.spinner("Consultando…"):
+            texto = medalla_seleccion.recomendacion_ia(candidatos)
+        st.session_state["medalla_reco_ia"] = texto or ""
+        if not texto:
+            st.info("La IA no está disponible; usa la sugerencia heurística (la primera).")
+    if st.session_state.get("medalla_reco_ia"):
+        st.info(st.session_state["medalla_reco_ia"])
+
+    # Post medalla (el primero es la sugerencia heurística de mayor tracción).
+    opciones_post = {_etiqueta_post(p): p for p in candidatos}
+    elegido_lbl = st.radio(
+        "Publicación medalla (sugerida primero)", list(opciones_post.keys()),
+        key="medalla_radio",
+    )
+    elegido = opciones_post[elegido_lbl]
+
+    # Réplicas en medios externos ya cargados.
+    externos = medalla_seleccion.listar_externos(inicio, fin)
+    opc_ext = {
+        f"{e.get('page_name')} · {int(e.get('total_reactions') or 0)} reac · "
+        f"{(e.get('message') or '')[:40]}": e.get("post_id")
+        for e in externos
+    }
+    medios_sel = st.multiselect(
+        "Réplicas en medios externos (de la base de externos)",
+        list(opc_ext.keys()), key="medalla_medios",
+    )
+
+    # Alta manual de un medio externo (cuando la réplica no está en la base).
+    with st.expander("➕ Agregar enlace de un medio externo a mano"):
+        url_m = st.text_input("Enlace del medio", key="medalla_ext_url")
+        nombre_m = st.text_input("Nombre del medio", key="medalla_ext_nombre")
+        c1, c2 = st.columns(2)
+        with c1:
+            reac_m = st.number_input("Reacciones", min_value=0, step=1, key="medalla_ext_reac")
+        with c2:
+            com_m = st.number_input("Comentarios", min_value=0, step=1, key="medalla_ext_com")
+        if st.button("Agregar medio", key="btn_add_ext_medalla"):
+            if url_m.strip():
+                try:
+                    pid_ext = externos_store.agregar_post_externo_manual(
+                        url_m.strip(), page_name=nombre_m.strip(),
+                        total_reactions=int(reac_m), comments_count=int(com_m),
+                    )
+                    st.session_state.setdefault("medalla_medios_manuales", [])
+                    if pid_ext and pid_ext not in st.session_state["medalla_medios_manuales"]:
+                        st.session_state["medalla_medios_manuales"].append(pid_ext)
+                    st.success("Medio agregado. Se incluirá al aprobar la medalla.")
+                except Exception as e:
+                    st.error(f"No se pudo agregar el medio: {e}")
+            else:
+                st.warning("Escribe el enlace del medio.")
+    manuales = st.session_state.get("medalla_medios_manuales", [])
+    if manuales:
+        st.caption(f"Medios agregados a mano en esta sesión: {len(manuales)}")
+
+    # —— Narrativa del informe (borrador editable) ——
+    # El botón de borrador IA va ANTES de crear los widgets: así puede escribir
+    # en session_state las claves narr_* en el mismo run (Streamlit no permite
+    # modificar la clave de un widget después de instanciarlo).
+    st.markdown("**Narrativa del informe (borrador editable)**")
+    st.caption(
+        "La IA propone un borrador a partir del texto del post; tú lo editas. "
+        "El texto puede variar cada vez, pero la estructura del PDF se mantiene."
+    )
+    contexto_borrador = {
+        "descripcion_post": (elegido.get("message") or "").strip(),
+        "periodo_label": etiqueta_rango(inicio, fin),
+    }
+    if st.button("Generar borrador con IA", key="btn_narr_ia"):
+        with st.spinner("Redactando borrador…"):
+            try:
+                borrador = medalla_pdf.borrador_narrativa(
+                    elegido, contexto_borrador, usar_ia=True,
+                )
+            except Exception:
+                borrador = {}
+        for clave, wkey in _NARR_KEYS.items():
+            st.session_state[wkey] = borrador.get(clave, "") if borrador else ""
+        st.success("Borrador generado. Revísalo y edítalo antes de aprobar.")
+    for wkey in _NARR_KEYS.values():
+        st.session_state.setdefault(wkey, "")
+
+    st.text_input("Mensaje corto (la «prueba del dolor» en una frase)", key="narr_mensaje")
+    st.text_area("Emoción real", key="narr_emocion", height=70)
+    st.text_area("Autoridad cercana", key="narr_autoridad", height=70)
+    st.text_area("Evidencia tangible", key="narr_evidencia", height=70)
+    st.text_input("Titular legible al instante", key="narr_titular")
+    st.text_input("Medio que la retomó (opcional)", key="narr_medio")
+    st.text_area(
+        "Comparación con otro alcalde (opcional, manual)",
+        key="narr_comparacion", height=70,
+    )
+
+    # Publicaciones que no traducen tracción: sugeridas automáticamente, editables.
+    st.markdown("**Publicaciones que no traducen tracción** (sugeridas, editables)")
+    sugeridos_nt = medalla_seleccion.sugerir_no_traccion(inicio, fin, top=3)
+    opc_nt = {_etiqueta_post(p): p.get("post_id") for p in sugeridos_nt}
+    marcadas_nt = st.multiselect(
+        "Se incluirán en la sección «contenido que no traduce tracción»",
+        list(opc_nt.keys()), default=list(opc_nt.keys()), key="medalla_no_traccion",
+    )
+
+    nota = st.text_input("Nota interna (opcional)", key="medalla_nota")
+
+    if st.button("Aprobar como medalla del período", type="primary", key="btn_aprobar_medalla"):
+        medios_ids = [opc_ext[k] for k in medios_sel if k in opc_ext]
+        medios_ids += list(st.session_state.get("medalla_medios_manuales", []))
+        narrativa = {
+            clave: (st.session_state.get(wkey) or "").strip()
+            for clave, wkey in _NARR_KEYS.items()
+        }
+        narrativa["no_traccion"] = [opc_nt[k] for k in marcadas_nt if k in opc_nt]
+        features = elegido.get("_metricas") or {}
+        try:
+            medalla_store.aprobar_medalla(
+                elegido.get("post_id"), score=elegido.get("_score", 0),
+                periodo_label=etiqueta_rango(inicio, fin), medios=medios_ids,
+                nota=nota, features=features, narrativa=narrativa,
+            )
+        except Exception as e:
+            st.error(f"No se pudo aprobar la medalla: {e}")
+            return
+        # Limpia el estado de edición para la próxima medalla.
+        for wkey in _NARR_KEYS.values():
+            st.session_state.pop(wkey, None)
+        st.session_state.pop("medalla_medios_manuales", None)
+        st.session_state.pop("medalla_reco_ia", None)
+        st.success(
+            "Medalla aprobada. El informe del alcalde se actualizará automáticamente."
+        )
+
+
+def seccion_editar_db():
+    st.subheader("🛠️ Editor de base de datos")
+    tab1, tab2 = st.tabs(["✏️ Corregir registros", "🏅 Medalla del período"])
+    with tab1:
+        _editor_posts()
+    with tab2:
+        _editor_medalla()

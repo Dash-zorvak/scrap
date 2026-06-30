@@ -25,11 +25,20 @@ Reglas de la fuente unica (se mantienen por plataforma):
     el comentario.
 """
 
+import os
 import sqlite3
+import sys
 
 import pandas as pd
 
-from config import FACEBOOK_DB, TIKTOK_DB
+# Permite importar este modulo de forma aislada (p.ej. en tests) sin depender de
+# que app.py haya configurado antes el sys.path. config.py vive en este mismo
+# directorio (dashboard/); ademas anadimos la raiz del repo para el paquete
+# `dashboard`. Mismo bootstrap que usan editor_db.py y medalla_dashboard.py.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from config import FACEBOOK_DB, TIKTOK_DB  # noqa: E402
 
 _POS = {
     "positivo", "muy_positivo", "positiva", "apoyo",

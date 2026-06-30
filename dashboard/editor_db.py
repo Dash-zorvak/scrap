@@ -70,9 +70,9 @@ def _etiqueta_video_tiktok(v):
     return f"{cuenta} · {fecha} · {desc or '(sin descripción)'}"
 
 
-# ═══════════════════════════════════════════
+# ══════════════════════════════════════════════
 # Herramienta 1 — corregir registros
-# ═══════════════════════════════════════════
+# ══════════════════════════════════════════════
 
 def _editor_posts():
     plataforma = st.radio(
@@ -279,9 +279,9 @@ def _editor_posts_tiktok():
                 st.error("No se pudo eliminar el video.")
 
 
-# ═══════════════════════════════════════════
+# ══════════════════════════════════════════════
 # Herramienta 2 — medalla del período
-# ═══════════════════════════════════════════
+# ══════════════════════════════════════════════
 
 def _editor_medalla():
     vigente = medalla_store.get_medalla_vigente()
@@ -358,7 +358,11 @@ def _editor_medalla():
             nota=nota,
             features=elegido.get("_metricas"),
         )
-        st.success("Medalla aprobada. Ya está disponible para descargar en el dashboard.")
+        st.success(
+            "Medalla aprobada. En el dashboard del alcalde, el informe ya queda "
+            "disponible en la pestaña «Memoria e Inteligencia Aplicada», sección "
+            "«Informe de la mejor medalla reciente» (con descarga directa del PDF)."
+        )
 
 
 def seccion_editar_db():

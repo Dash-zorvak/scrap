@@ -2,21 +2,27 @@
 
 Estaciones: Mapa de Públicos, Polarización, Voces de Influencia y Temas
 Emergentes. Mapa y Polarización usan la fuente unica (dash_fuente) filtrada por
-el periodo, sobre el 100% de los comentarios. La Polarizacion parte de la MISMA
-distribucion de sentimiento que el Mapa/Clima (dash_fuente.distribucion_sentimiento,
-derivada de fb_sentimiento), no de fb_comments.sentiment_score, que esta poco
-poblado y hacia que todo cayera en "neutral".
+el periodo y la plataforma, sobre el 100% de los comentarios. La Polarizacion
+parte de la MISMA distribucion de sentimiento que el Mapa/Clima
+(dash_fuente.distribucion_sentimiento), no de fb_comments.sentiment_score.
+
+Filtro por plataforma:
+  - Facebook -> solo Facebook. TikTok -> solo TikTok. Ambas -> combinados.
+  - Voces de influencia combina las paginas de la(s) plataforma(s) activa(s).
+  - Temas Emergentes se calcula a partir de la clasificacion tematica de
+    Facebook; en la vista exclusiva de TikTok se oculta (no hay equivalente
+    fiable) en lugar de mostrar datos de otra plataforma.
 
 Nota: el Cruce Tema x Zona y el Perfil de Audiencia (OCEAN) se retiraron por
-falta de datos confiables (geografia / clasificacion incompleta). Las "Voces de
-influencia" a nivel de autor ciudadano quedan pendientes hasta que la captura
-guarde la identidad del autor; por ahora se muestran las paginas oficiales.
+falta de datos confiables. Las "Voces de influencia" a nivel de autor ciudadano
+quedan pendientes; por ahora se muestran las paginas oficiales.
 """
 
+import pandas as pd
 import streamlit as st
 
-from config import FACEBOOK_DB
-from dashboard.dash_metrics import cargar_fb_engagement
+from config import FACEBOOK_DB, TIKTOK_DB
+from dashboard.dash_metrics import cargar_fb_engagement, cargar_tk_engagement
 from dashboard.dash_audiencia import polarizacion_desde_conteos
 from dashboard.dash_periodos import rango_periodo, filtrar_por_fecha, etiqueta_rango
 from dashboard.dash_fuente import cargar_comentarios_periodo, distribucion_sentimiento
@@ -27,6 +33,45 @@ from dashboard.dash_ui import (
     card_explicativa,
     referencias_publicaciones,
 )
+
+
+def _voces_influencia(ini, fin, plataforma):
+    """Top 5 paginas por interaccion, combinando solo la(s) plataforma(s) activa(s).
+
+    Facebook usa cargar_fb_engagement (item = post_id) y TikTok
+    cargar_tk_engagement (item = id del video). Ambos exponen page_name y
+    engagement_total, de modo que la mezcla solo ocurre cuando el filtro es
+    "Ambas".
+    """
+    plat = str(plataforma or "").lower()
+    frames = []
+    if "tik" not in plat:
+        df = filtrar_por_fecha(cargar_fb_engagement(FACEBOOK_DB), "created_time", ini, fin)
+        if df is not None and not df.empty and "page_name" in df.columns:
+            g = df.groupby("page_name").agg(
+                engagement=("engagement_total", "sum"),
+                posts=("post_id", "count"),
+            ).reset_index()
+            frames.append(g)
+    if plat != "facebook":
+        dft = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB)
+        col = "created_at" if (dft is not None and "created_at" in dft.columns) else "created_time"
+        dft = filtrar_por_fecha(dft, col, ini, fin)
+        if dft is not None and not dft.empty and "page_name" in dft.columns:
+            item_col = "id" if "id" in dft.columns else "post_id"
+            g = dft.groupby("page_name").agg(
+                engagement=("engagement_total", "sum"),
+                posts=(item_col, "count"),
+            ).reset_index()
+            frames.append(g)
+    if not frames:
+        return None
+    combinado = pd.concat(frames, ignore_index=True)
+    combinado = combinado.groupby("page_name").agg(
+        engagement=("engagement", "sum"),
+        posts=("posts", "sum"),
+    ).reset_index().sort_values("engagement", ascending=False).head(5)
+    return combinado
 
 
 def render_bloque2_audiencia(periodo, plataforma):
@@ -44,8 +89,8 @@ def render_bloque2_audiencia(periodo, plataforma):
         f'PERÍODO <span class="acc">{periodo.upper()}</span> <span class="sep">·</span> {etiqueta_rango(ini, fin).upper()} <span class="sep">·</span> PLATAFORMA <span class="acc">{plataforma.upper()}</span>'
     )
 
-    df_coment = cargar_comentarios_periodo(ini, fin)
-    dist = distribucion_sentimiento(df_coment)
+    df_coment = cargar_comentarios_periodo(ini, fin, plataforma)
+    dist = distribucion_sentimiento(df_coment, plataforma)
 
     # ── 1. MAPA DE PÚBLICOS ──
     st.markdown('<div class="section-header"><div class="section-title">01 · Mapa de Públicos</div><div class="section-subtitle">Composición de la audiencia según el tono de sus comentarios.</div></div>', unsafe_allow_html=True)
@@ -74,7 +119,7 @@ def render_bloque2_audiencia(periodo, plataforma):
             </div>
         </div>
         """, unsafe_allow_html=True)
-        referencias_publicaciones(limit=10, titulo="PUBLICACIONES ANALIZADAS")
+        referencias_publicaciones(limit=10, titulo="PUBLICACIONES ANALIZADAS", plataforma=plataforma)
     else:
         st.markdown('<div class="status-info">No hay comentarios en el período seleccionado.</div>', unsafe_allow_html=True)
 
@@ -133,21 +178,23 @@ def render_bloque2_audiencia(periodo, plataforma):
         "Qué está ocurriendo: qué páginas oficiales concentran la mayor parte de la interacción ciudadana.",
         "La barra más larga es la página con más reacciones y comentarios en el período.",
     )
-    df_fb_raw = filtrar_por_fecha(cargar_fb_engagement(FACEBOOK_DB), "created_time", ini, fin)
-    if df_fb_raw is not None and not df_fb_raw.empty:
-        top_pages = df_fb_raw.groupby('page_name').agg(
-            engagement=('engagement_total', 'sum'),
-            posts=('post_id', 'count')
-        ).reset_index().sort_values('engagement', ascending=False).head(5)
-        max_eng = top_pages['engagement'].max() if not top_pages.empty else 1
+    voces = _voces_influencia(ini, fin, plataforma)
+    if voces is not None and not voces.empty:
+        max_eng = voces['engagement'].max() if not voces.empty else 1
         rows_html = ""
-        for _, r in top_pages.iterrows():
+        for _, r in voces.iterrows():
             pct = (r['engagement'] / max_eng * 100) if max_eng > 0 else 0
             rows_html += f'<div class="bar-row"><div class="bar-row-label">{r["page_name"]}</div><div class="bar-track"><div class="bar-fill bar-fill-cy" style="width:{pct:.1f}%"></div></div><div class="bar-row-val">{int(r["engagement"]):,} · {int(r["posts"])}p</div></div>'
         st.markdown(f'<div class="panel"><div class="panel-head"><div class="panel-title">TOP 5 · PÁGINAS OFICIALES</div><div class="panel-meta">INTERACCIÓN · # PUBLICACIONES</div></div>{rows_html}</div>', unsafe_allow_html=True)
-        referencias_publicaciones(limit=8, titulo="PUBLICACIONES DE LAS PÁGINAS")
+        referencias_publicaciones(limit=8, titulo="PUBLICACIONES DE LAS PÁGINAS", plataforma=plataforma)
     else:
         st.markdown('<div class="status-info">Sin datos de interacción para identificar voces en este período.</div>', unsafe_allow_html=True)
 
     # ── 4. TEMAS EMERGENTES ──
-    render_temas_emergentes(FACEBOOK_DB)
+    # La deteccion de temas emergentes usa la clasificacion tematica de Facebook.
+    # En la vista exclusiva de TikTok no se muestra para no exhibir datos de FB.
+    if "tik" not in str(plataforma).lower():
+        render_temas_emergentes(FACEBOOK_DB)
+    else:
+        st.markdown('<div class="section-header"><div class="section-title">04 · Temas Emergentes</div><div class="section-subtitle">Temas que ganan fuerza en la conversación.</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="status-info">Los temas emergentes se calculan a partir de la clasificación temática de Facebook; no están disponibles en la vista exclusiva de TikTok.</div>', unsafe_allow_html=True)

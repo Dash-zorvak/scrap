@@ -185,16 +185,27 @@ def cargar_comentarios_periodo(inicio, fin, plataforma="Ambas", db_path=None, tk
 
 
 def clasificar_comentario(row):
-    """Etiqueta un comentario como favorable / neutral / critico."""
-    s = str(row.get("sentiment") or "").strip().lower()
+    """Etiqueta un comentario como favorable / neutral / critico.
+
+    Usa pd.isna() para tratar los nulos de pandas (pd.NA) de forma segura: con
+    columnas opcionales rellenadas con pd.NA, `row.get("sentiment") or ""`
+    invocaba bool(pd.NA) —cuyo valor de verdad es ambiguo— y reventaba el apply
+    con "boolean value of NA is ambiguous".
+    """
+    raw = row.get("sentiment")
+    s = "" if raw is None or pd.isna(raw) else str(raw)
+    s = s.strip().lower()
     if s in _POS:
         return "favorable"
     if s in _NEG:
         return "critico"
     if s in _NEU:
         return "neutral"
+    raw_score = row.get("sentiment_score")
+    if raw_score is None or pd.isna(raw_score):
+        return "neutral"
     try:
-        sc = float(row.get("sentiment_score"))
+        sc = float(raw_score)
     except (TypeError, ValueError):
         return "neutral"
     if sc > 0.1:

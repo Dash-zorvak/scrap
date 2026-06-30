@@ -25,11 +25,20 @@ Reglas de la fuente unica (se mantienen por plataforma):
     el comentario.
 """
 
+import os
 import sqlite3
+import sys
 
 import pandas as pd
 
-from config import FACEBOOK_DB, TIKTOK_DB
+# Permite importar este modulo de forma aislada (p.ej. en tests) sin depender de
+# que app.py haya configurado antes el sys.path. config.py vive en este mismo
+# directorio (dashboard/); ademas anadimos la raiz del repo para el paquete
+# `dashboard`. Mismo bootstrap que usan editor_db.py y medalla_dashboard.py.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from config import FACEBOOK_DB, TIKTOK_DB  # noqa: E402
 
 _POS = {
     "positivo", "muy_positivo", "positiva", "apoyo",
@@ -185,16 +194,27 @@ def cargar_comentarios_periodo(inicio, fin, plataforma="Ambas", db_path=None, tk
 
 
 def clasificar_comentario(row):
-    """Etiqueta un comentario como favorable / neutral / critico."""
-    s = str(row.get("sentiment") or "").strip().lower()
+    """Etiqueta un comentario como favorable / neutral / critico.
+
+    Usa pd.isna() para tratar los nulos de pandas (pd.NA) de forma segura: con
+    columnas opcionales rellenadas con pd.NA, `row.get("sentiment") or ""`
+    invocaba bool(pd.NA) —cuyo valor de verdad es ambiguo— y reventaba el apply
+    con "boolean value of NA is ambiguous".
+    """
+    raw = row.get("sentiment")
+    s = "" if raw is None or pd.isna(raw) else str(raw)
+    s = s.strip().lower()
     if s in _POS:
         return "favorable"
     if s in _NEG:
         return "critico"
     if s in _NEU:
         return "neutral"
+    raw_score = row.get("sentiment_score")
+    if raw_score is None or pd.isna(raw_score):
+        return "neutral"
     try:
-        sc = float(row.get("sentiment_score"))
+        sc = float(raw_score)
     except (TypeError, ValueError):
         return "neutral"
     if sc > 0.1:

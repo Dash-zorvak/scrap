@@ -1,12 +1,3 @@
-# Web scraping
-beautifulsoup4>=4.12.0
-lxml>=5.0.0
-requests>=2.31.0
-
-# Anti-detection
-fake-useragent>=1.4.0
-httpx>=0.27.0
-
 # Data processing
 pandas>=2.0.0
 # numpy fijado <2: torch==2.2.2 NO es compatible con numpy 2.x.
@@ -14,17 +5,16 @@ pandas>=2.0.0
 # torch -> "Numpy is not available" (falla BERT y categorias).
 numpy>=1.24.0,<2.0.0
 
-# ML / Clustering (categorizacion de posts - modulo1: KMeans + normalize)
+# ML / Clustering (categorizacion de posts - modulo1: KMeans + normalize;
+# tambien PCA/KMeans/LDA en src/analyzer)
 scikit-learn>=1.3.0
 sentence-transformers>=2.2.0
 
 # Database
 sqlalchemy>=2.0.0
 
-# Visualization
+# Visualization (solo charts opcionales de src/analyzer/reporting.py; import protegido)
 matplotlib>=3.7.0
-seaborn>=0.13.0
-plotly>=5.0.0
 
 # Dashboard
 streamlit>=1.30.0
@@ -40,9 +30,6 @@ tokenizers==0.22.2
 huggingface_hub==0.36.2
 safetensors==0.7.0
 emoji==2.15.0
-
-# Wordcloud
-wordcloud==1.9.6
 
 # Utils
 python-dotenv>=1.0.0

@@ -128,9 +128,9 @@ st.sidebar.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ═══════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════
 # DASHBOARD (solo lectura)
-# ═══════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════
 
 tab_pulso, tab_audiencia, tab_riesgo, tab_inteligencia = st.tabs([
     "PULSO GENERAL", "SEGMENTACIÓN DE AUDIENCIA",
@@ -145,7 +145,7 @@ with tab_riesgo:
 with tab_inteligencia:
     render_bloque4_inteligencia(periodo, plataforma)
     st.markdown("---")
-    with st.expander("📄 Informe de la mejor medalla reciente"):
+    with st.expander("📄 Informe de la mejor medalla reciente", expanded=True):
         render_descarga_medalla(periodo)
 
 _docstrip(periodo, plataforma, fecha_str)

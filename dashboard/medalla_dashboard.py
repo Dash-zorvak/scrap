@@ -4,6 +4,12 @@ SOLO LECTURA: toma la medalla aprobada vigente (medalla_store), arma el contexto
 (post FB + réplicas externas seleccionadas + capturas guardadas) y ofrece la
 descarga del PDF. La selección y edición viven en el panel de carga del analista,
 no aquí.
+
+La descarga se ofrece de forma AUTOMÁTICA: en cuanto hay una medalla vigente, el
+informe se prepara y el botón de descarga aparece sin que el alcalde tenga que
+pulsar nada. El PDF se cachea por medalla vigente (post + momento de aprobación)
+para no regenerarlo en cada rerun de Streamlit; si el analista aprueba otra
+medalla, la firma cambia y se regenera solo.
 """
 
 import os
@@ -14,25 +20,19 @@ import streamlit as st
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-try:
-    from config import FACEBOOK_DB  # type: ignore
-except Exception:
-    FACEBOOK_DB = os.getenv("FACEBOOK_DB", "facebook.db")
-
 import medalla_store  # noqa: E402
 import medalla_seleccion  # noqa: E402
 from capturas_store import listar_capturas  # noqa: E402
 from medalla_pdf import generar_pdf_medalla  # noqa: E402
 import db_edits  # noqa: E402
 
-try:
-    from src.storage.db import LocalStorage  # type: ignore
-except Exception:
-    from storage.db import LocalStorage  # type: ignore
 
-
-def _store():
-    return LocalStorage(db_path=FACEBOOK_DB)
+def _rerun():
+    """Re-ejecuta la app (compatibilidad entre versiones de Streamlit)."""
+    try:
+        st.rerun()
+    except AttributeError:  # Streamlit < 1.27
+        st.experimental_rerun()
 
 
 def render_descarga_medalla(periodo=None):
@@ -64,19 +64,32 @@ def render_descarga_medalla(periodo=None):
     }
     imagenes = listar_capturas(post.get("post_id"))
 
-    if st.button("Generar informe PDF", type="primary", key="btn_gen_medalla"):
-        with st.spinner("Generando informe…"):
+    # El informe se prepara automáticamente: el alcalde no debe pulsar nada para
+    # poder descargarlo. Se cachea por medalla vigente (post_id + momento de
+    # aprobación) para no regenerarlo en cada rerun de Streamlit. Si el analista
+    # aprueba otra medalla, la firma cambia y se regenera solo.
+    firma = f"{vigente.get('post_id')}|{vigente.get('decidido_en')}"
+    cache = st.session_state.get("medalla_pdf_cache") or {}
+    if cache.get("firma") != firma or not cache.get("bytes"):
+        with st.spinner("Preparando informe…"):
             try:
-                pdf = generar_pdf_medalla(post, contexto, imagenes=imagenes, usar_ia=True)
-                st.session_state["medalla_pdf_bytes"] = pdf
+                pdf = generar_pdf_medalla(
+                    post, contexto, imagenes=imagenes, usar_ia=True
+                )
+                cache = {"firma": firma, "bytes": pdf}
+                st.session_state["medalla_pdf_cache"] = cache
             except Exception as e:  # nunca romper el dashboard del alcalde
                 st.error(f"No se pudo generar el informe: {e}")
+                cache = {}
 
-    if st.session_state.get("medalla_pdf_bytes"):
+    if cache.get("bytes"):
         st.download_button(
             "Descargar informe de la medalla (PDF)",
-            data=st.session_state["medalla_pdf_bytes"],
+            data=cache["bytes"],
             file_name="informe_medalla.pdf",
             mime="application/pdf",
             key="dl_medalla",
         )
+        if st.button("Regenerar informe", key="btn_regen_medalla"):
+            st.session_state.pop("medalla_pdf_cache", None)
+            _rerun()

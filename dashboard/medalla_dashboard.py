@@ -20,25 +20,11 @@ import streamlit as st
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-try:
-    from config import FACEBOOK_DB  # type: ignore
-except Exception:
-    FACEBOOK_DB = os.getenv("FACEBOOK_DB", "facebook.db")
-
 import medalla_store  # noqa: E402
 import medalla_seleccion  # noqa: E402
 from capturas_store import listar_capturas  # noqa: E402
 from medalla_pdf import generar_pdf_medalla  # noqa: E402
 import db_edits  # noqa: E402
-
-try:
-    from src.storage.db import LocalStorage  # type: ignore
-except Exception:
-    from storage.db import LocalStorage  # type: ignore
-
-
-def _store():
-    return LocalStorage(db_path=FACEBOOK_DB)
 
 
 def _rerun():

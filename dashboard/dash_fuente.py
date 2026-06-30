@@ -1,32 +1,35 @@
 """Fuente unica de comentarios y sentimiento (verdad compartida).
 
 Todos los bloques que hablan de comentarios, sentimiento, polarizacion o
-fricciones deben usar ESTE modulo. Antes cada bloque cargaba los comentarios a
-su manera: unos por publicacion, otros por comentario, unos del ultimo dia y
-otros de toda la historia. Eso producia porcentajes que no coincidian entre si
-("13/48/39" vs "38/28") y conteos parciales ("23 comentarios").
+fricciones deben usar ESTE modulo.
 
-Reglas de la fuente unica:
+Filtrado por plataforma
+-----------------------
+Cada comentario lleva una columna `plataforma` ("facebook" o "tiktok"). Las
+funciones publicas reciben el filtro seleccionado en el panel ("Facebook",
+"TikTok" o "Ambas") y SOLO cargan/combinan las fuentes que correspondan, de modo
+que ninguna metrica mezcla plataformas cuando no debe:
+  - Facebook  -> solo comentarios de Facebook (fb_comments + fb_sentimiento).
+  - TikTok    -> solo comentarios de TikTok (comments + tiktok_sentimiento).
+  - Ambas     -> se concatenan y la distribucion se combina ponderando por el
+                 numero de comentarios de cada plataforma.
+
+Reglas de la fuente unica (se mantienen por plataforma):
   - Se cuenta el 100% de los comentarios del periodo, nunca una muestra.
-  - El sentimiento se toma de fb_sentimiento (pct_positivo / pct_negativo ya
-    calculados por publicacion), ponderado por la cantidad de comentarios de
-    cada publicacion. Esta es la misma fuente confiable que usaba el panel
-    original; la etiqueta por comentario (fb_comments.sentiment) esta poco
-    poblada y por si sola daba 0% a favor.
-  - Si fb_sentimiento no tuviera datos para las publicaciones del periodo, se
-    cae a clasificar comentario por comentario como respaldo.
+  - El sentimiento se toma de la tabla de sentimiento por publicacion/video
+    (fb_sentimiento / tiktok_sentimiento), ponderado por la cantidad de
+    comentarios. Si no hubiera datos, se cae a clasificar comentario por
+    comentario.
   - favorable + neutral + critico siempre suma 100%.
-  - El periodo se aplica por la fecha de la publicacion a la que pertenece el
-    comentario (fb_comments no guarda fecha propia). La fecha se toma de
-    fb_posts y, si faltara, de fb_engagement, para no descartar comentarios
-    cuyo post solo aparece en una de las dos tablas.
+  - El periodo se aplica por la fecha de la publicacion/video al que pertenece
+    el comentario.
 """
 
 import sqlite3
 
 import pandas as pd
 
-from config import FACEBOOK_DB
+from config import FACEBOOK_DB, TIKTOK_DB
 
 _POS = {
     "positivo", "muy_positivo", "positiva", "apoyo",
@@ -38,16 +41,24 @@ _NEG = {
 }
 _NEU = {"neutral", "neutro", "neutra", "mixto", "mixed"}
 
+_COLUMNAS_COMENTARIOS = [
+    "comment_id", "post_id", "message", "sentiment", "sentiment_score",
+    "topic_category", "zona", "created_time", "plataforma",
+]
 
-def cargar_comentarios_periodo(inicio, fin, db_path=None):
-    """Devuelve TODOS los comentarios cuyo post cae en [inicio, fin].
 
-    Columnas: comment_id, post_id, message, sentiment, sentiment_score,
-    topic_category, zona, created_time.
+def _norm_plataforma(plataforma):
+    """Normaliza el selector de plataforma a 'facebook' | 'tiktok' | 'ambas'."""
+    p = str(plataforma or "ambas").strip().lower()
+    if p.startswith("face") or p == "fb":
+        return "facebook"
+    if p.startswith("tik") or p == "tk":
+        return "tiktok"
+    return "ambas"
 
-    La fecha del comentario se hereda de su publicacion: se prefiere
-    fb_posts.created_time y, si falta, fb_engagement.created_time.
-    """
+
+def _cargar_comentarios_fb(inicio, fin, db_path=None):
+    """Comentarios de Facebook cuyo post cae en [inicio, fin]."""
     db_path = db_path or FACEBOOK_DB
     conn = None
     try:
@@ -64,23 +75,84 @@ def cargar_comentarios_periodo(inicio, fin, db_path=None):
             conn,
         )
     except Exception:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=_COLUMNAS_COMENTARIOS)
     finally:
         if conn is not None:
             conn.close()
     if df.empty:
-        return df
+        return pd.DataFrame(columns=_COLUMNAS_COMENTARIOS)
+    df["plataforma"] = "facebook"
     fechas = pd.to_datetime(df["created_time"], errors="coerce")
     mask = (fechas >= pd.Timestamp(inicio)) & (fechas <= pd.Timestamp(fin))
     return df[mask].copy()
 
 
-def clasificar_comentario(row):
-    """Etiqueta un comentario como favorable / neutral / critico.
+def _cargar_comentarios_tk(inicio, fin, tk_db_path=None):
+    """Comentarios de TikTok cuyo video cae en [inicio, fin].
 
-    Prioriza la etiqueta textual del comentario; si no existe, usa el puntaje.
-    Cualquier comentario sin dato utilizable cuenta como NEUTRAL.
+    TikTok no guarda una fecha fiable por comentario: la fecha se hereda del
+    video (videos.created_at) y, si faltara, se usa comments.created_at. El
+    sentimiento por comentario solo existe si modulo2 ya lo persistio en
+    comments.sentiment / comments.sentiment_score; si no, queda NA y la
+    distribucion se calcula desde tiktok_sentimiento.
     """
+    tk_db_path = tk_db_path or TIKTOK_DB
+    conn = None
+    try:
+        conn = sqlite3.connect(tk_db_path)
+        cdf = pd.read_sql("SELECT * FROM comments", conn)
+        vdf = pd.read_sql("SELECT id, created_at FROM videos", conn)
+    except Exception:
+        return pd.DataFrame(columns=_COLUMNAS_COMENTARIOS)
+    finally:
+        if conn is not None:
+            conn.close()
+    if cdf is None or cdf.empty:
+        return pd.DataFrame(columns=_COLUMNAS_COMENTARIOS)
+
+    cdf = cdf.reset_index(drop=True)
+    out = pd.DataFrame(index=cdf.index)
+    out["comment_id"] = cdf["id"] if "id" in cdf.columns else pd.NA
+    out["post_id"] = cdf["video_id"].astype(str) if "video_id" in cdf.columns else pd.NA
+    out["message"] = cdf["text"] if "text" in cdf.columns else pd.NA
+    out["sentiment"] = cdf["sentiment"] if "sentiment" in cdf.columns else pd.NA
+    out["sentiment_score"] = cdf["sentiment_score"] if "sentiment_score" in cdf.columns else pd.NA
+    out["topic_category"] = cdf["topic_category"] if "topic_category" in cdf.columns else pd.NA
+    out["zona"] = cdf["zona"] if "zona" in cdf.columns else pd.NA
+
+    fecha_video = {}
+    if vdf is not None and not vdf.empty:
+        v = vdf.copy()
+        v["id"] = v["id"].astype(str)
+        fecha_video = dict(zip(v["id"], v["created_at"]))
+    created = out["post_id"].astype(str).map(fecha_video)
+    if "created_at" in cdf.columns:
+        created = created.fillna(cdf["created_at"])
+    out["created_time"] = created
+    out["plataforma"] = "tiktok"
+    out = out[_COLUMNAS_COMENTARIOS]
+
+    fechas = pd.to_datetime(out["created_time"], errors="coerce")
+    mask = (fechas >= pd.Timestamp(inicio)) & (fechas <= pd.Timestamp(fin))
+    return out[mask].copy()
+
+
+def cargar_comentarios_periodo(inicio, fin, plataforma="Ambas", db_path=None, tk_db_path=None):
+    """Devuelve TODOS los comentarios del periodo segun la plataforma elegida."""
+    plat = _norm_plataforma(plataforma)
+    partes = []
+    if plat in ("facebook", "ambas"):
+        partes.append(_cargar_comentarios_fb(inicio, fin, db_path))
+    if plat in ("tiktok", "ambas"):
+        partes.append(_cargar_comentarios_tk(inicio, fin, tk_db_path))
+    partes = [p for p in partes if p is not None and not p.empty]
+    if not partes:
+        return pd.DataFrame(columns=_COLUMNAS_COMENTARIOS)
+    return pd.concat(partes, ignore_index=True)
+
+
+def clasificar_comentario(row):
+    """Etiqueta un comentario como favorable / neutral / critico."""
     s = str(row.get("sentiment") or "").strip().lower()
     if s in _POS:
         return "favorable"
@@ -112,12 +184,26 @@ def _dist_por_comentario(df, n):
     )
 
 
-def _dist_desde_fb_sentimiento(post_ids, db_path):
-    """Porcentajes favorable/neutral/critico desde fb_sentimiento.
+def _ponderar_pcts(sdf):
+    """(fav, neu, cri) ponderando pct_positivo/pct_negativo por total_comentarios."""
+    if sdf is None or sdf.empty:
+        return None
+    sdf = sdf.reset_index(drop=True)
+    peso = pd.to_numeric(sdf["total_comentarios"], errors="coerce").fillna(0)
+    peso = peso.clip(lower=0)
+    total = peso.sum()
+    if total <= 0:
+        peso = pd.Series([1.0] * len(sdf))
+        total = peso.sum()
+    pos = pd.to_numeric(sdf["pct_positivo"], errors="coerce").fillna(0)
+    neg = pd.to_numeric(sdf["pct_negativo"], errors="coerce").fillna(0)
+    fav = float((pos * peso).sum() / total)
+    cri = float((neg * peso).sum() / total)
+    neu = max(0.0, 100.0 - fav - cri)
+    return round(fav, 1), round(neu, 1), round(cri, 1)
 
-    Pondera pct_positivo / pct_negativo de cada publicacion por su numero de
-    comentarios. Devuelve None si no hay datos utilizables.
-    """
+
+def _dist_desde_fb_sentimiento(post_ids, db_path):
     if not post_ids:
         return None
     conn = None
@@ -135,28 +221,54 @@ def _dist_desde_fb_sentimiento(post_ids, db_path):
     finally:
         if conn is not None:
             conn.close()
-    if sdf is None or sdf.empty:
+    return _ponderar_pcts(sdf)
+
+
+def _dist_desde_tiktok_sentimiento(video_ids, tk_db_path):
+    if not video_ids:
         return None
-    peso = pd.to_numeric(sdf["total_comentarios"], errors="coerce").fillna(0)
-    peso = peso.clip(lower=0)
-    total = peso.sum()
-    if total <= 0:
-        # Sin pesos utiles: promedio simple entre publicaciones.
-        peso = pd.Series([1.0] * len(sdf))
-        total = peso.sum()
-    pos = pd.to_numeric(sdf["pct_positivo"], errors="coerce").fillna(0)
-    neg = pd.to_numeric(sdf["pct_negativo"], errors="coerce").fillna(0)
-    fav = float((pos * peso).sum() / total)
-    cri = float((neg * peso).sum() / total)
-    neu = max(0.0, 100.0 - fav - cri)
-    return round(fav, 1), round(neu, 1), round(cri, 1)
+    conn = None
+    try:
+        conn = sqlite3.connect(tk_db_path)
+        marcadores = ",".join(["?"] * len(video_ids))
+        sdf = pd.read_sql(
+            "SELECT video_id, pct_positivo, pct_negativo, total_comentarios "
+            f"FROM tiktok_sentimiento WHERE video_id IN ({marcadores})",
+            conn,
+            params=[str(v) for v in video_ids],
+        )
+    except Exception:
+        return None
+    finally:
+        if conn is not None:
+            conn.close()
+    return _ponderar_pcts(sdf)
 
 
-def distribucion_sentimiento(df, db_path=None):
+def _dist_subset(df_sub, plat_key, db_path, tk_db_path):
+    """(fav, neu, cri) de un subconjunto homogeneo de UNA plataforma."""
+    n = 0 if df_sub is None else len(df_sub)
+    if n == 0:
+        return None
+    pcts = None
+    if "post_id" in df_sub.columns:
+        ids = [p for p in df_sub["post_id"].dropna().unique().tolist()]
+        if plat_key == "tiktok":
+            pcts = _dist_desde_tiktok_sentimiento(ids, tk_db_path or TIKTOK_DB)
+        else:
+            pcts = _dist_desde_fb_sentimiento(ids, db_path or FACEBOOK_DB)
+    if pcts is None:
+        pcts = _dist_por_comentario(df_sub, n)
+    return pcts
+
+
+def distribucion_sentimiento(df, plataforma="Ambas", db_path=None, tk_db_path=None):
     """Distribucion favorable/neutral/critico sobre el 100% de df.
 
-    Usa fb_sentimiento (fuente confiable) ponderado por comentarios y, si no
-    hay datos, cae a la etiqueta de cada comentario.
+    Si df trae la columna `plataforma`, se calcula la distribucion de cada
+    plataforma con su propia fuente de sentimiento y se combinan ponderando por
+    el numero de comentarios de cada una. Asi una metrica "Ambas" nunca usa la
+    tabla equivocada para una fila.
     """
     n = 0 if df is None else len(df)
     base = {
@@ -166,15 +278,30 @@ def distribucion_sentimiento(df, db_path=None):
     if n == 0:
         return base
     db_path = db_path or FACEBOOK_DB
+    tk_db_path = tk_db_path or TIKTOK_DB
 
-    pcts = None
-    if "post_id" in df.columns:
-        post_ids = [p for p in df["post_id"].dropna().unique().tolist()]
-        pcts = _dist_desde_fb_sentimiento(post_ids, db_path)
-    if pcts is None:
-        pcts = _dist_por_comentario(df, n)
-    pf, pn, pc = pcts
+    if "plataforma" in df.columns:
+        grupos = []
+        for plat_key, sub in df.groupby("plataforma"):
+            pcts = _dist_subset(sub, str(plat_key).strip().lower(), db_path, tk_db_path)
+            if pcts is not None:
+                grupos.append((len(sub), pcts))
+        if grupos:
+            peso_total = sum(w for w, _ in grupos)
+            pf = sum(w * p[0] for w, p in grupos) / peso_total
+            pn = sum(w * p[1] for w, p in grupos) / peso_total
+            pc = sum(w * p[2] for w, p in grupos) / peso_total
+        else:
+            pf, pn, pc = _dist_por_comentario(df, n)
+    else:
+        pcts = _dist_subset(df, _norm_plataforma(plataforma), db_path, tk_db_path)
+        if pcts is None:
+            pcts = _dist_por_comentario(df, n)
+        pf, pn, pc = pcts
 
+    pf = round(pf, 1)
+    pn = round(pn, 1)
+    pc = round(pc, 1)
     nf = int(round(n * pf / 100))
     nc = int(round(n * pc / 100))
     nn = max(0, n - nf - nc)
@@ -186,21 +313,17 @@ def distribucion_sentimiento(df, db_path=None):
 
 
 def frase_clima(dist):
-    """Resumen en una frase del clima narrativo (lenguaje del alcalde)."""
-    n = dist["n_total"]
-    if n == 0:
-        return "No hay comentarios en el periodo seleccionado."
-    fav, neu, cri = dist["pct_favorable"], dist["pct_neutral"], dist["pct_critico"]
-    if fav >= cri + 15:
-        tono = "predominantemente favorable"
-    elif cri >= fav + 15:
-        tono = "predominantemente critica"
-    elif abs(fav - cri) <= 10 and (fav + cri) > neu:
-        tono = "dividida entre apoyo y critica"
-    else:
-        tono = "mayoritariamente neutral"
-    return (
-        f"De {n} comentarios analizados (el 100% del periodo), la conversacion "
-        f"es {tono}: {fav:.0f}% a favor, {neu:.0f}% neutral y {cri:.0f}% "
-        f"critica."
-    )
+    """Frase corta que resume el clima narrativo a partir de la distribucion."""
+    fav = dist.get("pct_favorable", 0)
+    cri = dist.get("pct_critico", 0)
+    if dist.get("n_total", 0) == 0:
+        return "Sin comentarios en el periodo"
+    if cri >= 50:
+        return "Clima predominantemente critico"
+    if fav >= 50:
+        return "Clima predominantemente favorable"
+    if cri > fav:
+        return "Clima mixto con tendencia critica"
+    if fav > cri:
+        return "Clima mixto con tendencia favorable"
+    return "Clima equilibrado"

@@ -2,9 +2,17 @@
 
 Estaciones: Autenticidad, Nivel de Alerta (solo semáforo), Velocidad de
 Propagación y Puntos de Fricción. Todo se calcula sobre la fuente única
-(dash_fuente) filtrada por el periodo seleccionado, usando el 100% de los
-comentarios del periodo. El lenguaje es ejecutivo: cada estación responde qué
-ocurre, por qué y qué hacer.
+(dash_fuente) filtrada por el periodo y la plataforma seleccionados, usando el
+100% de los comentarios del periodo. El lenguaje es ejecutivo: cada estación
+responde qué ocurre, por qué y qué hacer.
+
+Filtro por plataforma:
+  - Comentarios, distribución de sentimiento, autenticidad y fricciones respetan
+    el filtro (Facebook / TikTok / Ambas) a través de dash_fuente.
+  - El índice de enojo que alimenta el Nivel de Alerta se delega en
+    dash_emocional.metricas_emocionales (Facebook por reacciones tipadas, TikTok
+    por sentimiento de comentarios, "Ambas" ponderado por volumen), en lugar de
+    leerse solo de las reacciones de Facebook.
 """
 
 import pandas as pd
@@ -24,6 +32,7 @@ from dashboard.dash_fuente import (
     distribucion_sentimiento,
     clasificar_comentario,
 )
+from dashboard.dash_emocional import metricas_emocionales
 from dashboard.dash_ui import (
     _page_head,
     card_explicativa,
@@ -34,9 +43,12 @@ from dashboard.dash_ui import (
 
 
 def _filtra_fecha(df, ini, fin):
-    if df is None or df.empty or "created_time" not in df.columns:
+    if df is None or df.empty:
         return df
-    return filtrar_por_fecha(df, "created_time", ini, fin)
+    col = "created_time" if "created_time" in df.columns else ("created_at" if "created_at" in df.columns else None)
+    if col is None:
+        return df
+    return filtrar_por_fecha(df, col, ini, fin)
 
 
 def _detectar_fricciones(df_coment, top_n=3):
@@ -86,15 +98,15 @@ def render_bloque3_riesgo(periodo, plataforma):
         f'PERÍODO <span class="acc">{periodo.upper()}</span> <span class="sep">·</span> {etiqueta_rango(ini, fin).upper()} <span class="sep">·</span> PLATAFORMA <span class="acc">{plataforma.upper()}</span>'
     )
 
-    df_coment = cargar_comentarios_periodo(ini, fin)
-    dist = distribucion_sentimiento(df_coment)
+    df_coment = cargar_comentarios_periodo(ini, fin, plataforma)
+    dist = distribucion_sentimiento(df_coment, plataforma)
 
     plat = (plataforma or "").lower()
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB)
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB)
+    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB) if "tik" not in plat else pd.DataFrame()
+    df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB) if plat != "facebook" else pd.DataFrame()
     df_eng_fb = _filtra_fecha(df_fb_raw, ini, fin)
     df_eng_tk = _filtra_fecha(df_tk_raw, ini, fin)
-    if "tik" in plat and df_eng_tk is not None and not df_eng_tk.empty and "created_time" in df_eng_tk.columns:
+    if "tik" in plat and df_eng_tk is not None and not df_eng_tk.empty:
         df_eng = df_eng_tk
     else:
         df_eng = df_eng_fb
@@ -143,7 +155,8 @@ def render_bloque3_riesgo(periodo, plataforma):
     )
     fricciones = _detectar_fricciones(df_coment)
     pct_neg_val = dist["pct_critico"]
-    enojo_val = df_eng_fb['indice_enojo'].mean() if df_eng_fb is not None and not df_eng_fb.empty and 'indice_enojo' in df_eng_fb.columns else 0
+    # Indice de enojo desacoplado por plataforma (no se lee solo de FB).
+    enojo_val = float(metricas_emocionales(plataforma, ini, fin).get("indice_enojo", 0) or 0)
     pol_b3 = polarizacion_desde_conteos(dist["n_favorable"], dist["n_critico"], dist["n_total"]) if dist["n_total"] > 0 else None
     balance_b3 = pol_b3['balance'] if pol_b3 else None
     alerta = calcular_nivel_alerta(pct_negativo=pct_neg_val, indice_enojo=enojo_val, balance_confrontacion=balance_b3, n_fricciones=len(fricciones), temas_friccion=fricciones)
@@ -156,7 +169,7 @@ def render_bloque3_riesgo(periodo, plataforma):
         ids_alerta = []
         for fr in fricciones[:3]:
             ids_alerta.extend(_post_ids_por_tema_comentarios(fr["tema"]))
-        referencias_publicaciones(post_ids=ids_alerta, limit=8, titulo="PUBLICACIONES DETRÁS DE LA ALERTA")
+        referencias_publicaciones(post_ids=ids_alerta, limit=8, titulo="PUBLICACIONES DETRÁS DE LA ALERTA", plataforma=plataforma)
 
     # ── 3. VELOCIDAD DE PROPAGACIÓN — con contexto narrativo ──
     st.markdown('<div class="section-header"><div class="section-title">03 · Velocidad de Propagación</div><div class="section-subtitle">Hacia dónde va la interacción en las próximas 24 a 48 horas.</div></div>', unsafe_allow_html=True)
@@ -196,6 +209,6 @@ def render_bloque3_riesgo(periodo, plataforma):
     if fricciones:
         for fr in fricciones:
             st.markdown(f'<div class="pattern-card pattern-card-critical"><div style="font-family:var(--font-mono);font-size:10px;letter-spacing:1.4px;color:var(--red);font-weight:700;margin-bottom:6px">{fr["tema"].upper()} · {fr["n"]} COMENTARIOS CRÍTICOS</div><p style="font-size:14px;color:var(--fg-primary);line-height:1.55;margin:0">“{fr["cita"]}”</p></div>', unsafe_allow_html=True)
-            referencias_por_tema_comentarios(fr["tema"], limit=6)
+            referencias_por_tema_comentarios(fr["tema"], limit=6, plataforma=plataforma)
     else:
         st.markdown('<div class="status-info">No se detectaron temas con rechazo relevante en este período: la mayoría de los comentarios son neutrales o favorables.</div>', unsafe_allow_html=True)

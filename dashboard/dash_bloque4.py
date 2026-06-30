@@ -4,9 +4,19 @@ Diez estaciones tipo briefing: Eco Histórico, Lección Aprendida, Brecha
 Percepción-Realidad, Temas Emergentes, Temas en Extinción, Contexto No Visible,
 Correlación Contenido-Reacción, Comparativa Sectorial, Proyección de Escenario y
 Recomendación Estratégica. Todo se calcula sobre la fuente única (dash_fuente)
-filtrada por el periodo seleccionado. Las conclusiones redactadas responden, en
-lenguaje del alcalde, qué ocurre, por qué y qué hacer. El usuario no ve cómo se
-generó el análisis.
+filtrada por el periodo y la plataforma seleccionados. Las conclusiones
+redactadas responden, en lenguaje del alcalde, qué ocurre, por qué y qué hacer.
+El usuario no ve cómo se generó el análisis.
+
+Filtro por plataforma:
+  - Comentarios, distribución de sentimiento y KPIs derivados respetan el filtro
+    (Facebook / TikTok / Ambas) a través de dash_fuente.
+  - El índice de enojo / score emocional se delega en dash_emocional.metricas_
+    emocionales, que usa un modelo distinto por plataforma (ver allí la
+    justificación): Facebook a partir de reacciones tipadas y TikTok a partir
+    del sentimiento de los comentarios; "Ambas" pondera por volumen.
+  - La Correlación Contenido-Reacción depende de reacciones tipadas de Facebook;
+    no aplica a la vista exclusiva de TikTok y se sustituye por una nota.
 """
 
 import pandas as pd
@@ -19,6 +29,7 @@ from dashboard.dash_metrics import (
     cargar_externos,
     calcular_contagio_emocional,
 )
+from dashboard.dash_emocional import metricas_emocionales
 from dashboard.dash_memoria import clasificar_evolucion_temas, comparar_sectorial
 from dashboard.dash_periodos import rango_periodo, filtrar_por_fecha, etiqueta_rango
 from dashboard.dash_fuente import (
@@ -107,24 +118,34 @@ def render_bloque4_inteligencia(periodo, plataforma):
         </div>
     """, unsafe_allow_html=True)
 
-    # ── Fuente única: comentarios del periodo ──
-    df_coment = cargar_comentarios_periodo(ini, fin)
-    dist = distribucion_sentimiento(df_coment)
+    plat = str(plataforma or "").lower()
+
+    # ── Fuente única: comentarios del periodo (respeta plataforma) ──
+    df_coment = cargar_comentarios_periodo(ini, fin, plataforma)
+    dist = distribucion_sentimiento(df_coment, plataforma)
 
     # Periodo anterior de igual duración (para emergentes / extinción)
     try:
         dur = fin - ini
-        df_prev = cargar_comentarios_periodo(ini - dur, ini)
+        df_prev = cargar_comentarios_periodo(ini - dur, ini, plataforma)
     except Exception:
         df_prev = pd.DataFrame()
 
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB)
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB)
+    # Engagement total: solo de la(s) plataforma(s) activa(s), nunca se mezcla
+    # cuando el filtro no corresponde.
+    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB) if "tik" not in plat else pd.DataFrame()
+    df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB) if plat != "facebook" else pd.DataFrame()
     fb_p = _filtra_fecha(df_fb_raw, "created_time", ini, fin)
     tk_p = _filtra_fecha(df_tk_raw, "created_at", ini, fin)
     total_eng = (int(fb_p["engagement_total"].sum()) if not fb_p.empty and "engagement_total" in fb_p.columns else 0)
     total_eng += (int(tk_p["engagement_total"].sum()) if not tk_p.empty and "engagement_total" in tk_p.columns else 0)
-    enojo = float(fb_p["indice_enojo"].mean()) if not fb_p.empty and "indice_enojo" in fb_p.columns else 0.0
+
+    # Índice de enojo / score emocional: delegado al modelo desacoplado por
+    # plataforma (dash_emocional.metricas_emocionales). Facebook usa reacciones
+    # tipadas; TikTok usa el sentimiento de los comentarios; "Ambas" pondera por
+    # volumen. NO se copia el algoritmo de FB a TikTok porque conceptualmente no
+    # aplica (TikTok no expone reacciones tipadas).
+    enojo = float(metricas_emocionales(plataforma, ini, fin).get("indice_enojo", 0) or 0)
 
     temas_fav, temas_crit = _temas_por_tono(df_coment)
     score_interno = round((dist["pct_favorable"] - dist["pct_critico"]) / 100.0, 3)
@@ -132,10 +153,14 @@ def render_bloque4_inteligencia(periodo, plataforma):
     # Evolución de temas (periodo actual vs anterior) — fuente única
     evol = clasificar_evolucion_temas(_conteo_temas(df_coment), _conteo_temas(df_prev))
 
-    # Correlación contenido-reacción (filtrada al periodo)
-    df_posts, _conteo_hist, _dist_hist, _ = calcular_contagio_emocional()
-    if df_posts is not None and not df_posts.empty:
-        df_posts = _filtra_fecha(df_posts, "created_time", ini, fin)
+    # Correlación contenido-reacción (filtrada al periodo). Depende de las
+    # reacciones tipadas de Facebook; no aplica a la vista exclusiva de TikTok.
+    if plat == "tiktok":
+        df_posts = None
+    else:
+        df_posts, _conteo_hist, _dist_hist, _ = calcular_contagio_emocional()
+        if df_posts is not None and not df_posts.empty:
+            df_posts = _filtra_fecha(df_posts, "created_time", ini, fin)
     if df_posts is not None and not df_posts.empty and "tipo_contagio" in df_posts.columns:
         conteo_tipos = df_posts["tipo_contagio"].value_counts().to_dict()
         total_p = int(len(df_posts))
@@ -228,6 +253,8 @@ def render_bloque4_inteligencia(periodo, plataforma):
             for _, r in peores.iterrows():
                 msg = str(r.get("message", "") or "")[:120]
                 st.markdown(f'<div class="memo-item memo-item-negativo">“{msg}”</div>', unsafe_allow_html=True)
+    elif plat == "tiktok":
+        st.markdown('<div class="memo-item memo-item-neutral">La correlación contenido-reacción se basa en las reacciones tipadas de Facebook (me encanta, me enoja, etc.), que TikTok no expone. En la vista exclusiva de TikTok esta estación no aplica; el clima emocional de TikTok se mide en el índice de enojo/score a partir del sentimiento de los comentarios.</div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="memo-item memo-item-neutral">No hay suficientes publicaciones en el período para evaluar la conexión entre contenido y reacción.</div>', unsafe_allow_html=True)
 
@@ -261,4 +288,4 @@ def render_bloque4_inteligencia(periodo, plataforma):
     _b4_card(9, "Proyección de Escenario", "proyeccion", ctx)
     _b4_card(10, "Recomendación Estratégica", "recomendacion", ctx)
     st.markdown('</div>', unsafe_allow_html=True)
-    referencias_publicaciones(limit=10, titulo="PUBLICACIONES QUE SUSTENTAN EL MEMO")
+    referencias_publicaciones(limit=10, titulo="PUBLICACIONES QUE SUSTENTAN EL MEMO", plataforma=plataforma)

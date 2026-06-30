@@ -96,6 +96,60 @@ def analizar_sentimiento_facebook(db_path=None):
     return agrupado, motor_usado
 
 
+def _persistir_sentimiento_comentarios_tiktok(db_path, df_res):
+    """Persiste el sentimiento por comentario en comments.sentiment/sentiment_score.
+
+    El dashboard lee el sentimiento de TikTok comentario por comentario (igual que
+    en Facebook, a traves de dash_fuente). El scraper original de TikTok no guarda
+    esas columnas, asi que aqui se crean si faltan y se rellenan con el resultado
+    del clasificador.
+
+    Mapeo de etiquetas -> dashboard.dash_fuente.clasificar_comentario:
+      POS -> "positivo"  (score positivo)
+      NEG -> "negativo"  (score negativo)
+      NEU -> "neutral"   (score 0)
+    El score se guarda con signo para que clasificar_comentario lo interprete.
+    """
+    if df_res is None or df_res.empty or "comment_id" not in df_res.columns:
+        return
+    _map = {"POS": "positivo", "NEG": "negativo", "NEU": "neutral"}
+    filas = []
+    for _, r in df_res.iterrows():
+        label = str(r.get("label", "NEU"))
+        etiqueta = _map.get(label, "neutral")
+        try:
+            mag = abs(float(r.get("score", 0)))
+        except (TypeError, ValueError):
+            mag = 0.0
+        if label == "POS":
+            score = mag
+        elif label == "NEG":
+            score = -mag
+        else:
+            score = 0.0
+        filas.append((etiqueta, score, r.get("comment_id")))
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cols = {row[1] for row in cur.execute("PRAGMA table_info(comments)").fetchall()}
+        if "sentiment" not in cols:
+            cur.execute("ALTER TABLE comments ADD COLUMN sentiment TEXT")
+        if "sentiment_score" not in cols:
+            cur.execute("ALTER TABLE comments ADD COLUMN sentiment_score REAL")
+        cur.executemany(
+            "UPDATE comments SET sentiment = ?, sentiment_score = ? WHERE id = ?",
+            filas,
+        )
+        conn.commit()
+        print(f"  Sentimiento por comentario TikTok persistido: {len(filas)} filas")
+    except Exception as e:
+        print(f"  Aviso: no se pudo persistir sentimiento por comentario TikTok: {e}")
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def analizar_sentimiento_tiktok(db_path=None):
     if db_path is None:
         db_path = TIKTOK_DB
@@ -134,6 +188,9 @@ def analizar_sentimiento_tiktok(db_path=None):
         return pd.DataFrame(), motor_usado
 
     df_res = pd.DataFrame(resultados)
+
+    # Persistir el sentimiento por comentario (lo consume dash_fuente para TikTok).
+    _persistir_sentimiento_comentarios_tiktok(db_path, df_res)
 
     total = len(df_res)
     for label in ["POS", "NEG", "NEU"]:

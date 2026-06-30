@@ -57,8 +57,13 @@ def render_descarga_medalla(periodo=None):
         f"{len(medios)} réplica(s) externa(s)"
     )
 
+    # El contexto se construye con los DATOS REALES del post medalla vigente. En
+    # particular `descripcion_post` (el texto del post) es lo que permite que el
+    # alcance y la lectura del caso del PDF se adapten al hecho real del período
+    # (antes, sin este dato, la plantilla caía siempre al caso por defecto).
     contexto = {
         "periodo_label": vigente.get("periodo_label") or (periodo or ""),
+        "descripcion_post": (post.get("message") or "").strip(),
         "enlaces": [post.get("post_url")] if post.get("post_url") else [],
         "medios": medios,
     }

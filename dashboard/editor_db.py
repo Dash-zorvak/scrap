@@ -26,6 +26,7 @@ except Exception:
 
 import medalla_store  # noqa: E402
 import medalla_seleccion  # noqa: E402
+import externos_store  # noqa: E402
 from capturas_store import borrar_capturas  # noqa: E402
 from dash_periodos import OPCIONES_PERIODO, etiqueta_rango  # noqa: E402
 import db_edits  # noqa: E402
@@ -70,9 +71,9 @@ def _etiqueta_video_tiktok(v):
     return f"{cuenta} · {fecha} · {desc or '(sin descripción)'}"
 
 
-# ══════════════════════════════════════════════
+# ═════════════════════════════════════
 # Herramienta 1 — corregir registros
-# ══════════════════════════════════════════════
+# ═════════════════════════════════════
 
 def _editor_posts():
     plataforma = st.radio(
@@ -279,9 +280,9 @@ def _editor_posts_tiktok():
                 st.error("No se pudo eliminar el video.")
 
 
-# ══════════════════════════════════════════════
+# ═════════════════════════════════════
 # Herramienta 2 — medalla del período
-# ══════════════════════════════════════════════
+# ═════════════════════════════════════
 
 def _editor_medalla():
     vigente = medalla_store.get_medalla_vigente()
@@ -346,10 +347,55 @@ def _editor_medalla():
         "Réplicas en páginas externas (medios) para el informe",
         list(opc_ext.keys()), key="medalla_medios",
     )
+
+    # Además del marcado anterior, se puede PEGAR el enlace de un medio externo
+    # que no aparezca en la lista (p. ej. una nota de prensa recién publicada o
+    # que no se cargó por el flujo normal). Se crea al vuelo en externos.db y se
+    # incluye como réplica al aprobar la medalla.
+    with st.expander("➕ Agregar enlace de un medio externo a mano"):
+        st.caption(
+            "Úsalo si la réplica del medio no aparece en la lista de arriba. Se guarda "
+            "como página externa y se incluye en el informe PDF."
+        )
+        url_ext = st.text_input("Enlace de la publicación del medio", key="medalla_ext_url")
+        nombre_ext = st.text_input("Nombre del medio / página", key="medalla_ext_nombre")
+        ce1, ce2 = st.columns(2)
+        with ce1:
+            reac_ext = st.number_input(
+                "Reacciones", min_value=0, value=0, step=1, key="medalla_ext_reac",
+            )
+        with ce2:
+            com_ext = st.number_input(
+                "Comentarios", min_value=0, value=0, step=1, key="medalla_ext_com",
+            )
+        if st.button("Agregar enlace", key="btn_add_ext_medalla"):
+            pid_ext = externos_store.agregar_post_externo_manual(
+                url=url_ext, page_name=nombre_ext,
+                total_reactions=reac_ext, comments_count=com_ext,
+            )
+            if pid_ext:
+                manuales = st.session_state.setdefault("medalla_medios_manuales", [])
+                if pid_ext not in manuales:
+                    manuales.append(pid_ext)
+                st.success(
+                    "Enlace agregado; se incluirá como réplica al aprobar la medalla."
+                )
+            else:
+                st.warning("Indica al menos el enlace o el nombre del medio.")
+
+    manuales = st.session_state.get("medalla_medios_manuales", [])
+    if manuales:
+        st.caption(
+            f"Enlaces agregados a mano: {len(manuales)} (se incluirán en el informe)."
+        )
+
     nota = st.text_input("Nota (por qué es la medalla; ayuda a la IA a aprender)", "")
 
     if st.button("Aprobar como medalla", type="primary", key="btn_aprobar_medalla"):
         medios_ids = [opc_ext[k] for k in marcadas]
+        for pid_ext in st.session_state.get("medalla_medios_manuales", []):
+            if pid_ext not in medios_ids:
+                medios_ids.append(pid_ext)
         medalla_store.aprobar_medalla(
             post_id=elegido.get("post_id"),
             score=elegido.get("_score", 0),
@@ -358,6 +404,7 @@ def _editor_medalla():
             nota=nota,
             features=elegido.get("_metricas"),
         )
+        st.session_state.pop("medalla_medios_manuales", None)
         st.success(
             "Medalla aprobada. En el dashboard del alcalde, el informe ya queda "
             "disponible en la pestaña «Memoria e Inteligencia Aplicada», sección "

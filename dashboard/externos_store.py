@@ -17,6 +17,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import EXTERNOS_DB  # noqa: E402
 
+try:
+    from _generar_id import generar_id_post  # noqa: E402
+except Exception:  # pragma: no cover - respaldo si se importa como paquete
+    from dashboard._generar_id import generar_id_post  # noqa: E402
+
 
 def _resolver_db(db_path=None):
     """Permite override por argumento o env var (modo prueba usa externos_test.db)."""
@@ -140,6 +145,48 @@ def insertar_post_externo(conn, datos, post_id):
         ),
     )
     return True
+
+
+def agregar_post_externo_manual(url, page_name="", total_reactions=0,
+                                comments_count=0, message="", created_time=None,
+                                db_path=None):
+    """Crea (o actualiza) un post externo a partir de un enlace pegado a mano y
+    devuelve su post_id, para marcarlo como réplica de la medalla.
+
+    Pensado para el editor de la medalla: cuando un medio replica la publicación
+    y esa nota no está en external_posts (no se cargó por el flujo normal), el
+    analista pega el enlace y aquí se registra como página externa. Devuelve None
+    si no se indicó ni enlace ni nombre del medio.
+    """
+    url = (url or "").strip()
+    nombre = (page_name or "").strip()
+    if not url and not nombre:
+        return None
+    db = _resolver_db(db_path)
+    asegurar_tablas_externas(db)
+    conn = sqlite3.connect(db)
+    try:
+        ids = obtener_ids_posts_externos(conn)
+        base = url or f"{nombre}|{created_time or ''}|{(message or '')[:200]}"
+        post_id = generar_id_post(base, ids)
+        datos = {
+            "page_name": nombre,
+            "page_url": "",
+            "message": message or "",
+            "created_time": created_time,
+            "total_reactions": int(total_reactions or 0),
+            "comments_count": int(comments_count or 0),
+            "post_url": url,
+        }
+        insertar_post_externo(conn, datos, post_id)
+        if nombre:
+            conn.execute(
+                "INSERT OR IGNORE INTO external_pages (name) VALUES (?)", (nombre,)
+            )
+        conn.commit()
+        return post_id
+    finally:
+        conn.close()
 
 
 def insertar_comentario_externo(conn, comment_id, post_id, texto, autor=None):

@@ -21,6 +21,24 @@ def limpiar_texto(texto):
     return texto
 
 
+def _ids_ya_procesados(db_path, tabla, col):
+    """IDs (col) que ya tienen resultado en `tabla`. Set vacio si la tabla no existe.
+
+    Es la base de la incrementalidad: permite saltarse los posts/videos que ya
+    fueron analizados en lotes anteriores y procesar SOLO lo nuevo.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute(f"SELECT DISTINCT {col} FROM {tabla}").fetchall()
+        return {r[0] for r in rows if r[0] is not None}
+    except Exception:
+        return set()
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def analizar_sentimiento_facebook(db_path=None):
     if db_path is None:
         db_path = FACEBOOK_DB
@@ -29,13 +47,29 @@ def analizar_sentimiento_facebook(db_path=None):
         "SELECT comment_id, post_id, message FROM fb_comments WHERE message IS NOT NULL AND message != ''",
         conn,
     )
+    conn.close()
+
+    # Incremental: omitir comentarios de posts que YA tienen sentimiento calculado.
+    procesados = _ids_ya_procesados(db_path, "fb_sentimiento", "post_id")
+    if procesados:
+        antes = len(df)
+        df = df[~df["post_id"].isin(procesados)].copy()
+        print(f"  Incremental: {antes - len(df)} comentarios de posts ya analizados se omiten")
 
     total_raw = len(df)
+    if total_raw == 0:
+        print("  Sin posts nuevos que analizar (Facebook)")
+        return pd.DataFrame(), "reglas"
+
     df["texto_limpio"] = df["message"].apply(limpiar_texto)
     df = df[df["texto_limpio"].notna()].copy()
     df["num_palabras"] = df["texto_limpio"].str.split().str.len()
     df = df[df["num_palabras"] >= 3].copy()
-    print(f"  ({total_raw} comentarios crudos → {len(df)} para análisis)")
+    print(f"  ({total_raw} comentarios nuevos → {len(df)} para análisis)")
+
+    if df.empty:
+        print("  Sin comentarios analizables en los posts nuevos")
+        return pd.DataFrame(), "reglas"
 
     resultados = []
     textos = df["texto_limpio"].tolist()
@@ -48,8 +82,6 @@ def analizar_sentimiento_facebook(db_path=None):
             "label": label,
             "score": score,
         })
-
-    conn.close()
 
     if not resultados:
         print("  Sin resultados de sentimiento")
@@ -88,11 +120,12 @@ def analizar_sentimiento_facebook(db_path=None):
 
     agrupado["score_sentimiento"] = agrupado["pct_positivo"] - agrupado["pct_negativo"]
 
+    # Append: se anaden SOLO los posts nuevos; los anteriores se conservan.
     conn = sqlite3.connect(db_path)
-    agrupado.to_sql("fb_sentimiento", conn, if_exists="replace", index=False)
+    agrupado.to_sql("fb_sentimiento", conn, if_exists="append", index=False)
     conn.close()
 
-    print(f"  Posts agrupados: {len(agrupado)}")
+    print(f"  Posts nuevos agrupados: {len(agrupado)}")
     return agrupado, motor_usado
 
 
@@ -105,9 +138,9 @@ def _persistir_sentimiento_comentarios_tiktok(db_path, df_res):
     del clasificador.
 
     Mapeo de etiquetas -> dashboard.dash_fuente.clasificar_comentario:
-      POS -> "positivo"  (score positivo)
-      NEG -> "negativo"  (score negativo)
-      NEU -> "neutral"   (score 0)
+      POS -> \"positivo\"  (score positivo)
+      NEG -> \"negativo\"  (score negativo)
+      NEU -> \"neutral\"   (score 0)
     El score se guarda con signo para que clasificar_comentario lo interprete.
     """
     if df_res is None or df_res.empty or "comment_id" not in df_res.columns:
@@ -160,16 +193,27 @@ def analizar_sentimiento_tiktok(db_path=None):
     )
     conn.close()
 
+    # Incremental: omitir comentarios de videos que YA tienen sentimiento calculado.
+    procesados = _ids_ya_procesados(db_path, "tiktok_sentimiento", "video_id")
+    if procesados:
+        antes = len(df)
+        df = df[~df["video_id"].isin(procesados)].copy()
+        print(f"  Incremental: {antes - len(df)} comentarios de videos ya analizados se omiten")
+
     total_raw = len(df)
     if total_raw == 0:
-        print("  No hay comentarios en TikTok DB")
+        print("  No hay videos nuevos en TikTok DB")
         return pd.DataFrame(), "reglas"
 
     df["texto_limpio"] = df["message"].apply(limpiar_texto)
     df = df[df["texto_limpio"].notna()].copy()
     df["num_palabras"] = df["texto_limpio"].str.split().str.len()
     df = df[df["num_palabras"] >= 3].copy()
-    print(f"  ({total_raw} comentarios crudos → {len(df)} para análisis)")
+    print(f"  ({total_raw} comentarios nuevos → {len(df)} para análisis)")
+
+    if df.empty:
+        print("  Sin comentarios analizables en los videos nuevos")
+        return pd.DataFrame(), "reglas"
 
     resultados = []
     textos = df["texto_limpio"].tolist()
@@ -222,11 +266,12 @@ def analizar_sentimiento_tiktok(db_path=None):
 
     agrupado["score_sentimiento"] = agrupado["pct_positivo"] - agrupado["pct_negativo"]
 
+    # Append: se anaden SOLO los videos nuevos; los anteriores se conservan.
     conn = sqlite3.connect(db_path)
-    agrupado.to_sql("tiktok_sentimiento", conn, if_exists="replace", index=False)
+    agrupado.to_sql("tiktok_sentimiento", conn, if_exists="append", index=False)
     conn.close()
 
-    print(f"  Videos agrupados: {len(agrupado)}")
+    print(f"  Videos nuevos agrupados: {len(agrupado)}")
     return agrupado, motor_usado
 
 

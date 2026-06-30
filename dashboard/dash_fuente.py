@@ -58,33 +58,66 @@ def _norm_plataforma(plataforma):
 
 
 def _cargar_comentarios_fb(inicio, fin, db_path=None):
-    """Comentarios de Facebook cuyo post cae en [inicio, fin]."""
+    """Comentarios de Facebook cuyo post cae en [inicio, fin].
+
+    Desacoplado del esquema heredado: selecciona fc.* y rellena con NA las
+    columnas OPCIONALES (sentiment, sentiment_score, topic_category, zona) que
+    pudieran no existir, exactamente igual que _cargar_comentarios_tk. Asi, al
+    podar columnas heredadas como `zona` o `topic_category`, los comentarios de
+    Facebook siguen apareciendo en el dashboard en vez de desaparecer por una
+    excepcion de SQL.
+    """
     db_path = db_path or FACEBOOK_DB
     conn = None
     try:
         conn = sqlite3.connect(db_path)
-        df = pd.read_sql(
-            """
-            SELECT fc.comment_id, fc.post_id, fc.message,
-                   fc.sentiment, fc.sentiment_score, fc.topic_category, fc.zona,
-                   COALESCE(fp.created_time, fe.created_time) AS created_time
-            FROM fb_comments fc
-            LEFT JOIN fb_posts fp ON fc.post_id = fp.post_id
-            LEFT JOIN fb_engagement fe ON fc.post_id = fe.post_id
-            """,
-            conn,
-        )
+        cdf = pd.read_sql("SELECT * FROM fb_comments", conn)
+        try:
+            jdf = pd.read_sql("SELECT post_id, created_time FROM fb_posts", conn)
+        except Exception:
+            jdf = None
+        try:
+            edf = pd.read_sql("SELECT post_id, created_time FROM fb_engagement", conn)
+        except Exception:
+            edf = None
     except Exception:
         return pd.DataFrame(columns=_COLUMNAS_COMENTARIOS)
     finally:
         if conn is not None:
             conn.close()
-    if df.empty:
+    if cdf is None or cdf.empty:
         return pd.DataFrame(columns=_COLUMNAS_COMENTARIOS)
-    df["plataforma"] = "facebook"
-    fechas = pd.to_datetime(df["created_time"], errors="coerce")
+
+    cdf = cdf.reset_index(drop=True)
+    out = pd.DataFrame(index=cdf.index)
+    out["comment_id"] = cdf["comment_id"] if "comment_id" in cdf.columns else pd.NA
+    out["post_id"] = cdf["post_id"].astype(str) if "post_id" in cdf.columns else pd.NA
+    out["message"] = cdf["message"] if "message" in cdf.columns else pd.NA
+    out["sentiment"] = cdf["sentiment"] if "sentiment" in cdf.columns else pd.NA
+    out["sentiment_score"] = cdf["sentiment_score"] if "sentiment_score" in cdf.columns else pd.NA
+    out["topic_category"] = cdf["topic_category"] if "topic_category" in cdf.columns else pd.NA
+    out["zona"] = cdf["zona"] if "zona" in cdf.columns else pd.NA
+
+    # Fecha heredada del post (fb_posts), con respaldo en fb_engagement.
+    fecha_post = {}
+    if jdf is not None and not jdf.empty:
+        j = jdf.copy()
+        j["post_id"] = j["post_id"].astype(str)
+        fecha_post = dict(zip(j["post_id"], j["created_time"]))
+    fecha_eng = {}
+    if edf is not None and not edf.empty:
+        e = edf.copy()
+        e["post_id"] = e["post_id"].astype(str)
+        fecha_eng = dict(zip(e["post_id"], e["created_time"]))
+    created = out["post_id"].astype(str).map(fecha_post)
+    created = created.fillna(out["post_id"].astype(str).map(fecha_eng))
+    out["created_time"] = created
+    out["plataforma"] = "facebook"
+    out = out[_COLUMNAS_COMENTARIOS]
+
+    fechas = pd.to_datetime(out["created_time"], errors="coerce")
     mask = (fechas >= pd.Timestamp(inicio)) & (fechas <= pd.Timestamp(fin))
-    return df[mask].copy()
+    return out[mask].copy()
 
 
 def _cargar_comentarios_tk(inicio, fin, tk_db_path=None):

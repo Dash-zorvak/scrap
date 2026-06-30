@@ -6,6 +6,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import *
 
 
+def _ids_existentes(conn, tabla, col):
+    """IDs (col) que ya estan en `tabla`. Set vacio si la tabla no existe.
+
+    Permite procesar SOLO los posts/videos nuevos en cada lote en lugar de
+    recomputar toda la base.
+    """
+    try:
+        rows = conn.execute(f"SELECT {col} FROM {tabla}").fetchall()
+        return {r[0] for r in rows if r[0] is not None}
+    except Exception:
+        return set()
+
+
 def procesar_facebook(fb_db=None):
     if fb_db is None:
         fb_db = FACEBOOK_DB
@@ -22,6 +35,18 @@ def procesar_facebook(fb_db=None):
         AND created_time != ''
     """
     df = pd.read_sql_query(query, conn)
+
+    # Incremental: omitir posts que YA tienen engagement calculado.
+    existentes = _ids_existentes(conn, "fb_engagement", "post_id")
+    if existentes:
+        antes = len(df)
+        df = df[~df["post_id"].isin(existentes)].copy()
+        print(f"  Incremental: {antes - len(df)} posts ya con engagement se omiten")
+
+    if df.empty:
+        conn.close()
+        print("  Facebook: 0 posts nuevos procesados")
+        return df
 
     # Total de reacciones: TODAS las 7 reacciones de Facebook (ninguna queda fuera)
     df["total_reacciones"] = (
@@ -46,7 +71,7 @@ def procesar_facebook(fb_db=None):
     # Score emocional neto (valencia de reacciones en contexto civico):
     #   Positivas (afecto/apoyo): Me encanta (amor) + Me importa (carino).
     #   Negativas (rechazo/burla): Me entristece (tristeza) + Me enoja (enojo)
-    #     + Me divierte (humor). "Me divierte" en publicaciones oficiales es
+    #     + Me divierte (humor). \"Me divierte\" en publicaciones oficiales es
     #     mayoritariamente burla/sarcasmo, por lo que cuenta como senal
     #     NEGATIVA, nunca positiva.
     #   Neutras/ambiguas (excluidas): Me gusta (base generica) y Me asombra
@@ -63,7 +88,8 @@ def procesar_facebook(fb_db=None):
         "indice_tristeza", "indice_enojo", "engagement_total",
         "score_emocional", "plataforma"
     ]
-    df[cols_salida].to_sql("fb_engagement", conn, if_exists="replace", index=False)
+    # Append: se anaden SOLO los posts nuevos; los anteriores se conservan.
+    df[cols_salida].to_sql("fb_engagement", conn, if_exists="append", index=False)
     conn.close()
 
     print(f"  Facebook: {len(df)} posts procesados")
@@ -81,7 +107,19 @@ def procesar_tiktok(tk_db=None):
         FROM videos
     """
     df = pd.read_sql_query(query, conn)
+
+    # Incremental: omitir videos que YA tienen engagement calculado.
+    existentes = _ids_existentes(conn, "tiktok_engagement", "id")
     conn.close()
+
+    if existentes:
+        antes = len(df)
+        df = df[~df["id"].isin(existentes)].copy()
+        print(f"  Incremental: {antes - len(df)} videos ya con engagement se omiten")
+
+    if df.empty:
+        print("  TikTok: 0 videos nuevos procesados")
+        return df
 
     df["engagement_total"] = df["likes"] + df["shares"] + df["comments_count"] + df["favorites_count"]
     df["engagement_rate"] = (df["engagement_total"] / df["views"]).fillna(0).replace([float("inf")], 0)
@@ -97,8 +135,9 @@ def procesar_tiktok(tk_db=None):
         "score_engagement", "plataforma"
     ]
 
+    # Append: se anaden SOLO los videos nuevos; los anteriores se conservan.
     conn = sqlite3.connect(tk_db)
-    df[cols_salida].to_sql("tiktok_engagement", conn, if_exists="replace", index=False)
+    df[cols_salida].to_sql("tiktok_engagement", conn, if_exists="append", index=False)
     conn.close()
 
     print(f"  TikTok: {len(df)} videos procesados")

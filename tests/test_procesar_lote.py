@@ -1,4 +1,9 @@
-"""Tests for Fase 5: procesar_pipeline orchestrator."""
+"""Tests for Fase 5: procesar_pipeline orchestrator.
+
+Tras la poda del pipeline el orquestador ejecuta 5 pasos (antes 7). Se
+eliminaron los pasos de ZONAS y SERIES porque pertenecian al dashboard
+anterior y ya no alimentan ningun bloque vivo del dashboard actual.
+"""
 import os
 import sqlite3
 import tempfile
@@ -134,14 +139,17 @@ class TestProcesarPipeline:
 
         result = procesar_pipeline()
 
-        assert len(result["pasos_ok"]) == 7
+        # 5 pasos tras la poda: sentimiento FB, sentimiento TikTok, categorias,
+        # engagement FB, engagement TikTok. (zonas y series eliminados)
+        assert len(result["pasos_ok"]) == 5
         assert "sentimiento_facebook" in result["pasos_ok"]
         assert "sentimiento_tiktok" in result["pasos_ok"]
         assert "categorias" in result["pasos_ok"]
-        assert "zonas" in result["pasos_ok"]
         assert "engagement_facebook" in result["pasos_ok"]
         assert "engagement_tiktok" in result["pasos_ok"]
-        assert "series" in result["pasos_ok"]
+        # Pasos del dashboard anterior que ya NO deben ejecutarse:
+        assert "zonas" not in result["pasos_ok"]
+        assert "series" not in result["pasos_ok"]
         assert result["errores"] == []
         assert result["motor_sentimiento"] == "reglas"
 
@@ -150,16 +158,19 @@ class TestProcesarPipeline:
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()]
         conn.close()
-        for tbl in ["fb_sentimiento", "post_categorias", "fb_engagement", "series_facebook"]:
+        for tbl in ["fb_sentimiento", "post_categorias", "fb_engagement"]:
             assert tbl in tables, f"Missing table: {tbl}"
+        # Las tablas de series ya no se generan.
+        assert "series_facebook" not in tables
 
         conn = sqlite3.connect(tk_db)
         tables = [r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()]
         conn.close()
-        for tbl in ["tiktok_sentimiento", "tiktok_engagement", "series_tiktok"]:
+        for tbl in ["tiktok_sentimiento", "tiktok_engagement"]:
             assert tbl in tables, f"Missing table: {tbl}"
+        assert "series_tiktok" not in tables
 
     def test_motor_reglas_fallback(self, temp_dbs, monkeypatch):
         _mock_heavy_modules(monkeypatch)
@@ -181,7 +192,8 @@ class TestProcesarPipeline:
         assert "sentimiento_facebook" not in result["pasos_ok"]
         assert len(result["errores"]) >= 1
         assert any("sentimiento_facebook" in e for e in result["errores"])
-        assert len(result["pasos_ok"]) >= 5
+        # Los 4 pasos restantes deben aislarse del fallo.
+        assert len(result["pasos_ok"]) >= 3
 
     def test_progress_callback(self, temp_dbs, monkeypatch):
         _mock_heavy_modules(monkeypatch)
@@ -191,5 +203,5 @@ class TestProcesarPipeline:
             steps.append((paso, total, etiqueta))
 
         procesar_pipeline(progreso_cb=cb)
-        assert len(steps) == 8  # 7 steps + "Pipeline completado"
-        assert steps[-1] == (7, 7, "Pipeline completado")
+        assert len(steps) == 6  # 5 steps + "Pipeline completado"
+        assert steps[-1] == (5, 5, "Pipeline completado")

@@ -101,13 +101,19 @@ def _crear_dbs():
 def _add_fb_post(fb_db, post_id, message, comentarios):
     conn = sqlite3.connect(fb_db)
     conn.execute(
-        "INSERT INTO fb_posts VALUES (?, 'Alcaldía de Santa Ana', "
-        "'2026-05-01T00:00:00', ?, 50, 10, 0, 5, 3, 2, 4, ?)",
+        "INSERT INTO fb_posts (post_id, page_name, created_time, message, "
+        "likes_count, loves_count, cares_count, hahas_count, wows_count, "
+        "sads_count, angrys_count, comments_count) "
+        "VALUES (?, 'Alcaldía de Santa Ana', '2026-05-01T00:00:00', ?, "
+        "50, 10, 0, 5, 3, 2, 4, ?)",
         (post_id, message, len(comentarios)),
     )
+    # Columnas explicitas: el pipeline puede agregar columnas a estas tablas
+    # (p.ej. ALTER ADD sentiment), asi que NUNCA insertamos por posicion.
     for cid, texto in comentarios:
         conn.execute(
-            "INSERT INTO fb_comments VALUES (?, ?, ?)", (cid, post_id, texto)
+            "INSERT INTO fb_comments (comment_id, post_id, message) VALUES (?, ?, ?)",
+            (cid, post_id, texto),
         )
     conn.commit()
     conn.close()
@@ -116,13 +122,18 @@ def _add_fb_post(fb_db, post_id, message, comentarios):
 def _add_tk_video(tk_db, video_id, description, comentarios):
     conn = sqlite3.connect(tk_db)
     conn.execute(
-        "INSERT INTO videos VALUES (?, 1, ?, '2026-05-02T00:00:00', "
-        "500, 100, 20, 10, ?)",
+        "INSERT INTO videos (id, account_id, description, created_at, "
+        "views, likes, shares, favorites_count, comments_count) "
+        "VALUES (?, 1, ?, '2026-05-02T00:00:00', 500, 100, 20, 10, ?)",
         (video_id, description, len(comentarios)),
     )
+    # Columnas explicitas: modulo2 hace ALTER TABLE comments ADD COLUMN
+    # sentiment/sentiment_score durante la 1a corrida, dejando la tabla con 5
+    # columnas. Un INSERT posicional (3 valores) fallaria en la 2a corrida.
     for cid, texto in comentarios:
         conn.execute(
-            "INSERT INTO comments VALUES (?, ?, ?)", (cid, video_id, texto)
+            "INSERT INTO comments (id, video_id, text) VALUES (?, ?, ?)",
+            (cid, video_id, texto),
         )
     conn.commit()
     conn.close()

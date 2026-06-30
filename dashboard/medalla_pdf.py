@@ -1,28 +1,34 @@
 """Generador del informe PDF «Mejor medalla reciente» para el dashboard del alcalde.
 
-El documento separa con claridad dos capas:
+El documento sigue la ESTRUCTURA de la plantilla acordada (sin relleno, solo
+información puntual), y se autollena con los datos reales del período:
 
-  • DOCTRINA GENÉRICA reutilizable: el marco de evaluación «prueba del dolor» y
-    los anti-patrones de «contenido que no traduce tracción». Es metodología,
-    NO menciona ningún caso concreto, y por eso puede repetirse cada período.
+  1. Recuadro de totales (reacciones/comentarios/compartidos/impacto total),
+     sumando el post medalla + sus réplicas en medios («todas las publicaciones»).
+  2. Tabla de publicaciones (medalla + cada medio) con Compartidos y Subtotal y
+     nombre con hipervínculo.
+  3. Párrafo de alcance + «Un número al que hay que prestarle atención» con la
+     imagen del post.
+  4. Conclusión «prueba del dolor»: mensaje corto + 3 elementos clave
+     (Emoción real / Autoridad cercana / Evidencia tangible) adaptados al caso.
+  5. Contenido que no traduce tracción (imágenes de 3 posts + anti-patrones).
+  6. Referencias (enlaces de la medalla y los medios).
 
-  • LECTURA DEL CASO + ALCANCE, que se ADAPTAN en cada generación al post medalla
-    real del período: de qué trata la publicación, sus cifras (reacciones, tasa,
-    impresiones estimadas), las réplicas en medios y los enlaces de referencia.
-    Si hay capturas guardadas del post, se incrustan.
-
-El módulo NO depende de Streamlit. La redacción adaptativa usa el LLM de texto
-(dashboard.llm_groq.chat_texto) cuando hay API key; si no, cae a una plantilla
-local determinista construida con los datos reales del post.
+La parte interpretativa (mensaje corto, los 3 elementos, el medio que la retomó,
+la comparación con otro alcalde) la propone la IA como BORRADOR y el analista la
+edita en el panel; lo editado se pasa por `contexto['narrativa']`. Si no hay IA ni
+edición, se usa un texto genérico determinista basado en los datos. El módulo NO
+depende de Streamlit.
 """
 from __future__ import annotations
 
 import io
+import json
 from datetime import datetime
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT
+from reportlab.lib.enums import TA_JUSTIFY
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
@@ -38,14 +44,12 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-# ══════════════════════════════════════════════════
+# ═════════════════════════════════════
 # Marco editorial GENÉRICO — doctrina reutilizable, SIN casos concretos
-# ══════════════════════════════════════════════════
+# ═════════════════════════════════════
 
 TITULO = "ALCANCE DESTACADO Y PUNTOS SOBRE LA MEJOR MEDALLA RECIENTE DEL ALCALDE"
 
-# Doctrina «prueba del dolor». Texto fijo PERO genérico: describe el MÉTODO de
-# evaluación, nunca un caso particular. La lectura del caso real se redacta aparte.
 DOCTRINA_TITULO = "Cómo se evalúa la medalla (la «prueba del dolor»)"
 DOCTRINA_INTRO = (
     "La mejor medalla reciente del alcalde se evalúa con la «prueba del dolor»: el "
@@ -76,7 +80,6 @@ DOCTRINA_CIERRE = (
     "la historia ya está lista. Esa es la estructura de la prueba del dolor."
 )
 
-# Sección «Contenido que no traduce tracción». Texto fijo y genérico.
 NO_TRACCION_TITULO = "CONTENIDO QUE NO TRADUCE TRACCIÓN A PESAR DE EXCELENTES IMÁGENES"
 NO_TRACCION_PUNTOS = [
     (
@@ -112,12 +115,20 @@ NO_TRACCION_CIERRE = (
 )
 
 LECTURA_TITULO = "Lectura del caso — por qué es la medalla del período"
+CONCLUSION_TITULO = "Conclusión"
+NUMERO_TITULO = "Un número al que hay que prestarle atención"
 REFERENCIAS_TITULO = "REFERENCIAS DE LA MEJOR MEDALLA RECIENTE"
 
+# Claves de la narrativa adaptativa (lo que la IA propone y el analista edita).
+NARRATIVA_CLAVES = (
+    "mensaje_corto", "emocion_real", "autoridad_cercana",
+    "evidencia_tangible", "titular", "medio_retomo", "comparacion",
+)
 
-# ══════════════════════════════════════════════════
+
+# ═════════════════════════════════════
 # Helpers de cálculo
-# ══════════════════════════════════════════════════
+# ═════════════════════════════════════
 
 REACCIONES_POSITIVAS = ("loves_count", "cares_count", "wows_count")
 REACCIONES_NEGATIVAS = ("angrys_count", "sads_count")
@@ -154,9 +165,6 @@ def metricas_post(post: dict) -> dict:
     compartidos = _i(post, "shares_count")
     engagement = total_reac + comentarios + compartidos
     base = total_reac if total_reac > 0 else engagement
-    # Mismo razonamiento del documento: si las reacciones son el 5% del total
-    # de impresiones, impresiones = reacciones / 0.05 (conservador). Al 2% de
-    # enganche, impresiones = reacciones / 0.02 (optimista).
     impresiones_conservador = round(base / 0.05) if base else 0
     impresiones_optimista = round(base / 0.02) if base else 0
     return {
@@ -169,6 +177,46 @@ def metricas_post(post: dict) -> dict:
         "impresiones_conservador": impresiones_conservador,
         "impresiones_optimista": impresiones_optimista,
     }
+
+
+def _publicaciones_y_totales(post: dict, m: dict, medios: list) -> tuple:
+    """Filas de la tabla de publicaciones (medalla + medios) y los totales.
+
+    Los totales suman TODAS las publicaciones (la medalla y sus réplicas), tal
+    como pide el recuadro de la plantilla. Las páginas externas no guardan
+    compartidos, así que su columna queda en «—» y no infla el total.
+    """
+    rows = []
+    rows.append({
+        "nombre": post.get("page_name") or "Publicación medalla",
+        "url": post.get("post_url") or "",
+        "reac": m["total_reacciones"],
+        "com": m["comentarios"],
+        "comp": m["compartidos"],
+        "comp_known": True,
+        "medalla": True,
+    })
+    for med in (medios or []):
+        r = int(med.get("total_reactions") or med.get("reacciones") or 0)
+        c = int(med.get("comments_count") or med.get("comentarios") or 0)
+        sh_raw = med.get("shares_count", med.get("compartidos"))
+        comp_known = sh_raw is not None
+        sh = int(sh_raw or 0)
+        rows.append({
+            "nombre": med.get("page_name") or med.get("nombre") or "Medio externo",
+            "url": med.get("post_url") or med.get("url") or "",
+            "reac": r, "com": c, "comp": sh,
+            "comp_known": comp_known, "medalla": False,
+        })
+    for x in rows:
+        x["sub"] = x["reac"] + x["com"] + x["comp"]
+    tot = {
+        "reac": sum(x["reac"] for x in rows),
+        "com": sum(x["com"] for x in rows),
+        "comp": sum(x["comp"] for x in rows),
+    }
+    tot["impacto"] = tot["reac"] + tot["com"] + tot["comp"]
+    return rows, tot
 
 
 def _topicos_txt(topicos: list) -> str:
@@ -193,11 +241,7 @@ def _descripcion_post(post: dict, contexto: dict, limite: int = 220) -> str:
 
 
 def _parrafo_alcance_plantilla(post: dict, contexto: dict, m: dict) -> str:
-    """Párrafo de alcance construido con los DATOS REALES del post (respaldo sin LLM).
-
-    Ya no asume ningún caso por defecto (antes caía siempre al caso del FAS) ni
-    inventa cifras (ADS, 800k): todo lo cuantitativo sale de las métricas del post.
-    """
+    """Párrafo de alcance construido con los DATOS REALES del post (respaldo sin LLM)."""
     periodo = contexto.get("periodo_label") or "el \u00faltimo per\u00edodo"
     alcance_temas = _topicos_txt(contexto.get("topicos") or [])
     balance = (
@@ -222,12 +266,7 @@ def _parrafo_alcance_plantilla(post: dict, contexto: dict, m: dict) -> str:
 
 
 def _lectura_caso_plantilla(post: dict, contexto: dict, m: dict) -> str:
-    """Lectura del caso construida con los DATOS REALES del post (respaldo sin LLM).
-
-    Describe la publicación medalla concreta del período y por qué fue la de mayor
-    tracción, leída con la doctrina de la «prueba del dolor». NO usa ningún caso
-    de ejemplo.
-    """
+    """Lectura del caso construida con los DATOS REALES del post (respaldo sin LLM)."""
     pagina = post.get("page_name") or "la p\u00e1gina oficial"
     desc = _descripcion_post(post, contexto, limite=300)
     if desc:
@@ -250,6 +289,24 @@ def _lectura_caso_plantilla(post: dict, contexto: dict, m: dict) -> str:
     return base + cierre
 
 
+def _narrativa_plantilla(post: dict, contexto: dict, m: dict) -> dict:
+    """Borrador determinista (sin IA) de la narrativa adaptativa.
+
+    Genérico pero NUNCA menciona un caso concreto: el mensaje corto sale del texto
+    real del post y el resto reutiliza la doctrina de la «prueba del dolor».
+    """
+    mensaje = _descripcion_post(post, contexto, limite=90) or "la prueba del dolor"
+    return {
+        "mensaje_corto": mensaje,
+        "emocion_real": DOCTRINA_ELEMENTOS[0][1],
+        "autoridad_cercana": DOCTRINA_ELEMENTOS[1][1],
+        "evidencia_tangible": DOCTRINA_ELEMENTOS[2][1],
+        "titular": "",
+        "medio_retomo": "",
+        "comparacion": "",
+    }
+
+
 def _cargar_llm():
     """Importa (chat_texto, llm_disponible) tolerando ejecución como paquete o suelta."""
     try:
@@ -264,11 +321,7 @@ def _cargar_llm():
 
 
 def redactar_parrafo_ia(post: dict, contexto: dict, m: dict) -> str | None:
-    """Pide al LLM un p\u00e1rrafo de alcance adaptado al post, en la misma voz.
-
-    Devuelve None si el LLM no est\u00e1 disponible o falla (el caller usa la
-    plantilla determinista como respaldo).
-    """
+    """Pide al LLM un p\u00e1rrafo de alcance adaptado al post. None si no hay LLM."""
     chat_texto, llm_disponible = _cargar_llm()
     if not chat_texto:
         return None
@@ -304,11 +357,7 @@ def redactar_parrafo_ia(post: dict, contexto: dict, m: dict) -> str | None:
 
 
 def redactar_lectura_caso_ia(post: dict, contexto: dict, m: dict) -> str | None:
-    """Pide al LLM la \u00ablectura del caso\u00bb adaptada al post real del per\u00edodo.
-
-    Devuelve None si el LLM no est\u00e1 disponible o falla (el caller usa la
-    plantilla determinista como respaldo).
-    """
+    """Pide al LLM la \u00ablectura del caso\u00bb adaptada al post real. None si no hay LLM."""
     chat_texto, llm_disponible = _cargar_llm()
     if not chat_texto:
         return None
@@ -341,9 +390,102 @@ def redactar_lectura_caso_ia(post: dict, contexto: dict, m: dict) -> str | None:
         return None
 
 
-# ══════════════════════════════════════════════════
+def borrador_narrativa_ia(post: dict, contexto: dict, m: dict) -> dict | None:
+    """Pide al LLM un BORRADOR JSON de la narrativa adaptativa. None si no hay LLM.
+
+    Devuelve un dict con las NARRATIVA_CLAVES que el analista luego edita. El
+    prompt prohíbe inventar hechos y mencionar otros casos; describe lo que se
+    deduce del texto del post (no «ve» la imagen, así que se mantiene prudente).
+    """
+    chat_texto, llm_disponible = _cargar_llm()
+    if not chat_texto:
+        return None
+    try:
+        if not llm_disponible():
+            return None
+    except Exception:
+        return None
+
+    desc = _descripcion_post(post, contexto, limite=600)
+    prompt = (
+        "Eres analista de comunicaci\u00f3n pol\u00edtica. A partir del texto de la publicaci\u00f3n "
+        "medalla del alcalde, propon un BORRADOR breve para el informe siguiendo la "
+        "doctrina de la \u00abprueba del dolor\u00bb. Responde SOLO un objeto JSON con estas "
+        "claves (texto corto en espa\u00f1ol, sin comillas internas):\n"
+        "  mensaje_corto: en una frase, qu\u00e9 convierte de este caso (la \u00abprueba del dolor\u00bb).\n"
+        "  emocion_real: la emoci\u00f3n genuina que transmite.\n"
+        "  autoridad_cercana: c\u00f3mo se muestra la autoridad cercana (a partir del texto).\n"
+        "  evidencia_tangible: la prueba concreta de que algo pas\u00f3.\n"
+        "  titular: c\u00f3mo deber\u00eda leerse el titular al instante.\n"
+        "  medio_retomo: nombre del medio que lo retom\u00f3 si se infiere del contexto; si no, deja \"\".\n"
+        "Reglas: usa EXCLUSIVAMENTE los datos de ESTA publicaci\u00f3n, no inventes hechos ni "
+        "cifras, no menciones ejemplos de otros casos ni otros alcaldes. Si algo no se puede "
+        "deducir, deja la cadena vac\u00eda.\n\n"
+        f"Autor/p\u00e1gina: {post.get('page_name','')}\n"
+        f"Texto del post: {desc}\n"
+        f"Reacciones {m['total_reacciones']} (positivas {m['positivas']}, negativas "
+        f"{m['negativas']}), comentarios {m['comentarios']}, compartidos {m['compartidos']}."
+    )
+    try:
+        out = chat_texto(prompt, max_tokens=600, temperature=0.4, json=True)
+        data = json.loads(out)
+        if not isinstance(data, dict):
+            return None
+        limpio = {}
+        for k in NARRATIVA_CLAVES:
+            v = data.get(k)
+            if isinstance(v, (str, int, float)):
+                limpio[k] = str(v).strip()
+        return limpio or None
+    except Exception:
+        return None
+
+
+def borrador_narrativa(post: dict, contexto: dict | None = None,
+                       usar_ia: bool = True) -> dict:
+    """Borrador completo de la narrativa (IA + respaldo determinista).
+
+    Lo usa el panel: genera un borrador editable. Siempre devuelve todas las
+    NARRATIVA_CLAVES (las que la IA no aporte quedan con el respaldo genérico o
+    vacías).
+    """
+    contexto = dict(contexto or {})
+    m = metricas_post(post)
+    base = _narrativa_plantilla(post, contexto, m)
+    if usar_ia:
+        ia = borrador_narrativa_ia(post, contexto, m)
+        if ia:
+            for k, v in ia.items():
+                if v:
+                    base[k] = v
+    return base
+
+
+def _resolver_narrativa(post: dict, contexto: dict, m: dict, usar_ia: bool) -> dict:
+    """Narrativa final del PDF: lo editado por el analista manda; si no hay nada
+    editado y hay IA, se pide un borrador; en último caso, respaldo determinista.
+    """
+    base = _narrativa_plantilla(post, contexto, m)
+    dada = dict(contexto.get("narrativa") or {})
+    tiene_edicion = any(
+        dada.get(k) for k in ("mensaje_corto", "emocion_real",
+                              "autoridad_cercana", "evidencia_tangible")
+    )
+    if not tiene_edicion and usar_ia:
+        ia = borrador_narrativa_ia(post, contexto, m)
+        if ia:
+            for k, v in ia.items():
+                if v:
+                    base[k] = v
+    for k, v in dada.items():
+        if k in NARRATIVA_CLAVES and v:
+            base[k] = str(v)
+    return base
+
+
+# ═════════════════════════════════════
 # Estilos
-# ══════════════════════════════════════════════════
+# ═════════════════════════════════════
 
 _TINTA = colors.HexColor("#0f172a")
 _ACENTO = colors.HexColor("#b91c1c")
@@ -356,7 +498,7 @@ def _estilos() -> dict:
     return {
         "titulo": ParagraphStyle(
             "titulo", parent=base["Title"], fontName="Helvetica-Bold",
-            fontSize=16, leading=20, textColor=_TINTA, spaceAfter=4,
+            fontSize=15, leading=19, textColor=_TINTA, spaceAfter=4,
         ),
         "subtitulo": ParagraphStyle(
             "subtitulo", parent=base["Normal"], fontName="Helvetica",
@@ -396,7 +538,8 @@ def _estilos() -> dict:
     }
 
 
-def _kpi_tabla(post: dict, m: dict, S: dict) -> Table:
+def _kpi_tabla(tot: dict, S: dict) -> Table:
+    """Recuadro de totales: Reacciones | Comentarios | Compartidos | Impacto total."""
     def celda(valor, etiqueta):
         return [
             Paragraph(f"<b>{valor}</b>", ParagraphStyle(
@@ -407,10 +550,10 @@ def _kpi_tabla(post: dict, m: dict, S: dict) -> Table:
                 textColor=_GRIS, alignment=1)),
         ]
     datos = [
-        celda(_fmt(m["total_reacciones"]), "REACCIONES"),
-        celda(_fmt(m["comentarios"]), "COMENTARIOS"),
-        celda(_fmt(m["compartidos"]), "COMPARTIDOS"),
-        celda(_fmt(m["impresiones_conservador"]), "IMPRESIONES (EST.)"),
+        celda(_fmt(tot["reac"]), "TOTAL REACCIONES"),
+        celda(_fmt(tot["com"]), "TOTAL COMENTARIOS"),
+        celda(_fmt(tot["comp"]), "TOTAL COMPARTIDOS"),
+        celda(_fmt(tot["impacto"]), "IMPACTO TOTAL"),
     ]
     fila_val = [d[0] for d in datos]
     fila_lab = [d[1] for d in datos]
@@ -426,49 +569,51 @@ def _kpi_tabla(post: dict, m: dict, S: dict) -> Table:
     return t
 
 
-def _medios_tabla(medios: list, S: dict) -> Table:
-    """Tabla de r\u00e9plicas en p\u00e1ginas externas: nombre, reacciones, comentarios y enlace."""
+def _publicaciones_tabla(rows: list, S: dict) -> Table:
+    """Tabla de publicaciones (medalla + medios): nombre con enlace, reacciones,
+    comentarios, compartidos y subtotal, con una fila de totales."""
     def _h(txt):
         return Paragraph(f'<font color="#ffffff"><b>{escape(txt)}</b></font>', S["item"])
 
-    filas = [[_h("Medio / p\u00e1gina externa"), _h("Reacciones"),
-              _h("Comentarios"), _h("Enlace")]]
-    tot_reac = 0
-    tot_com = 0
-    for med in medios:
-        nombre = str(med.get("page_name") or med.get("nombre") or "\u2014")
-        reac = int(med.get("total_reactions") or med.get("reacciones") or 0)
-        com = int(med.get("comments_count") or med.get("comentarios") or 0)
-        tot_reac += reac
-        tot_com += com
-        url = med.get("post_url") or med.get("url") or ""
+    filas = [[_h("Publicaci\u00f3n"), _h("Reacciones"), _h("Comentarios"),
+              _h("Compartidos"), _h("Subtotal")]]
+    for row in rows:
+        nombre = escape(str(row["nombre"]))
+        if row.get("medalla"):
+            nombre = f"\U0001f3c5 {nombre}"
+        url = row.get("url") or ""
         if url:
-            url_s = escape(str(url))
-            enlace = Paragraph(
-                f'<a href="{url_s}" color="#1d4ed8">Ver publicaci\u00f3n</a>', S["enlace"])
+            celda_nombre = Paragraph(
+                f'<a href="{escape(str(url))}" color="#1d4ed8">{nombre}</a>', S["item"])
         else:
-            enlace = Paragraph("\u2014", S["enlace"])
+            celda_nombre = Paragraph(nombre, S["item"])
+        comp_txt = _fmt(row["comp"]) if row.get("comp_known") else "\u2014"
         filas.append([
-            Paragraph(escape(nombre), S["item"]),
-            Paragraph(_fmt(reac), S["item"]),
-            Paragraph(_fmt(com), S["item"]),
-            enlace,
+            celda_nombre,
+            Paragraph(_fmt(row["reac"]), S["item"]),
+            Paragraph(_fmt(row["com"]), S["item"]),
+            Paragraph(comp_txt, S["item"]),
+            Paragraph(_fmt(row["sub"]), S["item"]),
         ])
-    # Fila de totales
+    tot_reac = sum(r["reac"] for r in rows)
+    tot_com = sum(r["com"] for r in rows)
+    tot_comp = sum(r["comp"] for r in rows)
     filas.append([
-        Paragraph("<b>Total r\u00e9plicas</b>", S["item"]),
+        Paragraph("<b>Total</b>", S["item"]),
         Paragraph(f"<b>{_fmt(tot_reac)}</b>", S["item"]),
         Paragraph(f"<b>{_fmt(tot_com)}</b>", S["item"]),
-        Paragraph(f"{len(medios)} medio(s)", S["enlace"]),
+        Paragraph(f"<b>{_fmt(tot_comp)}</b>", S["item"]),
+        Paragraph(f"<b>{_fmt(tot_reac + tot_com + tot_comp)}</b>", S["item"]),
     ])
-    t = Table(filas, colWidths=[70 * mm, 28 * mm, 28 * mm, 44 * mm], repeatRows=1)
+    t = Table(filas, colWidths=[62 * mm, 27 * mm, 27 * mm, 27 * mm, 27 * mm],
+              repeatRows=1)
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), _TINTA),
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#eef2f7")),
         ("BOX", (0, 0), (-1, -1), 0.5, _SUAVE),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, _SUAVE),
         ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#f8fafc")]),
-        ("ALIGN", (1, 0), (2, -1), "CENTER"),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
@@ -493,9 +638,51 @@ def _imagen_flowable(ruta: str, max_ancho_mm: float = 170, max_alto_mm: float = 
         return None
 
 
-# ══════════════════════════════════════════════════
+def _bloque_conclusion(n: dict, S: dict) -> list:
+    """Flowables de la conclusión «prueba del dolor» con los 3 elementos adaptados."""
+    out = []
+    mensaje = n.get("mensaje_corto") or "la prueba del dolor"
+    out.append(Paragraph(
+        f"La mejor medalla reciente del alcalde es exactamente \u00ab{escape(mensaje)}\u00bb. "
+        "El reto es orientar la narrativa para que refleje siempre la misma estructura: "
+        "traducci\u00f3n visual inmediata de emoci\u00f3n y evidencia tangible.", S["cuerpo"]))
+    out.append(Paragraph(escape(DOCTRINA_LEAD), S["cuerpo"]))
+    evid = (n.get("evidencia_tangible") or "").strip()
+    tit = (n.get("titular") or "").strip()
+    if tit:
+        evid = (evid + " " + ("El titular: " + tit if not tit.lower().startswith("el titular") else tit)).strip()
+    elementos = [
+        ("Emoci\u00f3n real", n.get("emocion_real") or DOCTRINA_ELEMENTOS[0][1]),
+        ("Autoridad cercana", n.get("autoridad_cercana") or DOCTRINA_ELEMENTOS[1][1]),
+        ("Evidencia tangible", evid or DOCTRINA_ELEMENTOS[2][1]),
+    ]
+    items = [
+        ListItem(Paragraph(f"<b>{escape(t)}</b> \u2014 {escape(d)}", S["item"]), leftIndent=6)
+        for t, d in elementos
+    ]
+    out.append(ListFlowable(items, bulletType="bullet", start="square",
+                            leftIndent=12, spaceAfter=6))
+    out.append(Paragraph(escape(DOCTRINA_IGUAL), S["igual"]))
+    medio = (n.get("medio_retomo") or "").strip()
+    if medio:
+        out.append(Paragraph(
+            f"Es una historia completa con h\u00e9roe, beneficiario y resultado. "
+            f"{escape(medio)} la retom\u00f3 porque no hab\u00eda nada que construir: la historia "
+            f"ya estaba lista.", S["cuerpo"]))
+    else:
+        out.append(Paragraph(
+            "Es una historia completa con h\u00e9roe, beneficiario y resultado. Los medios la "
+            "retoman porque no hay nada que construir: la historia ya est\u00e1 lista.",
+            S["cuerpo"]))
+    comp = (n.get("comparacion") or "").strip()
+    if comp:
+        out.append(Paragraph(escape(comp), S["nota"]))
+    return out
+
+
+# ═════════════════════════════════════
 # Generador principal
-# ══════════════════════════════════════════════════
+# ═════════════════════════════════════
 
 def generar_pdf_medalla(
     post: dict,
@@ -507,32 +694,30 @@ def generar_pdf_medalla(
 
     post      : fila de fb_posts (dict) del post medalla.
     contexto  : datos adaptativos (periodo_label, topicos, enlaces, descripcion_post,
-                parrafo_alcance/lectura_caso ya redactados, etc.).
-    imagenes  : rutas de capturas guardadas del post para incrustar.
-    usar_ia   : si True intenta redactar el alcance y la lectura con el LLM.
+                medios, narrativa editable, no_traccion, etc.).
+    imagenes  : rutas de capturas guardadas del post medalla para incrustar.
+    usar_ia   : si True intenta redactar alcance/narrativa con el LLM.
     """
     contexto = dict(contexto or {})
     imagenes = list(imagenes or [])
     S = _estilos()
     m = metricas_post(post)
+    medios = contexto.get("medios") or []
 
-    # P\u00e1rrafo de alcance (h\u00edbrido: IA si hay, si no plantilla determinista).
     parrafo = contexto.get("parrafo_alcance")
     if not parrafo and usar_ia:
         parrafo = redactar_parrafo_ia(post, contexto, m)
     if not parrafo:
         parrafo = _parrafo_alcance_plantilla(post, contexto, m)
 
-    # Lectura del caso adaptada al post real (reemplaza la antigua conclusi\u00f3n fija).
-    lectura = contexto.get("lectura_caso")
-    if not lectura and usar_ia:
-        lectura = redactar_lectura_caso_ia(post, contexto, m)
-    if not lectura:
-        lectura = _lectura_caso_plantilla(post, contexto, m)
+    narrativa = _resolver_narrativa(post, contexto, m, usar_ia)
 
     enlaces = contexto.get("enlaces") or []
     if not enlaces and post.get("post_url"):
         enlaces = [post["post_url"]]
+
+    rows, tot = _publicaciones_y_totales(post, m, medios)
+    no_traccion = contexto.get("no_traccion") or []
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -551,74 +736,76 @@ def generar_pdf_medalla(
     el.append(HRFlowable(width="100%", thickness=1, color=_SUAVE))
     el.append(Spacer(1, 6))
 
-    # Alcance + KPIs (adaptativo)
-    el.append(Paragraph(escape(parrafo), S["cuerpo"]))
-    el.append(_kpi_tabla(post, m, S))
+    # 1) Recuadro de totales (todas las publicaciones)
+    el.append(_kpi_tabla(tot, S))
+    el.append(Paragraph(
+        "Suma de todas las publicaciones (medalla + r\u00e9plicas en medios). "
+        "Impacto total = reacciones + comentarios + compartidos.", S["nota"]))
+    el.append(Spacer(1, 6))
+
+    # 2) Tabla de publicaciones
+    el.append(_publicaciones_tabla(rows, S))
     el.append(Spacer(1, 10))
 
-    # Lectura del caso (adaptativo)
-    el.append(Paragraph(LECTURA_TITULO, S["seccion"]))
-    el.append(Paragraph(escape(lectura), S["cuerpo"]))
+    # 3) P\u00e1rrafo de alcance (adaptativo)
+    el.append(Paragraph(escape(parrafo), S["cuerpo"]))
 
-    # Repercusi\u00f3n en medios / p\u00e1ginas externas — din\u00e1mica
-    medios = contexto.get("medios") or []
-    el.append(Paragraph("Repercusi\u00f3n en medios y p\u00e1ginas externas", S["seccion"]))
+    # 4) Un n\u00famero al que hay que prestarle atenci\u00f3n + imagen del post
+    el.append(Paragraph(escape(NUMERO_TITULO), S["seccion"]))
     el.append(Paragraph(
-        "N\u00fameros que gener\u00f3 la r\u00e9plica de la medalla en cada p\u00e1gina externa:",
-        S["subtitulo"]))
-    if medios:
-        el.append(_medios_tabla(medios, S))
-    else:
-        el.append(Paragraph(
-            "Sin r\u00e9plicas externas registradas para este post en el per\u00edodo.",
-            S["nota"]))
-    el.append(Spacer(1, 4))
+        f"Estimaci\u00f3n conservadora: ~{_fmt(m['impresiones_conservador'])} impresiones "
+        "con las publicaciones m\u00e1s destacadas y sin inversi\u00f3n en pauta.", S["cuerpo"]))
+    if imagenes:
+        img = _imagen_flowable(imagenes[0])
+        if img is not None:
+            el.append(img)
+            el.append(Spacer(1, 6))
 
-    # Doctrina (prueba del dolor) — gen\u00e9rica/fija
-    el.append(Paragraph(DOCTRINA_TITULO, S["seccion"]))
-    el.append(Paragraph(escape(DOCTRINA_INTRO), S["cuerpo"]))
-    el.append(Paragraph(escape(DOCTRINA_LEAD), S["cuerpo"]))
-    items = [
-        ListItem(Paragraph(f"<b>{escape(t)}</b> \u2014 {escape(d)}", S["item"]),
-                 value=None, leftIndent=6)
-        for t, d in DOCTRINA_ELEMENTOS
-    ]
-    el.append(ListFlowable(items, bulletType="bullet", start="square",
-                           leftIndent=12, spaceAfter=6))
-    el.append(Paragraph(escape(DOCTRINA_IGUAL), S["igual"]))
-    el.append(Paragraph(escape(DOCTRINA_CIERRE), S["cuerpo"]))
+    # 5) Conclusi\u00f3n — prueba del dolor (adaptativa, editable)
+    el.append(Paragraph(escape(CONCLUSION_TITULO), S["seccion"]))
+    el.extend(_bloque_conclusion(narrativa, S))
 
-    # Contenido que no traduce tracci\u00f3n — gen\u00e9rica/fija
+    # 6) Contenido que no traduce tracci\u00f3n (im\u00e1genes + anti-patrones gen\u00e9ricos)
     el.append(Paragraph(escape(NO_TRACCION_TITULO), S["seccion"]))
+    for nt in no_traccion:
+        cap = nt.get("page_name") or nt.get("nombre") or "Publicaci\u00f3n"
+        el.append(Paragraph(f"<b>{escape(str(cap))}</b>", S["item"]))
+        for ruta in (nt.get("imagenes") or [])[:1]:
+            img = _imagen_flowable(ruta, max_alto_mm=70)
+            if img is not None:
+                el.append(img)
+        el.append(Spacer(1, 4))
     pts = [
-        ListItem(Paragraph(f"<b>{escape(t)}.</b> {escape(d)}", S["item"]),
-                 leftIndent=6)
+        ListItem(Paragraph(f"<b>{escape(t)}.</b> {escape(d)}", S["item"]), leftIndent=6)
         for t, d in NO_TRACCION_PUNTOS
     ]
     el.append(ListFlowable(pts, bulletType="1", leftIndent=14, spaceAfter=6))
     el.append(Paragraph(escape(NO_TRACCION_CIERRE), S["cuerpo"]))
 
-    # Referencias — din\u00e1micas
+    # 7) Referencias — din\u00e1micas
     el.append(Paragraph(escape(REFERENCIAS_TITULO), S["seccion"]))
-    if enlaces:
-        for url in enlaces:
-            url_s = escape(str(url))
-            el.append(Paragraph(
-                f"\u2022 <a href=\"{url_s}\" color=\"#1d4ed8\">{url_s}</a>",
-                S["enlace"]))
-    else:
+    hubo_ref = False
+    for url in enlaces:
+        url_s = escape(str(url))
         el.append(Paragraph(
-            "Sin enlaces de referencia registrados para este post.", S["nota"]))
-
-    # Capturas embebidas (si se guardaron en la ingesta)
-    if imagenes:
-        el.append(Spacer(1, 8))
-        el.append(Paragraph("Publicaci\u00f3n (capturas):", S["subtitulo"]))
-        for ruta in imagenes:
-            img = _imagen_flowable(ruta)
-            if img is not None:
-                el.append(img)
-                el.append(Spacer(1, 6))
+            f"\u2022 <a href=\"{url_s}\" color=\"#1d4ed8\">{url_s}</a>", S["enlace"]))
+        hubo_ref = True
+    for med in medios:
+        u = med.get("post_url") or med.get("url")
+        if u:
+            u_s = escape(str(u))
+            nombre = escape(str(med.get("page_name") or med.get("nombre") or "Medio"))
+            el.append(Paragraph(
+                f"\u2022 {nombre}: <a href=\"{u_s}\" color=\"#1d4ed8\">{u_s}</a>",
+                S["enlace"]))
+            hubo_ref = True
+    if not hubo_ref:
+        el.append(Paragraph("Sin enlaces de referencia registrados.", S["nota"]))
+    for ruta in (imagenes[1:] if len(imagenes) > 1 else []):
+        img = _imagen_flowable(ruta)
+        if img is not None:
+            el.append(Spacer(1, 6))
+            el.append(img)
 
     doc.build(el, onFirstPage=_pie, onLaterPages=_pie)
     return buf.getvalue()

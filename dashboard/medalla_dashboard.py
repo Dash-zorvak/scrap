@@ -1,9 +1,9 @@
 """Sección de descarga del informe PDF de la medalla en el dashboard del alcalde.
 
 SOLO LECTURA: toma la medalla aprobada vigente (medalla_store), arma el contexto
-(post FB + réplicas externas seleccionadas + capturas guardadas) y ofrece la
-descarga del PDF. La selección y edición viven en el panel de carga del analista,
-no aquí.
+(post FB + réplicas externas seleccionadas + narrativa editable + capturas) y
+ofrece la descarga del PDF. La selección y edición viven en el panel de carga del
+analista, no aquí.
 
 La descarga se ofrece de forma AUTOMÁTICA: en cuanto hay una medalla vigente, el
 informe se prepara y el botón de descarga aparece sin que el alcalde tenga que
@@ -57,16 +57,36 @@ def render_descarga_medalla(periodo=None):
         f"{len(medios)} réplica(s) externa(s)"
     )
 
-    # El contexto se construye con los DATOS REALES del post medalla vigente. En
-    # particular `descripcion_post` (el texto del post) es lo que permite que el
-    # alcance y la lectura del caso del PDF se adapten al hecho real del período
-    # (antes, sin este dato, la plantilla caía siempre al caso por defecto).
+    # El contexto se construye con los DATOS REALES del post medalla vigente y la
+    # narrativa editable que el analista aprobó (mensaje corto, 3 elementos,
+    # comparación y los posts que «no traducen tracción»). Así el PDF respeta la
+    # estructura de la plantilla y se adapta al caso real del período.
+    narrativa = vigente.get("narrativa") or {}
     contexto = {
         "periodo_label": vigente.get("periodo_label") or (periodo or ""),
         "descripcion_post": (post.get("message") or "").strip(),
         "enlaces": [post.get("post_url")] if post.get("post_url") else [],
         "medios": medios,
+        "narrativa": narrativa,
     }
+
+    # Posts «que no traducen tracción»: el analista los eligió al aprobar; aquí se
+    # resuelven a su texto y a sus capturas guardadas para incrustar las imágenes.
+    no_traccion = []
+    for pid in (narrativa.get("no_traccion") or []):
+        try:
+            p = db_edits.leer_post(pid)
+        except Exception:
+            p = None
+        if not p:
+            continue
+        no_traccion.append({
+            "page_name": p.get("page_name"),
+            "message": p.get("message"),
+            "imagenes": listar_capturas(pid),
+        })
+    contexto["no_traccion"] = no_traccion
+
     imagenes = listar_capturas(post.get("post_id"))
 
     # El informe se prepara automáticamente: el alcalde no debe pulsar nada para

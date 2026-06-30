@@ -115,6 +115,24 @@ def sugerir_candidatos(periodo, fecha_ref=None, top=8, db_path=None,
     return inicio, fin, posts[:top]
 
 
+def sugerir_no_traccion(inicio, fin, top=3, db_path=None, solo_oficiales=True):
+    """Sugiere las publicaciones oficiales de MENOR tracción del período.
+
+    Sirve como punto de partida (editable en el panel) para la sección
+    «contenido que no traduce tracción a pesar de excelentes imágenes». Devuelve
+    una lista de posts (dict) con '_score' y '_metricas', de menor a mayor score.
+    """
+    posts = _leer_posts_fb(inicio, fin, db_path)
+    if solo_oficiales:
+        oficiales = [p for p in posts if (p.get("page_name") or "") in FB_PAGES_OFICIALES]
+        posts = oficiales or posts
+    for p in posts:
+        p["_score"] = score_post(p)
+        p["_metricas"] = metricas_post(p)
+    posts.sort(key=lambda x: x.get("_score", 0))
+    return posts[:top]
+
+
 def recomendacion_ia(candidatos, db_path=None, max_tokens=400):
     """Texto breve de recomendación del LLM, afinado con ejemplos previos.
 

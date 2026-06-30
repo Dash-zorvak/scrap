@@ -2,7 +2,9 @@
 
 Guarda en facebook.db dos tablas:
   - medalla_seleccion: la medalla aprobada vigente (post FB) + los medios/páginas
-    externas asociadas (réplicas que el analista marcó) + el período.
+    externas asociadas (réplicas que el analista marcó) + el período + la
+    narrativa editable del informe (mensaje corto, 3 elementos, comparación y los
+    posts que «no traducen tracción»).
   - medalla_feedback: historial de decisiones (aprobada/rechazada) con las
     características del post, para que la sugerencia «aprenda» del criterio del
     analista (ejemplos few-shot para el re-ranking del LLM).
@@ -40,6 +42,7 @@ def asegurar_tablas(db_path=None):
                 periodo_label TEXT DEFAULT '',
                 medios_json TEXT DEFAULT '[]',
                 nota TEXT DEFAULT '',
+                narrativa_json TEXT DEFAULT '{}',
                 decidido_en DATETIME DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS medalla_feedback (
@@ -52,16 +55,25 @@ def asegurar_tablas(db_path=None):
             );
             """
         )
+        # Migración: añade narrativa_json a instalaciones previas sin la columna.
+        cols = [r[1] for r in conn.execute(
+            "PRAGMA table_info(medalla_seleccion)").fetchall()]
+        if "narrativa_json" not in cols:
+            conn.execute(
+                "ALTER TABLE medalla_seleccion ADD COLUMN narrativa_json TEXT DEFAULT '{}'")
         conn.commit()
     finally:
         conn.close()
 
 
 def aprobar_medalla(post_id, score=0, periodo_label="", medios=None, nota="",
-                    features=None, db_path=None):
+                    features=None, narrativa=None, db_path=None):
     """Registra la medalla aprobada vigente y deja constancia del feedback positivo.
 
-    medios: lista de post_id de external_posts (réplicas marcadas por el analista).
+    medios   : lista de post_id de external_posts (réplicas marcadas por el analista).
+    narrativa: dict editable del informe (mensaje_corto, emocion_real,
+               autoridad_cercana, evidencia_tangible, titular, medio_retomo,
+               comparacion y no_traccion=[post_id,...]).
     """
     asegurar_tablas(db_path)
     medios = list(medios or [])
@@ -69,10 +81,10 @@ def aprobar_medalla(post_id, score=0, periodo_label="", medios=None, nota="",
     try:
         conn.execute(
             "INSERT INTO medalla_seleccion "
-            "(post_id, estado, score, periodo_label, medios_json, nota) "
-            "VALUES (?,?,?,?,?,?)",
+            "(post_id, estado, score, periodo_label, medios_json, nota, narrativa_json) "
+            "VALUES (?,?,?,?,?,?,?)",
             (str(post_id), "aprobada", float(score or 0), periodo_label or "",
-             json.dumps(medios), nota or ""),
+             json.dumps(medios), nota or "", json.dumps(narrativa or {})),
         )
         conn.commit()
     finally:
@@ -101,8 +113,9 @@ def get_medalla_vigente(db_path=None):
     conn = sqlite3.connect(_db(db_path))
     try:
         row = conn.execute(
-            "SELECT post_id, score, periodo_label, medios_json, nota, decidido_en "
-            "FROM medalla_seleccion WHERE estado='aprobada' ORDER BY id DESC LIMIT 1"
+            "SELECT post_id, score, periodo_label, medios_json, nota, decidido_en, "
+            "narrativa_json FROM medalla_seleccion WHERE estado='aprobada' "
+            "ORDER BY id DESC LIMIT 1"
         ).fetchone()
     finally:
         conn.close()
@@ -112,9 +125,14 @@ def get_medalla_vigente(db_path=None):
         medios = json.loads(row[3] or "[]")
     except Exception:
         medios = []
+    try:
+        narrativa = json.loads(row[6] or "{}")
+    except Exception:
+        narrativa = {}
     return {
         "post_id": row[0], "score": row[1], "periodo_label": row[2],
         "medios": medios, "nota": row[4], "decidido_en": row[5],
+        "narrativa": narrativa,
     }
 
 

@@ -1,4 +1,25 @@
-"""Orquestador del pipeline Fase 5: ejecuta módulos 1-4 en orden."""
+"""Orquestador del pipeline Fase 5: ejecuta los pasos de analisis en orden.
+
+Pipeline INCREMENTAL (solo contenido nuevo)
+-------------------------------------------
+Cada paso procesa unicamente los items (posts/videos) que aun NO tienen
+resultado calculado, en lugar de recomputar TODA la base en cada lote. Asi el
+tiempo de "procesar lote" depende de lo que subes, no del tamano historico
+acumulado.
+
+Pasos vigentes (5):
+  1. Sentimiento Facebook   -> fb_sentimiento      (solo posts nuevos)
+  2. Sentimiento TikTok     -> tiktok_sentimiento  (solo videos nuevos)
+  3. Categorizacion KMeans  -> post_categorias     (embeddings cacheados)
+  4. Engagement Facebook    -> fb_engagement       (solo posts nuevos)
+  5. Engagement TikTok      -> tiktok_engagement   (solo videos nuevos)
+
+Pasos retirados (heredados del dashboard anterior, sin consumidores vivos):
+  - Zonas geograficas: ningun bloque vivo usa fb_comments.zona / fb_posts.zona.
+    El lector compartido (dash_fuente) tolera la ausencia de esa columna.
+  - Series temporales: ningun bloque importa dash_metrics.cargar_series; las
+    tendencias se calculan al vuelo desde fb_engagement / tiktok_engagement.
+"""
 
 import sys
 import os
@@ -8,12 +29,10 @@ from config import FACEBOOK_DB, TIKTOK_DB
 from modulo2_sentimiento import analizar_sentimiento_facebook, analizar_sentimiento_tiktok
 from modulo1_categorias import categorizar_posts, guardar_nombres_clusters
 from modulo3_engagement import procesar_facebook, procesar_tiktok
-from modulo4_series import series_facebook, series_tiktok
-from modulo_zonas import taggear_zonas_facebook
 
 
 def procesar_pipeline(progreso_cb=None):
-    """Ejecuta el pipeline completo en orden.
+    """Ejecuta el pipeline incremental en orden.
 
     Args:
         progreso_cb: Callable(paso_actual, total, etiqueta) para UI.
@@ -23,7 +42,7 @@ def procesar_pipeline(progreso_cb=None):
     """
     fb_db = FACEBOOK_DB
     tk_db = TIKTOK_DB
-    total_pasos = 7
+    total_pasos = 5
     pasos_ok = []
     errores = []
     motor_sentimiento = "reglas"
@@ -58,34 +77,19 @@ def procesar_pipeline(progreso_cb=None):
     except Exception as e:
         errores.append(f"categorias: {e}")
 
-    _notificar(4, "Etiquetando zonas geográficas...")
-    try:
-        taggear_zonas_facebook(db_path=fb_db)
-        pasos_ok.append("zonas")
-    except Exception as e:
-        errores.append(f"zonas: {e}")
-
-    _notificar(5, "Calculando engagement Facebook...")
+    _notificar(4, "Calculando engagement Facebook...")
     try:
         procesar_facebook(fb_db=fb_db)
         pasos_ok.append("engagement_facebook")
     except Exception as e:
         errores.append(f"engagement_facebook: {e}")
 
-    _notificar(6, "Calculando engagement TikTok...")
+    _notificar(5, "Calculando engagement TikTok...")
     try:
         procesar_tiktok(tk_db=tk_db)
         pasos_ok.append("engagement_tiktok")
     except Exception as e:
         errores.append(f"engagement_tiktok: {e}")
-
-    _notificar(7, "Generando series temporales...")
-    try:
-        series_facebook(fb_db=fb_db)
-        series_tiktok(tk_db=tk_db)
-        pasos_ok.append("series")
-    except Exception as e:
-        errores.append(f"series: {e}")
 
     resumen = {}
     for paso in pasos_ok:

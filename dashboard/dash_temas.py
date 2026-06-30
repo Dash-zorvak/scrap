@@ -70,10 +70,7 @@ def _contar_comentarios(db_path):
 
 def render_temas_emergentes(db_path):
     st.markdown(
-        '<div class="section-header"><div class="section-title">06 · Temas Emergentes</div>'
-        '<div class="section-subtitle">Temas englobantes definidos por defecto. El sistema sugiere '
-        'en qué tema va cada comentario y con qué postura (apoyo/crítica/neutral); tú lo apruebas. '
-        'Solo lo aprobado cuenta.</div></div>',
+        '<div class="section-header"><div class="section-title">06 · Temas Emergentes</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -131,12 +128,6 @@ def render_temas_emergentes(db_path):
                     f'{split_html}{aviso_critica}{ejemplo_html}</div>',
                     unsafe_allow_html=True,
                 )
-        st.markdown(
-            '<p style="font-size:11px;color:var(--fg-muted);margin-top:6px">'
-            'El porcentaje es sobre los comentarios que ya aprobaste con un tema, no sobre el total. '
-            'Cada tema se divide en apoyo / crítica / neutral según la postura que aprobaste.</p>',
-            unsafe_allow_html=True,
-        )
 
     total = _contar_comentarios(db_path)
     res = resumen_revision(db_path, total_comentarios=total)

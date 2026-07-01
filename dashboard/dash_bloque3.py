@@ -19,7 +19,7 @@ import pandas as pd
 import streamlit as st
 
 from config import FACEBOOK_DB, TIKTOK_DB
-from dashboard.dash_metrics import cargar_fb_engagement, cargar_tk_engagement
+from dashboard.dash_metrics import cargar_fb_engagement, cargar_tk_engagement, safe_query
 from dashboard.dash_audiencia import polarizacion_desde_conteos
 from dashboard.dash_riesgo import (
     calcular_autenticidad,
@@ -52,13 +52,35 @@ def _filtra_fecha(df, ini, fin):
     return filtrar_por_fecha(df, col, ini, fin)
 
 
+def _mapa_categoria_posts():
+    """Devuelve {item_id(str) -> categoria_nombre} desde post_categorias (FB).
+
+    Se usa para atribuir un TEMA a cada comentario a partir de la categoría de su
+    publicación, porque fb_comments.topic_category casi nunca está poblado (el
+    pipeline clasifica POSTS en post_categorias, no comentarios). Devuelve {} si
+    la tabla no existe o está vacía.
+    """
+    try:
+        df = safe_query(
+            "SELECT item_id, categoria_nombre FROM post_categorias "
+            "WHERE categoria_nombre IS NOT NULL AND TRIM(categoria_nombre) != ''",
+            FACEBOOK_DB,
+        )
+        if df is None or df.empty:
+            return {}
+        return {str(i): str(c) for i, c in zip(df["item_id"], df["categoria_nombre"])}
+    except Exception:
+        return {}
+
+
 def _detectar_fricciones(df_coment, top_n=3):
     """Temas con más comentarios críticos del periodo, con una cita real.
 
     Usa la MISMA clasificación que el resto del dashboard (clasificar_comentario)
-    para que, si el Clima muestra comentarios críticos, aquí sí aparezcan. Antes
-    quedaba vacío porque dependía de etiquetas de sentimiento que no siempre
-    coincidían.
+    para que, si el Clima muestra comentarios críticos, aquí sí aparezcan. El
+    TEMA de cada comentario se toma de la categoría de SU publicación
+    (post_categorias), porque fb_comments.topic_category casi nunca está poblado;
+    antes todo caía en "General" y los focos de crítica quedaban sin atribuir.
     """
     if df_coment is None or df_coment.empty:
         return []
@@ -68,10 +90,20 @@ def _detectar_fricciones(df_coment, top_n=3):
     crit = dfc[dfc["_clase"] == "critico"].copy()
     if crit.empty:
         return []
-    if "topic_category" in crit.columns:
-        crit["_tema"] = crit["topic_category"].fillna("General").replace("", "General")
-    else:
-        crit["_tema"] = "General"
+
+    cat_por_post = _mapa_categoria_posts()
+
+    def _tema_de_fila(row):
+        pid = str(row.get("post_id") or "")
+        cat = cat_por_post.get(pid)
+        if cat and str(cat).strip():
+            return str(cat)
+        tc = row.get("topic_category")
+        if tc is not None and not pd.isna(tc) and str(tc).strip():
+            return str(tc)
+        return "General"
+
+    crit["_tema"] = crit.apply(_tema_de_fila, axis=1)
     fr = []
     for tema, g in crit.groupby("_tema"):
         if g["_score"].notna().any():
@@ -172,6 +204,7 @@ def render_bloque3_riesgo(periodo, plataforma):
     card_explicativa(
         "Qué está ocurriendo: qué tan urgente es que la alcaldía responda, en semáforo (verde tranquilo, amarillo preparar, rojo responder ya).",
         "El color resume el nivel de molestia. Abajo se nombran los temas concretos a los que conviene responder.",
+        ojo="El enojo en reacciones (clics «Me enoja») y la crítica en comentarios (texto) son señales DISTINTAS y de volúmenes muy dispares: no son lo mismo ni se comparan directamente.",
     )
     sem_class = {'verde': 'positive', 'amarillo': 'warning', 'rojo': 'critical'}.get(alerta['color'], 'positive')
     emoji_sem = {'verde': '🟢', 'amarillo': '🟡', 'rojo': '🔴'}.get(alerta['color'], '⚪')
@@ -233,7 +266,7 @@ def render_bloque3_riesgo(periodo, plataforma):
         )
     card_explicativa(
         "Qué está ocurriendo: qué temas concentran más comentarios críticos de la ciudadanía.",
-        "Cada tarjeta es un tema; el número son sus comentarios críticos y la frase entre comillas es un comentario representativo.",
+        "Cada tarjeta es un tema; el número son sus comentarios críticos y la frase entre comillas es un comentario representativo. El tema sale de la categoría de la publicación a la que pertenece el comentario.",
     )
     if fricciones:
         for fr in fricciones:

@@ -6,7 +6,7 @@ Cambios respecto a la versión anterior:
     comentario; el usuario APRUEBA/corrige ambos y eso se guarda
     (tema_aprobaciones). Solo los comentarios aprobados cuentan en las tarjetas.
   - Cada tarjeta de tema se divide en apoyo / crítica / neutral, de modo que una
-    crítica no se lee como impulso positivo del tema.
+    crítica no se lea como impulso positivo del tema.
   - Las sugerencias se cachean por comentario durante la sesión y se revisan en
     lotes pequeños: aprobar un comentario NO vuelve a procesar a los demás, así
     el bloque no se congela ni deja de clasificar nuevos comentarios.
@@ -71,6 +71,18 @@ def _contar_comentarios(db_path):
 def render_temas_emergentes(db_path):
     st.markdown(
         '<div class="section-header"><div class="section-title">06 · Temas Emergentes</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # Aclaración de denominador: estos porcentajes salen SOLO de los comentarios
+    # revisados/aprobados a mano en este bloque, no del 100% del período. Sin
+    # esta nota, un "73% de apoyo" aquí parecía contradecir el saldo negativo del
+    # bloque Pulso (que sí usa el total de comentarios).
+    st.markdown(
+        '<div style="font-size:11px;color:var(--fg-muted);margin:-4px 0 10px 0">'
+        'Porcentajes calculados solo sobre los comentarios revisados a mano en '
+        'este bloque, no sobre el total del período. Para el 100% de los '
+        'comentarios, ve «Pulso General».</div>',
         unsafe_allow_html=True,
     )
 

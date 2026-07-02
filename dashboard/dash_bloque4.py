@@ -22,7 +22,7 @@ Filtro por plataforma:
 import pandas as pd
 import streamlit as st
 
-from config import FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB
+from dashboard.config import FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB
 from dashboard.dash_metrics import (
     cargar_fb_engagement,
     cargar_tk_engagement,
@@ -44,6 +44,12 @@ from dashboard.dash_narrativa import generar_narrativa
 from dashboard.dash_ui import _page_head, card_explicativa, referencias_publicaciones
 
 _IGNORAR_TEMAS = {"", "no_aplica", "sin_tema", "general"}
+
+
+def _filtra_fecha(df, col, ini, fin):
+    if df is None or df.empty or col not in df.columns:
+        return df if df is not None else pd.DataFrame()
+    return filtrar_por_fecha(df, col, ini, fin)
 
 
 def _temas_por_tono(df, top=5):

@@ -40,6 +40,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import FACEBOOK_DB, TIKTOK_DB  # noqa: E402
 
+try:
+    from dashboard.config import FACEBOOK_DB as DASH_FACEBOOK_DB  # noqa: E402
+except Exception:
+    DASH_FACEBOOK_DB = FACEBOOK_DB
+
 _POS = {
     "positivo", "muy_positivo", "positiva", "apoyo",
     "positive", "pos",
@@ -380,3 +385,48 @@ def frase_clima(dist):
     if fav > cri:
         return "Clima mixto con tendencia favorable"
     return "Clima equilibrado"
+
+
+def mapa_categoria_posts(db_path=None):
+    """{post_id(str): categoria_nombre(str)} desde post_categorias (FB).
+
+    El tema de cada comentario se toma de la categoría de SU publicación, porque
+    fb_comments.topic_category casi nunca está poblado (el pipeline clasifica
+    POSTS en post_categorias, no comentarios). Devuelve {} si no hay tabla/datos.
+    """
+    db_path = db_path or DASH_FACEBOOK_DB
+    try:
+        conn = sqlite3.connect(db_path)
+        df = pd.read_sql(
+            "SELECT item_id, categoria_nombre FROM post_categorias "
+            "WHERE categoria_nombre IS NOT NULL AND TRIM(categoria_nombre) != ''",
+            conn,
+        )
+        conn.close()
+        if df is None or df.empty:
+            return {}
+        return {str(i): str(c) for i, c in zip(df["item_id"], df["categoria_nombre"])}
+    except Exception:
+        return {}
+
+
+def tema_por_comentario(df, db_path=None):
+    """Serie con el tema de cada comentario: categoría de su post
+    (post_categorias), con respaldo en topic_category del comentario; '' si no
+    hay ninguno.
+    """
+    if df is None or df.empty:
+        return pd.Series(dtype=str)
+    cat_por_post = mapa_categoria_posts(db_path)
+
+    def _t(row):
+        pid = str(row.get("post_id") or "")
+        cat = cat_por_post.get(pid)
+        if cat and str(cat).strip():
+            return str(cat)
+        tc = row.get("topic_category")
+        if tc is not None and not pd.isna(tc) and str(tc).strip():
+            return str(tc)
+        return ""
+
+    return df.apply(_t, axis=1)

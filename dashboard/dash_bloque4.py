@@ -37,57 +37,13 @@ from dashboard.dash_fuente import (
     cargar_comentarios_periodo,
     distribucion_sentimiento,
     clasificar_comentario,
+    mapa_categoria_posts,
+    tema_por_comentario,
 )
 from dashboard.dash_narrativa import generar_narrativa
 from dashboard.dash_ui import _page_head, card_explicativa, referencias_publicaciones
 
 _IGNORAR_TEMAS = {"", "no_aplica", "sin_tema", "general"}
-
-
-def _filtra_fecha(df, col, ini, fin):
-    if df is None or df.empty or col not in df.columns:
-        return df if df is not None else pd.DataFrame()
-    return filtrar_por_fecha(df, col, ini, fin)
-
-
-def _mapa_categoria_posts():
-    """{item_id(str) -> categoria_nombre} desde post_categorias (FB).
-
-    El tema de cada comentario se toma de la categoría de SU publicación, porque
-    fb_comments.topic_category casi nunca está poblado (el pipeline clasifica
-    POSTS en post_categorias, no comentarios). Devuelve {} si no hay tabla/datos.
-    """
-    try:
-        df = safe_query(
-            "SELECT item_id, categoria_nombre FROM post_categorias "
-            "WHERE categoria_nombre IS NOT NULL AND TRIM(categoria_nombre) != ''",
-            FACEBOOK_DB,
-        )
-        if df is None or df.empty:
-            return {}
-        return {str(i): str(c) for i, c in zip(df["item_id"], df["categoria_nombre"])}
-    except Exception:
-        return {}
-
-
-def _tema_series(df):
-    """Serie con el tema de cada comentario: categoría de su post
-    (post_categorias), con respaldo en topic_category del comentario; '' si no
-    hay ninguno.
-    """
-    cat_por_post = _mapa_categoria_posts()
-
-    def _t(row):
-        pid = str(row.get("post_id") or "")
-        cat = cat_por_post.get(pid)
-        if cat and str(cat).strip():
-            return str(cat)
-        tc = row.get("topic_category")
-        if tc is not None and not pd.isna(tc) and str(tc).strip():
-            return str(tc)
-        return ""
-
-    return df.apply(_t, axis=1)
 
 
 def _temas_por_tono(df, top=5):
@@ -96,7 +52,7 @@ def _temas_por_tono(df, top=5):
         return [], []
     d = df.copy()
     d["_clase"] = d.apply(clasificar_comentario, axis=1)
-    d["_tema"] = _tema_series(d).astype(str).str.strip()
+    d["_tema"] = tema_por_comentario(d).astype(str).str.strip()
     d = d[~d["_tema"].str.lower().isin(_IGNORAR_TEMAS)]
     if d.empty:
         return [], []
@@ -111,7 +67,7 @@ def _temas_por_tono(df, top=5):
 def _conteo_temas(df):
     if df is None or df.empty:
         return {}
-    s = _tema_series(df).astype(str).str.strip()
+    s = tema_por_comentario(df).astype(str).str.strip()
     s = s[s != ""]
     s = s[~s.str.lower().isin(_IGNORAR_TEMAS)]
     return s.value_counts().to_dict()

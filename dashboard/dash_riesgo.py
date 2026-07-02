@@ -259,6 +259,10 @@ def agrupar_fricciones(df, top_n=3, umbral_score=-0.1):
     muy_negativo O si su sentiment_score < umbral_score. Agrupa por
     topic_category y devuelve, por tema, el conteo y una cita representativa
     (el comentario más negativo). Lista vacía si no hay fricción.
+
+    Si el DataFrame ya trae una columna _tema (calculada afuera con
+    dash_fuente.tema_por_comentario), úsala; si no, cae al comportamiento
+    viejo con topic_category solo como compatibilidad.
     """
     if df is None or len(df) == 0:
         return []
@@ -275,7 +279,9 @@ def agrupar_fricciones(df, top_n=3, umbral_score=-0.1):
     d = d[es_neg.fillna(False)]
     if d.empty:
         return []
-    if "topic_category" in d.columns:
+    if "_tema" in d.columns:
+        d["_tema"] = d["_tema"].fillna("General").replace("", "General")
+    elif "topic_category" in d.columns:
         d["_tema"] = d["topic_category"].fillna("General").replace("", "General")
     else:
         d["_tema"] = "General"

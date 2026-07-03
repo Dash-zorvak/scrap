@@ -157,9 +157,7 @@ def render_bloque4_inteligencia(periodo, plataforma):
     if plat == "tiktok":
         df_posts = None
     else:
-        df_posts, _conteo_hist, _dist_hist, _ = calcular_contagio_emocional()
-        if df_posts is not None and not df_posts.empty:
-            df_posts = _filtra_fecha(df_posts, "created_time", ini, fin)
+        df_posts, _conteo_hist, _dist_hist, _ = calcular_contagio_emocional(ini=ini, fin=fin)
     if df_posts is not None and not df_posts.empty and "tipo_contagio" in df_posts.columns:
         conteo_tipos = df_posts["tipo_contagio"].value_counts().to_dict()
         total_p = int(len(df_posts))
@@ -235,23 +233,43 @@ def render_bloque4_inteligencia(periodo, plataforma):
     _b4_header(7, "Correlación Contenido-Reacción")
     card_explicativa(
         "Qué está ocurriendo: si lo que publican las páginas conecta con cómo reacciona la gente.",
-        "Se cuenta cuántas publicaciones lograron una buena respuesta y cuántas generaron rechazo a pesar de un mensaje positivo.",
+        "Se cuenta cuántas publicaciones lograron una buena respuesta y cuántas generaron rechazo a pesar de un mensaje positivo. "
+        "Las categorías 'conectaron bien' y 'resonancia negativa' se calculan comparando las publicaciones DENTRO del período seleccionado entre sí, no contra el histórico completo."
     )
     if total_p > 0:
         pct_bien = (reson_pos / total_p * 100) if total_p else 0
         pct_rech = (rechazo / total_p * 100) if total_p else 0
+        pct_resneg = (reson_neg / total_p * 100) if total_p else 0
         st.markdown(
             f'<div class="memo-item memo-item-positivo">De las {total_p} publicaciones del período, {reson_pos} conectaron bien: su mensaje positivo recibió una reacción positiva de la ciudadanía ({pct_bien:.0f}%).</div>'
-            f'<div class="memo-item memo-item-negativo">{rechazo} publicaciones generaron rechazo pese a tener un mensaje positivo ({pct_rech:.0f}%): el mensaje no conectó con la gente.</div>',
+            f'<div class="memo-item memo-item-negativo">{rechazo} publicaciones generaron rechazo pese a tener un mensaje positivo ({pct_rech:.0f}%): el mensaje no conectó con la gente.</div>'
+            f'<div class="memo-item memo-item-negativo">{reson_neg} publicaciones tuvieron resonancia negativa: mensaje negativo y reacción negativa ({pct_resneg:.0f}%).</div>',
             unsafe_allow_html=True,
         )
         _b4_card_correlacion = generar_narrativa("correlacion", ctx)
         st.markdown(f'<p class="memo-body">{_b4_card_correlacion}</p>', unsafe_allow_html=True)
-        if peores is not None and not peores.empty:
-            st.markdown('<div class="memo-section-number" style="margin-top:8px">PUBLICACIONES QUE NO CONECTARON</div>', unsafe_allow_html=True)
-            for _, r in peores.iterrows():
-                msg = str(r.get("message", "") or "")[:120]
-                st.markdown(f'<div class="memo-item memo-item-negativo">“{msg}”</div>', unsafe_allow_html=True)
+        # Publicaciones que conectaron bien (resonancia_positiva)
+        if df_posts is not None and not df_posts.empty and "tipo_contagio" in df_posts.columns:
+            conectaron = df_posts[df_posts["tipo_contagio"] == "resonancia_positiva"].nlargest(3, "score_emocional")
+            if not conectaron.empty:
+                st.markdown('<div class="memo-section-number" style="margin-top:8px">PUBLICACIONES QUE CONECTARON BIEN</div>', unsafe_allow_html=True)
+                for _, r in conectaron.iterrows():
+                    msg = str(r.get("message", "") or "")[:120]
+                    st.markdown(f'<div class="memo-item memo-item-positivo">“{msg}”</div>', unsafe_allow_html=True)
+            # Publicaciones con resonancia negativa
+            reson_neg_posts = df_posts[df_posts["tipo_contagio"] == "resonancia_negativa"].nsmallest(3, "score_emocional")
+            if not reson_neg_posts.empty:
+                st.markdown('<div class="memo-section-number" style="margin-top:8px">PUBLICACIONES CON RESONANCIA NEGATIVA</div>', unsafe_allow_html=True)
+                for _, r in reson_neg_posts.iterrows():
+                    msg = str(r.get("message", "") or "")[:120]
+                    st.markdown(f'<div class="memo-item memo-item-negativo">“{msg}”</div>', unsafe_allow_html=True)
+            # Publicaciones que no conectaron (rechazo_a_positivo) - existing
+            peores = df_posts[df_posts["tipo_contagio"] == "rechazo_a_positivo"].nlargest(3, "distorsion") if "distorsion" in df_posts.columns else pd.DataFrame()
+            if peores is not None and not peores.empty:
+                st.markdown('<div class="memo-section-number" style="margin-top:8px">PUBLICACIONES QUE NO CONECTARON</div>', unsafe_allow_html=True)
+                for _, r in peores.iterrows():
+                    msg = str(r.get("message", "") or "")[:120]
+                    st.markdown(f'<div class="memo-item memo-item-negativo">“{msg}”</div>', unsafe_allow_html=True)
     elif plat == "tiktok":
         st.markdown('<div class="memo-item memo-item-neutral">La correlación contenido-reacción se basa en las reacciones tipadas de Facebook (me encanta, me enoja, etc.), que TikTok no expone. En la vista exclusiva de TikTok esta estación no aplica; el clima emocional de TikTok se mide en el índice de enojo/score a partir del sentimiento de los comentarios.</div>', unsafe_allow_html=True)
     else:

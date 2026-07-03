@@ -670,8 +670,8 @@ def calcular_narrativas_activas():
     return resultados
 
 
-@st.cache_data(ttl=3600)
-def calcular_contagio_emocional():
+@st.cache_data(ttl=3600, show_spinner=False)
+def calcular_contagio_emocional(ini=None, fin=None):
     FACEBOOK_DB_ACTIVA, _, _ = _activas()
     df_posts = safe_query("""
         SELECT fe.post_id,
@@ -698,6 +698,10 @@ def calcular_contagio_emocional():
         df_posts['created_time'], errors='coerce'
     )
     df_posts['semana'] = df_posts['created_time'].dt.to_period('W').dt.start_time
+
+    if ini is not None and fin is not None:
+        mask = (df_posts['created_time'] >= pd.Timestamp(ini)) & (df_posts['created_time'] <= pd.Timestamp(fin))
+        df_posts = df_posts[mask].copy()
 
     df_posts['distorsion'] = (
         df_posts['score_emocional'] - df_posts['sent_comentarios']

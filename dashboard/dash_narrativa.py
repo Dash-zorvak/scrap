@@ -178,7 +178,7 @@ def _limpiar(texto):
 
 
 def _compara_enojo_critico(texto: str) -> bool:
-    """Detecta si la misma oración menciona 'enojo'/'enoja' y 'crític'/'critica'.
+    """Detecta si la misma oración menciona 'enojo'/'enoja' y 'crítico' (incluye plurales y variantes sin tilde).
     
     Tokeniza por oraciones (split por ., !, ?) y usa regex case-insensitive.
     Retorna True si ALGUNA oración contiene AMBOS patrones.
@@ -188,7 +188,7 @@ def _compara_enojo_critico(texto: str) -> bool:
     # Split por . ! ? manteniendo el delimitador para reconstruir oraciones
     oraciones = re.split(r'(?<=[.!?])\s+', texto)
     patron_enojo = re.compile(r'\b(enojo|enoja)\b', re.IGNORECASE)
-    patron_critico = re.compile(r'\b(crític|critica|crítico|crítica)\b', re.IGNORECASE)
+    patron_critico = re.compile(r'\bcr[ií]tic\w*\b', re.IGNORECASE)
     for oracion in oraciones:
         if patron_enojo.search(oracion) and patron_critico.search(oracion):
             return True
@@ -230,7 +230,7 @@ def generar_narrativa(tipo: str, contexto: dict) -> str:
                 if _compara_enojo_critico(salida):
                     if intento == 0:
                         logging.warning(
-                            "generar_narrativa(%s) violó regla enojo/crrojo/crítico, reintentando", tipo
+                            "generar_narrativa(%s) violó regla enojo/crítico, reintentando", tipo
                         )
                         # Añadir advertencia explícita al prompt para el reintento
                         prompt = (

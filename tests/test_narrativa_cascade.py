@@ -111,6 +111,12 @@ def test_compara_enojo_critico_variantes_enoja_critica_detecta():
     assert dn._compara_enojo_critico(texto) is True
 
 
+def test_compara_enojo_critico_plural_criticos_detecta():
+    """Plural 'críticos' en misma oración que 'enojo' → detectado."""
+    texto = "El enojo de las reacciones no equivale al 38% de comentarios críticos."
+    assert dn._compara_enojo_critico(texto) is True
+
+
 def test_generar_narrativa_reintenta_si_viola_regla(monkeypatch):
     """Mock: primera respuesta viola regla, segunda respeta → devuelve la corregida."""
     llamadas = []

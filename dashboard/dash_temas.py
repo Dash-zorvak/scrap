@@ -161,10 +161,8 @@ def render_temas_emergentes(db_path):
         unsafe_allow_html=True,
     )
 
-    _render_revisor(db_path)
 
-
-def _render_revisor(db_path):
+def render_revisor_temas(db_path):
     with st.expander("✍️ Revisar y aprobar temas — revisa el lote y confirma", expanded=False):
         # Cache de sugerencias por comment_id durante la sesión. Además, se
         # revisa en lotes pequeños (_LOTE_REVISION): al aprobar un comentario

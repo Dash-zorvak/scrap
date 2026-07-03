@@ -30,9 +30,12 @@ class TestRenderTemasEmergentesNoApproval:
         monkeypatch.setattr("dashboard.dash_temas.render_revisor_temas", mock_render_revisor)
 
         # Mockear las dependencias de BD en el MÓDULO donde se usan (dash_temas)
-        monkeypatch.setattr("dashboard.dash_temas.cargar_temas_aprobados", lambda db_path: [])
+        monkeypatch.setattr("dashboard.dash_temas.cargar_temas_universo", lambda db_path: [])
         monkeypatch.setattr("dashboard.dash_temas.resumen_revision", lambda db_path, total_comentarios: {
             "total_aprobaciones": 0, "aprobados": 0, "sin_tema": 0, "pendientes": 0
+        })
+        monkeypatch.setattr("dashboard.dash_temas.resumen_cobertura_universo", lambda db_path, total_comentarios: {
+            "clasificados": 0, "total_comentarios": 0, "sin_clasificar": 0
         })
         monkeypatch.setattr("dashboard.dash_temas._contar_comentarios", lambda db_path: 0)
 

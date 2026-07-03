@@ -28,6 +28,7 @@ from dashboard.tema_taxonomia import (
     normalizar_postura,
     remapear,
 )
+from dashboard.tema_clasificaciones_ia import obtener_clasificaciones_ia
 
 TABLA = "tema_aprobaciones"
 
@@ -220,6 +221,96 @@ def agregar_por_tema(db_path):
         })
     temas.sort(key=lambda x: -x["doc_count"])
     return temas
+
+
+def agregar_por_tema_universo(db_path):
+    """Agrega comentarios por tema combinando IA + aprobaciones manuales.
+
+    Universo = clasificaciones IA (base) + aprobaciones manuales (sobrescribe).
+    La aprobacion manual es control de calidad y tiene prioridad.
+    Comentarios sin ninguna clasificacion quedan fuera del conteo.
+    Excluye 'no_aplica'. Devuelve lista de dicts igual que agregar_por_tema.
+    """
+    asegurar_tabla(db_path)
+    # Base: clasificaciones IA
+    clasif_ia = obtener_clasificaciones_ia(db_path)
+    # Override: aprobaciones manuales (prioridad)
+    aprobaciones = obtener_aprobaciones(db_path)
+
+    # Combinar: IA primero, luego aprobaciones sobrescriben
+    combinado = {}
+    for cid, data in clasif_ia.items():
+        combinado[cid] = data
+    for cid, data in aprobaciones.items():
+        combinado[cid] = data  # sobrescribe
+
+    conteo = defaultdict(int)
+    posturas = defaultdict(lambda: {"apoyo": 0, "critica": 0, "neutral": 0})
+    ejemplos = {}
+    ejemplos_critica = {}
+    total_con_tema = 0
+    for cid, data in combinado.items():
+        tema = data.get("tema")
+        texto = data.get("texto", "")
+        postura = data.get("postura", "neutral")
+        if not tema or tema == "no_aplica":
+            continue
+        post = normalizar_postura(postura)
+        conteo[tema] += 1
+        posturas[tema][post] += 1
+        total_con_tema += 1
+        limpio = " ".join((texto or "").split())
+        prev = ejemplos.get(tema)
+        if limpio and (prev is None or 15 <= len(limpio) < len(prev)):
+            ejemplos[tema] = limpio
+        if post == "critica" and limpio:
+            prev_c = ejemplos_critica.get(tema)
+            if prev_c is None or 15 <= len(limpio) < len(prev_c):
+                ejemplos_critica[tema] = limpio
+
+    temas = []
+    for i, (tema, n) in enumerate(conteo.items()):
+        ej = ejemplos.get(tema, "")
+        if len(ej) > 120:
+            ej = ej[:117] + "..."
+        ej_c = ejemplos_critica.get(tema, "")
+        if len(ej_c) > 120:
+            ej_c = ej_c[:117] + "..."
+        pst = posturas[tema]
+        temas.append({
+            "id": i + 1,
+            "categoria": tema,
+            "label": etiqueta_tema(tema),
+            "pct": round(n / total_con_tema * 100, 1) if total_con_tema else 0.0,
+            "doc_count": n,
+            "ejemplo": ej,
+            "apoyo": pst["apoyo"],
+            "critica": pst["critica"],
+            "neutral": pst["neutral"],
+            "pct_apoyo": round(pst["apoyo"] / n * 100, 1) if n else 0.0,
+            "pct_critica": round(pst["critica"] / n * 100, 1) if n else 0.0,
+            "pct_neutral": round(pst["neutral"] / n * 100, 1) if n else 0.0,
+            "saldo": pst["apoyo"] - pst["critica"],
+            "ejemplo_critica": ej_c,
+        })
+    temas.sort(key=lambda x: -x["doc_count"])
+    return temas
+
+
+def resumen_cobertura_universo(db_path, total_comentarios):
+    """Resumen de cobertura del universo (IA + manual).
+    Devuelve {"clasificados": n, "total_comentarios": total, "sin_clasificar": total-n}.
+    """
+    clasif_ia = obtener_clasificaciones_ia(db_path)
+    aprobaciones = obtener_aprobaciones(db_path)
+    # Unicos por comment_id (aprobaciones sobrescriben IA)
+    combinado = set(clasif_ia.keys()) | set(aprobaciones.keys())
+    n = len(combinado)
+    return {
+        "clasificados": n,
+        "total_comentarios": total_comentarios,
+        "sin_clasificar": max(0, total_comentarios - n),
+    }
 
 
 def resumen_revision(db_path, total_comentarios=None):

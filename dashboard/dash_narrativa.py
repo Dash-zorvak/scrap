@@ -96,10 +96,9 @@ _PROMPTS = {
     "contexto": (
         "Eres un analista de inteligencia ciudadana de la gestión municipal de "
         "Santa Ana. Explica qué factores fuera de las redes podrían estar detrás "
-        "del sentimiento detectado (temas dominantes, zonas con más enojo, picos "
-        "de actividad), usando SOLO las señales presentes en los datos. Di qué "
-        "ocurre, por qué podría estar pasando y qué conviene vigilar. No inventes "
-        "noticias ni fechas."
+        "del sentimiento detectado (temas dominantes, zonas con más enojo), usando "
+        "SOLO las señales presentes en los datos. Di qué ocurre, por qué podría "
+        "estar pasando y qué conviene vigilar. No inventes noticias ni fechas."
     ),
     "correlacion": (
         "Eres un analista de inteligencia ciudadana de la gestión municipal de "
@@ -127,6 +126,17 @@ _PROMPTS = {
         "ambiguo."
     ),
 }
+
+_CAMPOS_POR_TIPO = {
+    "eco_historico": ["periodo", "rango", "comentarios_analizados", "pct_favorable", "pct_neutral", "pct_critico", "indice_enojo", "temas_que_funcionaron", "temas_con_rechazo", "temas_emergentes", "temas_en_extincion"],
+    "leccion": ["comentarios_analizados", "pct_favorable", "pct_critico", "indice_enojo", "temas_que_funcionaron", "temas_con_rechazo"],
+    "brecha": ["comentarios_analizados", "pct_favorable", "pct_neutral", "pct_critico", "indice_enojo", "temas_que_funcionaron", "temas_con_rechazo"],
+    "contexto": ["comentarios_analizados", "pct_critico", "indice_enojo", "temas_que_funcionaron", "temas_con_rechazo"],
+    "correlacion": ["rango", "correlacion"],
+    "proyeccion": ["comentarios_analizados", "pct_favorable", "pct_neutral", "pct_critico", "indice_enojo", "interacciones_totales", "temas_emergentes", "temas_en_extincion"],
+    "recomendacion": ["comentarios_analizados", "pct_favorable", "pct_critico", "indice_enojo", "temas_que_funcionaron", "temas_con_rechazo"],
+}
+
 
 _PROHIBIDAS = [
     "análisis ia", "analisis ia", "generado por ia", "inteligencia artificial",
@@ -205,8 +215,13 @@ def generar_narrativa(tipo: str, contexto: dict) -> str:
     """
     if chat_texto is None or not groq_disponible():
         return _FALLBACK
+    
+    # Filtrar contexto según el tipo de estación
+    campos_permitidos = _CAMPOS_POR_TIPO.get(tipo, _CAMPOS_POR_TIPO["recomendacion"])
+    ctx_filtrado = {k: contexto.get(k) for k in campos_permitidos if k in contexto}
+    
     base = _PROMPTS.get(tipo, _PROMPTS["recomendacion"]) + _REGLAS
-    ctx_str = json.dumps(contexto, ensure_ascii=False, default=str)[:3500]
+    ctx_str = json.dumps(ctx_filtrado, ensure_ascii=False, default=str)[:3500]
     clave = _clave_cache(tipo, ctx_str)
     ahora = time.time()
     with _LOCK:

@@ -181,3 +181,155 @@ def test_generar_narrativa_verificador_tambien_valida_regla(monkeypatch):
     assert out == dn._FALLBACK
     # Intentó primario (None) y verificador (glm-test)
     assert llamadas == [None, "glm-test"]
+
+
+# ── D6: Filtrado de contexto por estación + corrección prompt "contexto" ──
+
+def test_prompt_contexto_no_contiene_picos_actividad():
+    """El prompt de 'contexto' en _PROMPTS ya no contiene 'picos de actividad'."""
+    prompt = dn._PROMPTS["contexto"]
+    assert "picos de actividad" not in prompt.lower()
+    assert "temas dominantes" in prompt
+    assert "zonas con más enojo" in prompt
+
+
+def _fake_chat_capture(prompts_captured):
+    """Factory que captura el prompt pasado a chat_texto."""
+    def fake(prompt, max_tokens=600, temperature=0.5, json=False, model=None):
+        prompts_captured.append(prompt)
+        return "Texto válido sin violar regla. Enojo bajo. Críticos altos.", "stop", None
+    return fake
+
+
+def test_generar_narrativa_correlacion_no_ve_temas_ni_indice_enojo(monkeypatch):
+    """Tipo 'correlacion' NO ve temas_que_funcionaron, temas_con_rechazo, indice_enojo."""
+    prompts_captured = []
+    monkeypatch.setattr(dn, "chat_texto", _fake_chat_capture(prompts_captured))
+    monkeypatch.setattr(dn, "groq_disponible", lambda: True)
+    monkeypatch.setattr(dn, "VERIFIER_MODEL", None)
+    _limpiar_cache_narrativa()
+
+    ctx_completo = {
+        "rango": "2024-01-01 a 2024-01-31",
+        "correlacion": {"publicaciones_analizadas": 10, "promedio_interacciones": 150},
+        "temas_que_funcionaron": ["tema1", "tema2"],
+        "temas_con_rechazo": ["tema3"],
+        "indice_enojo": 0.05,
+        "pct_critico": 30,
+        "comentarios_analizados": 500,
+    }
+    dn.generar_narrativa("correlacion", ctx_completo)
+
+    assert len(prompts_captured) == 1
+    prompt = prompts_captured[0]
+    assert "temas_que_funcionaron" not in prompt
+    assert "temas_con_rechazo" not in prompt
+    assert "indice_enojo" not in prompt
+    assert "correlacion" in prompt
+    assert "publicaciones_analizadas" in prompt
+
+
+def test_generar_narrativa_contexto_no_ve_correlacion(monkeypatch):
+    """Tipo 'contexto' NO ve la clave 'correlacion' ni sus subcampos."""
+    prompts_captured = []
+    monkeypatch.setattr(dn, "chat_texto", _fake_chat_capture(prompts_captured))
+    monkeypatch.setattr(dn, "groq_disponible", lambda: True)
+    monkeypatch.setattr(dn, "VERIFIER_MODEL", None)
+    _limpiar_cache_narrativa()
+
+    ctx_completo = {
+        "comentarios_analizados": 500,
+        "pct_critico": 30,
+        "indice_enojo": 0.05,
+        "temas_que_funcionaron": ["tema1"],
+        "temas_con_rechazo": ["tema2"],
+        "correlacion": {"publicaciones_analizadas": 10, "promedio_interacciones": 150},
+        "pct_favorable": 40,
+        "pct_neutral": 30,
+    }
+    dn.generar_narrativa("contexto", ctx_completo)
+
+    assert len(prompts_captured) == 1
+    prompt = prompts_captured[0]
+    assert "correlacion" not in prompt
+    assert "publicaciones_analizadas" not in prompt
+    assert "promedio_interacciones" not in prompt
+    # Pero sí ve sus campos permitidos
+    assert "comentarios_analizados" in prompt
+    assert "pct_critico" in prompt
+    assert "indice_enojo" in prompt
+    assert "temas_que_funcionaron" in prompt
+    assert "temas_con_rechazo" in prompt
+
+
+def test_generar_narrativa_brecha_recibe_sus_campos_esperados(monkeypatch):
+    """Tipo 'brecha' SÍ recibe pct_favorable, indice_enojo, temas_que_funcionaron, etc."""
+    prompts_captured = []
+    monkeypatch.setattr(dn, "chat_texto", _fake_chat_capture(prompts_captured))
+    monkeypatch.setattr(dn, "groq_disponible", lambda: True)
+    monkeypatch.setattr(dn, "VERIFIER_MODEL", None)
+    _limpiar_cache_narrativa()
+
+    ctx_completo = {
+        "comentarios_analizados": 500,
+        "pct_favorable": 45,
+        "pct_neutral": 25,
+        "pct_critico": 30,
+        "indice_enojo": 0.04,
+        "temas_que_funcionaron": ["tema1"],
+        "temas_con_rechazo": ["tema2"],
+        "temas_emergentes": ["tema3"],  # no debería ver esto
+        "correlacion": {"x": 1},  # no debería ver esto
+    }
+    dn.generar_narrativa("brecha", ctx_completo)
+
+    assert len(prompts_captured) == 1
+    prompt = prompts_captured[0]
+    # Campos permitidos para brecha
+    assert "comentarios_analizados" in prompt
+    assert "pct_favorable" in prompt
+    assert "pct_neutral" in prompt
+    assert "pct_critico" in prompt
+    assert "indice_enojo" in prompt
+    assert "temas_que_funcionaron" in prompt
+    assert "temas_con_rechazo" in prompt
+    # Campos NO permitidos para brecha
+    assert "temas_emergentes" not in prompt
+    assert "correlacion" not in prompt
+
+
+def test_generar_narrativa_cache_key_usa_ctx_filtrado(monkeypatch):
+    """La clave de caché usa el ctx FILTRADO (no el completo)."""
+    prompts_captured = []
+    call_count = [0]
+
+    def fake_chat(prompt, max_tokens=600, temperature=0.5, json=False, model=None):
+        call_count[0] += 1
+        prompts_captured.append(prompt)
+        return "Texto válido.", "stop", None
+
+    monkeypatch.setattr(dn, "chat_texto", fake_chat)
+    monkeypatch.setattr(dn, "groq_disponible", lambda: True)
+    monkeypatch.setattr(dn, "VERIFIER_MODEL", None)
+    _limpiar_cache_narrativa()
+
+    ctx_base = {
+        "comentarios_analizados": 500,
+        "pct_critico": 30,
+        "indice_enojo": 0.05,
+        "temas_que_funcionaron": ["tema1"],
+        "temas_con_rechazo": ["tema2"],
+        "correlacion": {"publicaciones_analizadas": 10},  # solo para contexto
+    }
+    # Primera llamada: tipo "contexto" filtra correlacion
+    dn.generar_narrativa("contexto", ctx_base)
+    # Segunda llamada: MISMO ctx_base completo, pero tipo "correlacion" filtra distinto
+    # Si la cache key usara el ctx completo (sin filtrar), colisionarían y
+    # la segunda llamada usaría cache de la primera (mal). Deben ser keys distintas.
+    dn.generar_narrativa("correlacion", ctx_base)
+
+    # Deben ser DOS llamadas distintas (no cache hit)
+    assert call_count[0] == 2
+    # Verificar que los prompts son distintos (diferentes campos filtrados)
+    assert "correlacion" not in prompts_captured[0]  # contexto no ve correlacion
+    assert "correlacion" in prompts_captured[1]      # correlacion sí ve correlacion

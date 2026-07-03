@@ -177,6 +177,24 @@ def _limpiar(texto):
     return t
 
 
+def _compara_enojo_critico(texto: str) -> bool:
+    """Detecta si la misma oración menciona 'enojo'/'enoja' y 'crític'/'critica'.
+    
+    Tokeniza por oraciones (split por ., !, ?) y usa regex case-insensitive.
+    Retorna True si ALGUNA oración contiene AMBOS patrones.
+    """
+    if not texto:
+        return False
+    # Split por . ! ? manteniendo el delimitador para reconstruir oraciones
+    oraciones = re.split(r'(?<=[.!?])\s+', texto)
+    patron_enojo = re.compile(r'\b(enojo|enoja)\b', re.IGNORECASE)
+    patron_critico = re.compile(r'\b(crític|critica|crítico|crítica)\b', re.IGNORECASE)
+    for oracion in oraciones:
+        if patron_enojo.search(oracion) and patron_critico.search(oracion):
+            return True
+    return False
+
+
 def generar_narrativa(tipo: str, contexto: dict) -> str:
     """Devuelve una conclusión ejecutiva para la estación `tipo`.
 
@@ -203,27 +221,59 @@ def generar_narrativa(tipo: str, contexto: dict) -> str:
     # Una sola llamada al modelo principal. Solo si el fallo NO es de límite
     # (429) probamos el verificador; ante un 429 reintentar duplicaría la
     # presión sobre la misma cuota y empeoraría el problema.
-    try:
-        _throttle()
-        salida_raw, _, _ = chat_texto(prompt, max_tokens=600, temperature=0.5, json=False)
-        salida = _limpiar(salida_raw)
-        if salida:
-            with _LOCK:
-                _CACHE[clave] = (salida, False, time.time())
-            return salida
-    except Exception as e:  # pragma: no cover
-        logging.warning("generar_narrativa(%s) falló: %r", tipo, e)
-        if not _es_rate_limit(e) and VERIFIER_MODEL:
-            try:
-                _throttle()
-                salida_raw, _, _ = chat_texto(prompt, max_tokens=600, temperature=0.5, json=False, model=VERIFIER_MODEL)
-                salida = _limpiar(salida_raw)
-                if salida:
-                    with _LOCK:
-                        _CACHE[clave] = (salida, False, time.time())
-                    return salida
-            except Exception as e2:  # pragma: no cover
-                logging.warning("generar_narrativa(%s) verificador falló: %r", tipo, e2)
+    for intento in range(2):  # 0 = primer intento, 1 = reintento tras violación
+        try:
+            _throttle()
+            salida_raw, _, _ = chat_texto(prompt, max_tokens=600, temperature=0.5, json=False)
+            salida = _limpiar(salida_raw)
+            if salida:
+                if _compara_enojo_critico(salida):
+                    if intento == 0:
+                        logging.warning(
+                            "generar_narrativa(%s) violó regla enojo/crrojo/crítico, reintentando", tipo
+                        )
+                        # Añadir advertencia explícita al prompt para el reintento
+                        prompt = (
+                            prompt
+                            + "\n\nADVERTENCIA: tu respuesta anterior comparó el enojo "
+                            "de reacciones con el % crítico de comentarios, algo PROHIBIDO "
+                            "por la regla 6. Corrige esto."
+                        )
+                        continue  # reintento con prompt corregido
+                    # Segundo intento también viola: caer a fallback
+                    logging.warning(
+                        "generar_narrativa(%s) reintento violó regla enojo/crítico, usando fallback",
+                        tipo,
+                    )
+                    break
+                # Salida válida: cachear y devolver
+                with _LOCK:
+                    _CACHE[clave] = (salida, False, time.time())
+                return salida
+        except Exception as e:  # pragma: no cover
+            logging.warning("generar_narrativa(%s) falló: %r", tipo, e)
+            if not _es_rate_limit(e) and VERIFIER_MODEL and intento == 0:
+                try:
+                    _throttle()
+                    salida_raw, _, _ = chat_texto(
+                        prompt, max_tokens=600, temperature=0.5, json=False, model=VERIFIER_MODEL
+                    )
+                    salida = _limpiar(salida_raw)
+                    if salida and not _compara_enojo_critico(salida):
+                        with _LOCK:
+                            _CACHE[clave] = (salida, False, time.time())
+                        return salida
+                    if salida and _compara_enojo_critico(salida):
+                        logging.warning(
+                            "generar_narrativa(%s) verificador violó regla enojo/crítico, usando fallback",
+                            tipo,
+                        )
+                        break
+                except Exception as e2:  # pragma: no cover
+                    logging.warning(
+                        "generar_narrativa(%s) verificador falló: %r", tipo, e2
+                    )
+            break
     with _LOCK:
         _CACHE[clave] = (_FALLBACK, True, time.time())
     return _FALLBACK

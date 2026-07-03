@@ -18,10 +18,10 @@ import sqlite3
 import streamlit as st
 
 from dashboard.dash_inteligencia import (
-    cargar_temas_aprobados,
+    cargar_temas_universo,
     sugerir_temas_pendientes_cacheado,
 )
-from dashboard.tema_aprobaciones import guardar_aprobacion, resumen_revision
+from dashboard.tema_aprobaciones import guardar_aprobacion, resumen_revision, resumen_cobertura_universo
 from dashboard.tema_taxonomia import TEMAS_VISIBLES, TEMA_LABELS
 
 # Cuántos comentarios se preparan para revisión por pantalla. Un lote pequeño
@@ -74,19 +74,15 @@ def render_temas_emergentes(db_path):
         unsafe_allow_html=True,
     )
 
-    # Aclaración de denominador: estos porcentajes salen SOLO de los comentarios
-    # revisados/aprobados a mano en este bloque, no del 100% del período. Sin
-    # esta nota, un "73% de apoyo" aquí parecía contradecir el saldo negativo del
-    # bloque Pulso (que sí usa el total de comentarios).
+    # Aclaración de denominador: ahora incluye IA + aprobaciones manuales
     st.markdown(
         '<div style="font-size:11px;color:var(--fg-muted);margin:-4px 0 10px 0">'
-        'Porcentajes calculados solo sobre los comentarios revisados a mano en '
-        'este bloque, no sobre el total del período. Para el 100% de los '
-        'comentarios, ve «Pulso General».</div>',
+        'Porcentajes calculados sobre comentarios con clasificación (IA + revisión manual), '
+        'no sobre el total del período. Para el 100% de los comentarios, ve «Pulso General».</div>',
         unsafe_allow_html=True,
     )
 
-    temas = cargar_temas_aprobados(db_path)
+    temas = cargar_temas_universo(db_path)
 
     if not temas:
         st.markdown(
@@ -143,10 +139,12 @@ def render_temas_emergentes(db_path):
 
     total = _contar_comentarios(db_path)
     res = resumen_revision(db_path, total_comentarios=total)
+    cobertura = resumen_cobertura_universo(db_path, total)
     st.markdown(
         f'<div class="panel" style="margin-top:10px">'
         f'<div class="panel-head"><div class="panel-title">PROGRESO DE REVISIÓN</div>'
-        f'<div class="panel-meta">{res["total_aprobaciones"]:,} de {total:,} revisados</div></div>'
+        f'<div class="panel-meta">{res["total_aprobaciones"]:,} de {total:,} revisados · '
+        f'{cobertura["clasificados"]:,} de {total:,} ya clasificados (IA + manual)</div></div>'
         f'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px">'
         f'<div class="stat-card" style="border-top:2px solid var(--green);padding:12px">'
         f'<div class="stat-value" style="color:var(--green)">{res["aprobados"]:,}</div>'

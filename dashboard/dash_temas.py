@@ -180,9 +180,10 @@ def render_revisor_temas(db_path):
                 cache.clear()
                 st.rerun()
 
-        pendientes = sugerir_temas_pendientes_cacheado(
-            db_path, cache=cache, limite=_LOTE_REVISION,
-        )
+        with st.spinner("Generando sugerencias de tema y postura con IA…"):
+            pendientes = sugerir_temas_pendientes_cacheado(
+                db_path, cache=cache, limite=_LOTE_REVISION,
+            )
         if not pendientes:
             st.markdown(
                 '<div class="status-info">No hay comentarios pendientes de revisión.</div>',

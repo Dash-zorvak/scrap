@@ -73,11 +73,3 @@ def test_sin_proveedor_no_llama_modelo(monkeypatch):
 
     out = dm.generar_narrativa_ia("leccion", {"score": 0.444, "n": 4})
     assert "no disponible" in out.lower()
-
-
-def test_sin_proveedor_no_llama_modelo(monkeypatch):
-    monkeypatch.setattr(dm, "groq_disponible", lambda: False)
-    _limpiar_cache()
-
-    out = dm.generar_narrativa_ia("leccion", {"score": 0.444, "n": 4})
-    assert "no disponible" in out.lower()

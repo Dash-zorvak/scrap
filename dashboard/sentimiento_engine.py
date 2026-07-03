@@ -168,7 +168,7 @@ def _clasificar_groq_lote(textos):
     import json
     items = "\n".join(f"{i}. {t}" for i, t in enumerate(textos))
     try:
-        raw_resp = chat_texto(_PROMPT_SENTIMIENTO + items, json=True, temperature=0, max_tokens=4096)
+        raw_resp, _, _ = chat_texto(_PROMPT_SENTIMIENTO + items, json=True, temperature=0, max_tokens=4096)
         parsed = json.loads(raw_resp)
     except Exception as e:
         raise e

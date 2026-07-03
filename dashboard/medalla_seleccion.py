@@ -168,7 +168,7 @@ def recomendacion_ia(candidatos, db_path=None, max_tokens=400):
         + "\n\nResponde indicando el indice recomendado y la justificacion."
     )
     try:
-        return chat_texto(prompt, max_tokens=max_tokens, temperature=0.3) or ""
+        return chat_texto(prompt, max_tokens=max_tokens, temperature=0.3)[0] or ""
     except Exception:
         return ""
 

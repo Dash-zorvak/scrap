@@ -21,7 +21,7 @@ def test_usa_primario_cuando_responde(monkeypatch):
 
     def fake_chat(prompt, max_tokens=600, temperature=0.6, json=False, model=None):
         llamadas.append(model)
-        return "narrativa primario"
+        return "narrativa primario", "stop", None
 
     monkeypatch.setattr(dm, "groq_disponible", lambda: True)
     monkeypatch.setattr(dm, "chat_texto", fake_chat)
@@ -41,7 +41,7 @@ def test_cae_al_verificador_glm_si_falla_primario(monkeypatch):
         llamadas.append(model)
         if model is None:
             raise RuntimeError("primario caido")
-        return "narrativa verificador"
+        return "narrativa verificador", "stop", None
 
     monkeypatch.setattr(dm, "groq_disponible", lambda: True)
     monkeypatch.setattr(dm, "chat_texto", fake_chat)
@@ -64,6 +64,14 @@ def test_mensaje_si_toda_la_cascada_falla(monkeypatch):
     _limpiar_cache()
 
     out = dm.generar_narrativa_ia("brecha", {"score": 0.333, "n": 3})
+    assert "no disponible" in out.lower()
+
+
+def test_sin_proveedor_no_llama_modelo(monkeypatch):
+    monkeypatch.setattr(dm, "groq_disponible", lambda: False)
+    _limpiar_cache()
+
+    out = dm.generar_narrativa_ia("leccion", {"score": 0.444, "n": 4})
     assert "no disponible" in out.lower()
 
 

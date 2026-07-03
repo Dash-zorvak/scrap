@@ -118,13 +118,14 @@ def generar_narrativa_ia(tipo: str, contexto: dict) -> str:
     ultimo_error = None
     for modelo in modelos:
         try:
-            return chat_texto(
+            resultado, _, _ = chat_texto(
                 prompt_full,
                 max_tokens=600,
                 temperature=0.6,
                 json=False,
                 model=modelo,
             )
+            return resultado
         except Exception as e:
             ultimo_error = e
             continue

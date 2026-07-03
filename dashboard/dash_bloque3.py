@@ -19,7 +19,7 @@ import pandas as pd
 import streamlit as st
 
 from config import FACEBOOK_DB, TIKTOK_DB
-from dashboard.dash_metrics import cargar_fb_engagement, cargar_tk_engagement, safe_query
+from dashboard.dash_metrics import cargar_fb_engagement, cargar_tk_engagement
 from dashboard.dash_audiencia import polarizacion_desde_conteos
 from dashboard.dash_riesgo import (
     calcular_autenticidad,
@@ -31,6 +31,7 @@ from dashboard.dash_fuente import (
     cargar_comentarios_periodo,
     distribucion_sentimiento,
     clasificar_comentario,
+    tema_por_comentario,
 )
 from dashboard.dash_emocional import metricas_emocionales
 from dashboard.dash_ui import (
@@ -52,27 +53,6 @@ def _filtra_fecha(df, ini, fin):
     return filtrar_por_fecha(df, col, ini, fin)
 
 
-def _mapa_categoria_posts():
-    """Devuelve {item_id(str) -> categoria_nombre} desde post_categorias (FB).
-
-    Se usa para atribuir un TEMA a cada comentario a partir de la categoría de su
-    publicación, porque fb_comments.topic_category casi nunca está poblado (el
-    pipeline clasifica POSTS en post_categorias, no comentarios). Devuelve {} si
-    la tabla no existe o está vacía.
-    """
-    try:
-        df = safe_query(
-            "SELECT item_id, categoria_nombre FROM post_categorias "
-            "WHERE categoria_nombre IS NOT NULL AND TRIM(categoria_nombre) != ''",
-            FACEBOOK_DB,
-        )
-        if df is None or df.empty:
-            return {}
-        return {str(i): str(c) for i, c in zip(df["item_id"], df["categoria_nombre"])}
-    except Exception:
-        return {}
-
-
 def _detectar_fricciones(df_coment, top_n=3):
     """Temas con más comentarios críticos del periodo, con una cita real.
 
@@ -91,19 +71,8 @@ def _detectar_fricciones(df_coment, top_n=3):
     if crit.empty:
         return []
 
-    cat_por_post = _mapa_categoria_posts()
-
-    def _tema_de_fila(row):
-        pid = str(row.get("post_id") or "")
-        cat = cat_por_post.get(pid)
-        if cat and str(cat).strip():
-            return str(cat)
-        tc = row.get("topic_category")
-        if tc is not None and not pd.isna(tc) and str(tc).strip():
-            return str(tc)
-        return "General"
-
-    crit["_tema"] = crit.apply(_tema_de_fila, axis=1)
+    crit["_tema"] = tema_por_comentario(crit).astype(str).str.strip()
+    crit["_tema"] = crit["_tema"].replace("", "General")
     fr = []
     for tema, g in crit.groupby("_tema"):
         if g["_score"].notna().any():

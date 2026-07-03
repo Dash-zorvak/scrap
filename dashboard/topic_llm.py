@@ -283,8 +283,16 @@ def _clasificar_bloque_llm(textos, model=None, ejemplos=None):
     for intento in range(MAX_REINTENTOS_429 + 1):
         _esperar_presupuesto(tokens_est)
         try:
-            raw = chat_texto(prompt, json=True, temperature=0, max_tokens=4096, model=model)
+            raw, finish_reason, reasoning_content = chat_texto(
+                prompt, json=True, temperature=0, max_tokens=4096, model=model
+            )
             _registrar_tokens(tokens_est)
+            if not raw:
+                logger.warning(
+                    "LLM devolvió contenido vacío: finish_reason=%s, reasoning_content=%s",
+                    finish_reason,
+                    "presente" if reasoning_content else "ausente",
+                )
             return _parsear_respuesta(raw, textos)
         except Exception as e:
             _registrar_tokens(tokens_est)

@@ -387,7 +387,7 @@ def chat_texto(
     temperature: float = 0.7,
     json: bool = False,
     model: str | None = None,
-) -> str:
+) -> tuple[str, str, str | None]:
     """Envía un prompt de texto al modelo de texto.
 
     `model` permite forzar un modelo distinto al TEXT_MODEL por defecto (lo usa
@@ -396,6 +396,9 @@ def chat_texto(
     Usa el cliente de texto (`_get_text_client`), que puede apuntar a un
     proveedor distinto del de visión.
     Lanza ValueError si no hay API key configurada.
+
+    Devuelve una tupla: (content, finish_reason, reasoning_content).
+    reasoning_content puede ser None si el proveedor no lo expone.
     """
     client = _get_text_client()
     if not client:
@@ -415,6 +418,11 @@ def chat_texto(
 
     def _call():
         resp = client.chat.completions.create(**kwargs)
-        return resp.choices[0].message.content
+        choice = resp.choices[0]
+        content = choice.message.content
+        finish_reason = choice.finish_reason
+        # Some providers (e.g., DeepSeek on NIM) expose reasoning_content on the message
+        reasoning_content = getattr(choice.message, "reasoning_content", None)
+        return content, finish_reason, reasoning_content
 
     return _retry_with_backoff(_call)

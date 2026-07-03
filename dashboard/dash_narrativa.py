@@ -205,7 +205,8 @@ def generar_narrativa(tipo: str, contexto: dict) -> str:
     # presión sobre la misma cuota y empeoraría el problema.
     try:
         _throttle()
-        salida = _limpiar(chat_texto(prompt, max_tokens=600, temperature=0.5, json=False))
+        salida_raw, _, _ = chat_texto(prompt, max_tokens=600, temperature=0.5, json=False)
+        salida = _limpiar(salida_raw)
         if salida:
             with _LOCK:
                 _CACHE[clave] = (salida, False, time.time())
@@ -215,7 +216,8 @@ def generar_narrativa(tipo: str, contexto: dict) -> str:
         if not _es_rate_limit(e) and VERIFIER_MODEL:
             try:
                 _throttle()
-                salida = _limpiar(chat_texto(prompt, max_tokens=600, temperature=0.5, json=False, model=VERIFIER_MODEL))
+                salida_raw, _, _ = chat_texto(prompt, max_tokens=600, temperature=0.5, json=False, model=VERIFIER_MODEL)
+                salida = _limpiar(salida_raw)
                 if salida:
                     with _LOCK:
                         _CACHE[clave] = (salida, False, time.time())

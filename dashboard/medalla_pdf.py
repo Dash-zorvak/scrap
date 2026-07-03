@@ -349,7 +349,7 @@ def redactar_parrafo_ia(post: dict, contexto: dict, m: dict) -> str | None:
         f"{m['impresiones_optimista']} (2%).\n\nP\u00e1rrafo base a reescribir:\n{plantilla}"
     )
     try:
-        out = chat_texto(prompt, max_tokens=900, temperature=0.5)
+        out, _, _ = chat_texto(prompt, max_tokens=600, temperature=0.4, json=True)
         out = (out or "").strip()
         return out or None
     except Exception:
@@ -383,7 +383,7 @@ def redactar_lectura_caso_ia(post: dict, contexto: dict, m: dict) -> str | None:
         f"{m['compartidos']}.\n\nBorrador base:\n{plantilla}"
     )
     try:
-        out = chat_texto(prompt, max_tokens=700, temperature=0.5)
+        out, _, _ = chat_texto(prompt, max_tokens=700, temperature=0.5)
         out = (out or "").strip()
         return out or None
     except Exception:
@@ -427,7 +427,7 @@ def borrador_narrativa_ia(post: dict, contexto: dict, m: dict) -> dict | None:
         f"{m['negativas']}), comentarios {m['comentarios']}, compartidos {m['compartidos']}."
     )
     try:
-        out = chat_texto(prompt, max_tokens=600, temperature=0.4, json=True)
+        out, _, _ = chat_texto(prompt, max_tokens=600, temperature=0.4, json=True)
         data = json.loads(out)
         if not isinstance(data, dict):
             return None

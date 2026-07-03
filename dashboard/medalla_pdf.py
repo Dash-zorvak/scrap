@@ -349,7 +349,7 @@ def redactar_parrafo_ia(post: dict, contexto: dict, m: dict) -> str | None:
         f"{m['impresiones_optimista']} (2%).\n\nP\u00e1rrafo base a reescribir:\n{plantilla}"
     )
     try:
-        out, _, _ = chat_texto(prompt, max_tokens=600, temperature=0.4, json=True)
+        out, _, _ = chat_texto(prompt, max_tokens=900, temperature=0.5)
         out = (out or "").strip()
         return out or None
     except Exception:

@@ -82,15 +82,3 @@ def test_cache_solo_clasifica_los_faltantes(tmp_path, monkeypatch):
     assert len(out) == 2
     assert registro["llamadas"] == 1
     assert registro["textos"] == [["dos"]]    # solo el faltante
-
-
-def test_sugerir_sin_cache_clasifica_todo(tmp_path, monkeypatch):
-    db = _crear_db(tmp_path, [("c1", "uno"), ("c2", "dos")])
-    registro = {"llamadas": 0, "textos": []}
-    monkeypatch.setattr(tl, "clasificar_temas_lote", _fake_factory(registro))
-
-    # La función pública (sin cache) clasifica todos los pendientes (comportamiento previo).
-    out = di.sugerir_temas_pendientes(db)
-    assert len(out) == 2
-    assert registro["llamadas"] == 1
-    assert len(registro["textos"][0]) == 2

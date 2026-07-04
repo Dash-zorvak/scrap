@@ -28,8 +28,10 @@ Reglas de la fuente unica (se mantienen por plataforma):
 import os
 import sqlite3
 import sys
+import logging
 
 import pandas as pd
+import streamlit as st
 
 # Permite importar este modulo de forma aislada (p.ej. en tests) sin depender de
 # que app.py haya configurado antes el sys.path. config.py vive en este mismo
@@ -39,6 +41,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import FACEBOOK_DB, TIKTOK_DB  # noqa: E402
+
+logger = logging.getLogger("dash_fuente")
 
 try:
     from dashboard.config import FACEBOOK_DB as DASH_FACEBOOK_DB  # noqa: E402
@@ -88,13 +92,20 @@ def _cargar_comentarios_fb(inicio, fin, db_path=None):
         cdf = pd.read_sql("SELECT * FROM fb_comments", conn)
         try:
             jdf = pd.read_sql("SELECT post_id, created_time FROM fb_posts", conn)
-        except Exception:
+        except Exception as e:
+            logger.warning("No se pudo leer fb_posts para join de fechas: %s", e)
             jdf = None
         try:
             edf = pd.read_sql("SELECT post_id, created_time FROM fb_engagement", conn)
-        except Exception:
+        except Exception as e:
+            logger.warning("No se pudo leer fb_engagement para join de fechas: %s", e)
             edf = None
-    except Exception:
+    except Exception as e:
+        logger.exception("Fallo leyendo fb_comments para _cargar_comentarios_fb")
+        try:
+            st.warning("No se pudieron cargar los comentarios de Facebook de este período (error interno). Los números pueden estar incompletos.")
+        except Exception:
+            pass
         return pd.DataFrame(columns=_COLUMNAS_COMENTARIOS)
     finally:
         if conn is not None:
@@ -139,7 +150,7 @@ def _cargar_comentarios_tk(inicio, fin, tk_db_path=None):
 
     TikTok no guarda una fecha fiable por comentario: la fecha se hereda del
     video (videos.created_at) y, si faltara, se usa comments.created_at. El
-    sentimiento por comentario solo existe si modulo2 ya lo persistio en
+    sentimiento por comentario solo existe si modulo2 ya lo persisto en
     comments.sentiment / comments.sentiment_score; si no, queda NA y la
     distribucion se calcula desde tiktok_sentimiento.
     """
@@ -149,7 +160,12 @@ def _cargar_comentarios_tk(inicio, fin, tk_db_path=None):
         conn = sqlite3.connect(tk_db_path)
         cdf = pd.read_sql("SELECT * FROM comments", conn)
         vdf = pd.read_sql("SELECT id, created_at FROM videos", conn)
-    except Exception:
+    except Exception as e:
+        logger.exception("Fallo leyendo comments/videos de TikTok para _cargar_comentarios_tk")
+        try:
+            st.warning("No se pudieron cargar los comentarios de TikTok de este período (error interno). Los números pueden estar incompletos.")
+        except Exception:
+            pass
         return pd.DataFrame(columns=_COLUMNAS_COMENTARIOS)
     finally:
         if conn is not None:
@@ -274,7 +290,12 @@ def _dist_desde_fb_sentimiento(post_ids, db_path):
             conn,
             params=list(post_ids),
         )
-    except Exception:
+    except Exception as e:
+        logger.exception("Fallo leyendo fb_sentimiento para _dist_desde_fb_sentimiento")
+        try:
+            st.warning("No se pudo calcular el sentimiento agregado de Facebook para este período; se usará una estimación por comentario.")
+        except Exception:
+            pass
         return None
     finally:
         if conn is not None:
@@ -295,7 +316,12 @@ def _dist_desde_tiktok_sentimiento(video_ids, tk_db_path):
             conn,
             params=[str(v) for v in video_ids],
         )
-    except Exception:
+    except Exception as e:
+        logger.exception("Fallo leyendo tiktok_sentimiento para _dist_desde_tiktok_sentimiento")
+        try:
+            st.warning("No se pudo calcular el sentimiento agregado de TikTok para este período; se usará una estimación por comentario.")
+        except Exception:
+            pass
         return None
     finally:
         if conn is not None:
@@ -406,7 +432,12 @@ def mapa_categoria_posts(db_path=None):
         if df is None or df.empty:
             return {}
         return {str(i): str(c) for i, c in zip(df["item_id"], df["categoria_nombre"])}
-    except Exception:
+    except Exception as e:
+        logger.exception("Fallo leyendo post_categorias para mapa_categoria_posts")
+        try:
+            st.warning("No se pudo cargar la categoría de las publicaciones; los temas pueden aparecer sin agrupar.")
+        except Exception:
+            pass
         return {}
 
 

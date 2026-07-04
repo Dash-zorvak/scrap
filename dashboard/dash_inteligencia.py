@@ -3,31 +3,20 @@
 import sys
 import os
 import sqlite3
-from collections import Counter, defaultdict
+import logging
+import streamlit as st
+from collections import defaultdict
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 from config import FACEBOOK_DB
-from dashboard.tema_taxonomia import (
-    TEMA_LABELS as _TAX_LABELS,
-    REMAP_LEGACY as _REMAP_LEGACY,
-    etiqueta_tema,
-)
+from dashboard.tema_taxonomia import etiqueta_tema
 from dashboard.tema_clasificaciones_ia import guardar_clasificacion_ia
 
 _SEVERIDAD_COLOR = {1: "🟢", 2: "🟡", 3: "🔴", 4: "🔴"}
 _SEVERIDAD_LABEL = {1: "bajo", 2: "medio", 3: "alto", 4: "crítico"}
 
-# Etiquetas legibles de los temas englobantes (fuente: tema_taxonomia). Se
-# conservan tambien las claves historicas por compatibilidad con datos viejos.
-TEMA_LABELS = dict(_TAX_LABELS)
-for _old, _new in _REMAP_LEGACY.items():
-    TEMA_LABELS.setdefault(_old, _TAX_LABELS.get(_new, _old))
-
-# Umbral de confianza por debajo del cual una clasificación se considera dudosa.
-UMBRAL_CONFIANZA_DUDOSA = float(os.environ.get("TEMAS_UMBRAL_DUDOSO", "0.55"))
-# Máximo de comentarios ambiguos que se exponen para revisión manual.
-MAX_AMBIGUOS_REVISION = int(os.environ.get("TEMAS_MAX_AMBIGUOS", "15"))
+logger = logging.getLogger("dash_inteligencia")
 
 
 def _construir_posts(db_path=None) -> list[dict]:
@@ -286,181 +275,6 @@ def cargar_perfil_ocean(db_path=None) -> dict:
     }
 
 
-def cargar_temas_latentes_detallado(db_path=None) -> dict:
-    """Version detallada (legacy) de Temas Emergentes con banderas de confianza.
-
-    Se conserva por compatibilidad; el dashboard ahora usa el modelo de
-    aprobacion manual (cargar_temas_aprobados / sugerir_temas_pendientes).
-    """
-    from dashboard.topic_llm import clasificar_temas_lote
-    if db_path is None:
-        db_path = FACEBOOK_DB
-    vacio = {"temas": [], "ambiguos": [], "resumen": {}}
-    try:
-        conn = sqlite3.connect(db_path)
-        rows = conn.execute("""
-            SELECT message FROM fb_comments
-            WHERE message IS NOT NULL AND message != ''
-            LIMIT 2000
-        """).fetchall()
-        conn.close()
-    except Exception:
-        return vacio
-    textos = [r[0] for r in rows]
-    if len(textos) < 10:
-        return vacio
-
-    clasificacion = clasificar_temas_lote(textos)
-
-    agreg = defaultdict(lambda: {
-        "n": 0, "suma_conf": 0.0, "n_sarcasticos": 0, "n_dudosos": 0, "n_reglas": 0,
-    })
-    ejemplos = {}
-    ejemplos_alt = {}
-    ambiguos = []
-    total_clasificados = 0
-    n_no_aplica = 0
-    n_sarcasticos_total = 0
-    n_dudosos_total = 0
-    n_reglas_total = 0
-
-    for texto, info in zip(textos, clasificacion):
-        info = info or {}
-        cat = info.get("categoria", "") or ""
-        tono = info.get("tono", "literal")
-        try:
-            conf = float(info.get("confianza", 0.5))
-        except (TypeError, ValueError):
-            conf = 0.5
-        motor = info.get("motor", "llm")
-        limpio = " ".join(str(texto).split())
-        es_dudoso = conf < UMBRAL_CONFIANZA_DUDOSA
-        es_sarcastico = tono == "sarcastico"
-        if motor == "reglas":
-            n_reglas_total += 1
-
-        if not cat or cat == "no_aplica":
-            n_no_aplica += 1
-            continue
-
-        a = agreg[cat]
-        a["n"] += 1
-        a["suma_conf"] += conf
-        total_clasificados += 1
-        if es_sarcastico:
-            a["n_sarcasticos"] += 1
-            n_sarcasticos_total += 1
-        if es_dudoso:
-            a["n_dudosos"] += 1
-            n_dudosos_total += 1
-        if motor == "reglas":
-            a["n_reglas"] += 1
-
-        alt_prev = ejemplos_alt.get(cat)
-        if alt_prev is None or 15 <= len(limpio) < len(alt_prev):
-            ejemplos_alt[cat] = limpio
-        if not es_sarcastico and not es_dudoso:
-            prev = ejemplos.get(cat)
-            if prev is None or 15 <= len(limpio) < len(prev):
-                ejemplos[cat] = limpio
-
-        if (es_dudoso or es_sarcastico) and len(ambiguos) < MAX_AMBIGUOS_REVISION:
-            if es_sarcastico and es_dudoso:
-                motivo = "posible sarcasmo + clasificación dudosa"
-            elif es_sarcastico:
-                motivo = "posible sarcasmo"
-            else:
-                motivo = "clasificación dudosa"
-            texto_corto = limpio if len(limpio) <= 160 else limpio[:157] + "..."
-            ambiguos.append({
-                "texto": texto_corto,
-                "categoria_tentativa": cat,
-                "label_tentativa": TEMA_LABELS.get(cat, cat.replace("_", " ").capitalize()),
-                "tono": tono,
-                "confianza": round(conf, 2),
-                "motivo": motivo,
-            })
-
-    resumen = {
-        "total": len(textos),
-        "clasificados": total_clasificados,
-        "no_aplica": n_no_aplica,
-        "sarcasticos": n_sarcasticos_total,
-        "dudosos": n_dudosos_total,
-        "por_reglas": n_reglas_total,
-        "umbral_dudoso": UMBRAL_CONFIANZA_DUDOSA,
-    }
-
-    if total_clasificados == 0:
-        return {"temas": [], "ambiguos": ambiguos, "resumen": resumen}
-
-    temas = []
-    for i, (cat, a) in enumerate(agreg.items()):
-        n = a["n"]
-        ejemplo = ejemplos.get(cat) or ejemplos_alt.get(cat, "")
-        if len(ejemplo) > 120:
-            ejemplo = ejemplo[:117] + "..."
-        conf_prom = a["suma_conf"] / n if n else 0.0
-        frac_sarc = a["n_sarcasticos"] / n if n else 0.0
-        frac_dud = a["n_dudosos"] / n if n else 0.0
-        if conf_prom < UMBRAL_CONFIANZA_DUDOSA or frac_dud >= 0.5:
-            bandera = "dudosa"
-        elif frac_sarc >= 0.34:
-            bandera = "sarcasmo"
-        else:
-            bandera = "ok"
-        temas.append({
-            "id": i + 1,
-            "label": TEMA_LABELS.get(cat, cat.replace("_", " ").capitalize()),
-            "categoria": cat,
-            "pct": round(n / total_clasificados * 100, 1),
-            "doc_count": n,
-            "ejemplo": ejemplo,
-            "words": [],
-            "confianza_promedio": round(conf_prom, 2),
-            "n_sarcasticos": a["n_sarcasticos"],
-            "n_dudosos": a["n_dudosos"],
-            "bandera": bandera,
-        })
-
-    temas = sorted(temas, key=lambda x: -x["doc_count"])
-    return {"temas": temas, "ambiguos": ambiguos, "resumen": resumen}
-
-
-def cargar_temas_aprobados(db_path=None) -> list[dict]:
-    """Tarjetas de Temas Emergentes: SOLO comentarios aprobados manualmente.
-
-    Cada tema trae su etiqueta, el numero de comentarios aprobados (doc_count) y
-    su porcentaje sobre el total de comentarios con tema aprobado (pct). Sin
-    banderas de confianza: el badge es '%·N comentarios'.
-    """
-    if db_path is None:
-        db_path = FACEBOOK_DB
-    from dashboard.tema_aprobaciones import agregar_por_tema
-    return agregar_por_tema(db_path)
-
-
-def cargar_temas_latentes(db_path=None) -> list[dict]:
-    """Compat: temas mostrados en el dashboard.
-
-    En el modelo de aprobacion manual, los temas mostrados son los aprobados.
-    """
-    return cargar_temas_aprobados(db_path)
-
-
-def sugerir_temas_pendientes(db_path=None, limite=None) -> list[dict]:
-    """Comentarios SIN aprobacion, con una sugerencia de tema de la IA.
-
-    La IA solo sugiere (no cuenta en las tarjetas). El usuario aprueba/corrige.
-    Las aprobaciones previas se inyectan como ejemplos (few-shot) para que la
-    sugerencia se afine con el criterio del usuario.
-
-    Equivale a sugerir_temas_pendientes_cacheado con un cache vacio: clasifica
-    todos los pendientes en cada llamada (comportamiento historico).
-    """
-    return sugerir_temas_pendientes_cacheado(db_path, cache={}, limite=limite)
-
-
 def sugerir_temas_pendientes_cacheado(db_path=None, cache=None, limite=None) -> list[dict]:
     """Igual que sugerir_temas_pendientes pero reutilizando un cache por comentario.
 
@@ -492,7 +306,8 @@ def sugerir_temas_pendientes_cacheado(db_path=None, cache=None, limite=None) -> 
             ORDER BY (created_time IS NULL), created_time DESC
         """).fetchall()
         conn.close()
-    except Exception:
+    except Exception as e:
+        logger.warning("No se pudo ordenar fb_comments por fecha, se intenta sin orden: %s", e)
         try:
             conn = sqlite3.connect(db_path)
             rows = conn.execute(
@@ -500,7 +315,12 @@ def sugerir_temas_pendientes_cacheado(db_path=None, cache=None, limite=None) -> 
                 "WHERE message IS NOT NULL AND message != ''"
             ).fetchall()
             conn.close()
-        except Exception:
+        except Exception as e:
+            logger.exception("Fallo leyendo fb_comments para sugerir temas pendientes")
+            try:
+                st.warning("No se pudieron cargar los comentarios pendientes de revisión (error interno).")
+            except Exception:
+                pass
             return []
 
     aprobados = ids_aprobados(db_path)
@@ -550,6 +370,19 @@ def sugerir_temas_pendientes_cacheado(db_path=None, cache=None, limite=None) -> 
             }
         salida.append(item)
     return salida
+
+
+def sugerir_temas_pendientes(db_path=None, limite=None) -> list[dict]:
+    """Comentarios SIN aprobacion, con una sugerencia de tema de la IA.
+
+    La IA solo sugiere (no cuenta en las tarjetas). El usuario aprueba/corrige.
+    Las aprobaciones previas se inyectan como ejemplos (few-shot) para que la
+    sugerencia se afine con el criterio del usuario.
+
+    Equivale a sugerir_temas_pendientes_cacheado con un cache vacio: clasifica
+    todos los pendientes en cada llamada (comportamiento historico).
+    """
+    return sugerir_temas_pendientes_cacheado(db_path, cache={}, limite=limite)
 
 
 def cargar_temas_universo(db_path=None) -> list[dict]:

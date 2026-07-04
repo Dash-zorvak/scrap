@@ -103,7 +103,7 @@ def rango_periodo(periodo, fecha_ref=None, fecha_desde=None, fecha_hasta=None):
 def filtrar_por_fecha(df, col, inicio, fin):
     """Filtra un DataFrame por una columna de fecha al rango [inicio, fin]."""
     if df is None or len(df) == 0 or col not in df.columns:
-        return df
+        return pd.DataFrame()
     fechas = pd.to_datetime(df[col], errors="coerce")
     mask = (fechas >= pd.Timestamp(inicio)) & (fechas <= pd.Timestamp(fin))
     return df[mask].copy()

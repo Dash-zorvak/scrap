@@ -24,32 +24,25 @@ import streamlit as st
 
 from dashboard.config import FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB
 from dashboard.dash_metrics import (
-    cargar_fb_engagement,
-    cargar_tk_engagement,
     cargar_externos,
     calcular_contagio_emocional,
     safe_query,
 )
 from dashboard.dash_emocional import metricas_emocionales
 from dashboard.dash_memoria import clasificar_evolucion_temas, comparar_sectorial
-from dashboard.dash_periodos import rango_periodo, filtrar_por_fecha, etiqueta_rango
+from dashboard.dash_periodos import rango_periodo, etiqueta_rango
 from dashboard.dash_fuente import (
     cargar_comentarios_periodo,
     distribucion_sentimiento,
     clasificar_comentario,
     mapa_categoria_posts,
     tema_por_comentario,
+    cargar_engagement_periodo,
 )
 from dashboard.dash_narrativa import generar_narrativa
 from dashboard.dash_ui import _page_head, card_explicativa, referencias_publicaciones
 
 _IGNORAR_TEMAS = {"", "no_aplica", "sin_tema", "general"}
-
-
-def _filtra_fecha(df, col, ini, fin):
-    if df is None or df.empty or col not in df.columns:
-        return df if df is not None else pd.DataFrame()
-    return filtrar_por_fecha(df, col, ini, fin)
 
 
 def _temas_por_tono(df, top=5):
@@ -130,21 +123,17 @@ def render_bloque4_inteligencia(periodo, plataforma):
     except Exception:
         df_prev = pd.DataFrame()
 
-    # Engagement total: solo de la(s) plataforma(s) activa(s), nunca se mezcla
-    # cuando el filtro no corresponde.
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB) if "tik" not in plat else pd.DataFrame()
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB) if plat != "facebook" else pd.DataFrame()
-    fb_p = _filtra_fecha(df_fb_raw, "created_time", ini, fin)
-    tk_p = _filtra_fecha(df_tk_raw, "created_at", ini, fin)
-    total_eng = (int(fb_p["engagement_total"].sum()) if not fb_p.empty and "engagement_total" in fb_p.columns else 0)
-    total_eng += (int(tk_p["engagement_total"].sum()) if not tk_p.empty and "engagement_total" in tk_p.columns else 0)
+    # Engagement total + emocionales: una sola llamada a cargar_engagement_periodo
+    # devuelve (df_fb, df_tk) ya filtrados por plataforma y fecha.
+    df_fb, df_tk = cargar_engagement_periodo(ini, fin, plataforma)
+    total_eng = (int(df_fb["engagement_total"].sum()) if not df_fb.empty and "engagement_total" in df_fb.columns else 0)
+    total_eng += (int(df_tk["engagement_total"].sum()) if not df_tk.empty and "engagement_total" in df_tk.columns else 0)
 
     # Índice de enojo / score emocional: delegado al modelo desacoplado por
-    # plataforma (dash_emocional.metricas_emocionales). Facebook usa reacciones
-    # tipadas; TikTok usa el sentimiento de los comentarios; "Ambas" pondera por
-    # volumen. NO se copia el algoritmo de FB a TikTok porque conceptualmente no
-    # aplica (TikTok no expone reacciones tipadas).
-    enojo = float(metricas_emocionales(plataforma, ini, fin).get("indice_enojo", 0) or 0)
+    # plataforma (dash_emocional.metricas_emocionales). Recibe df_fb/df_tk ya
+    # cargados y filtrados. Facebook usa reacciones tipadas; TikTok usa el
+    # sentimiento de los comentarios; "Ambas" pondera por volumen.
+    enojo = float(metricas_emocionales(plataforma, df_fb=df_fb, df_tk=df_tk).get("indice_enojo", 0) or 0)
 
     temas_fav, temas_crit = _temas_por_tono(df_coment)
     score_interno = round((dist["pct_favorable"] - dist["pct_critico"]) / 100.0, 3)
@@ -157,7 +146,7 @@ def render_bloque4_inteligencia(periodo, plataforma):
     if plat == "tiktok":
         df_posts = None
     else:
-        df_posts, _conteo_hist, _dist_hist, _ = calcular_contagio_emocional(ini=ini, fin=fin)
+        df_posts, _conteo_hist, _dist_hist, _ = calcular_contagio_emocional(df_fb=df_fb)
     if df_posts is not None and not df_posts.empty and "tipo_contagio" in df_posts.columns:
         conteo_tipos = df_posts["tipo_contagio"].value_counts().to_dict()
         total_p = int(len(df_posts))

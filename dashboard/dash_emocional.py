@@ -34,11 +34,9 @@ Anadir una red nueva = escribir una funcion emocional_<red>() y registrarla
 aqui, sin tocar los bloques del dashboard.
 """
 
-import sqlite3
-
 import pandas as pd
 
-from config import FACEBOOK_DB, TIKTOK_DB
+from dashboard.dash_periodos import filtrar_por_fecha
 
 
 def _norm_plataforma(plataforma):
@@ -50,45 +48,26 @@ def _norm_plataforma(plataforma):
     return "ambas"
 
 
-def _filtra(df, col, ini, fin):
-    if df is None or df.empty or col not in df.columns:
-        return df if df is not None else pd.DataFrame()
-    fechas = pd.to_datetime(df[col], errors="coerce")
-    mask = (fechas >= pd.Timestamp(ini)) & (fechas <= pd.Timestamp(fin))
-    return df[mask].copy()
-
-
-def emocional_facebook(ini, fin, db_path=None):
+def emocional_facebook(df_fb):
     """Score emocional e indice de enojo NATIVOS de Facebook (reacciones tipadas).
 
-    Lee fb_engagement (score_emocional, indice_enojo, total_reacciones) y pondera
-    por total_reacciones (mas reacciones = mas peso emocional). Devuelve dict con
-    score_emocional, indice_enojo, peso y fuente, o None si no hay datos.
+    Recibe df_fb ya cargado y filtrado (con columnas: score_emocional, indice_enojo,
+    total_reacciones). Pondera por total_reacciones. Devuelve dict o None.
     """
-    db_path = db_path or FACEBOOK_DB
-    conn = None
-    try:
-        conn = sqlite3.connect(db_path)
-        df = pd.read_sql(
-            "SELECT created_time, score_emocional, indice_enojo, total_reacciones "
-            "FROM fb_engagement",
-            conn,
-        )
-    except Exception:
+    if df_fb is None or df_fb.empty:
         return None
-    finally:
-        if conn is not None:
-            conn.close()
-    df = _filtra(df, "created_time", ini, fin)
-    if df is None or df.empty:
-        return None
-    peso = pd.to_numeric(df["total_reacciones"], errors="coerce").fillna(0).clip(lower=0)
+    # Asegurar columnas necesarias
+    req = ["score_emocional", "indice_enojo", "total_reacciones"]
+    for c in req:
+        if c not in df_fb.columns:
+            return None
+    peso = pd.to_numeric(df_fb["total_reacciones"], errors="coerce").fillna(0).clip(lower=0)
     total = peso.sum()
     if total <= 0:
-        peso = pd.Series([1.0] * len(df), index=df.index)
+        peso = pd.Series([1.0] * len(df_fb), index=df_fb.index)
         total = peso.sum()
-    score = pd.to_numeric(df["score_emocional"], errors="coerce").fillna(0)
-    enojo = pd.to_numeric(df["indice_enojo"], errors="coerce").fillna(0)
+    score = pd.to_numeric(df_fb["score_emocional"], errors="coerce").fillna(0)
+    enojo = pd.to_numeric(df_fb["indice_enojo"], errors="coerce").fillna(0)
     return {
         "score_emocional": float((score * peso).sum() / total),
         "indice_enojo": float((enojo * peso).sum() / total),
@@ -97,44 +76,27 @@ def emocional_facebook(ini, fin, db_path=None):
     }
 
 
-def emocional_tiktok(ini, fin, tk_db_path=None):
+def emocional_tiktok(df_tk):
     """Score emocional e indice de enojo PROPIOS de TikTok (sentimiento de comentarios).
 
-    TikTok no tiene reacciones tipadas; la unica senal afectiva real es el
-    sentimiento de los comentarios. Se lee tiktok_sentimiento
-    (pct_positivo / pct_negativo por video) unida a videos para datar por
-    created_at, y se pondera por total_comentarios:
+    Recibe df_tk ya cargado y filtrado (con columnas: pct_positivo, pct_negativo,
+    total_comentarios). Pondera por total_comentarios.
       indice_enojo    = pct_negativo / 100                  en [0, 1]
       score_emocional = (pct_positivo - pct_negativo) / 100  en [-1, 1]
     """
-    tk_db_path = tk_db_path or TIKTOK_DB
-    conn = None
-    try:
-        conn = sqlite3.connect(tk_db_path)
-        df = pd.read_sql(
-            """
-            SELECT ts.video_id, ts.pct_positivo, ts.pct_negativo,
-                   ts.total_comentarios, v.created_at
-            FROM tiktok_sentimiento ts
-            LEFT JOIN videos v ON CAST(ts.video_id AS TEXT) = CAST(v.id AS TEXT)
-            """,
-            conn,
-        )
-    except Exception:
+    if df_tk is None or df_tk.empty:
         return None
-    finally:
-        if conn is not None:
-            conn.close()
-    df = _filtra(df, "created_at", ini, fin)
-    if df is None or df.empty:
-        return None
-    peso = pd.to_numeric(df["total_comentarios"], errors="coerce").fillna(0).clip(lower=0)
+    req = ["pct_positivo", "pct_negativo", "total_comentarios"]
+    for c in req:
+        if c not in df_tk.columns:
+            return None
+    peso = pd.to_numeric(df_tk["total_comentarios"], errors="coerce").fillna(0).clip(lower=0)
     total = peso.sum()
     if total <= 0:
-        peso = pd.Series([1.0] * len(df), index=df.index)
+        peso = pd.Series([1.0] * len(df_tk), index=df_tk.index)
         total = peso.sum()
-    pos = pd.to_numeric(df["pct_positivo"], errors="coerce").fillna(0)
-    neg = pd.to_numeric(df["pct_negativo"], errors="coerce").fillna(0)
+    pos = pd.to_numeric(df_tk["pct_positivo"], errors="coerce").fillna(0)
+    neg = pd.to_numeric(df_tk["pct_negativo"], errors="coerce").fillna(0)
     enojo = neg / 100.0
     score = (pos - neg) / 100.0
     return {
@@ -145,23 +107,22 @@ def emocional_tiktok(ini, fin, tk_db_path=None):
     }
 
 
-def metricas_emocionales(plataforma, ini, fin, fb_db=None, tk_db=None):
+def metricas_emocionales(plataforma, df_fb=None, df_tk=None):
     """Orquesta el calculo emocional respetando el filtro de plataforma.
 
-    Devuelve siempre un dict con score_emocional, indice_enojo, detalle, fuente
-    y n_plataformas. Para "Ambas" combina ponderando por volumen (masa
-    emocional): total_reacciones en FB y total_comentarios en TikTok. De este
-    modo ningun indicador emocional mezcla la formula de una plataforma con los
-    datos de otra.
+    Recibe df_fb y df_tk ya cargados y filtrados (o None).
+    Devuelve dict con score_emocional, indice_enojo, detalle, fuente y n_plataformas.
+    Para "Ambas" combina ponderando por volumen (masa emocional): total_reacciones
+    en FB y total_comentarios en TikTok.
     """
     plat = _norm_plataforma(plataforma)
     detalle = {}
-    if plat in ("facebook", "ambas"):
-        fb = emocional_facebook(ini, fin, fb_db)
+    if plat in ("facebook", "ambas") and df_fb is not None:
+        fb = emocional_facebook(df_fb)
         if fb:
             detalle["facebook"] = fb
-    if plat in ("tiktok", "ambas"):
-        tk = emocional_tiktok(ini, fin, tk_db)
+    if plat in ("tiktok", "ambas") and df_tk is not None:
+        tk = emocional_tiktok(df_tk)
         if tk:
             detalle["tiktok"] = tk
 

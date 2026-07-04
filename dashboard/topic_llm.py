@@ -34,6 +34,7 @@ import os
 import re
 import time
 
+import streamlit as st
 from dashboard.tema_taxonomia import (
     CATEGORIAS_VALIDAS,
     TEMAS as _TEMAS,
@@ -326,10 +327,36 @@ def clasificar_temas_lote(textos, lote=None, ejemplos=None):
     try:
         from dashboard.llm_groq import groq_disponible
         usar_llm = groq_disponible()
-    except Exception:
-        usar_llm = False
+    except Exception as e:
+        logger.warning(
+            "No se pudo comprobar disponibilidad de IA para clasificar %d comentarios: %r; "
+            "usando clasificación por palabras clave",
+            len(textos), e,
+        )
+        try:
+            st.warning(
+                "No se pudo conectar con el modelo de IA para clasificar temas; "
+                "se está usando una clasificación automática más básica por palabras clave. "
+                "Los resultados pueden ser menos precisos hasta que se restablezca la conexión."
+            )
+        except Exception:
+            pass
+        return _fallback_keyword(textos)
 
     if not usar_llm:
+        logger.warning(
+            "IA no disponible para clasificar %d comentarios (sin API key configurada); "
+            "usando clasificación por palabras clave",
+            len(textos),
+        )
+        try:
+            st.warning(
+                "No se pudo conectar con el modelo de IA para clasificar temas; "
+                "se está usando una clasificación automática más básica por palabras clave. "
+                "Los resultados pueden ser menos precisos hasta que se restablezca la conexión."
+            )
+        except Exception:
+            pass
         return _fallback_keyword(textos)
 
     tam = lote or LOTE_LLM

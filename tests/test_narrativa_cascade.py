@@ -183,6 +183,75 @@ def test_generar_narrativa_verificador_tambien_valida_regla(monkeypatch):
     assert llamadas == [None, "glm-test"]
 
 
+# ── D7: Validación de saldo (_contradice_saldo) ──
+
+
+def test_contradice_saldo_positivo_texto_critico_detecta():
+    """Saldo real positivo (+40) pero texto dice 'predominio crítico' → True."""
+    ctx = {"pct_favorable": 60, "pct_critico": 20}
+    texto = "Hay un predominio crítico en los comentarios de la semana."
+    assert dn._contradice_saldo(texto, ctx) is True
+
+
+def test_contradice_saldo_negativo_texto_favorable_detecta():
+    """Saldo real negativo (-40) pero texto dice 'apoyo mayoritario' → True."""
+    ctx = {"pct_favorable": 20, "pct_critico": 60}
+    texto = "Se observa un apoyo mayoritario de la ciudadanía."
+    assert dn._contradice_saldo(texto, ctx) is True
+
+
+def test_contradice_saldo_coincide_no_dispara():
+    """Saldo positivo (+40) y texto dice 'mayoría favorable' → False."""
+    ctx = {"pct_favorable": 60, "pct_critico": 20}
+    texto = "La mayoría favorable de comentarios supera a los críticos."
+    assert dn._contradice_saldo(texto, ctx) is False
+
+
+def test_contradice_saldo_correlacion_sin_campos_nunca_dispara():
+    """Tipo 'correlacion' no tiene pct_favorable/pct_critico → siempre False."""
+    ctx = {"rango": "ene-2024", "correlacion": {"x": 1}}
+    texto = "predominio crítico en los datos analizados"
+    assert dn._contradice_saldo(texto, ctx) is False
+
+
+def test_generar_narrativa_reintenta_si_contradice_saldo(monkeypatch):
+    """Mock: primera respuesta contradice saldo, segunda respeta → devuelve la corregida."""
+    llamadas = []
+
+    def fake_chat(prompt, max_tokens=600, temperature=0.5, json=False, model=None):
+        llamadas.append(1)
+        if len(llamadas) == 1:
+            return "Hay un apoyo mayoritario de la ciudadanía hacia la gestión.", "stop", None
+        return "Los comentarios críticos son mayoría. Los favorables son minoría.", "stop", None
+
+    monkeypatch.setattr(dn, "chat_texto", fake_chat)
+    monkeypatch.setattr(dn, "groq_disponible", lambda: True)
+    monkeypatch.setattr(dn, "VERIFIER_MODEL", None)
+    _limpiar_cache_narrativa()
+
+    out = dn.generar_narrativa("recomendacion", {"pct_favorable": 20, "pct_critico": 60, "score": 0.1, "n": 10})
+    assert "críticos son mayoría" in out.lower()
+    assert dn._contradice_saldo(out, {"pct_favorable": 20, "pct_critico": 60}) is False
+
+
+def test_generar_narrativa_dos_violaciones_saldo_cae_fallback(monkeypatch):
+    """Mock: ambas respuestas contradicen saldo → devuelve _FALLBACK."""
+    llamadas = []
+
+    def fake_chat(prompt, max_tokens=600, temperature=0.5, json=False, model=None):
+        llamadas.append(1)
+        return "Hay un apoyo mayoritario de la ciudadanía hacia la gestión.", "stop", None
+
+    monkeypatch.setattr(dn, "chat_texto", fake_chat)
+    monkeypatch.setattr(dn, "groq_disponible", lambda: True)
+    monkeypatch.setattr(dn, "VERIFIER_MODEL", None)
+    _limpiar_cache_narrativa()
+
+    out = dn.generar_narrativa("recomendacion", {"pct_favorable": 20, "pct_critico": 60, "score": 0.1, "n": 10})
+    assert out == dn._FALLBACK
+    assert len(llamadas) == 2
+
+
 # ── D6: Filtrado de contexto por estación + corrección prompt "contexto" ──
 
 def test_prompt_contexto_no_contiene_picos_actividad():

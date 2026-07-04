@@ -205,6 +205,38 @@ def _compara_enojo_critico(texto: str) -> bool:
     return False
 
 
+_PATRON_PREDOMINIO_FAVORABLE = re.compile(
+    r'\b(predominio favorable|mayor[ií]a favorable|mayoritariamente favorable|'
+    r'm[aá]s favorable|favorable predomina|apoyo mayoritario|'
+    r'saldo positivo|balance positivo)\b',
+    re.IGNORECASE
+)
+
+_PATRON_PREDOMINIO_CRITICO = re.compile(
+    r'\b(predominio cr[ií]tic[oa]|mayor[ií]a cr[ií]tic[oa]|mayoritariamente cr[ií]tic[oa]|'
+    r'm[aá]s cr[ií]tic[oa]|cr[ií]tic[oa] predomina|rechazo mayoritario|'
+    r'saldo negativo|balance negativo)\b',
+    re.IGNORECASE
+)
+
+
+def _contradice_saldo(texto: str, ctx_filtrado: dict) -> bool:
+    pct_fav = ctx_filtrado.get("pct_favorable")
+    pct_crit = ctx_filtrado.get("pct_critico")
+    if pct_fav is None or pct_crit is None:
+        return False
+    saldo_real = pct_fav - pct_crit
+    tiene_favorable = bool(_PATRON_PREDOMINIO_FAVORABLE.search(texto))
+    tiene_critico = bool(_PATRON_PREDOMINIO_CRITICO.search(texto))
+    if not tiene_favorable and not tiene_critico:
+        return False
+    if tiene_favorable and saldo_real < 0:
+        return True
+    if tiene_critico and saldo_real > 0:
+        return True
+    return False
+
+
 def generar_narrativa(tipo: str, contexto: dict) -> str:
     """Devuelve una conclusión ejecutiva para la estación `tipo`.
 
@@ -242,23 +274,41 @@ def generar_narrativa(tipo: str, contexto: dict) -> str:
             salida_raw, _, _ = chat_texto(prompt, max_tokens=600, temperature=0.5, json=False)
             salida = _limpiar(salida_raw)
             if salida:
+                violaciones = []
                 if _compara_enojo_critico(salida):
+                    violaciones.append("enojo/crítico")
+                if _contradice_saldo(salida, ctx_filtrado):
+                    violaciones.append("saldo")
+                if violaciones:
                     if intento == 0:
                         logging.warning(
-                            "generar_narrativa(%s) violó regla enojo/crítico, reintentando", tipo
+                            "generar_narrativa(%s) violó reglas %s, reintentando",
+                            tipo, ", ".join(violaciones),
                         )
-                        # Añadir advertencia explícita al prompt para el reintento
+                        advertencias = []
+                        if "enojo/crítico" in violaciones:
+                            advertencias.append(
+                                "tu respuesta anterior comparó el enojo de reacciones "
+                                "con el % crítico de comentarios, algo PROHIBIDO "
+                                "por la regla 6"
+                            )
+                        if "saldo" in violaciones:
+                            advertencias.append(
+                                "tu respuesta anterior contradice el saldo real de los "
+                                "datos: si los críticos superan a los favorables no debes "
+                                "presentarlo como favorable ni como 'apoyo mayoritario' "
+                                "(regla 9)"
+                            )
                         prompt = (
                             prompt
-                            + "\n\nADVERTENCIA: tu respuesta anterior comparó el enojo "
-                            "de reacciones con el % crítico de comentarios, algo PROHIBIDO "
-                            "por la regla 6. Corrige esto."
+                            + "\n\nADVERTENCIA: "
+                            + " y ".join(advertencias)
+                            + ". Corrige esto."
                         )
                         continue  # reintento con prompt corregido
-                    # Segundo intento también viola: caer a fallback
                     logging.warning(
-                        "generar_narrativa(%s) reintento violó regla enojo/crítico, usando fallback",
-                        tipo,
+                        "generar_narrativa(%s) reintento violó reglas %s, usando fallback",
+                        tipo, ", ".join(violaciones),
                     )
                     break
                 # Salida válida: cachear y devolver
@@ -274,14 +324,19 @@ def generar_narrativa(tipo: str, contexto: dict) -> str:
                         prompt, max_tokens=600, temperature=0.5, json=False, model=VERIFIER_MODEL
                     )
                     salida = _limpiar(salida_raw)
-                    if salida and not _compara_enojo_critico(salida):
-                        with _LOCK:
-                            _CACHE[clave] = (salida, False, time.time())
-                        return salida
-                    if salida and _compara_enojo_critico(salida):
+                    if salida:
+                        violaciones = []
+                        if _compara_enojo_critico(salida):
+                            violaciones.append("enojo/crítico")
+                        if _contradice_saldo(salida, ctx_filtrado):
+                            violaciones.append("saldo")
+                        if not violaciones:
+                            with _LOCK:
+                                _CACHE[clave] = (salida, False, time.time())
+                            return salida
                         logging.warning(
-                            "generar_narrativa(%s) verificador violó regla enojo/crítico, usando fallback",
-                            tipo,
+                            "generar_narrativa(%s) verificador violó reglas %s, usando fallback",
+                            tipo, ", ".join(violaciones),
                         )
                         break
                 except Exception as e2:  # pragma: no cover

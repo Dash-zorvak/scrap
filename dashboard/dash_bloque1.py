@@ -78,10 +78,6 @@ def render_bloque1_pulso(periodo, plataforma):
     # (ini=None, fin=None = sin filtro de período).
     df_fb_int, df_tk_int = cargar_engagement_periodo(None, None, plataforma)
 
-    # Engagement para Concentración Temática: ya filtrado por fecha via
-    # cargar_engagement_periodo(ini, fin, plataforma)
-    df_fb_cat, df_tk_cat = cargar_engagement_periodo(ini, fin, plataforma)
-
     _page_head(
         "PULSO GENERAL / LECTURA CIUDADANA",
         "Pulso general de la conversación pública",

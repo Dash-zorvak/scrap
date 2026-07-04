@@ -32,12 +32,6 @@ FB_PAGES_OFICIALES = [
     "Gustavo Acevedo",
 ]
 
-# Tablas
-FB_POSTS_TABLE    = "fb_posts"
-FB_COMMENTS_TABLE = "fb_comments"
-TK_VIDEOS_TABLE   = "videos"
-TK_COMMENTS_TABLE = "comments"
-
 # Reacciones Facebook: las 7 reacciones completas (ninguna queda fuera)
 FB_REACTIONS = [
     "likes_count",

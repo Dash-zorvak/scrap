@@ -19,14 +19,11 @@ class TestCalcularContagioEmocional:
 
     def test_con_ini_fin_filtra_antes_de_umbrales(self):
         """
-        Verifica que al pasar ini/fin, el umbral se calcula SOLO con posts del período.
-        Un outlier FUERA del período no debe afectar la clasificación dentro del período.
+        Verifica que al pasar un df_fb ya filtrado por período, el umbral se calcula
+        SOLO con posts del período. Un outlier FUERA del período no debe afectar
+        la clasificación dentro del período.
         """
-        # Crear DataFrame sintético con posts
         # Período de prueba: 15-21 ene 2024
-        ini = pd.Timestamp("2024-01-15")
-        fin = pd.Timestamp("2024-01-21")
-
         # Posts DENTRO del período: scores bajos (umbral 0.75 será bajo)
         posts_dentro = pd.DataFrame({
             'post_id': ['p1', 'p2', 'p3', 'p4'],
@@ -60,39 +57,28 @@ class TestCalcularContagioEmocional:
 
         df_all = pd.concat([posts_dentro, posts_fuera], ignore_index=True)
 
-        # Mockear safe_query para devolver nuestro DataFrame sintético
-        import dashboard.dash_metrics as dm
-        original_safe_query = dm.safe_query
-        
-        def mock_safe_query(query, db_path, params=None):
-            return df_all.copy()
-        
-        dm.safe_query = mock_safe_query
-        try:
-            # Llamar CON ini/fin - debería filtrar ANTES de calcular quantiles
-            df_posts, conteo, _, _ = calcular_contagio_emocional(ini=ini, fin=fin)
-            
-            # Verificar que solo quedaron los 4 posts del período
-            assert len(df_posts) == 4, f"Esperaba 4 posts en el período, got {len(df_posts)}"
-            
-            # El umbral q75 de [0.1, 0.2, 0.3, 0.4] = 0.325
-            # El umbral q25 = 0.175
-            # Posts con score_emocional >= 0.325 y sent >= 0.325 -> resonancia_positiva
-            # Solo p3 (0.3) y p4 (0.4) están cerca... p4 >= 0.325 -> resonancia_positiva
-            resonancia_pos = df_posts[df_posts['tipo_contagio'] == 'resonancia_positiva']
-            assert len(resonancia_pos) >= 1, "Debería haber al menos 1 resonancia_positiva con umbrales del período"
-            
-        finally:
-            dm.safe_query = original_safe_query
+        # Simular que cargar_engagement_periodo ya filtró por fecha
+        # (es decir, solo pasa los posts del período)
+        df_filtrado_manual = posts_dentro.copy()
 
-    def test_sin_ini_fin_comportamiento_historico(self):
-        """
-        Sin ini/fin, debe comportarse como antes (usar todos los posts para umbrales).
-        """
-        ini = None
-        fin = None
+        # Llamar con df_fb ya filtrado - debe usar solo esos 4 posts para quantiles
+        df_posts, conteo, _, _ = calcular_contagio_emocional(df_fb=df_filtrado_manual)
+        
+        # Verificar que solo quedaron los 4 posts del período
+        assert len(df_posts) == 4, f"Esperaba 4 posts en el período, got {len(df_posts)}"
+        
+        # El umbral q75 de [0.1, 0.2, 0.3, 0.4] = 0.325
+        # El umbral q25 = 0.175
+        # Posts con score_emocional >= 0.325 y sent >= 0.325 -> resonancia_positiva
+        # Solo p4 (0.4) >= 0.325 -> resonancia_positiva
+        resonancia_pos = df_posts[df_posts['tipo_contagio'] == 'resonancia_positiva']
+        assert len(resonancia_pos) >= 1, "Debería haber al menos 1 resonancia_positiva con umbrales del período"
 
-        # Posts con variación
+    def test_sin_filtro_previo_comportamiento_historico(self):
+        """
+        Si se pasa un df_fb con todos los posts históricos, debe usar todos para umbrales.
+        """
+        # Posts con variación (simula todo el histórico sin filtro previo)
         posts = pd.DataFrame({
             'post_id': ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'],
             'created_time': [
@@ -108,35 +94,22 @@ class TestCalcularContagioEmocional:
             'pct_positivo': [50]*8, 'pct_negativo': [10]*8,
         })
 
-        import dashboard.dash_metrics as dm
-        original_safe_query = dm.safe_query
+        # Llamar con df_fb completo (sin filtrar)
+        df_posts, conteo, _, _ = calcular_contagio_emocional(df_fb=posts)
         
-        def mock_safe_query(query, db_path, params=None):
-            return posts.copy()
+        # Debe usar todos los 8 posts
+        assert len(df_posts) == 8, f"Sin filtro previo debería usar todos los posts, got {len(df_posts)}"
         
-        dm.safe_query = mock_safe_query
-        try:
-            df_posts, conteo, _, _ = calcular_contagio_emocional(ini=ini, fin=fin)
-            
-            # Debe usar todos los 8 posts
-            assert len(df_posts) == 8, f"Sin ini/fin debería usar todos los posts, got {len(df_posts)}"
-            
-            # q75 de [0.1..0.8] = 0.575, q25 = 0.275
-            # Verificar que las clasificaciones existen
-            assert 'tipo_contagio' in df_posts.columns
-            assert len(conteo) > 0
-            
-        finally:
-            dm.safe_query = original_safe_query
+        # q75 de [0.1..0.8] = 0.575, q25 = 0.275
+        # Verificar que las clasificaciones existen
+        assert 'tipo_contagio' in df_posts.columns
+        assert len(conteo) > 0
 
     def test_outlier_fuera_no_afecta_clasificacion_interna(self):
         """
-        CON ini/fin: el outlier FUERA del período NO afecta umbrales/clasificación.
-        SIN ini/fin: el comportamiento histórico se mantiene (outliers SÍ afectan umbrales).
+        Al pasar solo posts del período (simulando filtro previo por cargar_engagement_periodo),
+        los outliers fuera del período NO afectan umbrales/clasificación.
         """
-        ini = pd.Timestamp("2024-01-01")
-        fin = pd.Timestamp("2024-01-07")
-        
         # 5 posts DENTRO del período (valores moderados)
         posts_dentro = pd.DataFrame({
             'post_id': [f'p{i}' for i in range(1, 6)],
@@ -165,39 +138,25 @@ class TestCalcularContagioEmocional:
         
         df_all = pd.concat([posts_dentro, posts_outliers], ignore_index=True)
         
-        import dashboard.dash_metrics as dm
-        original_safe_query = dm.safe_query
+        # CON filtro previo (simulado): solo 5 posts, q75≈0.4
+        df_filtrado, conteo_f, _, _ = calcular_contagio_emocional(df_fb=posts_dentro)
+        assert len(df_filtrado) == 5, f"Esperado 5 posts con filtro, got {len(df_filtrado)}"
         
-        def mock_safe_query(query, db_path, params=None):
-            return df_all.copy()
+        # Verificar que los umbrales NO fueron afectados por outliers (q75 debería ser ~0.4, no ~0.97)
+        # Con 5 posts: score_emocional = [0.1, 0.2, 0.3, 0.4, 0.5], q75 = 0.4, q25 = 0.2
+        # Los 5 posts deberían clasificarse según estos umbrales moderados
         
-        dm.safe_query = mock_safe_query
-        try:
-            # IMPORTANTE: Limpiar cache de streamlit entre llamadas
-            # @st.cache_data usa la función como clave, pero no podemos limpiarlo fácilmente
-            # así que llamamos a la función subyacente directamente o usamos un enfoque diferente
-            
-            # CON filtro (ini/fin): solo 5 posts, q75≈0.4
-            df_filtrado, conteo_f, _, _ = calcular_contagio_emocional(ini=ini, fin=fin)
-            assert len(df_filtrado) == 5, f"Esperado 5 posts con filtro, got {len(df_filtrado)}"
-            
-            # Verificar que los umbrales NO fueron afectados por outliers (q75 debería ser ~0.4, no ~0.97)
-            # Con 5 posts: score_emocional = [0.1, 0.2, 0.3, 0.4, 0.5], q75 = 0.4, q25 = 0.2
-            # Los 5 posts deberían clasificarse según estos umbrales moderados
-            
-            # SIN filtro: 9 posts, q75 sería ~0.96 (dominado por outliers)
-            # No podemos llamar a la función cacheada de nuevo con otros params en el mismo proceso
-            # pero verificamos que la lógica de filtrado funcione comprobando el resultado filtrado
-            
-            # Verificar que la clasificación tiene sentido con umbrales moderados
-            # Post con score 0.5 > q75(0.4) y sent 0.5 > q75(0.4) -> resonancia_positiva
-            # Post con score 0.1 < q25(0.2) y sent 0.1 < q25(0.2) -> resonancia_negativa
-            tipos = df_filtrado['tipo_contagio'].tolist()
-            assert 'resonancia_positiva' in tipos
-            assert 'resonancia_negativa' in tipos
-            
-        finally:
-            dm.safe_query = original_safe_query
+        # Verificar que la clasificación tiene sentido con umbrales moderados
+        # Post con score 0.5 > q75(0.4) y sent 0.5 > q75(0.4) -> resonancia_positiva
+        # Post con score 0.1 < q25(0.2) y sent 0.1 < q25(0.2) -> resonancia_negativa
+        tipos = df_filtrado['tipo_contagio'].tolist()
+        assert 'resonancia_positiva' in tipos
+        assert 'resonancia_negativa' in tipos
+        
+        # SIN filtro previo (usando todo): 9 posts, q75 sería ~0.96 (dominado por outliers)
+        df_sin_filtro, conteo_sf, _, _ = calcular_contagio_emocional(df_fb=df_all)
+        # Con outliers, los umbrales cambian drásticamente
+        assert len(df_sin_filtro) == 9
 
 
 class TestSeccion07ListasPublicaciones:
@@ -243,19 +202,18 @@ class TestSeccion07ListasPublicaciones:
 
 
 class TestCacheInvalidaPorPeriodo:
-    """Verifica que el cache distingue por ini/fin."""
+    """Verifica que el cache distingue por df_fb (ya filtrado)."""
 
-    def test_cache_key_incluye_ini_fin(self):
-        """El decorador @st.cache_data debe distinguir llamadas con diferentes ini/fin."""
+    def test_cache_key_incluye_df_fb(self):
+        """El decorador @st.cache_data debe distinguir llamadas con diferentes df_fb."""
         import dashboard.dash_metrics as dm
         import inspect
         
         source = inspect.getsource(dm.calcular_contagio_emocional)
         
-        # Verificar que el decorador tiene ttl y parámetros
+        # Verificar que el decorador tiene ttl y parámetro df_fb
         assert '@st.cache_data' in source or 'st.cache_data' in source
         assert 'ttl=3600' in source
-        assert 'ini=None' in source
-        assert 'fin=None' in source
+        assert 'df_fb' in source
         # Streamlit cache_data usa los argumentos de la función como clave de cache
-        # así que ini/fin distintos = cache keys distintas automáticamente
+        # así que df_fb distintos = cache keys distintas automáticamente

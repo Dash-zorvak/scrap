@@ -19,19 +19,19 @@ import pandas as pd
 import streamlit as st
 
 from config import FACEBOOK_DB, TIKTOK_DB
-from dashboard.dash_metrics import cargar_fb_engagement, cargar_tk_engagement
 from dashboard.dash_audiencia import polarizacion_desde_conteos
 from dashboard.dash_riesgo import (
     calcular_autenticidad,
     calcular_nivel_alerta,
     calcular_propagacion_24_48,
 )
-from dashboard.dash_periodos import rango_periodo, filtrar_por_fecha, etiqueta_rango
+from dashboard.dash_periodos import rango_periodo, etiqueta_rango
 from dashboard.dash_fuente import (
     cargar_comentarios_periodo,
     distribucion_sentimiento,
     clasificar_comentario,
     tema_por_comentario,
+    cargar_engagement_periodo,
 )
 from dashboard.dash_emocional import metricas_emocionales
 from dashboard.dash_ui import (
@@ -42,15 +42,6 @@ from dashboard.dash_ui import (
     referencias_por_tema_comentarios,
     _post_ids_por_tema_comentarios,
 )
-
-
-def _filtra_fecha(df, ini, fin):
-    if df is None or df.empty:
-        return df
-    col = "created_time" if "created_time" in df.columns else ("created_at" if "created_at" in df.columns else None)
-    if col is None:
-        return df
-    return filtrar_por_fecha(df, col, ini, fin)
 
 
 def _detectar_fricciones(df_coment, top_n=3):
@@ -103,15 +94,15 @@ def render_bloque3_riesgo(periodo, plataforma):
     df_coment = cargar_comentarios_periodo(ini, fin, plataforma)
     dist = distribucion_sentimiento(df_coment, plataforma)
 
+    # Engagement + emocionales: una sola llamada a cargar_engagement_periodo
+    # devuelve (df_fb, df_tk) ya filtrados por plataforma y fecha.
+    df_fb, df_tk = cargar_engagement_periodo(ini, fin, plataforma)
+    # Para propagación: usar la plataforma activa (si hay TikTok y no Facebook, usar TikTok)
     plat = (plataforma or "").lower()
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB) if "tik" not in plat else pd.DataFrame()
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB) if plat != "facebook" else pd.DataFrame()
-    df_eng_fb = _filtra_fecha(df_fb_raw, ini, fin)
-    df_eng_tk = _filtra_fecha(df_tk_raw, ini, fin)
-    if "tik" in plat and df_eng_tk is not None and not df_eng_tk.empty:
-        df_eng = df_eng_tk
+    if "tik" in plat and df_tk is not None and not df_tk.empty:
+        df_eng = df_tk
     else:
-        df_eng = df_eng_fb
+        df_eng = df_fb
 
     if dist["n_total"] == 0 and (df_eng is None or df_eng.empty):
         st.markdown('<div class="status-info">No hay datos en el período seleccionado.</div>', unsafe_allow_html=True)
@@ -159,7 +150,8 @@ def render_bloque3_riesgo(periodo, plataforma):
     fricciones = _detectar_fricciones(df_coment)
     pct_neg_val = dist["pct_critico"]
     # Indice de enojo desacoplado por plataforma (no se lee solo de FB).
-    enojo_val = float(metricas_emocionales(plataforma, ini, fin).get("indice_enojo", 0) or 0)
+    # Recibe df_fb/df_tk ya cargados y filtrados por cargar_engagement_periodo.
+    enojo_val = float(metricas_emocionales(plataforma, df_fb=df_fb, df_tk=df_tk).get("indice_enojo", 0) or 0)
     pol_b3 = polarizacion_desde_conteos(dist["n_favorable"], dist["n_critico"], dist["n_total"]) if dist["n_total"] > 0 else None
     balance_b3 = pol_b3['balance'] if pol_b3 else None
     alerta = calcular_nivel_alerta(pct_negativo=pct_neg_val, indice_enojo=enojo_val, balance_confrontacion=balance_b3, n_fricciones=len(fricciones), temas_friccion=fricciones)

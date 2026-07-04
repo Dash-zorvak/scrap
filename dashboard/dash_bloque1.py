@@ -18,15 +18,12 @@ import pandas as pd
 import streamlit as st
 
 from config import FACEBOOK_DB, TIKTOK_DB
-from dashboard.dash_metrics import (
-    cargar_fb_engagement,
-    cargar_tk_engagement,
-)
-from dashboard.dash_periodos import rango_periodo, filtrar_por_fecha, etiqueta_rango
+from dashboard.dash_periodos import rango_periodo, etiqueta_rango
 from dashboard.dash_fuente import (
     cargar_comentarios_periodo,
     distribucion_sentimiento,
     frase_clima,
+    cargar_engagement_periodo,
 )
 from dashboard.dash_pulso import (
     calcular_intensidad_vs_promedio,
@@ -43,35 +40,17 @@ from dashboard.dash_ui import (
 )
 
 
-def _filtrar_plataforma(df_fb, df_tk, plataforma):
-    """Aplica el filtro de plataforma sin tocar el rango de fechas."""
-    vacio_fb = df_fb.iloc[0:0] if df_fb is not None else df_fb
-    vacio_tk = df_tk.iloc[0:0] if df_tk is not None else df_tk
-    if plataforma == "Facebook":
-        return df_fb, vacio_tk
-    if plataforma == "TikTok":
-        return vacio_fb, df_tk
-    return df_fb, df_tk
-
-
-def _conteo_categorias(df_fb_raw, df_tk_raw, plataforma, ini, fin):
+def _conteo_categorias(df_fb, df_tk, plataforma):
     """Conteo de categorias tematicas del periodo respetando la plataforma.
 
-    Reutiliza las columnas categoria_nombre que ya exponen cargar_fb_engagement
-    y cargar_tk_engagement (via post_categorias), de modo que la concentracion
-    tematica nunca mezcla plataformas cuando el filtro no lo indica.
+    Recibe df_fb y df_tk ya cargados y filtrados por cargar_engagement_periodo.
     """
     plat = str(plataforma or "").lower()
     frames = []
-    if "tik" not in plat and df_fb_raw is not None and not df_fb_raw.empty and "categoria_nombre" in df_fb_raw.columns:
-        f = filtrar_por_fecha(df_fb_raw, "created_time", ini, fin)
-        if f is not None and not f.empty:
-            frames.append(f[["categoria_nombre"]])
-    if plat != "facebook" and df_tk_raw is not None and not df_tk_raw.empty and "categoria_nombre" in df_tk_raw.columns:
-        col = "created_time" if "created_time" in df_tk_raw.columns else "created_at"
-        t = filtrar_por_fecha(df_tk_raw, col, ini, fin)
-        if t is not None and not t.empty:
-            frames.append(t[["categoria_nombre"]])
+    if "tik" not in plat and df_fb is not None and not df_fb.empty and "categoria_nombre" in df_fb.columns:
+        frames.append(df_fb[["categoria_nombre"]])
+    if plat != "facebook" and df_tk is not None and not df_tk.empty and "categoria_nombre" in df_tk.columns:
+        frames.append(df_tk[["categoria_nombre"]])
     if not frames:
         return {}
     cat = pd.concat(frames, ignore_index=True)["categoria_nombre"].dropna()
@@ -95,10 +74,13 @@ def render_bloque1_pulso(periodo, plataforma):
     dist = distribucion_sentimiento(df_coment, plataforma)
 
     # Engagement para Intensidad: la comparacion ultimo dia vs promedio semanal
-    # necesita la ventana semanal completa, asi que solo se filtra por plataforma.
-    df_fb_raw = cargar_fb_engagement(FACEBOOK_DB)
-    df_tk_raw = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB)
-    df_fb_int, df_tk_int = _filtrar_plataforma(df_fb_raw, df_tk_raw, plataforma)
+    # necesita la ventana semanal completa, asi que solo se filtra por plataforma
+    # (ini=None, fin=None = sin filtro de período).
+    df_fb_int, df_tk_int = cargar_engagement_periodo(None, None, plataforma)
+
+    # Engagement para Concentración Temática: ya filtrado por fecha via
+    # cargar_engagement_periodo(ini, fin, plataforma)
+    df_fb_cat, df_tk_cat = cargar_engagement_periodo(ini, fin, plataforma)
 
     _page_head(
         "PULSO GENERAL / LECTURA CIUDADANA",
@@ -188,7 +170,9 @@ def render_bloque1_pulso(periodo, plataforma):
         st.markdown('<div class="status-info">Aún no hay suficientes días con interacción para comparar contra el promedio semanal.</div>', unsafe_allow_html=True)
 
     # ── 3. CONCENTRACIÓN TEMÁTICA ──
-    conteo_cat = _conteo_categorias(df_fb_raw, df_tk_raw, plataforma, ini, fin)
+    # Usar df_fb/df_tk ya filtrados por fecha desde cargar_engagement_periodo
+    df_fb_cat, df_tk_cat = cargar_engagement_periodo(ini, fin, plataforma)
+    conteo_cat = _conteo_categorias(df_fb_cat, df_tk_cat, plataforma)
     conc = calcular_concentracion(conteo_cat) if conteo_cat else None
     st.markdown('<div class="section-header"><div class="section-title">03 · Concentración Temática</div></div>', unsafe_allow_html=True)
     if conc:

@@ -233,37 +233,6 @@ def get_fecha_inicio(periodo):
 
 
 @st.cache_data(ttl=3600)
-def cargar_fb_engagement(db_path):
-    df = safe_query("""
-        SELECT fe.*, pc.categoria_nombre
-        FROM fb_engagement fe
-        LEFT JOIN post_categorias pc ON fe.post_id = pc.item_id
-    """, db_path)
-    if df.empty:
-        return df
-    df['created_time'] = pd.to_datetime(df['created_time'], errors='coerce')
-    df['categoria_nombre'] = df['categoria_nombre'].replace('Contenido promocional', 'Convocatorias y celebraciones')
-    return df.dropna(subset=['created_time'])
-
-
-@st.cache_data(ttl=3600)
-def cargar_tk_engagement(tk_db_path, fb_db_path):
-    df = safe_query("SELECT * FROM tiktok_engagement", tk_db_path)
-    if df.empty:
-        return df
-    cats = safe_query("SELECT item_id, categoria_nombre FROM post_categorias", fb_db_path)
-    if not cats.empty:
-        cats['item_id'] = cats['item_id'].astype(str)
-        df['id_str'] = df['id'].astype(str)
-        df = df.merge(cats, left_on='id_str', right_on='item_id', how='left')
-        df = df.drop(columns=['id_str','item_id'], errors='ignore')
-    df['categoria_nombre'] = df.get('categoria_nombre', pd.Series(dtype=str))
-    df['categoria_nombre'] = df['categoria_nombre'].replace('Contenido promocional', 'Convocatorias y celebraciones')
-    df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
-    return df.dropna(subset=['created_at'])
-
-
-@st.cache_data(ttl=3600)
 def cargar_sentimiento_fb(db_path):
     df = safe_query("""
         SELECT fs.*, pc.categoria_nombre
@@ -671,87 +640,80 @@ def calcular_narrativas_activas():
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def calcular_contagio_emocional(ini=None, fin=None):
-    FACEBOOK_DB_ACTIVA, _, _ = _activas()
-    df_posts = safe_query("""
-        SELECT fe.post_id,
-               fe.created_time,
-               fe.score_emocional,
-               fe.indice_amor,
-               fe.indice_humor,
-               fe.indice_tristeza,
-               fe.total_reacciones,
-               fe.message,
-               pc.categoria_nombre,
-               fs.score_sentimiento as sent_comentarios,
-               fs.pct_positivo,
-               fs.pct_negativo
-        FROM fb_engagement fe
-        LEFT JOIN post_categorias pc ON fe.post_id = pc.item_id
-        LEFT JOIN fb_sentimiento fs ON fe.post_id = fs.post_id
-        WHERE 1=1
-    """, FACEBOOK_DB_ACTIVA)
-    if df_posts.empty:
+def calcular_contagio_emocional(df_fb):
+    """Pure transformation: recibe df_fb ya cargado y filtrado (con columnas:
+    post_id, created_time, score_emocional, indice_amor, indice_humor,
+    indice_tristeza, total_reacciones, message, categoria_nombre, score_sentimiento,
+    pct_positivo, pct_negativo).
+    No hace consultas SQL ni filtro de fecha — eso se hace en cargar_engagement_periodo.
+    Devuelve (df_posts, conteo_tipos, distorsion_alta, por_semana).
+    """
+    if df_fb is None or df_fb.empty:
         return pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame()
 
-    df_posts['created_time'] = pd.to_datetime(
-        df_posts['created_time'], errors='coerce'
+    # Asegurar columnas necesarias
+    req = ["post_id", "created_time", "score_emocional", "sent_comentarios",
+           "pct_positivo", "pct_negativo", "categoria_nombre", "message"]
+    for c in req:
+        if c not in df_fb.columns:
+            return pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame()
+
+    df_posts = df_fb.copy()
+    df_posts["created_time"] = pd.to_datetime(
+        df_posts["created_time"], errors="coerce"
     )
-    df_posts['semana'] = df_posts['created_time'].dt.to_period('W').dt.start_time
+    df_posts["semana"] = df_posts["created_time"].dt.to_period("W").dt.start_time
+    df_posts = df_posts.dropna(subset=["created_time"])
 
-    if ini is not None and fin is not None:
-        mask = (df_posts['created_time'] >= pd.Timestamp(ini)) & (df_posts['created_time'] <= pd.Timestamp(fin))
-        df_posts = df_posts[mask].copy()
-
-    df_posts['distorsion'] = (
-        df_posts['score_emocional'] - df_posts['sent_comentarios']
+    df_posts["distorsion"] = (
+        df_posts["score_emocional"] - df_posts["sent_comentarios"]
     )
 
-    umbral_pos = df_posts['score_emocional'].quantile(0.75)
-    umbral_neg = df_posts['score_emocional'].quantile(0.25)
+    umbral_pos = df_posts["score_emocional"].quantile(0.75)
+    umbral_neg = df_posts["score_emocional"].quantile(0.25)
 
     def clasificar_contagio(row):
-        em = row.get('score_emocional', 0) or 0
-        sent = row.get('sent_comentarios', 0) or 0
-        dist = row.get('distorsion', 0) or 0
+        em = row.get("score_emocional", 0) or 0
+        sent = row.get("sent_comentarios", 0) or 0
+        dist = row.get("distorsion", 0) or 0
 
         if pd.isna(em) or pd.isna(sent):
-            return 'sin_datos', 'Sin datos suficientes'
+            return "sin_datos", "Sin datos suficientes"
 
         if em >= umbral_pos and sent >= umbral_pos:
-            return 'resonancia_positiva', 'Resonancia positiva'
+            return "resonancia_positiva", "Resonancia positiva"
         elif em >= umbral_pos and sent <= umbral_neg:
-            return 'rechazo_a_positivo', 'Rechazo a mensaje positivo'
+            return "rechazo_a_positivo", "Rechazo a mensaje positivo"
         elif em <= umbral_neg and sent <= umbral_neg:
-            return 'resonancia_negativa', 'Resonancia negativa'
+            return "resonancia_negativa", "Resonancia negativa"
         elif em <= umbral_neg and sent >= umbral_pos:
-            return 'inversion_positiva', 'Inversión positiva'
+            return "inversion_positiva", "Inversión positiva"
         elif abs(dist) > 0.3:
-            return 'distorsion_alta', 'Alta distorsión narrativa'
+            return "distorsion_alta", "Alta distorsión narrativa"
         else:
-            return 'neutral', 'Respuesta neutral'
+            return "neutral", "Respuesta neutral"
 
-    df_posts['tipo_contagio'] = df_posts.apply(
+    df_posts["tipo_contagio"] = df_posts.apply(
         lambda r: clasificar_contagio(r)[0], axis=1
     )
-    df_posts['label_contagio'] = df_posts.apply(
+    df_posts["label_contagio"] = df_posts.apply(
         lambda r: clasificar_contagio(r)[1], axis=1
     )
 
-    conteo_tipos = df_posts['tipo_contagio'].value_counts().to_dict()
+    conteo_tipos = df_posts["tipo_contagio"].value_counts().to_dict()
 
     distorsion_alta = df_posts[
-        df_posts['tipo_contagio'] == 'rechazo_a_positivo'
-    ].nlargest(5, 'distorsion')[
-        ['post_id','created_time','message',
-         'score_emocional','sent_comentarios',
-         'distorsion','categoria_nombre']
+        df_posts["tipo_contagio"] == "rechazo_a_positivo"
+    ].nlargest(5, "distorsion")[
+        ["post_id", "created_time", "message",
+         "score_emocional", "sent_comentarios",
+         "distorsion", "categoria_nombre"]
     ]
 
-    por_semana = df_posts.groupby('semana').agg(
-        score_post=('score_emocional','mean'),
-        score_comentarios=('sent_comentarios','mean'),
-        distorsion_prom=('distorsion','mean')
+    por_semana = df_posts.groupby("semana").agg(
+        score_post=("score_emocional", "mean"),
+        score_comentarios=("sent_comentarios", "mean"),
+        distorsion_prom=("distorsion", "mean")
     ).reset_index().dropna()
 
     return df_posts, conteo_tipos, distorsion_alta, por_semana

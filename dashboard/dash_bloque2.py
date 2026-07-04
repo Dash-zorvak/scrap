@@ -22,10 +22,13 @@ import pandas as pd
 import streamlit as st
 
 from config import FACEBOOK_DB, TIKTOK_DB
-from dashboard.dash_metrics import cargar_fb_engagement, cargar_tk_engagement
 from dashboard.dash_audiencia import polarizacion_desde_conteos
-from dashboard.dash_periodos import rango_periodo, filtrar_por_fecha, etiqueta_rango
-from dashboard.dash_fuente import cargar_comentarios_periodo, distribucion_sentimiento
+from dashboard.dash_periodos import rango_periodo, etiqueta_rango
+from dashboard.dash_fuente import (
+    cargar_comentarios_periodo,
+    distribucion_sentimiento,
+    cargar_engagement_periodo,
+)
 from dashboard.dash_temas import render_temas_emergentes
 from dashboard.dash_ui import (
     _page_head,
@@ -36,35 +39,28 @@ from dashboard.dash_ui import (
 )
 
 
-def _voces_influencia(ini, fin, plataforma):
+def _voces_influencia(plataforma, df_fb=None, df_tk=None):
     """Top 5 paginas por interaccion, combinando solo la(s) plataforma(s) activa(s).
 
-    Facebook usa cargar_fb_engagement (item = post_id) y TikTok
-    cargar_tk_engagement (item = id del video). Ambos exponen page_name y
-    engagement_total, de modo que la mezcla solo ocurre cuando el filtro es
-    "Ambas".
+    Recibe df_fb y df_tk ya cargados y filtrados por cargar_engagement_periodo.
+    Ambos exponen page_name y engagement_total, de modo que la mezcla solo ocurre
+    cuando el filtro es "Ambas".
     """
     plat = str(plataforma or "").lower()
     frames = []
-    if "tik" not in plat:
-        df = filtrar_por_fecha(cargar_fb_engagement(FACEBOOK_DB), "created_time", ini, fin)
-        if df is not None and not df.empty and "page_name" in df.columns:
-            g = df.groupby("page_name").agg(
-                engagement=("engagement_total", "sum"),
-                posts=("post_id", "count"),
-            ).reset_index()
-            frames.append(g)
-    if plat != "facebook":
-        dft = cargar_tk_engagement(TIKTOK_DB, FACEBOOK_DB)
-        col = "created_at" if (dft is not None and "created_at" in dft.columns) else "created_time"
-        dft = filtrar_por_fecha(dft, col, ini, fin)
-        if dft is not None and not dft.empty and "page_name" in dft.columns:
-            item_col = "id" if "id" in dft.columns else "post_id"
-            g = dft.groupby("page_name").agg(
-                engagement=("engagement_total", "sum"),
-                posts=(item_col, "count"),
-            ).reset_index()
-            frames.append(g)
+    if "tik" not in plat and df_fb is not None and not df_fb.empty and "page_name" in df_fb.columns:
+        g = df_fb.groupby("page_name").agg(
+            engagement=("engagement_total", "sum"),
+            posts=("post_id", "count"),
+        ).reset_index()
+        frames.append(g)
+    if plat != "facebook" and df_tk is not None and not df_tk.empty and "page_name" in df_tk.columns:
+        item_col = "id" if "id" in df_tk.columns else "post_id"
+        g = df_tk.groupby("page_name").agg(
+            engagement=("engagement_total", "sum"),
+            posts=(item_col, "count"),
+        ).reset_index()
+        frames.append(g)
     if not frames:
         return None
     combinado = pd.concat(frames, ignore_index=True)
@@ -92,6 +88,10 @@ def render_bloque2_audiencia(periodo, plataforma):
 
     df_coment = cargar_comentarios_periodo(ini, fin, plataforma)
     dist = distribucion_sentimiento(df_coment, plataforma)
+
+    # Voces de influencia: una sola llamada a cargar_engagement_periodo
+    # devuelve (df_fb, df_tk) ya filtrados por plataforma y fecha.
+    df_fb, df_tk = cargar_engagement_periodo(ini, fin, plataforma)
 
     # ── 1. MAPA DE PÚBLICOS ──
     st.markdown('<div class="section-header"><div class="section-title">01 · Mapa de Públicos</div></div>', unsafe_allow_html=True)
@@ -200,7 +200,7 @@ def render_bloque2_audiencia(periodo, plataforma):
         st.markdown('<div class="status-info">No hay comentarios en el período seleccionado.</div>', unsafe_allow_html=True)
 
     # ── 3. VOCES DE INFLUENCIA (páginas oficiales) ──
-    voces = _voces_influencia(ini, fin, plataforma)
+    voces = _voces_influencia(plataforma, df_fb=df_fb, df_tk=df_tk)
     st.markdown('<div class="section-header"><div class="section-title">03 · Voces de Influencia</div></div>', unsafe_allow_html=True)
     if voces is not None and not voces.empty:
         _top = voces.iloc[0]

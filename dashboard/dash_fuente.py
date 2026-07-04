@@ -41,6 +41,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import FACEBOOK_DB, TIKTOK_DB  # noqa: E402
+from dashboard.dash_periodos import filtrar_por_fecha  # noqa: E402
 
 logger = logging.getLogger("dash_fuente")
 
@@ -205,6 +206,7 @@ def cargar_comentarios_periodo(inicio, fin, plataforma="Ambas", db_path=None, tk
     plat = _norm_plataforma(plataforma)
     partes = []
     if plat in ("facebook", "ambas"):
+       
         partes.append(_cargar_comentarios_fb(inicio, fin, db_path))
     if plat in ("tiktok", "ambas"):
         partes.append(_cargar_comentarios_tk(inicio, fin, tk_db_path))
@@ -212,6 +214,81 @@ def cargar_comentarios_periodo(inicio, fin, plataforma="Ambas", db_path=None, tk
     if not partes:
         return pd.DataFrame(columns=_COLUMNAS_COMENTARIOS)
     return pd.concat(partes, ignore_index=True)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cargar_engagement_periodo(ini, fin, plataforma="Ambas", fb_db=None, tk_db=None):
+    """Carga engagement + sentimiento + categorias de FB y TK filtrados por plataforma y fecha.
+
+    Facebook: fb_engagement LEFT JOIN post_categorias LEFT JOIN fb_sentimiento
+    TikTok:   tiktok_engagement LEFT JOIN post_categorias LEFT JOIN tiktok_sentimiento
+
+    Devuelve (df_fb, df_tk) con las columnas necesarias para todos los bloques.
+    El filtro de fecha usa EXCLUSIVAMENTE dash_periodos.filtrar_por_fecha.
+    ini=None, fin=None => sin filtro de período (solo plataforma).
+    """
+    from config import FACEBOOK_DB as _FACEBOOK_DB, TIKTOK_DB as _TIKTOK_DB
+    fb_db = fb_db or _FACEBOOK_DB
+    tk_db = tk_db or _TIKTOK_DB
+    plat = _norm_plataforma(plataforma)
+
+    df_fb = pd.DataFrame()
+    df_tk = pd.DataFrame()
+
+    if plat in ("facebook", "ambas"):
+        try:
+            conn = sqlite3.connect(fb_db)
+            df_fb = pd.read_sql("""
+                SELECT fe.*, pc.categoria_nombre,
+                       fs.score_sentimiento, fs.pct_positivo, fs.pct_negativo,
+                       fs.total_comentarios as sent_total_comentarios
+                FROM fb_engagement fe
+                LEFT JOIN post_categorias pc ON fe.post_id = pc.item_id
+                LEFT JOIN fb_sentimiento fs ON fe.post_id = fs.post_id
+            """, conn)
+            conn.close()
+            if not df_fb.empty:
+                df_fb["created_time"] = pd.to_datetime(df_fb["created_time"], errors="coerce")
+                if ini is not None and fin is not None:
+                    df_fb = filtrar_por_fecha(df_fb, "created_time", ini, fin)
+                df_fb = df_fb.dropna(subset=["created_time"])
+        except Exception:
+            df_fb = pd.DataFrame()
+
+    if plat in ("tiktok", "ambas"):
+        try:
+            conn = sqlite3.connect(tk_db)
+            df_tk = pd.read_sql("SELECT * FROM tiktok_engagement", conn)
+            # Categorías (post_categorias puede no existir en todas las BDs)
+            try:
+                cats = pd.read_sql("SELECT item_id, categoria_nombre FROM post_categorias", conn)
+                if not cats.empty:
+                    cats["item_id"] = cats["item_id"].astype(str)
+                    df_tk["id_str"] = df_tk["id"].astype(str)
+                    df_tk = df_tk.merge(cats, left_on="id_str", right_on="item_id", how="left")
+                    df_tk = df_tk.drop(columns=["id_str", "item_id"], errors="ignore")
+            except Exception:
+                df_tk["categoria_nombre"] = pd.Series(dtype=str)
+            # Sentimiento
+            try:
+                sent = pd.read_sql("SELECT video_id, pct_positivo, pct_negativo, total_comentarios FROM tiktok_sentimiento", conn)
+                if not sent.empty:
+                    sent["video_id"] = sent["video_id"].astype(str)
+                    df_tk["id_str"] = df_tk["id"].astype(str)
+                    df_tk = df_tk.merge(sent, left_on="id_str", right_on="video_id", how="left")
+                    df_tk = df_tk.drop(columns=["id_str", "video_id"], errors="ignore")
+            except Exception:
+                pass
+            conn.close()
+            if not df_tk.empty:
+                df_tk["created_at"] = pd.to_datetime(df_tk["created_at"], errors="coerce")
+                if ini is not None and fin is not None:
+                    df_tk = filtrar_por_fecha(df_tk, "created_at", ini, fin)
+                df_tk = df_tk.dropna(subset=["created_at"])
+        except Exception:
+            df_tk = pd.DataFrame()
+
+    return df_fb, df_tk
 
 
 def clasificar_comentario(row):

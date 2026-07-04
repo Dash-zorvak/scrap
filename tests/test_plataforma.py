@@ -12,6 +12,7 @@ Se usan bases de datos temporales (tmp_path) y se pasan db_path / tk_db_path
 explicitos, de modo que el guard de conftest sobre las DB reales no se activa.
 """
 
+import pandas as pd
 import sqlite3
 
 from dashboard.dash_fuente import (
@@ -166,32 +167,58 @@ class TestDistribucionPorPlataforma:
 
 
 class TestModeloEmocional:
-    def test_facebook_usa_reacciones(self, tmp_path):
-        fb, tk = _bases(tmp_path)
-        r = emocional_facebook(INI, FIN, db_path=fb)
+    def test_facebook_usa_reacciones(self):
+        df_fb = pd.DataFrame({
+            "created_time": pd.to_datetime(["2026-01-05", "2026-01-10"]),
+            "score_emocional": [0.5, -0.5],
+            "indice_enojo": [0.1, 0.5],
+            "total_reacciones": [100, 100],
+        })
+        r = emocional_facebook(df_fb)
         assert r is not None
         assert round(r["score_emocional"], 3) == 0.0
         assert round(r["indice_enojo"], 3) == 0.3
         assert r["fuente"] == "facebook_reacciones_tipadas"
 
-    def test_tiktok_usa_sentimiento(self, tmp_path):
-        fb, tk = _bases(tmp_path)
-        r = emocional_tiktok(INI, FIN, tk_db_path=tk)
+    def test_tiktok_usa_sentimiento(self):
+        df_tk = pd.DataFrame({
+            "created_at": pd.to_datetime(["2026-01-06", "2026-01-12"]),
+            "pct_positivo": [80, 20],
+            "pct_negativo": [10, 60],
+            "total_comentarios": [2, 2],
+        })
+        r = emocional_tiktok(df_tk)
         assert r is not None
         assert round(r["indice_enojo"], 3) == 0.35
         assert round(r["score_emocional"], 3) == 0.15
         assert r["fuente"] == "tiktok_sentimiento_comentarios"
 
-    def test_ambas_combina_por_volumen(self, tmp_path):
-        fb, tk = _bases(tmp_path)
-        r = metricas_emocionales("Ambas", INI, FIN, fb_db=fb, tk_db=tk)
+    def test_ambas_combina_por_volumen(self):
+        df_fb = pd.DataFrame({
+            "created_time": pd.to_datetime(["2026-01-05", "2026-01-10"]),
+            "score_emocional": [0.5, -0.5],
+            "indice_enojo": [0.1, 0.5],
+            "total_reacciones": [100, 100],
+        })
+        df_tk = pd.DataFrame({
+            "created_at": pd.to_datetime(["2026-01-06", "2026-01-12"]),
+            "pct_positivo": [80, 20],
+            "pct_negativo": [10, 60],
+            "total_comentarios": [2, 2],
+        })
+        r = metricas_emocionales("Ambas", df_fb=df_fb, df_tk=df_tk)
         assert r["n_plataformas"] == 2
         assert r["fuente"] == "combinado_ponderado_por_volumen"
         assert 0.30 <= r["indice_enojo"] <= 0.35
 
-    def test_solo_tiktok_no_usa_facebook(self, tmp_path):
-        fb, tk = _bases(tmp_path)
-        r = metricas_emocionales("TikTok", INI, FIN, fb_db=fb, tk_db=tk)
+    def test_solo_tiktok_no_usa_facebook(self):
+        df_tk = pd.DataFrame({
+            "created_at": pd.to_datetime(["2026-01-06", "2026-01-12"]),
+            "pct_positivo": [80, 20],
+            "pct_negativo": [10, 60],
+            "total_comentarios": [2, 2],
+        })
+        r = metricas_emocionales("TikTok", df_fb=None, df_tk=df_tk)
         assert r["n_plataformas"] == 1
         assert r["fuente"] == "tiktok_sentimiento_comentarios"
         assert round(r["indice_enojo"], 3) == 0.35

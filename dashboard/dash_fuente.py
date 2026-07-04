@@ -249,6 +249,8 @@ def cargar_engagement_periodo(ini, fin, plataforma="Ambas", fb_db=None, tk_db=No
             conn.close()
             if not df_fb.empty:
                 df_fb["created_time"] = pd.to_datetime(df_fb["created_time"], errors="coerce")
+                if "categoria_nombre" in df_fb.columns:
+                    df_fb["categoria_nombre"] = df_fb["categoria_nombre"].replace("Contenido promocional", "Convocatorias y celebraciones")
                 if ini is not None and fin is not None:
                     df_fb = filtrar_por_fecha(df_fb, "created_time", ini, fin)
                 df_fb = df_fb.dropna(subset=["created_time"])
@@ -282,6 +284,8 @@ def cargar_engagement_periodo(ini, fin, plataforma="Ambas", fb_db=None, tk_db=No
             conn.close()
             if not df_tk.empty:
                 df_tk["created_at"] = pd.to_datetime(df_tk["created_at"], errors="coerce")
+                if "categoria_nombre" in df_tk.columns:
+                    df_tk["categoria_nombre"] = df_tk["categoria_nombre"].replace("Contenido promocional", "Convocatorias y celebraciones")
                 if ini is not None and fin is not None:
                     df_tk = filtrar_por_fecha(df_tk, "created_at", ini, fin)
                 df_tk = df_tk.dropna(subset=["created_at"])

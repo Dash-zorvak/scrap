@@ -227,7 +227,7 @@ def render_bloque2_audiencia(periodo, plataforma):
     # La deteccion de temas emergentes usa la clasificacion tematica de Facebook.
     # En la vista exclusiva de TikTok no se muestra para no exhibir datos de FB.
     if "tik" not in str(plataforma).lower():
-        render_temas_emergentes(FACEBOOK_DB)
+        render_temas_emergentes(FACEBOOK_DB, ini, fin)
     else:
         st.markdown('<div class="section-header"><div class="section-title">04 · Temas Emergentes</div><div class="section-subtitle">Temas que ganan fuerza en la conversación.</div></div>', unsafe_allow_html=True)
         st.markdown('<div class="status-info">Los temas emergentes se calculan a partir de la clasificación temática de Facebook; no están disponibles en la vista exclusiva de TikTok.</div>', unsafe_allow_html=True)

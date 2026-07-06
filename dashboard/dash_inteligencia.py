@@ -112,13 +112,17 @@ def sugerir_temas_pendientes_cacheado(db_path=None, cache=None, limite=None) -> 
     return salida
 
 
-def cargar_temas_universo(db_path=None) -> list[dict]:
+def cargar_temas_universo(db_path=None, ini=None, fin=None) -> list[dict]:
     """Tarjetas de Temas Emergentes: comentarios aprobados + clasificaciones IA.
 
     Universo combinado: IA como base, aprobaciones manuales sobrescriben
     (control de calidad). Comentarios sin ninguna clasificacion quedan fuera.
+
+    `ini`/`fin`, si se dan, restringen el universo al período activo (mismo
+    criterio que el resto del dashboard). `ini=None`/`fin=None` => acumulado
+    histórico completo (comportamiento anterior).
     """
     if db_path is None:
         db_path = FACEBOOK_DB
     from dashboard.tema_aprobaciones import agregar_por_tema_universo
-    return agregar_por_tema_universo(db_path)
+    return agregar_por_tema_universo(db_path, ini=ini, fin=fin)

@@ -12,11 +12,15 @@ import tempfile
 
 import pandas as pd
 import pytest
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "dashboard"))
 
-from dashboard.dash_ui import _post_ids_por_tema_comentarios
+from dashboard.dash_ui import (
+    _post_ids_por_tema_comentarios,
+    _warn_dropped_null_dates,
+)
 
 
 class TestPostIdsPorTemaComentarios:
@@ -137,3 +141,45 @@ class TestPostIdsPorTemaComentarios:
             os.unlink(db_path)
 
         assert ids == []
+
+
+class TestWarnDroppedNullDates:
+    """_warn_dropped_null_dates cierra conexión explícitamente."""
+
+    def _setup_mocks(self, read_sql_side_effect=None):
+        """Configura mocks y devuelve (mock_connect, mock_exists, mock_read_sql)."""
+        mock_conn = MagicMock()
+        mock_connect = MagicMock(return_value=mock_conn)
+        mock_exists = MagicMock(return_value=True)
+        if read_sql_side_effect is not None:
+            mock_read_sql = MagicMock(side_effect=read_sql_side_effect)
+        else:
+            df = pd.DataFrame({"c": [0]})
+            mock_read_sql = MagicMock(return_value=df)
+        return mock_connect, mock_exists, mock_read_sql, mock_conn
+
+    def test_close_llamado_dos_veces_en_exito(self):
+        """conn.close() se llama 2 veces (fb_posts + videos) sin excepción."""
+        mock_connect, mock_exists, mock_read_sql, mock_conn = self._setup_mocks()
+        with patch("dashboard.dash_ui.os.path.exists", mock_exists), \
+             patch("dashboard.dash_ui.sqlite3.connect", mock_connect), \
+             patch("dashboard.dash_ui.pd.read_sql", mock_read_sql):
+            _warn_dropped_null_dates()
+        assert mock_conn.close.call_count == 2, (
+            f"close debería llamarse 2 veces, se llamó {mock_conn.close.call_count}"
+        )
+
+    def test_close_llamado_dos_veces_con_error(self):
+        """Excepción en read_sql se absorbe y close() se llama 2 veces."""
+        def raiser(*args, **kwargs):
+            raise RuntimeError("fail")
+        mock_connect, mock_exists, mock_read_sql, mock_conn = self._setup_mocks(
+            read_sql_side_effect=raiser
+        )
+        with patch("dashboard.dash_ui.os.path.exists", mock_exists), \
+             patch("dashboard.dash_ui.sqlite3.connect", mock_connect), \
+             patch("dashboard.dash_ui.pd.read_sql", mock_read_sql):
+            _warn_dropped_null_dates()
+        assert mock_conn.close.call_count == 2, (
+            f"close debería llamarse 2 veces, se llamó {mock_conn.close.call_count}"
+        )

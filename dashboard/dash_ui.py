@@ -54,7 +54,8 @@ def _warn_dropped_null_dates():
             db = FACEBOOK_DB if table == "fb_posts" else TIKTOK_DB
             if not os.path.exists(db):
                 continue
-            with sqlite3.connect(db) as conn:
+            conn = sqlite3.connect(db)
+            try:
                 n = pd.read_sql(
                     f"SELECT COUNT(*) as c FROM {table} WHERE {col} IS NULL OR TRIM(CAST({col} AS TEXT)) = ''",
                     conn
@@ -64,6 +65,8 @@ def _warn_dropped_null_dates():
                         f'<div class="status-info">Se descartaron {n} {label} sin fecha.</div>',
                         unsafe_allow_html=True
                     )
+            finally:
+                conn.close()
         except Exception:
             pass
 

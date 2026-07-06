@@ -32,7 +32,7 @@ class TestCalcularContagioEmocional:
                 '2024-01-17 10:00', '2024-01-18 10:00'
             ],
             'score_emocional': [0.1, 0.2, 0.3, 0.4],  # q75 = 0.325, q25 = 0.175
-            'sent_comentarios': [0.1, 0.2, 0.3, 0.4],
+            'score_sentimiento': [0.1, 0.2, 0.3, 0.4],
             'message': ['msg1', 'msg2', 'msg3', 'msg4'],
             'categoria_nombre': ['cat1'] * 4,
             'indice_amor': [0]*4, 'indice_humor': [0]*4,
@@ -47,7 +47,7 @@ class TestCalcularContagioEmocional:
                 '2024-01-01 10:00', '2024-01-02 10:00'
             ],
             'score_emocional': [0.9, 0.95],  # Muy alto - outlier
-            'sent_comentarios': [0.9, 0.95],
+            'score_sentimiento': [0.9, 0.95],
             'message': ['outlier_msg1', 'outlier_msg2'],
             'categoria_nombre': ['cat1'] * 2,
             'indice_amor': [0]*2, 'indice_humor': [0]*2,
@@ -86,7 +86,7 @@ class TestCalcularContagioEmocional:
                 '2024-01-05', '2024-01-06', '2024-01-07', '2024-01-08'
             ],
             'score_emocional': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
-            'sent_comentarios': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+            'score_sentimiento': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
             'message': [f'msg{i}' for i in range(1, 9)],
             'categoria_nombre': ['cat1'] * 8,
             'indice_amor': [0]*8, 'indice_humor': [0]*8,
@@ -115,7 +115,7 @@ class TestCalcularContagioEmocional:
             'post_id': [f'p{i}' for i in range(1, 6)],
             'created_time': pd.date_range('2024-01-01', periods=5, freq='D'),
             'score_emocional': [0.1, 0.2, 0.3, 0.4, 0.5],
-            'sent_comentarios': [0.1, 0.2, 0.3, 0.4, 0.5],
+            'score_sentimiento': [0.1, 0.2, 0.3, 0.4, 0.5],
             'message': [f'msg{i}' for i in range(1, 6)],
             'categoria_nombre': ['cat1'] * 5,
             'indice_amor': [0]*5, 'indice_humor': [0]*5,
@@ -128,7 +128,7 @@ class TestCalcularContagioEmocional:
             'post_id': ['out1', 'out2', 'out3', 'out4'],
             'created_time': pd.date_range('2023-12-01', periods=4, freq='D'),
             'score_emocional': [0.99, 0.98, 0.97, 0.96],
-            'sent_comentarios': [0.99, 0.98, 0.97, 0.96],
+            'score_sentimiento': [0.99, 0.98, 0.97, 0.96],
             'message': [f'out{i}' for i in range(4)],
             'categoria_nombre': ['cat1'] * 4,
             'indice_amor': [0]*4, 'indice_humor': [0]*4,
@@ -157,6 +157,40 @@ class TestCalcularContagioEmocional:
         df_sin_filtro, conteo_sf, _, _ = calcular_contagio_emocional(df_fb=df_all)
         # Con outliers, los umbrales cambian drásticamente
         assert len(df_sin_filtro) == 9
+
+    def test_esquema_real_cargar_engagement_periodo_pasa_validacion(self):
+        """
+        Verifica que calcular_contagio_emocional acepta un DataFrame con el
+        esquema real que produce cargar_engagement_periodo para Facebook
+        (columna score_sentimiento, NO sent_comentarios).
+        Debe fallar con el código anterior al fix (que exigía sent_comentarios)
+        y pasar con la corrección a score_sentimiento.
+        """
+        df_real = pd.DataFrame({
+            'post_id': ['r1', 'r2', 'r3'],
+            'created_time': pd.date_range('2024-06-01', periods=3, freq='D'),
+            'score_emocional': [0.3, 0.6, 0.1],
+            'message': ['post real 1', 'post real 2', 'post real 3'],
+            'categoria_nombre': ['cat_a', 'cat_b', 'cat_a'],
+            'score_sentimiento': [0.2, 0.5, 0.05],
+            'pct_positivo': [60.0, 75.0, 30.0],
+            'pct_negativo': [10.0, 5.0, 40.0],
+            'sent_total_comentarios': [100, 200, 50],
+            'indice_amor': [0.3, 0.5, 0.1],
+            'indice_humor': [0.2, 0.3, 0.05],
+            'indice_tristeza': [0.1, 0.05, 0.3],
+            'total_reacciones': [150, 300, 80],
+        })
+
+        df_posts, conteo, _, _ = calcular_contagio_emocional(df_fb=df_real)
+
+        assert len(df_posts) > 0, (
+            "El DataFrame con esquema real NO debería estar vacío. "
+            "Si falla, revisa que la validación de columnas use score_sentimiento "
+            "en lugar de sent_comentarios."
+        )
+        assert 'tipo_contagio' in df_posts.columns
+        assert len(conteo) > 0
 
 
 class TestSeccion07ListasPublicaciones:

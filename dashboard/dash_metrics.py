@@ -243,7 +243,7 @@ def calcular_contagio_emocional(df_fb):
         return pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame()
 
     # Asegurar columnas necesarias
-    req = ["post_id", "created_time", "score_emocional", "sent_comentarios",
+    req = ["post_id", "created_time", "score_emocional", "score_sentimiento",
            "pct_positivo", "pct_negativo", "categoria_nombre", "message"]
     for c in req:
         if c not in df_fb.columns:
@@ -257,7 +257,7 @@ def calcular_contagio_emocional(df_fb):
     df_posts = df_posts.dropna(subset=["created_time"])
 
     df_posts["distorsion"] = (
-        df_posts["score_emocional"] - df_posts["sent_comentarios"]
+        df_posts["score_emocional"] - df_posts["score_sentimiento"]
     )
 
     umbral_pos = df_posts["score_emocional"].quantile(0.75)
@@ -265,7 +265,7 @@ def calcular_contagio_emocional(df_fb):
 
     def clasificar_contagio(row):
         em = row.get("score_emocional", 0) or 0
-        sent = row.get("sent_comentarios", 0) or 0
+        sent = row.get("score_sentimiento", 0) or 0
         dist = row.get("distorsion", 0) or 0
 
         if pd.isna(em) or pd.isna(sent):
@@ -297,13 +297,13 @@ def calcular_contagio_emocional(df_fb):
         df_posts["tipo_contagio"] == "rechazo_a_positivo"
     ].nlargest(5, "distorsion")[
         ["post_id", "created_time", "message",
-         "score_emocional", "sent_comentarios",
+         "score_emocional", "score_sentimiento",
          "distorsion", "categoria_nombre"]
     ]
 
     por_semana = df_posts.groupby("semana").agg(
         score_post=("score_emocional", "mean"),
-        score_comentarios=("sent_comentarios", "mean"),
+        score_comentarios=("score_sentimiento", "mean"),
         distorsion_prom=("distorsion", "mean")
     ).reset_index().dropna()
 

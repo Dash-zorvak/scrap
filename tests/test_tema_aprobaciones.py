@@ -2,18 +2,23 @@ import os
 import sqlite3
 import tempfile
 
+import pandas as pd
 import pytest
 
 from dashboard.tema_aprobaciones import (
+    _ids_comentarios_en_periodo,
     asegurar_tabla,
     guardar_aprobacion,
     ids_aprobados,
     obtener_aprobaciones,
     agregar_por_tema,
+    agregar_por_tema_universo,
     resumen_revision,
+    resumen_cobertura_universo,
     ejemplos_few_shot,
     TABLA,
 )
+from dashboard.tema_clasificaciones_ia import guardar_clasificacion_ia
 
 
 @pytest.fixture
@@ -85,6 +90,158 @@ class TestResumen:
         assert r["sin_tema"] == 1
         assert r["total_aprobaciones"] == 2
         assert r["pendientes"] == 8
+
+
+@pytest.fixture
+def db_con_datos_periodo():
+    """Crea DB con fb_comments, fb_posts, fb_engagement para tests de período.
+
+    - Comentario c1 -> post p1 (fb_posts: 2024-01-15)  → dentro de [2024-01-01, 2024-01-31]
+    - Comentario c2 -> post p2 (fb_posts: 2024-03-10)  → fuera
+    - Comentario c3 -> post p3 (sin fb_posts, pero fb_engagement: 2024-01-20) → dentro (fallback)
+    """
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE fb_comments (comment_id TEXT, post_id TEXT, message TEXT)")
+    conn.execute("CREATE TABLE fb_posts (post_id TEXT, created_time TEXT)")
+    conn.execute("CREATE TABLE fb_engagement (post_id TEXT, created_time TEXT)")
+    conn.execute("INSERT INTO fb_comments VALUES ('c1', 'p1', 'msg 1')")
+    conn.execute("INSERT INTO fb_comments VALUES ('c2', 'p2', 'msg 2')")
+    conn.execute("INSERT INTO fb_comments VALUES ('c3', 'p3', 'msg 3')")
+    conn.execute("INSERT INTO fb_posts VALUES ('p1', '2024-01-15')")
+    conn.execute("INSERT INTO fb_posts VALUES ('p2', '2024-03-10')")
+    conn.execute("INSERT INTO fb_engagement VALUES ('p3', '2024-01-20')")
+    conn.commit()
+    conn.close()
+    yield path
+    if os.path.exists(path):
+        os.unlink(path)
+
+
+class TestIdsComentariosEnPeriodo:
+    def test_filtra_dentro_y_fuera(self, db_con_datos_periodo):
+        ids = _ids_comentarios_en_periodo(
+            db_con_datos_periodo, "2024-01-01", "2024-01-31"
+        )
+        assert "c1" in ids, "c1 (post p1, 2024-01-15) deberia estar dentro"
+        assert "c2" not in ids, "c2 (post p2, 2024-03-10) deberia estar fuera"
+        assert "c3" in ids, "c3 (post p3, fb_engagement 2024-01-20) deberia estar dentro por fallback"
+
+    def test_fallback_fb_engagement(self, db_con_datos_periodo):
+        """c3 no tiene fb_posts pero si fb_engagement: la fecha debe resolverse."""
+        ids = _ids_comentarios_en_periodo(
+            db_con_datos_periodo, "2024-01-01", "2024-01-31"
+        )
+        assert "c3" in ids, "c3 debe resolverse desde fb_engagement"
+
+    def test_sin_fb_posts_usa_fb_engagement(self):
+        """fb_posts no existe, solo fb_engagement debe bastar."""
+        fd, path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        conn = sqlite3.connect(path)
+        conn.execute("CREATE TABLE fb_comments (comment_id TEXT, post_id TEXT)")
+        conn.execute("CREATE TABLE fb_engagement (post_id TEXT, created_time TEXT)")
+        conn.execute("INSERT INTO fb_comments VALUES ('c1', 'p1')")
+        conn.execute("INSERT INTO fb_engagement VALUES ('p1', '2024-01-15')")
+        conn.commit()
+        conn.close()
+        try:
+            ids = _ids_comentarios_en_periodo(path, "2024-01-01", "2024-01-31")
+            assert "c1" in ids
+        finally:
+            os.unlink(path)
+
+    def test_tablas_vacias_devuelve_vacio(self):
+        fd, path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        conn = sqlite3.connect(path)
+        conn.execute("CREATE TABLE fb_comments (comment_id TEXT, post_id TEXT)")
+        conn.commit()
+        conn.close()
+        try:
+            ids = _ids_comentarios_en_periodo(path, "2024-01-01", "2024-01-31")
+            assert ids == set()
+        finally:
+            os.unlink(path)
+
+
+@pytest.fixture
+def db_con_clasificaciones_periodo():
+    """Crea DB con clasificaciones IA y aprobaciones ligadas a posts dentro/fuera.
+
+    - IA clasifica c1 (p1, dentro) y c2 (p2, fuera).
+    - Aprobacion manual sobrescribe c1 con otro tema.
+    """
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE fb_comments (comment_id TEXT, post_id TEXT, message TEXT)")
+    conn.execute("CREATE TABLE fb_posts (post_id TEXT, created_time TEXT)")
+    conn.execute("INSERT INTO fb_comments VALUES ('c1', 'p1', 'msg1')")
+    conn.execute("INSERT INTO fb_comments VALUES ('c2', 'p2', 'msg2')")
+    conn.execute("INSERT INTO fb_posts VALUES ('p1', '2024-01-15')")
+    conn.execute("INSERT INTO fb_posts VALUES ('p2', '2024-03-10')")
+    conn.commit()
+    conn.close()
+    guardar_clasificacion_ia(path, "c1", "seguridad", postura="apoyo", texto="msg1")
+    guardar_clasificacion_ia(path, "c2", "salud", postura="critica", texto="msg2")
+    guardar_aprobacion(path, "c1", "obras_servicios", texto="msg1 override", postura="neutral")
+    yield path
+    if os.path.exists(path):
+        os.unlink(path)
+
+
+class TestAgregarPorTemaUniversoPeriodo:
+    def test_solo_dentro_del_periodo(self, db_con_clasificaciones_periodo):
+        temas = agregar_por_tema_universo(
+            db_con_clasificaciones_periodo, ini="2024-01-01", fin="2024-01-31"
+        )
+        cats = {t["categoria"] for t in temas}
+        assert "obras_servicios" in cats, "c1 aprobado dentro del periodo"
+        assert "salud" not in cats, "c2 fuera del periodo no debe aparecer"
+
+    def test_sin_ini_fin_devuelve_completo(self, db_con_clasificaciones_periodo):
+        temas = agregar_por_tema_universo(db_con_clasificaciones_periodo)
+        cats = {t["categoria"] for t in temas}
+        assert "obras_servicios" in cats, "c1 debe aparecer"
+        assert "salud" in cats, "c2 debe aparecer sin filtro"
+
+
+class TestResumenCoberturaPeriodo:
+    def test_clasificados_solo_dentro(self, db_con_clasificaciones_periodo):
+        cov = resumen_cobertura_universo(
+            db_con_clasificaciones_periodo, total_comentarios=10,
+            ini="2024-01-01", fin="2024-01-31"
+        )
+        # c1 esta dentro, c2 fuera => 1 clasificado
+        assert cov["clasificados"] == 1
+
+    def test_sin_ini_fin_cuenta_todos(self, db_con_clasificaciones_periodo):
+        cov = resumen_cobertura_universo(
+            db_con_clasificaciones_periodo, total_comentarios=10
+        )
+        assert cov["clasificados"] == 2
+
+
+class TestResumenRevisionPeriodo:
+    def test_solo_dentro_del_periodo(self, db_con_clasificaciones_periodo):
+        res = resumen_revision(
+            db_con_clasificaciones_periodo, total_comentarios=10,
+            ini="2024-01-01", fin="2024-01-31"
+        )
+        # Solo c1 aprobado dentro del periodo
+        assert res["aprobados"] == 1
+        assert res["total_aprobaciones"] == 1
+
+    def test_sin_ini_fin_cuenta_todos(self, db_con_clasificaciones_periodo):
+        guardar_aprobacion(db_con_clasificaciones_periodo, "c2", "no_aplica", texto="fuera")
+        res = resumen_revision(
+            db_con_clasificaciones_periodo, total_comentarios=10
+        )
+        assert res["aprobados"] == 1  # c1 = obras_servicios
+        assert res["sin_tema"] == 1  # c2 = no_aplica
+        assert res["total_aprobaciones"] == 2  # c1 + c2
 
 
 class TestFewShot:

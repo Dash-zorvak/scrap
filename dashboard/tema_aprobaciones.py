@@ -18,6 +18,7 @@ en CI.
 """
 
 import sqlite3
+import pandas as pd
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -35,6 +36,50 @@ TABLA = "tema_aprobaciones"
 
 def _conectar(db_path):
     return sqlite3.connect(db_path)
+
+
+def _ids_comentarios_en_periodo(db_path, ini, fin):
+    """IDs de fb_comments cuyo post cae en [ini, fin].
+
+    Replica la misma resolución de fecha que dash_fuente._cargar_comentarios_fb
+    (fecha heredada de fb_posts, con respaldo en fb_engagement si el post no
+    aparece ahí), pero sin importar dash_fuente (que depende de Streamlit)
+    para que este módulo siga siendo puro y verificable en CI.
+    """
+    conn = _conectar(db_path)
+    try:
+        cdf = pd.read_sql("SELECT comment_id, post_id FROM fb_comments", conn)
+        try:
+            jdf = pd.read_sql("SELECT post_id, created_time FROM fb_posts", conn)
+        except Exception:
+            jdf = None
+        try:
+            edf = pd.read_sql("SELECT post_id, created_time FROM fb_engagement", conn)
+        except Exception:
+            edf = None
+    finally:
+        conn.close()
+
+    if cdf.empty:
+        return set()
+
+    cdf["post_id"] = cdf["post_id"].astype(str)
+    fecha_post = {}
+    if jdf is not None and not jdf.empty:
+        j = jdf.copy()
+        j["post_id"] = j["post_id"].astype(str)
+        fecha_post = dict(zip(j["post_id"], j["created_time"]))
+    fecha_eng = {}
+    if edf is not None and not edf.empty:
+        e = edf.copy()
+        e["post_id"] = e["post_id"].astype(str)
+        fecha_eng = dict(zip(e["post_id"], e["created_time"]))
+
+    created = cdf["post_id"].map(fecha_post)
+    created = created.fillna(cdf["post_id"].map(fecha_eng))
+    fechas = pd.to_datetime(created, errors="coerce")
+    mask = (fechas >= pd.Timestamp(ini)) & (fechas <= pd.Timestamp(fin))
+    return set(cdf.loc[mask, "comment_id"].tolist())
 
 
 def asegurar_tabla(db_path):
@@ -223,13 +268,17 @@ def agregar_por_tema(db_path):
     return temas
 
 
-def agregar_por_tema_universo(db_path):
+def agregar_por_tema_universo(db_path, ini=None, fin=None):
     """Agrega comentarios por tema combinando IA + aprobaciones manuales.
 
     Universo = clasificaciones IA (base) + aprobaciones manuales (sobrescribe).
     La aprobacion manual es control de calidad y tiene prioridad.
     Comentarios sin ninguna clasificacion quedan fuera del conteo.
     Excluye 'no_aplica'. Devuelve lista de dicts igual que agregar_por_tema.
+
+    `ini`/`fin`, si se dan, restringen el universo a los comentarios cuyo post
+    cae en ese rango (mismo criterio que el resto del dashboard). `ini=None`
+    o `fin=None` => sin filtro de período (acumulado histórico completo).
     """
     asegurar_tabla(db_path)
     # Base: clasificaciones IA
@@ -243,6 +292,10 @@ def agregar_por_tema_universo(db_path):
         combinado[cid] = data
     for cid, data in aprobaciones.items():
         combinado[cid] = data  # sobrescribe
+
+    if ini is not None and fin is not None:
+        ids_periodo = _ids_comentarios_en_periodo(db_path, ini, fin)
+        combinado = {cid: data for cid, data in combinado.items() if cid in ids_periodo}
 
     conteo = defaultdict(int)
     posturas = defaultdict(lambda: {"apoyo": 0, "critica": 0, "neutral": 0})
@@ -297,14 +350,19 @@ def agregar_por_tema_universo(db_path):
     return temas
 
 
-def resumen_cobertura_universo(db_path, total_comentarios):
+def resumen_cobertura_universo(db_path, total_comentarios, ini=None, fin=None):
     """Resumen de cobertura del universo (IA + manual).
+
+    `ini`/`fin`, si se dan, restringen a los comentarios del período (mismo
+    criterio que agregar_por_tema_universo).
     Devuelve {"clasificados": n, "total_comentarios": total, "sin_clasificar": total-n}.
     """
     clasif_ia = obtener_clasificaciones_ia(db_path)
     aprobaciones = obtener_aprobaciones(db_path)
     # Unicos por comment_id (aprobaciones sobrescriben IA)
     combinado = set(clasif_ia.keys()) | set(aprobaciones.keys())
+    if ini is not None and fin is not None:
+        combinado = combinado & _ids_comentarios_en_periodo(db_path, ini, fin)
     n = len(combinado)
     return {
         "clasificados": n,
@@ -313,18 +371,25 @@ def resumen_cobertura_universo(db_path, total_comentarios):
     }
 
 
-def resumen_revision(db_path, total_comentarios=None):
-    """Progreso de revision: con tema, sin tema y (si se da el total) pendientes."""
+def resumen_revision(db_path, total_comentarios=None, ini=None, fin=None):
+    """Progreso de revision: con tema, sin tema y (si se da el total) pendientes.
+
+    `ini`/`fin`, si se dan, restringen las aprobaciones contadas a los
+    comentarios del período (mismo criterio que agregar_por_tema_universo).
+    """
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:
         rows = conn.execute(
-            f"SELECT tema FROM {TABLA} WHERE estado='aprobado'"
+            f"SELECT comment_id, tema FROM {TABLA} WHERE estado='aprobado'"
         ).fetchall()
     finally:
         conn.close()
-    aprobados = sum(1 for (t,) in rows if t and t != "no_aplica")
-    sin_tema = sum(1 for (t,) in rows if t == "no_aplica")
+    if ini is not None and fin is not None:
+        ids_periodo = _ids_comentarios_en_periodo(db_path, ini, fin)
+        rows = [(cid, t) for cid, t in rows if cid in ids_periodo]
+    aprobados = sum(1 for (_, t) in rows if t and t != "no_aplica")
+    sin_tema = sum(1 for (_, t) in rows if t == "no_aplica")
     out = {
         "aprobados": aprobados,
         "sin_tema": sin_tema,

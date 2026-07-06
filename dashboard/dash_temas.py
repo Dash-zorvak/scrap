@@ -17,6 +17,7 @@ import sqlite3
 
 import streamlit as st
 
+from dashboard.dash_fuente import cargar_comentarios_periodo
 from dashboard.dash_inteligencia import (
     cargar_temas_universo,
     sugerir_temas_pendientes_cacheado,
@@ -55,8 +56,20 @@ def _label_postura(clave):
     return _POSTURA_LABELS_UI.get(clave, clave)
 
 
-def _contar_comentarios(db_path):
+def _contar_comentarios(db_path, ini=None, fin=None):
+    """Total de comentarios de Facebook con mensaje no vacío.
+
+    Si se dan `ini`/`fin`, cuenta solo los del período (mismo criterio de
+    fecha que el resto del dashboard, vía dash_fuente.cargar_comentarios_periodo).
+    Sin `ini`/`fin`, cuenta el histórico completo (comportamiento anterior).
+    """
     try:
+        if ini is not None and fin is not None:
+            df = cargar_comentarios_periodo(ini, fin, "Facebook", db_path)
+            if df is None or df.empty:
+                return 0
+            mensajes = df["message"].fillna("").astype(str).str.strip()
+            return int((mensajes != "").sum())
         conn = sqlite3.connect(db_path)
         n = conn.execute(
             "SELECT COUNT(*) FROM fb_comments "
@@ -68,7 +81,7 @@ def _contar_comentarios(db_path):
         return 0
 
 
-def render_temas_emergentes(db_path):
+def render_temas_emergentes(db_path, ini=None, fin=None):
     st.markdown(
         '<div class="section-header"><div class="section-title">06 · Temas Emergentes</div></div>',
         unsafe_allow_html=True,
@@ -82,7 +95,7 @@ def render_temas_emergentes(db_path):
         unsafe_allow_html=True,
     )
 
-    temas = cargar_temas_universo(db_path)
+    temas = cargar_temas_universo(db_path, ini=ini, fin=fin)
 
     if not temas:
         st.markdown(
@@ -137,9 +150,9 @@ def render_temas_emergentes(db_path):
                     unsafe_allow_html=True,
                 )
 
-    total = _contar_comentarios(db_path)
-    res = resumen_revision(db_path, total_comentarios=total)
-    cobertura = resumen_cobertura_universo(db_path, total)
+    total = _contar_comentarios(db_path, ini=ini, fin=fin)
+    res = resumen_revision(db_path, total_comentarios=total, ini=ini, fin=fin)
+    cobertura = resumen_cobertura_universo(db_path, total, ini=ini, fin=fin)
     st.markdown(
         f'<div class="panel" style="margin-top:10px">'
         f'<div class="panel-head"><div class="panel-title">PROGRESO DE REVISIÓN</div>'

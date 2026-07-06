@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "dashboard"))
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import dashboard.llm_groq as lg
 
 
@@ -31,10 +31,12 @@ def test_chat_texto_deepseek_incluye_extra_body_thinking_false(monkeypatch):
     """Test A: modelo DeepSeek → extra_body con thinking=False en la llamada real."""
     mock_client = _mock_openai_client()
     monkeypatch.setattr(lg, "_get_text_client", lambda: mock_client)
-    monkeypatch.setattr(lg, "TEXT_MODEL", "deepseek-ai/deepseek-v4-flash")
 
-    # Llamar a chat_texto con modelo DeepSeek por defecto
-    content, finish_reason, reasoning = lg.chat_texto("prompt de prueba")
+    # Pasar el modelo DeepSeek explícitamente en vez de depender de TEXT_MODEL,
+    # que puede quedar fijado como default en la firma de chat_texto al importar el módulo.
+    content, finish_reason, reasoning = lg.chat_texto(
+        "prompt de prueba", model="deepseek-ai/deepseek-v4-flash"
+    )
 
     # Verificar que la llamada al cliente incluyó extra_body
     call_kwargs = mock_client.chat.completions.create.call_args.kwargs

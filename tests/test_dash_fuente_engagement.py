@@ -6,12 +6,14 @@ Verifica que:
   - ini=None, fin=None devuelve todo el histórico (solo filtrado por plataforma)
   - Un LEFT JOIN sin filas de sentimiento no rompe nada (columnas NaN)
   - Devuelve (df_fb, df_tk) con columnas esperadas
+  - La conexión SQLite se cierra siempre, incluso si pd.read_sql falla
 """
 
 import pandas as pd
 import sqlite3
 import sys
 import os
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "dashboard"))
@@ -169,3 +171,25 @@ class TestCargarEngagementPeriodo:
             "pct_positivo", "pct_negativo", "total_comentarios"
         }
         assert tk_cols.issubset(set(df_tk.columns))
+
+    def test_facebook_conn_siempre_se_cierra_aunque_falle(self, tmp_path):
+        fb = str(tmp_path / "facebook.db")
+        tk = str(tmp_path / "tiktok.db")
+        mock_conn = MagicMock()
+        with patch.object(pd, "read_sql", side_effect=Exception("boom")):
+            with patch("sqlite3.connect", return_value=mock_conn):
+                df_fb, df_tk = cargar_engagement_periodo(INI, FIN, "Facebook", fb_db=fb, tk_db=tk)
+        assert df_fb.empty
+        assert df_tk.empty
+        mock_conn.close.assert_called_once()
+
+    def test_tiktok_conn_siempre_se_cierra_aunque_falle(self, tmp_path):
+        fb = str(tmp_path / "facebook.db")
+        tk = str(tmp_path / "tiktok.db")
+        mock_conn = MagicMock()
+        with patch.object(pd, "read_sql", side_effect=Exception("boom")):
+            with patch("sqlite3.connect", return_value=mock_conn):
+                df_fb, df_tk = cargar_engagement_periodo(INI, FIN, "TikTok", fb_db=fb, tk_db=tk)
+        assert df_fb.empty
+        assert df_tk.empty
+        mock_conn.close.assert_called_once()

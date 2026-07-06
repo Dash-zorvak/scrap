@@ -236,6 +236,7 @@ def cargar_engagement_periodo(ini, fin, plataforma="Ambas", fb_db=None, tk_db=No
     df_tk = pd.DataFrame()
 
     if plat in ("facebook", "ambas"):
+        conn = None
         try:
             conn = sqlite3.connect(fb_db)
             df_fb = pd.read_sql("""
@@ -246,7 +247,6 @@ def cargar_engagement_periodo(ini, fin, plataforma="Ambas", fb_db=None, tk_db=No
                 LEFT JOIN post_categorias pc ON fe.post_id = pc.item_id
                 LEFT JOIN fb_sentimiento fs ON fe.post_id = fs.post_id
             """, conn)
-            conn.close()
             if not df_fb.empty:
                 df_fb["created_time"] = pd.to_datetime(df_fb["created_time"], errors="coerce")
                 if "categoria_nombre" in df_fb.columns:
@@ -256,8 +256,12 @@ def cargar_engagement_periodo(ini, fin, plataforma="Ambas", fb_db=None, tk_db=No
                 df_fb = df_fb.dropna(subset=["created_time"])
         except Exception:
             df_fb = pd.DataFrame()
+        finally:
+            if conn is not None:
+                conn.close()
 
     if plat in ("tiktok", "ambas"):
+        conn = None
         try:
             conn = sqlite3.connect(tk_db)
             df_tk = pd.read_sql("SELECT * FROM tiktok_engagement", conn)
@@ -281,7 +285,6 @@ def cargar_engagement_periodo(ini, fin, plataforma="Ambas", fb_db=None, tk_db=No
                     df_tk = df_tk.drop(columns=["id_str", "video_id"], errors="ignore")
             except Exception:
                 pass
-            conn.close()
             if not df_tk.empty:
                 df_tk["created_at"] = pd.to_datetime(df_tk["created_at"], errors="coerce")
                 if "categoria_nombre" in df_tk.columns:
@@ -291,6 +294,9 @@ def cargar_engagement_periodo(ini, fin, plataforma="Ambas", fb_db=None, tk_db=No
                 df_tk = df_tk.dropna(subset=["created_at"])
         except Exception:
             df_tk = pd.DataFrame()
+        finally:
+            if conn is not None:
+                conn.close()
 
     return df_fb, df_tk
 

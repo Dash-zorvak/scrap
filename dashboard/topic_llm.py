@@ -61,6 +61,10 @@ MAX_REINTENTOS_429 = int(os.environ.get("TOPIC_LLM_REINTENTOS", "5"))
 # Espera por defecto (segundos) si el 429 no dice cuanto esperar.
 ESPERA_429_DEFAULT = float(os.environ.get("TOPIC_LLM_ESPERA_429", "16"))
 
+# Espera corta (segundos) antes de reintentar tras una respuesta vacía del
+# modelo (no es rate limit; no necesita el backoff largo de un 429).
+ESPERA_VACIO_DEFAULT = float(os.environ.get("TOPIC_LLM_ESPERA_VACIO", "2"))
+
 # Cascada de verificacion cruzada. 0 la desactiva.
 CASCADA_ACTIVA = os.environ.get("LLM_CASCADA_ACTIVA", "1") not in ("0", "false", "False", "")
 
@@ -288,13 +292,6 @@ def _clasificar_bloque_llm(textos, model=None, ejemplos=None):
                 prompt, json=True, temperature=0, max_tokens=4096, model=model
             )
             _registrar_tokens(tokens_est)
-            if not raw:
-                logger.warning(
-                    "LLM devolvió contenido vacío: finish_reason=%s, reasoning_content=%s",
-                    finish_reason,
-                    "presente" if reasoning_content else "ausente",
-                )
-            return _parsear_respuesta(raw, textos)
         except Exception as e:
             _registrar_tokens(tokens_est)
             msg = str(e)
@@ -308,6 +305,26 @@ def _clasificar_bloque_llm(textos, model=None, ejemplos=None):
                 ultimo_error = e
                 continue
             raise
+
+        if not raw:
+            logger.warning(
+                "LLM devolvió contenido vacío: finish_reason=%s, reasoning_content=%s",
+                finish_reason,
+                "presente" if reasoning_content else "ausente",
+            )
+            if intento < MAX_REINTENTOS_429:
+                logger.warning(
+                    "Reintentando por respuesta vacía (intento %d/%d); esperando %.1fs",
+                    intento + 1, MAX_REINTENTOS_429, ESPERA_VACIO_DEFAULT,
+                )
+                time.sleep(ESPERA_VACIO_DEFAULT)
+                ultimo_error = ValueError("LLM devolvió contenido vacío")
+                continue
+            ultimo_error = ValueError("LLM devolvió contenido vacío tras agotar reintentos")
+            break
+
+        return _parsear_respuesta(raw, textos)
+
     if ultimo_error:
         raise ultimo_error
     return _fallback_keyword(textos)

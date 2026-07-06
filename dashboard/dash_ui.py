@@ -22,6 +22,7 @@ import pandas as pd
 import streamlit as st
 
 from config import FACEBOOK_DB, TIKTOK_DB
+from dashboard.dash_fuente import tema_por_comentario
 from dashboard.dash_metrics import safe_query
 
 
@@ -264,10 +265,14 @@ def _post_ids_por_categoria(tema):
 def _post_ids_por_tema_comentarios(tema):
     try:
         df = safe_query(
-            "SELECT DISTINCT post_id FROM fb_comments WHERE topic_category = ?",
-            FACEBOOK_DB, params=[str(tema)],
+            "SELECT post_id, topic_category FROM fb_comments",
+            FACEBOOK_DB,
         )
-        return df["post_id"].tolist() if df is not None and not df.empty else []
+        if df is None or df.empty:
+            return []
+        df["_tema"] = tema_por_comentario(df, FACEBOOK_DB)
+        ids = df.loc[df["_tema"] == str(tema), "post_id"].dropna().astype(str).unique().tolist()
+        return ids
     except Exception:
         return []
 

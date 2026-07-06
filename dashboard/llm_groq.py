@@ -128,6 +128,11 @@ JSON_MODE = os.environ.get("LLM_JSON_MODE", "1") not in ("0", "false", "False", 
 _MAX_REINTENTOS = int(os.environ.get("LLM_MAX_REINTENTOS", "3"))
 
 
+def _es_modelo_deepseek(model: str) -> bool:
+    """True si el modelo es de la familia DeepSeek (necesita apagar el modo de razonamiento explícitamente en NIM para no agotar max_tokens pensando)."""
+    return "deepseek" in (model or "").lower()
+
+
 # ── Cliente lazy ──
 
 _cliente: OpenAI | None = None
@@ -415,6 +420,10 @@ def chat_texto(
     }
     if json and JSON_MODE:
         kwargs["response_format"] = {"type": "json_object"}
+
+    # DeepSeek en NIM: apagar razonamiento explícitamente para no agotar max_tokens
+    if _es_modelo_deepseek(kwargs["model"]):
+        kwargs["extra_body"] = {"chat_template_kwargs": {"thinking": False}}
 
     def _call():
         resp = client.chat.completions.create(**kwargs)

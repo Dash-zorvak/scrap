@@ -2,8 +2,6 @@
 import logging
 import pytest
 from unittest.mock import patch, MagicMock
-import json
-
 import dashboard.topic_llm as topic_llm
 from dashboard import llm_groq
 
@@ -13,19 +11,18 @@ def test_clasificar_bloque_llm_logs_empty_content_with_finish_reason_length(capl
     con finish_reason='length'."""
     
     with caplog.at_level(logging.WARNING, logger="topic_llm"):
-        # Mock chat_texto to return empty content with finish_reason="length"
         def mock_chat_texto(prompt, **kwargs):
             return "", "length", None
         
-        with patch("dashboard.llm_groq.chat_texto", mock_chat_texto):
-            with patch("dashboard.llm_groq.groq_disponible", return_value=True):
-                textos = ["comentario de prueba"]
-                # The function will log the warning and then raise JSONDecodeError
-                # when trying to parse the empty response
-                with pytest.raises(json.JSONDecodeError):
-                    topic_llm._clasificar_bloque_llm(textos)
+        with patch("dashboard.llm_groq.chat_texto", mock_chat_texto), \
+             patch("dashboard.llm_groq.groq_disponible", return_value=True), \
+             patch("time.sleep"), \
+             patch("dashboard.topic_llm._esperar_presupuesto"), \
+             patch("dashboard.topic_llm._registrar_tokens"):
+            textos = ["comentario de prueba"]
+            with pytest.raises(ValueError, match="vacío"):
+                topic_llm._clasificar_bloque_llm(textos)
     
-    # Verify the warning was logged with finish_reason and reasoning_content info
     assert len(caplog.records) >= 1
     warning_msg = caplog.records[0].message
     assert "LLM devolvió contenido vacío" in warning_msg
@@ -38,18 +35,18 @@ def test_clasificar_bloque_llm_logs_empty_content_with_finish_reason_stop(caplog
     con finish_reason='stop'."""
     
     with caplog.at_level(logging.WARNING, logger="topic_llm"):
-        # Mock chat_texto to return empty content with finish_reason="stop"
         def mock_chat_texto(prompt, **kwargs):
             return "", "stop", "algun razonamiento"
         
-        with patch("dashboard.llm_groq.chat_texto", mock_chat_texto):
-            with patch("dashboard.llm_groq.groq_disponible", return_value=True):
-                textos = ["comentario de prueba"]
-                # The function will log the warning and then raise JSONDecodeError
-                with pytest.raises(json.JSONDecodeError):
-                    topic_llm._clasificar_bloque_llm(textos)
+        with patch("dashboard.llm_groq.chat_texto", mock_chat_texto), \
+             patch("dashboard.llm_groq.groq_disponible", return_value=True), \
+             patch("time.sleep"), \
+             patch("dashboard.topic_llm._esperar_presupuesto"), \
+             patch("dashboard.topic_llm._registrar_tokens"):
+            textos = ["comentario de prueba"]
+            with pytest.raises(ValueError, match="vacío"):
+                topic_llm._clasificar_bloque_llm(textos)
     
-    # Verify the warning was logged with finish_reason and reasoning_content info
     assert len(caplog.records) >= 1
     warning_msg = caplog.records[0].message
     assert "LLM devolvió contenido vacío" in warning_msg

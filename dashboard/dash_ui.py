@@ -22,8 +22,16 @@ import pandas as pd
 import streamlit as st
 
 from dashboard.config import FACEBOOK_DB, TIKTOK_DB
-from dashboard.dash_fuente import tema_por_comentario
-from dashboard.dash_metrics import safe_query
+
+
+def safe_query(query: str, db_path: str, params=None) -> pd.DataFrame:
+    if not os.path.exists(db_path):
+        return pd.DataFrame()
+    try:
+        with sqlite3.connect(db_path) as conn:
+            return pd.read_sql_query(query, conn, params=params)
+    except Exception:
+        return pd.DataFrame()
 
 
 def _es_solo_tiktok(plataforma):
@@ -265,35 +273,12 @@ def _post_ids_por_categoria(tema):
         return []
 
 
-def _post_ids_por_tema_comentarios(tema):
-    try:
-        df = safe_query(
-            "SELECT post_id, topic_category FROM fb_comments",
-            FACEBOOK_DB,
-        )
-        if df is None or df.empty:
-            return []
-        df["_tema"] = tema_por_comentario(df, FACEBOOK_DB)
-        ids = df.loc[df["_tema"] == str(tema), "post_id"].dropna().astype(str).unique().tolist()
-        return ids
-    except Exception:
-        return []
-
-
 def referencias_por_categoria(tema, limit=8, plataforma=None):
     if _es_solo_tiktok(plataforma):
         return
     ids = _post_ids_por_categoria(tema)
     if ids:
         referencias_publicaciones(post_ids=ids, limit=limit, titulo="Referencias a los post sobre " + str(tema).lower() + ", verifica el post", plataforma=plataforma)
-
-
-def referencias_por_tema_comentarios(tema, limit=6, plataforma=None):
-    if _es_solo_tiktok(plataforma):
-        return
-    ids = _post_ids_por_tema_comentarios(tema)
-    if ids:
-        referencias_publicaciones(post_ids=ids, limit=limit, titulo="PUBLICACIONES DE «" + str(tema) + "»", plataforma=plataforma)
 
 
 def render_notas_metodologicas():

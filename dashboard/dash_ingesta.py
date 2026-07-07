@@ -9,8 +9,6 @@ Facebook (extraccion, revision y confirmacion).
 import streamlit as st
 import pandas as pd
 import uuid
-import os
-import sqlite3
 from datetime import datetime, date
 
 from dashboard.config import (
@@ -18,7 +16,6 @@ from dashboard.config import (
     FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB,
 )
 from dashboard.guardar_lote import guardar_lote
-from dashboard.procesar_lote import procesar_pipeline
 from dashboard.externos_store import listar_paginas_externas, agregar_pagina_externa
 
 
@@ -624,50 +621,4 @@ def seccion_cargar_contenido():
     if guardados:
         st.info(f"✅ {len(guardados)} post(s) ya guardados en la base de datos.")
 
-    # ── Procesamiento del pipeline (Fase 5) ──
-    st.markdown("### ⚙️ Procesar lote (reconstruir análisis)")
-    st.caption("Reconstruye las tablas agregadas (sentimiento, categorías, engagement, series) a partir de los datos guardados.")
 
-    _check_hay_datos = False
-    for db, tabla in [(FACEBOOK_DB_ACTIVA, "fb_posts"), (TIKTOK_DB_ACTIVA, "videos")]:
-        if os.path.exists(db):
-            try:
-                with sqlite3.connect(db) as conn:
-                    c = pd.read_sql(f"SELECT COUNT(*) as c FROM {tabla}", conn).iloc[0]['c']
-                    if c > 0:
-                        _check_hay_datos = True
-                        break
-            except Exception:
-                pass
-    if not _check_hay_datos:
-        st.warning("No hay datos guardados. Haz primero la ingesta/guardado.")
-
-    if st.button("⚙️ Procesar lote (reconstruir análisis)", type="primary", disabled=not _check_hay_datos):
-        status = st.status("Iniciando pipeline…", expanded=True)
-        def _progreso(paso, total, etiqueta):
-            status.update(label=f"Paso {paso}/{total}: {etiqueta}")
-        result = procesar_pipeline(_progreso)
-        st.session_state["ultimo_procesamiento"] = result
-        st.cache_data.clear()
-        if result["errores"]:
-            status.update(label="Pipeline con errores", state="error", expanded=True)
-        else:
-            status.update(label="Pipeline completado", state="complete", expanded=False)
-        st.rerun()
-    result = st.session_state.get("ultimo_procesamiento")
-    if result:
-        motor = result["motor_sentimiento"]
-        if result["errores"]:
-            st.error("❌ Pipeline completado con errores:")
-            for err in result["errores"]:
-                st.error(f"  • {err}")
-        else:
-            st.success("✅ Pipeline completado sin errores.")
-        if motor == "bert":
-            st.info("🧠 Sentimiento analizado con BERT local (modelo principal).")
-        elif motor == "groq":
-            st.warning("⚠️ BERT no se pudo cargar; se usó Groq como respaldo.")
-        else:
-            st.warning("⚠️ Ni BERT ni Groq disponibles; se usó clasificador de reglas (último recurso).")
-        if result["pasos_ok"]:
-            st.info(f"✅ Pasos completados: {', '.join(result['pasos_ok'])}")

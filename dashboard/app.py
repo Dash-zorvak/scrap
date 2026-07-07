@@ -9,8 +9,8 @@ import os
 import streamlit as st
 from datetime import datetime
 
-from dashboard.estilos import CSS
-from dashboard.estilos_override import CSS_OVERRIDE
+from estilos import CSS
+from estilos_override import CSS_OVERRIDE
 
 # ── Ruta al JSON de análisis ──────────────────────────────────────────
 _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

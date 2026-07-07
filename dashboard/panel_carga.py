@@ -70,7 +70,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 tab_carga, tab_editor, tab_aprobar = st.tabs([
-    "📥 Cargar contenido", "🛠️ Editar base de datos / Medalla", "✅ Aprobar temas"
+    "📥 Cargar contenido", "🛠️ Editar base de datos", "✅ Aprobar temas"
 ])
 with tab_carga:
     seccion_cargar_contenido()

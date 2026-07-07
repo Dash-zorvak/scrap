@@ -1,17 +1,11 @@
-"""Persistencia de aprobaciones manuales de temas + aprendizaje (few-shot).
+"""Persistencia de aprobaciones manuales de temas.
 
 Guarda, por comentario (comment_id de fb_comments), el tema que el usuario
-APROBO manualmente y su POSTURA (apoyo/critica/neutral). La IA solo sugiere;
-nada cuenta en las tarjetas de Temas Emergentes hasta que el usuario lo aprueba
-aqui.
+APROBO manualmente y su POSTURA (apoyo/critica/neutral).
 
 La postura es un eje SEPARADO del tema (ver dashboard/tema_taxonomia.py): permite
 que la tarjeta de cada tema se divida en apoyo / critica / neutral y que una
 critica NO se cuente como impulso positivo del tema.
-
-"Aprendizaje" sin reentrenar y con presupuesto 0: las aprobaciones se reusan
-como ejemplos validados (few-shot) que se inyectan al prompt del modelo. Cuantas
-mas apruebes, mas se alinea la sugerencia con tu criterio.
 
 Modulo puro de datos (sqlite + stdlib), sin Streamlit, para que sea verificable
 en CI.
@@ -29,7 +23,6 @@ from dashboard.tema_taxonomia import (
     normalizar_postura,
     remapear,
 )
-from dashboard.tema_clasificaciones_ia import obtener_clasificaciones_ia
 
 TABLA = "tema_aprobaciones"
 
@@ -268,109 +261,6 @@ def agregar_por_tema(db_path):
     return temas
 
 
-def agregar_por_tema_universo(db_path, ini=None, fin=None):
-    """Agrega comentarios por tema combinando IA + aprobaciones manuales.
-
-    Universo = clasificaciones IA (base) + aprobaciones manuales (sobrescribe).
-    La aprobacion manual es control de calidad y tiene prioridad.
-    Comentarios sin ninguna clasificacion quedan fuera del conteo.
-    Excluye 'no_aplica'. Devuelve lista de dicts igual que agregar_por_tema.
-
-    `ini`/`fin`, si se dan, restringen el universo a los comentarios cuyo post
-    cae en ese rango (mismo criterio que el resto del dashboard). `ini=None`
-    o `fin=None` => sin filtro de período (acumulado histórico completo).
-    """
-    asegurar_tabla(db_path)
-    # Base: clasificaciones IA
-    clasif_ia = obtener_clasificaciones_ia(db_path)
-    # Override: aprobaciones manuales (prioridad)
-    aprobaciones = obtener_aprobaciones(db_path)
-
-    # Combinar: IA primero, luego aprobaciones sobrescriben
-    combinado = {}
-    for cid, data in clasif_ia.items():
-        combinado[cid] = data
-    for cid, data in aprobaciones.items():
-        combinado[cid] = data  # sobrescribe
-
-    if ini is not None and fin is not None:
-        ids_periodo = _ids_comentarios_en_periodo(db_path, ini, fin)
-        combinado = {cid: data for cid, data in combinado.items() if cid in ids_periodo}
-
-    conteo = defaultdict(int)
-    posturas = defaultdict(lambda: {"apoyo": 0, "critica": 0, "neutral": 0})
-    ejemplos = {}
-    ejemplos_critica = {}
-    total_con_tema = 0
-    for cid, data in combinado.items():
-        tema = data.get("tema")
-        texto = data.get("texto", "")
-        postura = data.get("postura", "neutral")
-        if not tema or tema == "no_aplica":
-            continue
-        post = normalizar_postura(postura)
-        conteo[tema] += 1
-        posturas[tema][post] += 1
-        total_con_tema += 1
-        limpio = " ".join((texto or "").split())
-        prev = ejemplos.get(tema)
-        if limpio and (prev is None or 15 <= len(limpio) < len(prev)):
-            ejemplos[tema] = limpio
-        if post == "critica" and limpio:
-            prev_c = ejemplos_critica.get(tema)
-            if prev_c is None or 15 <= len(limpio) < len(prev_c):
-                ejemplos_critica[tema] = limpio
-
-    temas = []
-    for i, (tema, n) in enumerate(conteo.items()):
-        ej = ejemplos.get(tema, "")
-        if len(ej) > 120:
-            ej = ej[:117] + "..."
-        ej_c = ejemplos_critica.get(tema, "")
-        if len(ej_c) > 120:
-            ej_c = ej_c[:117] + "..."
-        pst = posturas[tema]
-        temas.append({
-            "id": i + 1,
-            "categoria": tema,
-            "label": etiqueta_tema(tema),
-            "pct": round(n / total_con_tema * 100, 1) if total_con_tema else 0.0,
-            "doc_count": n,
-            "ejemplo": ej,
-            "apoyo": pst["apoyo"],
-            "critica": pst["critica"],
-            "neutral": pst["neutral"],
-            "pct_apoyo": round(pst["apoyo"] / n * 100, 1) if n else 0.0,
-            "pct_critica": round(pst["critica"] / n * 100, 1) if n else 0.0,
-            "pct_neutral": round(pst["neutral"] / n * 100, 1) if n else 0.0,
-            "saldo": pst["apoyo"] - pst["critica"],
-            "ejemplo_critica": ej_c,
-        })
-    temas.sort(key=lambda x: -x["doc_count"])
-    return temas
-
-
-def resumen_cobertura_universo(db_path, total_comentarios, ini=None, fin=None):
-    """Resumen de cobertura del universo (IA + manual).
-
-    `ini`/`fin`, si se dan, restringen a los comentarios del período (mismo
-    criterio que agregar_por_tema_universo).
-    Devuelve {"clasificados": n, "total_comentarios": total, "sin_clasificar": total-n}.
-    """
-    clasif_ia = obtener_clasificaciones_ia(db_path)
-    aprobaciones = obtener_aprobaciones(db_path)
-    # Unicos por comment_id (aprobaciones sobrescriben IA)
-    combinado = set(clasif_ia.keys()) | set(aprobaciones.keys())
-    if ini is not None and fin is not None:
-        combinado = combinado & _ids_comentarios_en_periodo(db_path, ini, fin)
-    n = len(combinado)
-    return {
-        "clasificados": n,
-        "total_comentarios": total_comentarios,
-        "sin_clasificar": max(0, total_comentarios - n),
-    }
-
-
 def resumen_revision(db_path, total_comentarios=None, ini=None, fin=None):
     """Progreso de revision: con tema, sin tema y (si se da el total) pendientes.
 
@@ -401,31 +291,4 @@ def resumen_revision(db_path, total_comentarios=None, ini=None, fin=None):
     return out
 
 
-def ejemplos_few_shot(db_path, por_tema=3, max_total=24):
-    """Muestra balanceada de aprobaciones para ensenar al modelo (few-shot).
 
-    Hasta `por_tema` ejemplos por categoria (incluido 'no_aplica', util para que
-    el modelo aprenda que NO es un tema), con tope global `max_total`. Cada item:
-    {"texto", "tema"}. Orden determinista para que sea testeable.
-    """
-    asegurar_tabla(db_path)
-    conn = _conectar(db_path)
-    try:
-        rows = conn.execute(
-            f"SELECT tema, texto FROM {TABLA} "
-            f"WHERE estado='aprobado' AND texto IS NOT NULL AND texto != ''"
-        ).fetchall()
-    finally:
-        conn.close()
-
-    por_cat = defaultdict(list)
-    for tema, texto in rows:
-        t = " ".join((texto or "").split())
-        if t and tema:
-            por_cat[tema].append(t)
-
-    salida = []
-    for tema in sorted(por_cat.keys()):
-        for t in sorted(por_cat[tema])[:por_tema]:
-            salida.append({"texto": t[:200], "tema": tema})
-    return salida[:max_total]

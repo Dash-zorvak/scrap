@@ -39,6 +39,10 @@ import pandas as pd
 from dashboard.dash_periodos import filtrar_por_fecha
 
 
+COLUMNAS_REQUERIDAS_FACEBOOK = ["score_emocional", "indice_enojo", "total_reacciones"]
+COLUMNAS_REQUERIDAS_TIKTOK = ["pct_positivo", "pct_negativo", "total_comentarios"]
+
+
 def _norm_plataforma(plataforma):
     p = str(plataforma or "ambas").strip().lower()
     if p.startswith("face") or p == "fb":
@@ -57,7 +61,7 @@ def emocional_facebook(df_fb):
     if df_fb is None or df_fb.empty:
         return None
     # Asegurar columnas necesarias
-    req = ["score_emocional", "indice_enojo", "total_reacciones"]
+    req = COLUMNAS_REQUERIDAS_FACEBOOK
     for c in req:
         if c not in df_fb.columns:
             return None
@@ -86,7 +90,7 @@ def emocional_tiktok(df_tk):
     """
     if df_tk is None or df_tk.empty:
         return None
-    req = ["pct_positivo", "pct_negativo", "total_comentarios"]
+    req = COLUMNAS_REQUERIDAS_TIKTOK
     for c in req:
         if c not in df_tk.columns:
             return None

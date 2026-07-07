@@ -230,6 +230,12 @@ def cargar_externos(db_path):
     return posts
 
 
+COLUMNAS_REQUERIDAS_CONTAGIO = [
+    "post_id", "created_time", "score_emocional", "score_sentimiento",
+    "pct_positivo", "pct_negativo", "categoria_nombre", "message",
+]
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def calcular_contagio_emocional(df_fb):
     """Pure transformation: recibe df_fb ya cargado y filtrado (con columnas:
@@ -243,8 +249,7 @@ def calcular_contagio_emocional(df_fb):
         return pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame()
 
     # Asegurar columnas necesarias
-    req = ["post_id", "created_time", "score_emocional", "score_sentimiento",
-           "pct_positivo", "pct_negativo", "categoria_nombre", "message"]
+    req = COLUMNAS_REQUERIDAS_CONTAGIO
     for c in req:
         if c not in df_fb.columns:
             return pd.DataFrame(), {}, pd.DataFrame(), pd.DataFrame()

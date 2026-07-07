@@ -14,6 +14,8 @@ logger = logging.getLogger("sentimiento")
 ULTIMO_ERROR_BERT = None
 ULTIMO_ERROR_GROQ = None
 _BERT_FALLO = False
+_BERT_FALLO_TS = 0.0
+BERT_RETRY_COOLDOWN_S = int(os.environ.get("BERT_RETRY_COOLDOWN_S", "600"))
 
 BERT_LOAD_TIMEOUT_S = int(os.environ.get("BERT_LOAD_TIMEOUT_S", "120"))
 
@@ -227,12 +229,13 @@ def clasificar_lote(textos):
 
     def _intentar_bert():
         nonlocal motor, resultados_non_empty
-        global _BERT_FALLO, ULTIMO_ERROR_BERT
+        global _BERT_FALLO, _BERT_FALLO_TS, ULTIMO_ERROR_BERT
         bert_ok = False
         bert_resultados = None
         carga_ok = [False]
         carga_exception = [None]
-        timeout = 1 if _BERT_FALLO else BERT_LOAD_TIMEOUT_S
+        cooldown_pasado = (time.time() - _BERT_FALLO_TS) >= BERT_RETRY_COOLDOWN_S
+        timeout = BERT_LOAD_TIMEOUT_S if (not _BERT_FALLO or cooldown_pasado) else 1
 
         def _load_bert():
             try:
@@ -247,11 +250,13 @@ def clasificar_lote(textos):
 
         if not carga_ok[0]:
             _BERT_FALLO = True
+            _BERT_FALLO_TS = time.time()
             exc = carga_exception[0]
             ULTIMO_ERROR_BERT = repr(exc) if exc else "timeout"
             logger.warning("BERT carga falló: %s", ULTIMO_ERROR_BERT)
             return False
 
+        _BERT_FALLO = False
         try:
             bert_resultados = _clasificar_bert(non_empty_texts)
             bert_ok = True

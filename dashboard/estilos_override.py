@@ -30,15 +30,15 @@ CSS_OVERRIDE = """
 .stMarkdown td, .stMarkdown th { font-size: var(--fs-body) !important; }
 
 /* Subir el piso de los textos diminutos (overlines, metadatos, etiquetas). */
-.overline, .panel-meta, .sys-section-label, .doc-meta, .topbar-meta,
-.bloom-caption, .ref-meta, .nota-metodologica, .que-ves-box {
+.panel-meta, .sys-section-label, .doc-meta, .topbar-meta,
+.exec-caption, .wys-text {
   font-size: var(--fs-meta) !important;
   letter-spacing: 0.4px !important;
 }
 
 /* Titulos de seccion y de pagina. */
-.page-title, .block-title, h1, h2 { font-size: var(--fs-h-lg) !important; }
-.page-sub, .block-sub, h3 { font-size: var(--fs-h-md) !important; }
+h1, h2 { font-size: var(--fs-h-lg) !important; }
+.page-sub, h3 { font-size: var(--fs-h-md) !important; }
 
 /* Metricas / KPIs destacados. */
 .kpi-value, .metric-value, [data-testid=\"stMetricValue\"] {

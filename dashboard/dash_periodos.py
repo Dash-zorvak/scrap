@@ -12,9 +12,20 @@ semana" = los ultimos 7 dias con datos) porque las ventanas de calendario muy
 cortas dejaban tramos sin comentarios y arruinaban los porcentajes.
 """
 
+import logging
+import os
 from datetime import datetime, timedelta
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+_CORTE_RAW = os.environ.get("DASHBOARD_FECHA_CORTE_MINIMA", "2020-01-01")
+try:
+    DASHBOARD_FECHA_CORTE_MINIMA = datetime.strptime(_CORTE_RAW, "%Y-%m-%d")
+except (ValueError, TypeError):
+    DASHBOARD_FECHA_CORTE_MINIMA = datetime(2020, 1, 1, 0, 0, 0)
+    logger.warning("DASHBOARD_FECHA_CORTE_MINIMA inválida '%s', usando 2020-01-01", _CORTE_RAW)
 
 # Opciones oficiales (mismas que el panel usaba originalmente).
 OPCIONES_PERIODO = [
@@ -73,7 +84,7 @@ def rango_periodo(periodo, fecha_ref=None, fecha_desde=None, fecha_hasta=None):
     if periodo == "Ultimos 3 meses":
         return _inicio_dia(ref - timedelta(days=89)), fin
     if periodo == "Todo el periodo":
-        return datetime(2020, 1, 1, 0, 0, 0), fin
+        return DASHBOARD_FECHA_CORTE_MINIMA, fin
 
     # --- Compatibilidad con nombres antiguos (no se muestran en el panel) ---
     if periodo == "Hoy":
@@ -97,7 +108,7 @@ def rango_periodo(periodo, fecha_ref=None, fecha_desde=None, fecha_hasta=None):
         return _inicio_dia(d), _fin_dia(h)
 
     # Por defecto: todo el historial.
-    return datetime(2020, 1, 1, 0, 0, 0), fin
+    return DASHBOARD_FECHA_CORTE_MINIMA, fin
 
 
 def filtrar_por_fecha(df, col, inicio, fin):

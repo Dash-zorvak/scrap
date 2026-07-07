@@ -471,8 +471,8 @@ def distribucion_sentimiento(df, plataforma="Ambas", db_path=None, tk_db_path=No
         pf, pn, pc = pcts
 
     pf = round(pf, 1)
-    pn = round(pn, 1)
     pc = round(pc, 1)
+    pn = round(max(0.0, 100.0 - pf - pc), 1)
     nf = int(round(n * pf / 100))
     nc = int(round(n * pc / 100))
     nn = max(0, n - nf - nc)

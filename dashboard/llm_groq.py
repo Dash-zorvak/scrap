@@ -136,14 +136,16 @@ def _es_modelo_deepseek(model: str) -> bool:
 # ── Cliente lazy ──
 
 _cliente: OpenAI | None = None
+_cliente_api_key: str | None = None
+_cliente_base_url: str | None = None
 _cliente_texto: OpenAI | None = None
+_cliente_texto_api_key: str | None = None
+_cliente_texto_base_url: str | None = None
 
 
 def _get_groq_client() -> OpenAI | None:
     """Cliente principal (visión y, por defecto, texto). Usa el endpoint NVIDIA."""
-    global _cliente
-    if _cliente is not None:
-        return _cliente
+    global _cliente, _cliente_api_key, _cliente_base_url
 
     api_key = _primer_env("LLM_API_KEY", "NVIDIA_API_KEY", "GROQ_API_KEY")
     if not api_key:
@@ -165,9 +167,19 @@ def _get_groq_client() -> OpenAI | None:
         "LLM_BASE_URL", "GROQ_BASE_URL",
         default="https://integrate.api.nvidia.com/v1",
     )
+
+    if (
+        _cliente is not None
+        and _cliente_api_key == api_key
+        and _cliente_base_url == base_url
+    ):
+        return _cliente
+
     _cliente = OpenAI(
         api_key=api_key, base_url=base_url, timeout=90.0, max_retries=0
     )
+    _cliente_api_key = api_key
+    _cliente_base_url = base_url
     return _cliente
 
 
@@ -179,9 +191,7 @@ def _get_text_client() -> OpenAI | None:
     específica de texto (LLM_TEXT_API_KEY / OPENCODE_API_KEY / LLM_TEXT_BASE_URL),
     reutiliza el cliente principal y conserva el comportamiento anterior.
     """
-    global _cliente_texto
-    if _cliente_texto is not None:
-        return _cliente_texto
+    global _cliente_texto, _cliente_texto_api_key, _cliente_texto_base_url
 
     text_key = _primer_env("LLM_TEXT_API_KEY", "OPENCODE_API_KEY")
     text_base = _primer_env("LLM_TEXT_BASE_URL")
@@ -205,11 +215,20 @@ def _get_text_client() -> OpenAI | None:
     if not api_key:
         return _get_groq_client()
 
-    # Si hay key de OpenCode y no se define base, usa el endpoint de Zen.
     base_url = text_base or "https://opencode.ai/zen/v1"
+
+    if (
+        _cliente_texto is not None
+        and _cliente_texto_api_key == api_key
+        and _cliente_texto_base_url == base_url
+    ):
+        return _cliente_texto
+
     _cliente_texto = OpenAI(
         api_key=api_key, base_url=base_url, timeout=90.0, max_retries=0
     )
+    _cliente_texto_api_key = api_key
+    _cliente_texto_base_url = base_url
     return _cliente_texto
 
 

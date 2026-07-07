@@ -49,16 +49,33 @@ def analizar_sentimiento_facebook(db_path=None):
     )
     conn.close()
 
-    # Incremental: omitir comentarios de posts que YA tienen sentimiento calculado.
-    procesados = _ids_ya_procesados(db_path, "fb_sentimiento", "post_id")
-    if procesados:
+    # D23: incremental por COMENTARIO, no por post completo. Antes, un post con
+    # UNA sola fila en fb_sentimiento quedaba excluido para siempre del
+    # recalculo, aunque llegaran comentarios nuevos en una carga posterior.
+    # Ahora se salta unicamente los comentarios que ya tienen sentimiento
+    # calculado (fb_comments.sentiment), sin importar el estado de su post.
+    conn_chk = sqlite3.connect(db_path)
+    cur_chk = conn_chk.cursor()
+    cols_chk = {row[1] for row in cur_chk.execute("PRAGMA table_info(fb_comments)").fetchall()}
+    if "sentiment" not in cols_chk:
+        cur_chk.execute("ALTER TABLE fb_comments ADD COLUMN sentiment TEXT")
+    if "sentiment_score" not in cols_chk:
+        cur_chk.execute("ALTER TABLE fb_comments ADD COLUMN sentiment_score REAL")
+    conn_chk.commit()
+    ya_clasificados = {
+        r[0] for r in cur_chk.execute(
+            "SELECT comment_id FROM fb_comments WHERE sentiment IS NOT NULL"
+        ).fetchall()
+    }
+    conn_chk.close()
+    if ya_clasificados:
         antes = len(df)
-        df = df[~df["post_id"].isin(procesados)].copy()
-        print(f"  Incremental: {antes - len(df)} comentarios de posts ya analizados se omiten")
+        df = df[~df["comment_id"].isin(ya_clasificados)].copy()
+        print(f"  Incremental: {antes - len(df)} comentarios ya clasificados se omiten")
 
     total_raw = len(df)
     if total_raw == 0:
-        print("  Sin posts nuevos que analizar (Facebook)")
+        print("  Sin comentarios nuevos que analizar (Facebook)")
         return pd.DataFrame(), "reglas"
 
     df["texto_limpio"] = df["message"].apply(limpiar_texto)
@@ -68,7 +85,7 @@ def analizar_sentimiento_facebook(db_path=None):
     print(f"  ({total_raw} comentarios nuevos → {len(df)} para análisis)")
 
     if df.empty:
-        print("  Sin comentarios analizables en los posts nuevos")
+        print("  Sin comentarios analizables en los comentarios nuevos")
         return pd.DataFrame(), "reglas"
 
     resultados = []
@@ -89,13 +106,39 @@ def analizar_sentimiento_facebook(db_path=None):
 
     df_res = pd.DataFrame(resultados)
 
+    # Persistir el sentimiento por comentario ANTES de recalcular agregados:
+    # es la base de la incrementalidad por comentario (D23) y le da a
+    # Facebook paridad con TikTok (_persistir_sentimiento_comentarios_tiktok).
+    _persistir_sentimiento_comentarios_facebook(db_path, df_res)
+
     total = len(df_res)
     for label in ["POS", "NEG", "NEU"]:
         pct = (df_res["label"] == label).sum() / total * 100
         print(f"    {label}: {pct:.1f}%")
 
+    # D23: el agregado por post debe reflejar TODOS sus comentarios ya
+    # clasificados (viejos + nuevos), no solo los clasificados en esta
+    # corrida — si no, un post con comentarios viejos + nuevos quedaria con
+    # un porcentaje calculado solo sobre los nuevos.
+    post_ids_afectados = sorted(set(df_res["post_id"]))
+    placeholders = ",".join("?" for _ in post_ids_afectados)
+    conn_full = sqlite3.connect(db_path)
+    df_full = pd.read_sql_query(
+        f"""
+        SELECT comment_id, post_id, message, sentiment AS etiqueta_es,
+               sentiment_score AS score_con_signo
+        FROM fb_comments
+        WHERE post_id IN ({placeholders}) AND sentiment IS NOT NULL
+        """,
+        conn_full,
+        params=post_ids_afectados,
+    )
+    conn_full.close()
+    _map_inv = {"positivo": "POS", "negativo": "NEG", "neutral": "NEU"}
+    df_full["label"] = df_full["etiqueta_es"].map(_map_inv).fillna("NEU")
+    df_full["score"] = df_full["score_con_signo"].abs()
+
     def _top_comment_by_neg(group):
-        idx = group["label"].value_counts().get("NEG", 0)
         neg_rows = group[group["label"] == "NEG"]
         if not neg_rows.empty:
             top = neg_rows.loc[neg_rows["score"].idxmax()]
@@ -109,23 +152,34 @@ def analizar_sentimiento_facebook(db_path=None):
             return top["message"][:200]
         return ""
 
-    agrupado = df_res.groupby("post_id").agg(
+    agrupado = df_full.groupby("post_id").agg(
         total_comentarios=("comment_id", "count"),
         pct_positivo=("label", lambda x: (x == "POS").sum() / max(len(x), 1) * 100),
         pct_negativo=("label", lambda x: (x == "NEG").sum() / max(len(x), 1) * 100),
         pct_neutral=("label", lambda x: (x == "NEU").sum() / max(len(x), 1) * 100),
-        comentario_mas_negativo=("post_id", lambda pid: _top_comment_by_neg(df_res[df_res["post_id"] == pid.iloc[0]])),
-        comentario_mas_positivo=("post_id", lambda pid: _top_comment_by_pos(df_res[df_res["post_id"] == pid.iloc[0]])),
+        comentario_mas_negativo=("post_id", lambda pid: _top_comment_by_neg(df_full[df_full["post_id"] == pid.iloc[0]])),
+        comentario_mas_positivo=("post_id", lambda pid: _top_comment_by_pos(df_full[df_full["post_id"] == pid.iloc[0]])),
     ).reset_index()
 
     agrupado["score_sentimiento"] = agrupado["pct_positivo"] - agrupado["pct_negativo"]
 
-    # Append: se anaden SOLO los posts nuevos; los anteriores se conservan.
-    conn = sqlite3.connect(db_path)
-    agrupado.to_sql("fb_sentimiento", conn, if_exists="append", index=False)
-    conn.close()
+    # D23: upsert real en vez de append puro — los posts que YA tenian fila en
+    # fb_sentimiento se reemplazan con el agregado recalculado (que ahora
+    # incluye sus comentarios nuevos), en vez de quedar congelados o
+    # duplicados.
+    conn_up = sqlite3.connect(db_path)
+    try:
+        conn_up.execute(
+            f"DELETE FROM fb_sentimiento WHERE post_id IN ({placeholders})",
+            post_ids_afectados,
+        )
+    except sqlite3.OperationalError:
+        pass  # la tabla fb_sentimiento aun no existe en la primera corrida
+    agrupado.to_sql("fb_sentimiento", conn_up, if_exists="append", index=False)
+    conn_up.commit()
+    conn_up.close()
 
-    print(f"  Posts nuevos agrupados: {len(agrupado)}")
+    print(f"  Posts actualizados (nuevos o con comentarios nuevos): {len(agrupado)}")
     return agrupado, motor_usado
 
 
@@ -183,6 +237,55 @@ def _persistir_sentimiento_comentarios_tiktok(db_path, df_res):
             conn.close()
 
 
+def _persistir_sentimiento_comentarios_facebook(db_path, df_res):
+    """Persiste el sentimiento por comentario en fb_comments.sentiment/sentiment_score.
+
+    Le da a Facebook la misma granularidad por comentario que ya tiene TikTok
+    (ver _persistir_sentimiento_comentarios_tiktok) y es la base de la
+    incrementalidad por comentario del fix de D23: permite saber exactamente
+    que comentarios ya fueron clasificados sin depender de si el post_id ya
+    tiene o no una fila en fb_sentimiento.
+    """
+    if df_res is None or df_res.empty or "comment_id" not in df_res.columns:
+        return
+    _map = {"POS": "positivo", "NEG": "negativo", "NEU": "neutral"}
+    filas = []
+    for _, r in df_res.iterrows():
+        label = str(r.get("label", "NEU"))
+        etiqueta = _map.get(label, "neutral")
+        try:
+            mag = abs(float(r.get("score", 0)))
+        except (TypeError, ValueError):
+            mag = 0.0
+        if label == "POS":
+            score = mag
+        elif label == "NEG":
+            score = -mag
+        else:
+            score = 0.0
+        filas.append((etiqueta, score, r.get("comment_id")))
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cols = {row[1] for row in cur.execute("PRAGMA table_info(fb_comments)").fetchall()}
+        if "sentiment" not in cols:
+            cur.execute("ALTER TABLE fb_comments ADD COLUMN sentiment TEXT")
+        if "sentiment_score" not in cols:
+            cur.execute("ALTER TABLE fb_comments ADD COLUMN sentiment_score REAL")
+        cur.executemany(
+            "UPDATE fb_comments SET sentiment = ?, sentiment_score = ? WHERE comment_id = ?",
+            filas,
+        )
+        conn.commit()
+        print(f"  Sentimiento por comentario Facebook persistido: {len(filas)} filas")
+    except Exception as e:
+        print(f"  Aviso: no se pudo persistir sentimiento por comentario Facebook: {e}")
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def analizar_sentimiento_tiktok(db_path=None):
     if db_path is None:
         db_path = TIKTOK_DB
@@ -193,16 +296,32 @@ def analizar_sentimiento_tiktok(db_path=None):
     )
     conn.close()
 
-    # Incremental: omitir comentarios de videos que YA tienen sentimiento calculado.
-    procesados = _ids_ya_procesados(db_path, "tiktok_sentimiento", "video_id")
-    if procesados:
+    # D23: incremental por COMENTARIO, no por video completo (mismo fix que
+    # Facebook). Se reutiliza comments.sentiment, que ya existia gracias a
+    # _persistir_sentimiento_comentarios_tiktok, pero antes solo se llenaba
+    # para videos nunca vistos.
+    conn_chk = sqlite3.connect(db_path)
+    cur_chk = conn_chk.cursor()
+    cols_chk = {row[1] for row in cur_chk.execute("PRAGMA table_info(comments)").fetchall()}
+    if "sentiment" not in cols_chk:
+        cur_chk.execute("ALTER TABLE comments ADD COLUMN sentiment TEXT")
+    if "sentiment_score" not in cols_chk:
+        cur_chk.execute("ALTER TABLE comments ADD COLUMN sentiment_score REAL")
+    conn_chk.commit()
+    ya_clasificados = {
+        r[0] for r in cur_chk.execute(
+            "SELECT id FROM comments WHERE sentiment IS NOT NULL"
+        ).fetchall()
+    }
+    conn_chk.close()
+    if ya_clasificados:
         antes = len(df)
-        df = df[~df["video_id"].isin(procesados)].copy()
-        print(f"  Incremental: {antes - len(df)} comentarios de videos ya analizados se omiten")
+        df = df[~df["comment_id"].isin(ya_clasificados)].copy()
+        print(f"  Incremental: {antes - len(df)} comentarios ya clasificados se omiten")
 
     total_raw = len(df)
     if total_raw == 0:
-        print("  No hay videos nuevos en TikTok DB")
+        print("  No hay comentarios nuevos en TikTok DB")
         return pd.DataFrame(), "reglas"
 
     df["texto_limpio"] = df["message"].apply(limpiar_texto)
@@ -212,7 +331,7 @@ def analizar_sentimiento_tiktok(db_path=None):
     print(f"  ({total_raw} comentarios nuevos → {len(df)} para análisis)")
 
     if df.empty:
-        print("  Sin comentarios analizables en los videos nuevos")
+        print("  Sin comentarios analizables en los comentarios nuevos")
         return pd.DataFrame(), "reglas"
 
     resultados = []
@@ -241,6 +360,26 @@ def analizar_sentimiento_tiktok(db_path=None):
         pct = (df_res["label"] == label).sum() / total * 100
         print(f"    {label}: {pct:.1f}%")
 
+    # D23: recalcular el agregado con TODOS los comentarios ya clasificados
+    # del video (viejos + nuevos), no solo el lote nuevo de esta corrida.
+    video_ids_afectados = sorted(set(df_res["video_id"]))
+    placeholders = ",".join("?" for _ in video_ids_afectados)
+    conn_full = sqlite3.connect(db_path)
+    df_full = pd.read_sql_query(
+        f"""
+        SELECT id AS comment_id, video_id, text AS message, sentiment AS etiqueta_es,
+               sentiment_score AS score_con_signo
+        FROM comments
+        WHERE video_id IN ({placeholders}) AND sentiment IS NOT NULL
+        """,
+        conn_full,
+        params=video_ids_afectados,
+    )
+    conn_full.close()
+    _map_inv = {"positivo": "POS", "negativo": "NEG", "neutral": "NEU"}
+    df_full["label"] = df_full["etiqueta_es"].map(_map_inv).fillna("NEU")
+    df_full["score"] = df_full["score_con_signo"].abs()
+
     def _top_comment_by_neg(group):
         neg_rows = group[group["label"] == "NEG"]
         if not neg_rows.empty:
@@ -255,23 +394,31 @@ def analizar_sentimiento_tiktok(db_path=None):
             return top["message"][:200]
         return ""
 
-    agrupado = df_res.groupby("video_id").agg(
+    agrupado = df_full.groupby("video_id").agg(
         total_comentarios=("comment_id", "count"),
         pct_positivo=("label", lambda x: (x == "POS").sum() / max(len(x), 1) * 100),
         pct_negativo=("label", lambda x: (x == "NEG").sum() / max(len(x), 1) * 100),
         pct_neutral=("label", lambda x: (x == "NEU").sum() / max(len(x), 1) * 100),
-        comentario_mas_negativo=("video_id", lambda vid: _top_comment_by_neg(df_res[df_res["video_id"] == vid.iloc[0]])),
-        comentario_mas_positivo=("video_id", lambda vid: _top_comment_by_pos(df_res[df_res["video_id"] == vid.iloc[0]])),
+        comentario_mas_negativo=("video_id", lambda vid: _top_comment_by_neg(df_full[df_full["video_id"] == vid.iloc[0]])),
+        comentario_mas_positivo=("video_id", lambda vid: _top_comment_by_pos(df_full[df_full["video_id"] == vid.iloc[0]])),
     ).reset_index()
 
     agrupado["score_sentimiento"] = agrupado["pct_positivo"] - agrupado["pct_negativo"]
 
-    # Append: se anaden SOLO los videos nuevos; los anteriores se conservan.
-    conn = sqlite3.connect(db_path)
-    agrupado.to_sql("tiktok_sentimiento", conn, if_exists="append", index=False)
-    conn.close()
+    # D23: upsert real (delete + append) en vez de append puro.
+    conn_up = sqlite3.connect(db_path)
+    try:
+        conn_up.execute(
+            f"DELETE FROM tiktok_sentimiento WHERE video_id IN ({placeholders})",
+            video_ids_afectados,
+        )
+    except sqlite3.OperationalError:
+        pass
+    agrupado.to_sql("tiktok_sentimiento", conn_up, if_exists="append", index=False)
+    conn_up.commit()
+    conn_up.close()
 
-    print(f"  Videos nuevos agrupados: {len(agrupado)}")
+    print(f"  Videos actualizados (nuevos o con comentarios nuevos): {len(agrupado)}")
     return agrupado, motor_usado
 
 

@@ -153,7 +153,7 @@ class LocalStorage:
                 post_id=post.get("post_id"),
                 page_id=post.get("page_id", ""),
                 page_name=post.get("page_name", ""),
-                message=post.get("message", "")[:10000],
+                message=(post.get("message") or "")[:10000],
                 created_time=self._parse_dt(post.get("created_time")),
                 likes_count=post.get("likes_count", 0),
                 loves_count=post.get("loves_count", 0),
@@ -186,7 +186,7 @@ class LocalStorage:
             obj = FBComment(
                 comment_id=comment.get("comment_id"),
                 post_id=comment.get("post_id", ""),
-                message=comment.get("message", "")[:5000],
+                message=(comment.get("message") or "")[:5000],
                 author_name=comment.get("author_name", ""),
                 created_time=self._parse_dt(comment.get("created_time")),
                 like_count=comment.get("like_count", 0),

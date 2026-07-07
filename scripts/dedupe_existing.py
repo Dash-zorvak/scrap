@@ -182,6 +182,11 @@ def dedupe(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool 
             cur.execute("DELETE FROM external_posts WHERE rowid = ?", (dup["rowid"],))
             removed += 1
             if keep["post_id"] != canon_id:
+                reassigned_keep = cur.execute(
+                    "UPDATE external_comments SET post_id = ? WHERE post_id = ?",
+                    (canon_id, keep["post_id"])
+                ).rowcount
+                comments_reassigned += reassigned_keep
                 cur.execute(
                     "UPDATE external_posts SET post_id = ? WHERE rowid = ?",
                     (canon_id, keep["rowid"])
@@ -210,6 +215,11 @@ def dedupe(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool 
                     cur.execute("DELETE FROM external_posts WHERE rowid = ?", (rowid,))
                     removed += 1
                 else:
+                    reassigned_singleton = cur.execute(
+                        "UPDATE external_comments SET post_id = ? WHERE post_id = ?",
+                        (canon, pid)
+                    ).rowcount
+                    comments_reassigned += reassigned_singleton
                     cur.execute(
                         "UPDATE external_posts SET post_id = ? WHERE rowid = ?",
                         (canon, rowid)

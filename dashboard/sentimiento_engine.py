@@ -158,11 +158,14 @@ _PROMPT_SENTIMIENTO = (
     "Eres un clasificador de sentimiento en español. "
     "Clasifica cada texto como POS (positivo), NEG (negativo) o NEU (neutral). "
     "Devuelve SOLO un JSON object con una clave 'resultados' que sea un array de objetos, "
-    "cada uno con 'label' (POS|NEG|NEU). "
+    "cada uno con 'label' (POS|NEG|NEU) y 'confianza' (número decimal entre 0 y 1 que refleje "
+    "qué tan seguro estás de esa clasificación). "
     "NO devuelvas markdown ni texto adicional.\n\n"
     "Textos:\n"
 )
 
+
+_SCORE_RESPALDO_GROQ = 0.7
 
 def _clasificar_groq_lote(textos):
     import json
@@ -173,14 +176,32 @@ def _clasificar_groq_lote(textos):
     except Exception as e:
         raise e
     raw = parsed.get("resultados", parsed if isinstance(parsed, list) else [])
+    if len(raw) != len(textos):
+        logger.warning(
+            "Groq devolvió %d resultados de sentimiento pero se esperaban %d; "
+            "los faltantes se completan como NEU con score de respaldo %.1f",
+            len(raw), len(textos), _SCORE_RESPALDO_GROQ,
+        )
     resultados = []
+    confianzas_invalidas = 0
     for i, texto in enumerate(textos):
         entry = raw[i] if i < len(raw) else {}
         label = entry.get("label", "NEU")
         if label not in ("POS", "NEG", "NEU"):
             label = "NEU"
-        score = 0.7
+        confianza = entry.get("confianza")
+        if isinstance(confianza, (int, float)) and not isinstance(confianza, bool) and 0.0 <= confianza <= 1.0:
+            score = round(float(confianza), 4)
+        else:
+            score = _SCORE_RESPALDO_GROQ
+            confianzas_invalidas += 1
         resultados.append((label, score))
+    if confianzas_invalidas:
+        logger.warning(
+            "Groq no devolvió una 'confianza' válida para %d de %d textos; "
+            "se usó el score de respaldo %.1f para esos casos",
+            confianzas_invalidas, len(textos), _SCORE_RESPALDO_GROQ,
+        )
     return resultados
 
 

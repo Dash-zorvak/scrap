@@ -8,6 +8,8 @@ numpy>=1.24.0,<2.0.0
 # ML / Clustering (categorizacion de posts - modulo1: KMeans + normalize;
 # tambien PCA/KMeans/LDA en src/analyzer)
 scikit-learn>=1.3.0
+# Necesario explicito por linear_sum_assignment en modulo1_categorias (D22)
+scipy >= 1.10.0
 sentence-transformers>=2.2.0
 
 # Database

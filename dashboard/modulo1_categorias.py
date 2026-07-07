@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import *
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import normalize
+from scipy.optimize import linear_sum_assignment
 
 
 STOPWORDS = {
@@ -96,6 +97,88 @@ def _guardar_cache_embeddings(conn, filas):
         filas,
     )
     conn.commit()
+
+
+def _asegurar_tabla_centroides(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cluster_centroids (
+            cluster_id INTEGER PRIMARY KEY,
+            centroid TEXT
+        )
+        """
+    )
+    conn.commit()
+
+
+def _cargar_centroides_previos(conn):
+    """Devuelve {cluster_id: np.ndarray} de la corrida anterior, si existe."""
+    _asegurar_tabla_centroides(conn)
+    previos = {}
+    for cid, centroid_json in conn.execute(
+        "SELECT cluster_id, centroid FROM cluster_centroids"
+    ):
+        try:
+            previos[cid] = np.array(json.loads(centroid_json), dtype=float)
+        except Exception:
+            continue
+    return previos
+
+
+def _guardar_centroides(conn, centroides):
+    """centroides: {cluster_id: np.ndarray}. Reemplaza la tabla completa."""
+    _asegurar_tabla_centroides(conn)
+    conn.execute("DELETE FROM cluster_centroids")
+    conn.executemany(
+        "INSERT INTO cluster_centroids (cluster_id, centroid) VALUES (?, ?)",
+        [(int(cid), json.dumps(vec.tolist())) for cid, vec in centroides.items()],
+    )
+    conn.commit()
+
+
+def _remapear_clusters_estables(nuevos_centroides, previos_centroides):
+    """
+    Empareja los cluster_id nuevos (arbitrarios, de esta corrida de KMeans)
+    con los cluster_id estables de la corrida anterior, usando el algoritmo
+    hungaro (asignacion optima) sobre distancia coseno entre centroides.
+    Los clusters nuevos sin match razonable (distancia > 0.4) reciben un
+    cluster_id nunca antes usado, para no pisar nombres existentes.
+
+    nuevos_centroides / previos_centroides: {cluster_id: np.ndarray}
+    Devuelve {cluster_id_nuevo_de_kmeans: cluster_id_estable}.
+    """
+    if not previos_centroides:
+        return {cid: cid for cid in nuevos_centroides}
+
+    nuevos_ids = list(nuevos_centroides.keys())
+    previos_ids = list(previos_centroides.keys())
+
+    dist = np.zeros((len(nuevos_ids), len(previos_ids)))
+    for i, nid in enumerate(nuevos_ids):
+        a = nuevos_centroides[nid]
+        for j, pid in enumerate(previos_ids):
+            b = previos_centroides[pid]
+            sim = np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9)
+            dist[i, j] = 1 - sim
+
+    filas, columnas = linear_sum_assignment(dist)
+
+    UMBRAL_DISTANCIA = 0.4
+    mapeo = {}
+    emparejados_previos = set()
+    for i, j in zip(filas, columnas):
+        nid, pid = nuevos_ids[i], previos_ids[j]
+        if dist[i, j] <= UMBRAL_DISTANCIA and pid not in emparejados_previos:
+            mapeo[nid] = pid
+            emparejados_previos.add(pid)
+
+    siguiente_id_libre = max(previos_ids, default=-1) + 1
+    for nid in nuevos_ids:
+        if nid not in mapeo:
+            mapeo[nid] = siguiente_id_libre
+            siguiente_id_libre += 1
+
+    return mapeo
 
 
 def _items_en_post_categorias(conn):
@@ -198,14 +281,29 @@ def categorizar_posts(fb_db=None, tk_db=None):
 
     k = min(8, len(df))
     km = KMeans(n_clusters=k, random_state=42, n_init=10)
-    df["cluster_id"] = km.fit_predict(X)
+    labels_kmeans = km.fit_predict(X)
+
+    # --- D22: estabilizar cluster_id entre corridas ---
+    # KMeans no garantiza que "cluster 0" de esta corrida sea el mismo grupo
+    # semantico que "cluster 0" de la corrida anterior (los ids son
+    # arbitrarios y pueden permutarse al cambiar el dataset). guardar_nombres_clusters()
+    # asume un mapeo FIJO cluster_id -> nombre, asi que hay que preservar la
+    # identidad de cada cluster explicitamente via sus centroides.
+    centroides_nuevos = {int(cid): km.cluster_centers_[cid] for cid in range(k)}
+    centroides_previos = _cargar_centroides_previos(conn)
+    mapeo_estable = _remapear_clusters_estables(centroides_nuevos, centroides_previos)
+    df["cluster_id"] = [mapeo_estable[int(c)] for c in labels_kmeans]
+    centroides_estables = {
+        mapeo_estable[cid]: vec for cid, vec in centroides_nuevos.items()
+    }
+    _guardar_centroides(conn, centroides_estables)
 
     df[["item_id", "plataforma", "cluster_id", "texto_limpio"]].to_sql(
         "post_categorias", conn, if_exists="replace", index=False
     )
     conn.close()
 
-    print(f"  Categorias: {len(df)} items en {k} clusters")
+    print(f"  Categorias: {len(df)} items en {k} clusters (ids estabilizados)")
 
 
 def guardar_nombres_clusters(fb_db=None):
@@ -231,6 +329,12 @@ def guardar_nombres_clusters(fb_db=None):
             "UPDATE post_categorias SET categoria_nombre = ? WHERE cluster_id = ?",
             (nombre, cid),
         )
+    # Clusters genuinamente nuevos (sin match con ninguno de los 8 originales)
+    # reciben un nombre generico en vez de quedar en NULL.
+    conn.execute(
+        "UPDATE post_categorias SET categoria_nombre = 'Otros / sin clasificar' "
+        "WHERE categoria_nombre IS NULL"
+    )
     conn.commit()
     conn.close()
     print("  Nombres de categorias guardados")

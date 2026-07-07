@@ -11,6 +11,7 @@ Reglas de tracción (acordadas):
   impresiones_est = reacciones / 0.05 (conservador) y / 0.02 (optimista)
 """
 
+import logging
 import os
 import sqlite3
 import sys
@@ -35,6 +36,9 @@ except Exception:  # el LLM es opcional; sin él se usa solo el heurístico
 
     def llm_disponible():
         return False
+
+
+logger = logging.getLogger(__name__)
 
 
 # Pesos del score heurístico de ranking.
@@ -107,6 +111,11 @@ def sugerir_candidatos(periodo, fecha_ref=None, top=8, db_path=None,
     posts = _leer_posts_fb(inicio, fin, db_path)
     if solo_oficiales:
         oficiales = [p for p in posts if (p.get("page_name") or "") in FB_PAGES_OFICIALES]
+        if not oficiales and posts:
+            logger.warning(
+                "No se encontraron posts oficiales en el período; "
+                "se usarán %d posts no oficiales como candidatos", len(posts)
+            )
         posts = oficiales or posts
     for p in posts:
         p["_score"] = score_post(p)
@@ -125,6 +134,11 @@ def sugerir_no_traccion(inicio, fin, top=3, db_path=None, solo_oficiales=True):
     posts = _leer_posts_fb(inicio, fin, db_path)
     if solo_oficiales:
         oficiales = [p for p in posts if (p.get("page_name") or "") in FB_PAGES_OFICIALES]
+        if not oficiales and posts:
+            logger.warning(
+                "No se encontraron posts oficiales en el período; "
+                "se usarán %d posts no oficiales como candidatos", len(posts)
+            )
         posts = oficiales or posts
     for p in posts:
         p["_score"] = score_post(p)

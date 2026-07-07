@@ -1,0 +1,97 @@
+{
+  "meta": {
+    "generado_en": "",
+    "periodo": "",
+    "plataforma": "",
+    "fecha_datos_hasta": ""
+  },
+  "bloque1": {
+    "clima_narrativo": {
+      "tono_dominante": "",
+      "pct_favorable": 0,
+      "pct_neutral": 0,
+      "pct_critico": 0,
+      "n_total_comentarios": 0,
+      "tono_score_hoy": 0,
+      "tono_score_ayer": 0,
+      "tendencia": 0,
+      "etiqueta_tendencia": "",
+      "narrativa": ""
+    },
+    "intensidad": {
+      "vol_hoy": 0,
+      "promedio_semanal": 0,
+      "pct_diferencia": 0,
+      "etiqueta": "",
+      "fecha_hoy": "",
+      "n_dias_referencia": 0,
+      "narrativa": ""
+    },
+    "concentracion_tematica": {
+      "hhi": 0,
+      "nivel": "",
+      "estado": "",
+      "top_tema": "",
+      "n_temas": 0,
+      "ramas": [],
+      "narrativa": ""
+    },
+    "termometro_colonias": [],
+    "pulso_iq": {
+      "valor": 0,
+      "cuadrante": "",
+      "narrativa": ""
+    },
+    "cierre_factual": ""
+  },
+  "bloque2": {
+    "mapa_publicos": {
+      "pct_simpatizantes": 0,
+      "pct_neutrales": 0,
+      "pct_criticos": 0,
+      "n_total": 0
+    },
+    "polarizacion": {
+      "indice": 0,
+      "nivel": "",
+      "narrativa": ""
+    },
+    "voces_influencia": [],
+    "temas_emergentes_lda": []
+  },
+  "bloque3": {
+    "autenticidad": {
+      "pct_organico": 0,
+      "pct_coordinado": 0,
+      "n_duplicados": 0,
+      "narrativa": ""
+    },
+    "nivel_alerta": {
+      "semaforo": "",
+      "indice_riesgo": 0,
+      "pct_negativos": 0,
+      "indice_enojo_reacciones": 0,
+      "balance_confrontacion": 0,
+      "n_temas_friccion": 0,
+      "alertas_cambridge": []
+    },
+    "velocidad_propagacion": {
+      "proyeccion_24h": "",
+      "tendencia_dias": [],
+      "narrativa": ""
+    },
+    "puntos_friccion": []
+  },
+  "bloque4": {
+    "eco_historico": "",
+    "leccion_aprendida": "",
+    "brecha_percepcion_realidad": "",
+    "temas_emergentes_evolucion": [],
+    "temas_extinction": [],
+    "contexto_no_visible": "",
+    "correlacion_contenido_reaccion": "",
+    "comparativa_sectorial": "",
+    "proyeccion_escenario": "",
+    "recomendacion_estrategica": ""
+  }
+}

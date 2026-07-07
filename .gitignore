@@ -61,3 +61,6 @@ data/*.backup_*.db
 # # Skills / artefactos de agentes de IA (Open Devin y similares)
 .od-skills/
 **/.od-skills/
+
+# # Analysis JSON (generado por analista externo, no se versiona)
+data/analysis.json

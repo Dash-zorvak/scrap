@@ -157,6 +157,7 @@ _ULTIMA = [0.0]
 _TTL_OK = float(os.environ.get("NARRATIVA_TTL_OK", "3600"))
 _COOLDOWN_FALLO = float(os.environ.get("NARRATIVA_COOLDOWN", "90"))
 _MIN_INTERVALO = float(os.environ.get("NARRATIVA_MIN_INTERVALO", "1.6"))
+_CACHE_MAX = int(os.environ.get("NARRATIVA_CACHE_MAX", "500"))
 
 
 def _es_rate_limit(exc) -> bool:
@@ -175,6 +176,14 @@ def _throttle():
 
 def _clave_cache(tipo, ctx_str):
     return tipo + ":" + hashlib.sha1(ctx_str.encode("utf-8")).hexdigest()
+
+
+def _guardar_cache(clave, entrada):
+    _CACHE[clave] = entrada
+    if len(_CACHE) > _CACHE_MAX:
+        ordenadas = sorted(_CACHE.items(), key=lambda x: x[1][2])
+        for k, _ in ordenadas[:len(_CACHE) - _CACHE_MAX]:
+            del _CACHE[k]
 
 
 def _limpiar(texto):
@@ -313,7 +322,7 @@ def generar_narrativa(tipo: str, contexto: dict) -> str:
                     break
                 # Salida válida: cachear y devolver
                 with _LOCK:
-                    _CACHE[clave] = (salida, False, time.time())
+                    _guardar_cache(clave, (salida, False, time.time()))
                 return salida
         except Exception as e:  # pragma: no cover
             logging.warning("generar_narrativa(%s) falló: %r", tipo, e)
@@ -332,7 +341,7 @@ def generar_narrativa(tipo: str, contexto: dict) -> str:
                             violaciones.append("saldo")
                         if not violaciones:
                             with _LOCK:
-                                _CACHE[clave] = (salida, False, time.time())
+                                _guardar_cache(clave, (salida, False, time.time()))
                             return salida
                         logging.warning(
                             "generar_narrativa(%s) verificador violó reglas %s, usando fallback",
@@ -345,5 +354,5 @@ def generar_narrativa(tipo: str, contexto: dict) -> str:
                     )
             break
     with _LOCK:
-        _CACHE[clave] = (_FALLBACK, True, time.time())
+        _guardar_cache(clave, (_FALLBACK, True, time.time()))
     return _FALLBACK

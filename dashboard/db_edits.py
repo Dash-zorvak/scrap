@@ -36,6 +36,29 @@ COLUMNAS_TIKTOK_EDITABLES = {
     "shares", "favorites_count", "comments_count",
 }
 
+# Columnas de fb_posts que, si se corrigen manualmente, invalidan el
+# engagement ya calculado de ese post (D24) y deben disparar un recalculo
+# en la siguiente corrida de modulo3_engagement.procesar_facebook.
+COLUMNAS_ENGAGEMENT_FB = {
+    "likes_count", "loves_count", "cares_count", "hahas_count", "wows_count",
+    "sads_count", "angrys_count", "comments_count",
+}
+
+# Lo mismo para la tabla videos (TikTok) — ver modulo3_engagement.procesar_tiktok.
+COLUMNAS_ENGAGEMENT_TIKTOK = {
+    "views", "likes", "shares", "favorites_count", "comments_count",
+}
+
+
+def _marcar_recalculo(conn, tabla, col_id, valor_id):
+    """Agrega needs_recalculo si falta y marca la fila para reproceso."""
+    cols = {row[1] for row in conn.execute(f"PRAGMA table_info({tabla})").fetchall()}
+    if "needs_recalculo" not in cols:
+        conn.execute(f"ALTER TABLE {tabla} ADD COLUMN needs_recalculo INTEGER DEFAULT 0")
+    conn.execute(
+        f"UPDATE {tabla} SET needs_recalculo = 1 WHERE {col_id} = ?", (str(valor_id),)
+    )
+
 
 def _db(db_path=None):
     return db_path or os.getenv("FACEBOOK_DB", "") or FACEBOOK_DB
@@ -72,8 +95,15 @@ def update_fb_post(post_id, fields, db_path=None):
         cur = conn.execute(
             f"UPDATE fb_posts SET {sets} WHERE post_id = ?", valores
         )
+        cambio = cur.rowcount > 0
+        # D24: si la correccion toca algun campo que afecta el engagement ya
+        # calculado, marcar el post para que se recalcule en la siguiente
+        # corrida de modulo3_engagement en vez de quedar congelado con el
+        # valor anterior a la correccion.
+        if cambio and (set(campos.keys()) & COLUMNAS_ENGAGEMENT_FB):
+            _marcar_recalculo(conn, "fb_posts", "post_id", post_id)
         conn.commit()
-        return cur.rowcount > 0
+        return cambio
     except Exception:
         return False
     finally:
@@ -126,8 +156,11 @@ def update_video_tiktok(video_id, fields, db_path=None):
         cur = conn.execute(
             f"UPDATE videos SET {sets} WHERE id = ?", valores
         )
+        cambio = cur.rowcount > 0
+        if cambio and (set(campos.keys()) & COLUMNAS_ENGAGEMENT_TIKTOK):
+            _marcar_recalculo(conn, "videos", "id", video_id)
         conn.commit()
-        return cur.rowcount > 0
+        return cambio
     except Exception:
         return False
     finally:

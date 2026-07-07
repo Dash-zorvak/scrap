@@ -19,6 +19,24 @@ def _ids_existentes(conn, tabla, col):
         return set()
 
 
+def _ids_pendientes_recalculo(conn, tabla, col):
+    """IDs marcados con needs_recalculo=1 en tabla. Set vacio si la
+    columna/tabla no existe.
+
+    Se usa para forzar el recalculo de un post/video ya procesado cuando
+    editor_db.py corrigio manualmente alguno de sus campos de engagement
+    (D24): sin esto, _ids_existentes lo excluiria para siempre.
+    """
+    try:
+        cols = {row[1] for row in conn.execute(f"PRAGMA table_info({tabla})").fetchall()}
+        if "needs_recalculo" not in cols:
+            return set()
+        rows = conn.execute(f"SELECT {col} FROM {tabla} WHERE needs_recalculo = 1").fetchall()
+        return {r[0] for r in rows if r[0] is not None}
+    except Exception:
+        return set()
+
+
 def procesar_facebook(fb_db=None):
     if fb_db is None:
         fb_db = FACEBOOK_DB
@@ -36,16 +54,21 @@ def procesar_facebook(fb_db=None):
     """
     df = pd.read_sql_query(query, conn)
 
-    # Incremental: omitir posts que YA tienen engagement calculado.
+    # Incremental: procesar posts nuevos + posts ya procesados que el
+    # analista corrigio manualmente desde el editor (D24: antes esos ultimos
+    # quedaban excluidos para siempre por estar ya en fb_engagement).
     existentes = _ids_existentes(conn, "fb_engagement", "post_id")
+    pendientes_recalculo = _ids_pendientes_recalculo(conn, "fb_posts", "post_id")
     if existentes:
         antes = len(df)
-        df = df[~df["post_id"].isin(existentes)].copy()
-        print(f"  Incremental: {antes - len(df)} posts ya con engagement se omiten")
+        a_procesar = ~df["post_id"].isin(existentes) | df["post_id"].isin(pendientes_recalculo)
+        df = df[a_procesar].copy()
+        print(f"  Incremental: {antes - len(df)} posts ya con engagement al dia se omiten"
+              f" ({len(pendientes_recalculo)} marcados para recalculo")
 
     if df.empty:
         conn.close()
-        print("  Facebook: 0 posts nuevos procesados")
+        print("  Facebook: 0 posts nuevos o marcados para recalculo")
         return df
 
     # Total de reacciones: TODAS las 7 reacciones de Facebook (ninguna queda fuera)
@@ -88,8 +111,20 @@ def procesar_facebook(fb_db=None):
         "indice_tristeza", "indice_enojo", "engagement_total",
         "score_emocional", "plataforma"
     ]
-    # Append: se anaden SOLO los posts nuevos; los anteriores se conservan.
+    # D24: upsert real — reemplaza la fila de los posts recalculados en vez
+    # de duplicarla con un segundo append.
+    post_ids_procesados = df["post_id"].tolist()
+    placeholders_ids = ",".join("?" for _ in post_ids_procesados)
+    try:
+        conn.execute(f"DELETE FROM fb_engagement WHERE post_id IN ({placeholders_ids})", post_ids_procesados)
+    except sqlite3.OperationalError:
+        pass  # la tabla fb_engagement aun no existe en la primera corrida
     df[cols_salida].to_sql("fb_engagement", conn, if_exists="append", index=False)
+    ids_limpiar = [pid for pid in post_ids_procesados if pid in pendientes_recalculo]
+    if ids_limpiar:
+        ph = ",".join("?" for _ in ids_limpiar)
+        conn.execute(f"UPDATE fb_posts SET needs_recalculo = 0 WHERE post_id IN ({ph})", ids_limpiar)
+    conn.commit()
     conn.close()
 
     print(f"  Facebook: {len(df)} posts procesados")
@@ -108,17 +143,21 @@ def procesar_tiktok(tk_db=None):
     """
     df = pd.read_sql_query(query, conn)
 
-    # Incremental: omitir videos que YA tienen engagement calculado.
+    # Incremental: procesar videos nuevos + videos ya procesados marcados
+    # para recalculo (D24, mismo patron que Facebook).
     existentes = _ids_existentes(conn, "tiktok_engagement", "id")
+    pendientes_recalculo = _ids_pendientes_recalculo(conn, "videos", "id")
     conn.close()
 
     if existentes:
         antes = len(df)
-        df = df[~df["id"].isin(existentes)].copy()
-        print(f"  Incremental: {antes - len(df)} videos ya con engagement se omiten")
+        a_procesar = ~df["id"].isin(existentes) | df["id"].isin(pendientes_recalculo)
+        df = df[a_procesar].copy()
+        print(f"  Incremental: {antes - len(df)} videos ya con engagement al dia se omiten"
+              f" ({len(pendientes_recalculo)} marcados para recalculo")
 
     if df.empty:
-        print("  TikTok: 0 videos nuevos procesados")
+        print("  TikTok: 0 videos nuevos o marcados para recalculo")
         return df
 
     df["engagement_total"] = df["likes"] + df["shares"] + df["comments_count"] + df["favorites_count"]
@@ -135,9 +174,19 @@ def procesar_tiktok(tk_db=None):
         "score_engagement", "plataforma"
     ]
 
-    # Append: se anaden SOLO los videos nuevos; los anteriores se conservan.
     conn = sqlite3.connect(tk_db)
+    ids_procesados = df["id"].tolist()
+    placeholders_ids = ",".join("?" for _ in ids_procesados)
+    try:
+        conn.execute(f"DELETE FROM tiktok_engagement WHERE id IN ({placeholders_ids})", ids_procesados)
+    except sqlite3.OperationalError:
+        pass
     df[cols_salida].to_sql("tiktok_engagement", conn, if_exists="append", index=False)
+    ids_limpiar = [vid for vid in ids_procesados if vid in pendientes_recalculo]
+    if ids_limpiar:
+        ph = ",".join("?" for _ in ids_limpiar)
+        conn.execute(f"UPDATE videos SET needs_recalculo = 0 WHERE id IN ({ph})", ids_limpiar)
+    conn.commit()
     conn.close()
 
     print(f"  TikTok: {len(df)} videos procesados")

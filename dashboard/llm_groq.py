@@ -56,10 +56,13 @@ JSON con LLM_JSON_MODE=0 (el prompt ya pide JSON explícitamente).
 """
 
 import base64
+import logging
 import os
 import time
 from dotenv import load_dotenv
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 # Carga .env en local para que los slugs de modelos y la API key esten
 # disponibles aunque este modulo se use fuera del dashboard (p. ej. el pipeline
@@ -241,11 +244,13 @@ def _retry_with_backoff(func, *args, max_retries=None, **kwargs):
                 or e.__class__.__name__ in ("APITimeoutError", "APIConnectionError")
             )
             if (es_rate or es_timeout) and attempt < max_retries - 1:
-                # Rate limit: espera exponencial. Timeout/conexión: espera más
-                # corta, suele ser una lentitud puntual del proveedor. Los 5xx y
-                # las funciones DEGRADED NO se reintentan aquí: los maneja la
-                # cascada de visión cayendo a otro modelo (ver _es_error_modelo).
-                time.sleep(2 ** (attempt + 1) if es_rate else (attempt + 1) * 2)
+                dormir = 2 ** (attempt + 1) if es_rate else (attempt + 1) * 2
+                logger.info(
+                    "Backoff en intento %d/%d: durmiendo %.1fs (%s)",
+                    attempt + 1, max_retries, dormir,
+                    "rate limit" if es_rate else "timeout/connection",
+                )
+                time.sleep(dormir)
                 continue
             raise
     raise last_exc

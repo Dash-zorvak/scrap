@@ -168,6 +168,10 @@ def _esperar_presupuesto(tokens_estimados):
         if dormir <= 0:
             break
         logger.info("Pacing IA: esperando %.1fs para no superar %d TPM", dormir, TPM_BUDGET)
+        try:
+            st.toast(f"Esperando presupuesto de IA ({dormir:.0f}s)...", icon="⏳")
+        except Exception:
+            pass
         time.sleep(min(dormir, 20.0))
         espera_acumulada += dormir
         if espera_acumulada > 180:
@@ -301,6 +305,10 @@ def _clasificar_bloque_llm(textos, model=None, ejemplos=None):
                     "Rate limit IA (intento %d/%d); esperando %.1fs antes de reintentar",
                     intento + 1, MAX_REINTENTOS_429, espera,
                 )
+                try:
+                    st.toast(f"Límite de IA alcanzado, esperando {espera:.0f}s...", icon="⚠️")
+                except Exception:
+                    pass
                 time.sleep(espera)
                 ultimo_error = e
                 continue
@@ -317,6 +325,10 @@ def _clasificar_bloque_llm(textos, model=None, ejemplos=None):
                     "Reintentando por respuesta vacía (intento %d/%d); esperando %.1fs",
                     intento + 1, MAX_REINTENTOS_429, ESPERA_VACIO_DEFAULT,
                 )
+                try:
+                    st.toast(f"Respuesta vacía de IA, reintentando en {ESPERA_VACIO_DEFAULT:.0f}s...", icon="🔄")
+                except Exception:
+                    pass
                 time.sleep(ESPERA_VACIO_DEFAULT)
                 ultimo_error = ValueError("LLM devolvió contenido vacío")
                 continue

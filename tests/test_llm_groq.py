@@ -9,6 +9,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "dashboard"))
 
+import logging
 import pytest
 from unittest.mock import MagicMock
 import dashboard.llm_groq as lg
@@ -78,3 +79,38 @@ def test_es_modelo_deepseek_variantes():
     assert lg._es_modelo_deepseek("qwen/qwen3.5-397b-a17b") is False
     assert lg._es_modelo_deepseek("") is False
     assert lg._es_modelo_deepseek(None) is False
+
+
+class TestRetryBackoffLogging:
+
+    def test_logs_backoff_en_rate_limit(self, caplog, monkeypatch):
+        caplog.set_level(logging.INFO, logger="dashboard.llm_groq")
+        monkeypatch.setattr(lg, "_MAX_REINTENTOS", 2)
+
+        llamadas = [0]
+
+        def func_que_falla():
+            llamadas[0] += 1
+            if llamadas[0] == 1:
+                raise Exception("429 Too Many Requests")
+            return "ok"
+
+        monkeypatch.setattr("time.sleep", lambda s: None)
+        resultado = lg._retry_with_backoff(func_que_falla)
+
+        assert resultado == "ok"
+        records = [r for r in caplog.records if r.levelno == logging.INFO]
+        assert len(records) >= 1
+        assert any("Backoff" in r.message for r in records)
+
+    def test_no_log_si_no_hay_reintento(self, caplog, monkeypatch):
+        caplog.set_level(logging.INFO, logger="dashboard.llm_groq")
+        monkeypatch.setattr(lg, "_MAX_REINTENTOS", 2)
+
+        def func_ok():
+            return "ok"
+
+        resultado = lg._retry_with_backoff(func_ok)
+        assert resultado == "ok"
+        records = [r for r in caplog.records if r.levelno == logging.INFO]
+        assert len(records) == 0

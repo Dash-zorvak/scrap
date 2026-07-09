@@ -19,7 +19,9 @@ from datetime import datetime, timezone
 from dashboard.tema_taxonomia import (
     CATEGORIAS_VALIDAS,
     REMAP_LEGACY,
+    EMOCIONES_VALIDAS,
     etiqueta_tema,
+    normalizar_emocion,
     normalizar_postura,
     remapear,
 )
@@ -95,11 +97,15 @@ def asegurar_tabla(db_path):
             )
             """
         )
-        # Migracion para tablas creadas antes de existir 'postura'.
+        # Migraciones para columnas agregadas posteriormente.
         cols = [r[1] for r in conn.execute(f"PRAGMA table_info({TABLA})").fetchall()]
         if "postura" not in cols:
             conn.execute(
                 f"ALTER TABLE {TABLA} ADD COLUMN postura TEXT DEFAULT 'neutral'"
+            )
+        if "emocion" not in cols:
+            conn.execute(
+                f"ALTER TABLE {TABLA} ADD COLUMN emocion TEXT DEFAULT 'calma'"
             )
         conn.commit()
     finally:
@@ -108,7 +114,7 @@ def asegurar_tabla(db_path):
 
 def guardar_aprobacion(db_path, comment_id, tema, texto="",
                        tema_sugerido=None, tono="literal", confianza=None,
-                       postura="neutral"):
+                       postura="neutral", emocion=None):
     """Guarda (o actualiza) la aprobacion de un comentario.
 
     Devuelve True si se guardo. En la aprobacion MANUAL validamos de forma
@@ -118,6 +124,9 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
 
     `postura` (apoyo/critica/neutral) se normaliza; un valor desconocido cae a
     'neutral' para no contar como apoyo ni critica por error.
+
+    `emocion` se normaliza con normalizar_emocion(); valor desconocido cae a
+    'calma'.
 
     Nota: a diferencia de remapear() -que degrada lo desconocido a 'no_aplica'
     para tolerar ruido del modelo-, aqui un tema invalido se RECHAZA, porque es
@@ -129,14 +138,15 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
         return False
     tema = remapear(tema)
     postura = normalizar_postura(postura)
+    emocion = normalizar_emocion(emocion)
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:
         conn.execute(
             f"""
             INSERT OR REPLACE INTO {TABLA}
-            (comment_id, tema, tema_sugerido, tono, postura, confianza, texto, estado, fecha)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado', ?)
+            (comment_id, tema, tema_sugerido, tono, postura, confianza, texto, estado, fecha, emocion)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado', ?, ?)
             """,
             (
                 comment_id,
@@ -147,6 +157,7 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
                 confianza,
                 (texto or "")[:500],
                 datetime.now(timezone.utc).isoformat(),
+                emocion,
             ),
         )
         conn.commit()
@@ -167,23 +178,24 @@ def ids_aprobados(db_path):
 
 
 def obtener_aprobaciones(db_path):
-    """Devuelve {comment_id: {tema, tema_sugerido, tono, postura, confianza, texto, ...}}."""
+    """Devuelve {comment_id: {tema, tema_sugerido, tono, postura, emocion, confianza, texto, ...}}."""
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:
         rows = conn.execute(
-            f"SELECT comment_id, tema, tema_sugerido, tono, postura, confianza, "
+            f"SELECT comment_id, tema, tema_sugerido, tono, postura, emocion, confianza, "
             f"texto, estado, fecha FROM {TABLA}"
         ).fetchall()
     finally:
         conn.close()
     salida = {}
-    for cid, tema, sug, tono, postura, conf, texto, estado, fecha in rows:
+    for cid, tema, sug, tono, postura, emocion, conf, texto, estado, fecha in rows:
         salida[cid] = {
             "tema": tema,
             "tema_sugerido": sug,
             "tono": tono,
             "postura": normalizar_postura(postura),
+            "emocion": normalizar_emocion(emocion),
             "confianza": conf,
             "texto": texto,
             "estado": estado,
@@ -198,30 +210,36 @@ def agregar_por_tema(db_path):
     Excluye 'no_aplica'. El porcentaje es sobre el total de comentarios con un
     tema aprobado (no sobre el total analizado). Cada tema se divide ademas por
     POSTURA (apoyo/critica/neutral) para que una critica no se lea como impulso
-    positivo. Devuelve una lista de dicts ordenada de mayor a menor doc_count:
+    positivo. Se incluye ademas desglose por EMOCION (10 emociones del catalogo).
+
+    Devuelve una lista de dicts ordenada de mayor a menor doc_count:
     {id, categoria, label, pct, doc_count, ejemplo, apoyo, critica, neutral,
-     pct_apoyo, pct_critica, pct_neutral, saldo, ejemplo_critica}.
+     pct_apoyo, pct_critica, pct_neutral, saldo, ejemplo_critica, emociones,
+     emocion_dominante}.
     """
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:
         rows = conn.execute(
-            f"SELECT tema, texto, postura FROM {TABLA} WHERE estado='aprobado'"
+            f"SELECT tema, texto, postura, emocion FROM {TABLA} WHERE estado='aprobado'"
         ).fetchall()
     finally:
         conn.close()
 
     conteo = defaultdict(int)
     posturas = defaultdict(lambda: {"apoyo": 0, "critica": 0, "neutral": 0})
+    emociones = defaultdict(lambda: defaultdict(int))
     ejemplos = {}
     ejemplos_critica = {}
     total_con_tema = 0
-    for tema, texto, postura in rows:
+    for tema, texto, postura, emocion in rows:
         if not tema or tema == "no_aplica":
             continue
         post = normalizar_postura(postura)
+        emo = normalizar_emocion(emocion)
         conteo[tema] += 1
         posturas[tema][post] += 1
+        emociones[tema][emo] += 1
         total_con_tema += 1
         limpio = " ".join((texto or "").split())
         prev = ejemplos.get(tema)
@@ -232,6 +250,8 @@ def agregar_por_tema(db_path):
             if prev_c is None or 15 <= len(limpio) < len(prev_c):
                 ejemplos_critica[tema] = limpio
 
+    from dashboard.tema_taxonomia import EMOCIONES_VALIDAS
+
     temas = []
     for i, (tema, n) in enumerate(conteo.items()):
         ej = ejemplos.get(tema, "")
@@ -241,6 +261,16 @@ def agregar_por_tema(db_path):
         if len(ej_c) > 120:
             ej_c = ej_c[:117] + "..."
         pst = posturas[tema]
+        emo_counts = emociones.get(tema, {})
+        emo_total = sum(emo_counts.values()) or 1
+        emo_detalle = {
+            e: {
+                "count": emo_counts.get(e, 0),
+                "pct": round(emo_counts.get(e, 0) / emo_total * 100, 1),
+            }
+            for e in EMOCIONES_VALIDAS
+        }
+        emo_dominante = max(EMOCIONES_VALIDAS, key=lambda e: emo_counts.get(e, 0)) if emo_counts else "calma"
         temas.append({
             "id": i + 1,
             "categoria": tema,
@@ -256,6 +286,8 @@ def agregar_por_tema(db_path):
             "pct_neutral": round(pst["neutral"] / n * 100, 1) if n else 0.0,
             "saldo": pst["apoyo"] - pst["critica"],
             "ejemplo_critica": ej_c,
+            "emociones": emo_detalle,
+            "emocion_dominante": emo_dominante,
         })
     temas.sort(key=lambda x: -x["doc_count"])
     return temas

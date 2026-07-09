@@ -8,7 +8,7 @@ en las tarjetas de Temas Emergentes.
 import streamlit as st
 
 from dashboard.tema_aprobaciones import guardar_aprobacion, resumen_revision
-from dashboard.tema_taxonomia import TEMAS_VISIBLES, TEMA_LABELS
+from dashboard.tema_taxonomia import TEMAS_VISIBLES, TEMA_LABELS, EMOCIONES, EMOCION_DEFAULT
 
 # Opciones del selector de tema: temas englobantes + 'sin tema'.
 _OPCIONES = list(TEMAS_VISIBLES) + ["no_aplica"]
@@ -20,6 +20,10 @@ _POSTURA_LABELS_UI = {
     "critica": "👎 Crítica",
     "neutral": "➖ Neutral",
 }
+
+# Opciones del selector de emoción.
+_EMOCION_OPCIONES = list(EMOCIONES.keys())
+_EMOCION_LABELS_UI = dict(EMOCIONES)
 
 
 def _label_opcion(clave):
@@ -74,7 +78,7 @@ def render_revisor_temas(db_path):
                 f'«{texto_clean}»</div>',
                 unsafe_allow_html=True,
             )
-            c1, c2, c3 = st.columns([2, 1, 1])
+            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
             with c1:
                 sel = st.selectbox(
                     "Tema", _OPCIONES, format_func=_label_opcion,
@@ -86,10 +90,16 @@ def render_revisor_temas(db_path):
                     key=f"post_{cid}", label_visibility="collapsed",
                 )
             with c3:
+                sel_emocion = st.selectbox(
+                    "Emoción", _EMOCION_OPCIONES, format_func=lambda x: _EMOCION_LABELS_UI.get(x, x),
+                    key=f"emo_{cid}", label_visibility="collapsed",
+                )
+            with c4:
                 if st.button("Aprobar", key=f"ap_{cid}"):
                     guardar_aprobacion(
                         db_path, cid, sel, texto=texto,
                         tema_sugerido=None, tono="literal",
                         confianza=None, postura=sel_postura,
+                        emocion=sel_emocion,
                     )
                     st.rerun()

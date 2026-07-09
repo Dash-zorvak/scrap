@@ -413,19 +413,7 @@ with tab_pulso:
     st.markdown('<div class="section-header"><div class="section-title">06 · Termómetro de Zonas</div></div>', unsafe_allow_html=True)
     termometro_zonas = b1.get("termometro_zonas", [])
     if not termometro_zonas:
-        colonias = b1.get("termometro_colonias", [])
-        if colonias:
-            filas_col = "".join(
-                f'<div class="bar-row">'
-                f'<div class="bar-row-label">{c.get("zona","—")}</div>'
-                f'<div class="bar-track"><div class="bar-fill bar-fill-grn" style="width:{c.get("pct_apoyo",0):.0f}%"></div></div>'
-                f'<div class="bar-row-val" style="color:var(--green)">{c.get("pct_apoyo",0):.0f}% apoyo</div>'
-                f'</div>'
-                for c in colonias
-            )
-            st.markdown(f'<div class="panel">{filas_col}</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="status-info">Sin datos de zonas.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="status-info">Sin datos de zonas.</div>', unsafe_allow_html=True)
     else:
         for zona in termometro_zonas:
             tension_color = {
@@ -599,7 +587,7 @@ with tab_audiencia:
                 pc = {"positiva": "var(--green)", "neutral": "var(--amber)", "negativa": "var(--red)"}.get(postura, "var(--fg-muted)")
                 postura_badge = f'<span style="font-family:var(--font-mono);font-size:9px;color:{pc};font-weight:600;text-transform:uppercase">· {postura}</span>'
 
-            cita_v = v.get("cita", "")
+            cita_v = v.get("cita_destacada", "")
             cita_html = f'<div style="font-size:11px;color:var(--fg-secondary);font-style:italic;margin-top:6px">"{cita_v}"</div>' if cita_v else ""
 
             st.markdown(f"""
@@ -608,18 +596,20 @@ with tab_audiencia:
                     <div class="exec-card-title">{v.get('pagina','—')} {postura_badge}</div>
                 </div>
                 <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-secondary);margin:6px 0">
+                    Publicaciones: <strong>{v.get('publicaciones',0):,}</strong> ·
+                    Alcance: <strong>{v.get('alcance_estimado',0):,}</strong> ·
                     Engagement: <strong>{v.get('engagement',0):,}</strong> ·
-                    Reacciones: <strong>{v.get('reacciones',0):,}</strong> ·
-                    Comentarios: <strong>{v.get('comentarios',0):,}</strong> ·
-                    Compartidos: <strong>{v.get('compartidos',0):,}</strong>
+                    Reacciones: <strong>{v.get('reacciones_totales',0):,}</strong> ·
+                    Comentarios: <strong>{v.get('comentarios_totales',0):,}</strong> ·
+                    Compartidos: <strong>{v.get('compartidos_totales',0):,}</strong>
                 </div>
                 <div style="font-size:11px;color:var(--fg-muted)">
                     Tema predominante: <strong>{v.get('tema_predominante','—')}</strong> ·
-                    Tono: <strong>{v.get('tono','—')}</strong>
+                    Tono: <strong>{v.get('tono_predominante','—')}</strong>
                 </div>
                 {cita_html}
                 <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg-dim);margin-top:6px">
-                n_enlaces analizados: {v.get('n_enlaces_analizados',0)}</div>
+                n_enlaces: {v.get('n_enlaces',0)}</div>
             </div>
             """, unsafe_allow_html=True)
     else:
@@ -789,6 +779,17 @@ with tab_riesgo:
     """, unsafe_allow_html=True)
     if vp_formula:
         st.caption(f"Fórmula: {vp_formula}")
+
+    # Serie diaria de tendencia
+    tendencia_dias = vp.get("tendencia_dias", [])
+    if tendencia_dias:
+        st.markdown('<div style="margin:12px 0 6px;font-size:12px;color:var(--fg-secondary)">Tendencia diaria</div>', unsafe_allow_html=True)
+        if isinstance(tendencia_dias[0], dict):
+            import pandas as pd
+            df = pd.DataFrame(tendencia_dias)
+        else:
+            df = pd.DataFrame({"valor": tendencia_dias})
+        st.line_chart(df, use_container_width=True, height=200)
 
     temas_acel_vp = vp.get("temas_acelerando", [])
     temas_desacel_vp = vp.get("temas_desacelerando", [])

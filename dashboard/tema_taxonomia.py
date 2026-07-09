@@ -180,3 +180,69 @@ def normalizar_postura(postura):
 def etiqueta_postura(postura):
     """Etiqueta legible para una postura (acepta sinonimos / None)."""
     return POSTURA_LABELS.get(normalizar_postura(postura), POSTURA_LABELS[POSTURA_DEFAULT])
+
+
+# ---------------------------------------------------------------------------
+# Catálogo de emociones (mismo que bloque1.indice_emociones del schema).
+# ---------------------------------------------------------------------------
+EMOCIONES = {
+    "reclamo": "Reclamo",
+    "objecion": "Objeción",
+    "satisfaccion": "Satisfacción",
+    "calma": "Calma",
+    "enojo": "Enojo",
+    "tristeza": "Tristeza",
+    "alegria": "Alegría",
+    "reconocimiento": "Reconocimiento",
+    "ironia": "Ironía",
+    "preocupacion": "Preocupación",
+}
+
+EMOCIONES_VALIDAS = set(EMOCIONES.keys())
+EMOCION_LABELS = dict(EMOCIONES)
+EMOCION_DEFAULT = "calma"
+
+_EMOCION_SINONIMOS = {
+    "queja": "reclamo",
+    "reclamos": "reclamo",
+    "objeción": "objecion",
+    "objetar": "objecion",
+    "satisfacción": "satisfaccion",
+    "satisfecho": "satisfaccion",
+    "enojo": "enojo",
+    "enojado": "enojo",
+    "rabia": "enojo",
+    "triste": "tristeza",
+    "tristeza": "tristeza",
+    "alegre": "alegria",
+    "alegría": "alegria",
+    "feliz": "alegria",
+    "felicidad": "alegria",
+    "reconocimiento": "reconocimiento",
+    "agradecimiento": "reconocimiento",
+    "gratitud": "reconocimiento",
+    "ironía": "ironia",
+    "ironico": "ironia",
+    "irónico": "ironia",
+    "burla": "ironia",
+    "preocupación": "preocupacion",
+    "preocupado": "preocupacion",
+    "inquietud": "preocupacion",
+    "calma": "calma",
+    "tranquilidad": "calma",
+    "tranquilo": "calma",
+}
+
+
+def normalizar_emocion(emocion):
+    """Devuelve una emoción canónica (10 emociones).
+
+    Acepta None, sinónimos, mayúsculas/espacios. Valor desconocido cae a
+    EMOCION_DEFAULT ("calma").
+    """
+    if not emocion:
+        return EMOCION_DEFAULT
+    e = str(emocion).strip().lower()
+    if e in EMOCIONES_VALIDAS:
+        return e
+    return _EMOCION_SINONIMOS.get(e, EMOCION_DEFAULT)

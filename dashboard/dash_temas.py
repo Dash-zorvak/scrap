@@ -8,7 +8,7 @@ en las tarjetas de Temas Emergentes.
 import streamlit as st
 
 from dashboard.tema_aprobaciones import guardar_aprobacion, resumen_revision
-from dashboard.tema_taxonomia import TEMAS_VISIBLES, TEMA_LABELS, EMOCIONES, EMOCION_DEFAULT
+from dashboard.tema_taxonomia import TEMAS_VISIBLES, TEMA_LABELS, EMOCIONES, EMOCION_LABELS, EMOCION_DEFAULT
 
 # Opciones del selector de tema: temas englobantes + 'sin tema'.
 _OPCIONES = list(TEMAS_VISIBLES) + ["no_aplica"]
@@ -23,7 +23,7 @@ _POSTURA_LABELS_UI = {
 
 # Opciones del selector de emoción.
 _EMOCION_OPCIONES = list(EMOCIONES.keys())
-_EMOCION_LABELS_UI = dict(EMOCIONES)
+_EMOCION_LABELS_UI = dict(EMOCION_LABELS)
 
 
 def _label_opcion(clave):

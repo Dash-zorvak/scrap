@@ -199,16 +199,54 @@ tab_pulso, tab_audiencia, tab_riesgo, tab_intel = st.tabs([
 # ════════════════════════════════════════════════════════════
 
 _EMO_DEFS = [
+    # Alegría (joy)
+    ("serenidad", "Serenidad", "var(--green)"),
+    ("alegria", "Alegría", "var(--green)"),
+    ("euforia", "Euforia", "var(--green)"),
+    # Confianza (trust)
+    ("aceptacion", "Aceptación", "var(--green)"),
+    ("confianza", "Confianza", "var(--green)"),
+    ("admiracion", "Admiración", "var(--green)"),
+    # Miedo (fear)
+    ("aprension", "Aprensión", "var(--amber)"),
+    ("preocupacion", "Preocupación", "var(--amber)"),
+    ("terror", "Terror / Pánico", "var(--red)"),
+    # Sorpresa (surprise)
+    ("distraccion", "Distracción", "var(--amber)"),
+    ("sorpresa", "Sorpresa", "var(--amber)"),
+    ("asombro", "Asombro", "var(--amber)"),
+    # Tristeza (sadness)
+    ("melancolia", "Melancolía", "var(--red)"),
+    ("tristeza", "Tristeza", "var(--red)"),
+    ("dolor", "Dolor / Pena", "var(--red)"),
+    # Desagrado (disgust)
+    ("aburrimiento", "Aburrimiento", "var(--amber)"),
+    ("desagrado", "Desagrado", "var(--red)"),
+    ("repulsion", "Repulsión", "var(--red)"),
+    # Enojo (anger)
+    ("fastidio", "Fastidio", "var(--amber)"),
+    ("enojo", "Enojo", "var(--red)"),
+    ("furia", "Furia / Ira", "var(--red)"),
+    # Anticipación (anticipation)
+    ("interes", "Interés", "var(--amber)"),
+    ("expectativa", "Expectativa", "var(--amber)"),
+    ("vigilancia", "Vigilancia", "var(--amber)"),
+    # Díadas
+    ("optimismo", "Optimismo", "var(--green)"),
+    ("amor_civico", "Cariño / Aprecio", "var(--green)"),
+    ("sumision", "Resignación", "var(--amber)"),
+    ("asombro_temeroso", "Sobrecogimiento", "var(--red)"),
+    ("desaprobacion", "Desaprobación", "var(--red)"),
+    ("remordimiento", "Remordimiento", "var(--red)"),
+    ("desprecio", "Desprecio", "var(--red)"),
+    ("agresividad", "Agresividad", "var(--red)"),
+    # Posturas cívicas
     ("reclamo", "Reclamo", "var(--red)"),
     ("objecion", "Objeción", "var(--amber)"),
     ("satisfaccion", "Satisfacción", "var(--green)"),
     ("calma", "Calma", "var(--green)"),
-    ("enojo", "Enojo", "var(--red)"),
-    ("tristeza", "Tristeza", "var(--red)"),
-    ("alegria", "Alegría", "var(--green)"),
     ("reconocimiento", "Reconocimiento", "var(--green)"),
     ("ironia", "Ironía", "var(--amber)"),
-    ("preocupacion", "Preocupación", "var(--amber)"),
 ]
 
 

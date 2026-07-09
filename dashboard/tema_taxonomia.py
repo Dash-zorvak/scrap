@@ -183,59 +183,256 @@ def etiqueta_postura(postura):
 
 
 # ---------------------------------------------------------------------------
-# Catálogo de emociones (mismo que bloque1.indice_emociones del schema).
+# Catálogo de emociones — Plutchik expandido (31 categorías).
+#
+# Fuente: modelo de Plutchik (8 emociones primarias, leve/media/intensa)
+# + 8 díadas secundarias + posturas cívicas del catálogo original.
+# Las 10 claves legacy se conservan idénticas.
 # ---------------------------------------------------------------------------
 EMOCIONES = {
-    "reclamo": "Reclamo",
-    "objecion": "Objeción",
-    "satisfaccion": "Satisfacción",
-    "calma": "Calma",
-    "enojo": "Enojo",
-    "tristeza": "Tristeza",
-    "alegria": "Alegría",
-    "reconocimiento": "Reconocimiento",
-    "ironia": "Ironía",
-    "preocupacion": "Preocupación",
+    # Familia: ALEGRÍA (joy)
+    "serenidad": {
+        "label": "Serenidad", "familia": "joy", "intensidad": "leve",
+        "descripcion": "Comentario positivo, tranquilo, sin entusiasmo marcado.",
+    },
+    "alegria": {
+        "label": "Alegría", "familia": "joy", "intensidad": "media",
+        "descripcion": "Comentario que expresa contento o satisfacción emocional visible.",
+    },
+    "euforia": {
+        "label": "Euforia", "familia": "joy", "intensidad": "intensa",
+        "descripcion": "Entusiasmo desbordado, celebración explícita.",
+    },
+    # Familia: CONFIANZA (trust)
+    "aceptacion": {
+        "label": "Aceptación", "familia": "trust", "intensidad": "leve",
+        "descripcion": "Conformidad neutra con lo publicado, sin objeción.",
+    },
+    "confianza": {
+        "label": "Confianza", "familia": "trust", "intensidad": "media",
+        "descripcion": "Respaldo explícito a la gestión o la fuente de la información.",
+    },
+    "admiracion": {
+        "label": "Admiración", "familia": "trust", "intensidad": "intensa",
+        "descripcion": "Reconocimiento elevado, elogio directo a una persona o acción.",
+    },
+    # Familia: MIEDO (fear)
+    "aprension": {
+        "label": "Aprensión", "familia": "fear", "intensidad": "leve",
+        "descripcion": "Duda o inquietud leve sobre lo que puede pasar.",
+    },
+    "preocupacion": {
+        "label": "Preocupación", "familia": "fear", "intensidad": "media",
+        "descripcion": "Inquietud explícita por un riesgo o problema concreto.",
+    },
+    "terror": {
+        "label": "Terror / Pánico", "familia": "fear", "intensidad": "intensa",
+        "descripcion": "Miedo extremo, lenguaje de alarma o emergencia.",
+    },
+    # Familia: SORPRESA (surprise)
+    "distraccion": {
+        "label": "Distracción", "familia": "surprise", "intensidad": "leve",
+        "descripcion": "Comentario que nota algo inesperado sin darle mayor peso.",
+    },
+    "sorpresa": {
+        "label": "Sorpresa", "familia": "surprise", "intensidad": "media",
+        "descripcion": "Reacción de asombro ante un anuncio o dato no esperado.",
+    },
+    "asombro": {
+        "label": "Asombro", "familia": "surprise", "intensidad": "intensa",
+        "descripcion": "Sorpresa muy marcada, puede ser admiración o escándalo.",
+    },
+    # Familia: TRISTEZA (sadness)
+    "melancolia": {
+        "label": "Melancolía", "familia": "sadness", "intensidad": "leve",
+        "descripcion": "Tono apagado, resignación leve.",
+    },
+    "tristeza": {
+        "label": "Tristeza", "familia": "sadness", "intensidad": "media",
+        "descripcion": "Pesar explícito frente a una noticia o situación.",
+    },
+    "dolor": {
+        "label": "Dolor / Pena profunda", "familia": "sadness", "intensidad": "intensa",
+        "descripcion": "Duelo o pesar intenso (pérdidas, tragedias, luto).",
+    },
+    # Familia: DESAGRADO / ASCO (disgust)
+    "aburrimiento": {
+        "label": "Aburrimiento / Indiferencia", "familia": "disgust", "intensidad": "leve",
+        "descripcion": "Desinterés, comentario desganado.",
+    },
+    "desagrado": {
+        "label": "Desagrado", "familia": "disgust", "intensidad": "media",
+        "descripcion": "Rechazo explícito, algo 'no gusta' sin llegar a la indignación.",
+    },
+    "repulsion": {
+        "label": "Repulsión / Indignación moral", "familia": "disgust", "intensidad": "intensa",
+        "descripcion": "Rechazo fuerte, lenguaje de asco o condena moral.",
+    },
+    # Familia: ENOJO (anger)
+    "fastidio": {
+        "label": "Fastidio / Molestia", "familia": "anger", "intensidad": "leve",
+        "descripcion": "Irritación leve, queja sin agresividad.",
+    },
+    "enojo": {
+        "label": "Enojo", "familia": "anger", "intensidad": "media",
+        "descripcion": "Molestia clara y directa.",
+    },
+    "furia": {
+        "label": "Furia / Ira", "familia": "anger", "intensidad": "intensa",
+        "descripcion": "Enojo extremo, insultos, mayúsculas, lenguaje agresivo.",
+    },
+    # Familia: ANTICIPACIÓN (anticipation)
+    "interes": {
+        "label": "Interés", "familia": "anticipation", "intensidad": "leve",
+        "descripcion": "Curiosidad o atención hacia lo publicado, preguntas.",
+    },
+    "expectativa": {
+        "label": "Expectativa", "familia": "anticipation", "intensidad": "media",
+        "descripcion": "Comentario que anticipa un resultado o pide seguimiento.",
+    },
+    "vigilancia": {
+        "label": "Vigilancia / Alerta expectante", "familia": "anticipation", "intensidad": "intensa",
+        "descripcion": "Seguimiento atento y desconfiado.",
+    },
+    # DÍADAS (combinación de dos primarias adyacentes)
+    "optimismo": {
+        "label": "Optimismo", "familia": "diada", "deriva_de": ["anticipation", "joy"],
+        "descripcion": "Anticipación + alegría: expectativa positiva explícita sobre el futuro.",
+    },
+    "amor_civico": {
+        "label": "Cariño / Aprecio", "familia": "diada", "deriva_de": ["joy", "trust"],
+        "descripcion": "Alegría + confianza: afecto y respaldo emocional combinados.",
+    },
+    "sumision": {
+        "label": "Resignación conforme", "familia": "diada", "deriva_de": ["trust", "fear"],
+        "descripcion": "Confianza + miedo: acepta la situación aunque le genera inquietud.",
+    },
+    "asombro_temeroso": {
+        "label": "Sobrecogimiento", "familia": "diada", "deriva_de": ["fear", "surprise"],
+        "descripcion": "Miedo + sorpresa: reacción de shock ante algo inesperado y alarmante.",
+    },
+    "desaprobacion": {
+        "label": "Desaprobación", "familia": "diada", "deriva_de": ["surprise", "sadness"],
+        "descripcion": "Sorpresa + tristeza: decepción ante algo inesperado.",
+    },
+    "remordimiento": {
+        "label": "Remordimiento / Lamento", "familia": "diada", "deriva_de": ["sadness", "disgust"],
+        "descripcion": "Tristeza + desagrado: lamento con rechazo hacia lo ocurrido.",
+    },
+    "desprecio": {
+        "label": "Desprecio", "familia": "diada", "deriva_de": ["disgust", "anger"],
+        "descripcion": "Desagrado + enojo: menosprecio combinado con hostilidad.",
+    },
+    "agresividad": {
+        "label": "Agresividad", "familia": "diada", "deriva_de": ["anger", "anticipation"],
+        "descripcion": "Enojo + anticipación: amenaza o confrontación activa.",
+    },
+    # POSTURAS CÍVICAS (del catálogo original)
+    "reclamo": {
+        "label": "Reclamo", "familia": "civica",
+        "descripcion": "Exige una acción o respuesta concreta de la institución.",
+    },
+    "objecion": {
+        "label": "Objeción", "familia": "civica",
+        "descripcion": "Cuestiona una decisión o dato sin necesariamente exigir acción.",
+    },
+    "satisfaccion": {
+        "label": "Satisfacción", "familia": "civica",
+        "descripcion": "Declara conformidad con un resultado o servicio concreto.",
+    },
+    "calma": {
+        "label": "Calma", "familia": "civica",
+        "descripcion": "Tono neutro, informativo, sin carga emocional relevante.",
+    },
+    "reconocimiento": {
+        "label": "Reconocimiento", "familia": "civica",
+        "descripcion": "Agradece o felicita explícitamente una acción institucional.",
+    },
+    "ironia": {
+        "label": "Ironía / Sarcasmo", "familia": "civica",
+        "descripcion": "Crítica indirecta disfrazada de elogio o burla.",
+    },
+}
+
+# Compatibilidad con el catálogo anterior (10 claves).
+EMOCIONES_LEGACY = {
+    "reclamo", "objecion", "satisfaccion", "calma", "enojo", "tristeza",
+    "alegria", "reconocimiento", "ironia", "preocupacion",
 }
 
 EMOCIONES_VALIDAS = set(EMOCIONES.keys())
-EMOCION_LABELS = dict(EMOCIONES)
+EMOCION_LABELS = {k: v["label"] for k, v in EMOCIONES.items()}
 EMOCION_DEFAULT = "calma"
 
+FAMILIAS_LABELS = {
+    "joy": "Alegría", "trust": "Confianza", "fear": "Miedo",
+    "surprise": "Sorpresa", "sadness": "Tristeza", "disgust": "Desagrado",
+    "anger": "Enojo", "anticipation": "Anticipación",
+    "diada": "Emociones combinadas", "civica": "Posturas cívicas",
+}
+
+
+def familia_de(clave_emocion: str) -> str:
+    """Devuelve la familia de una emoción (joy, trust, …, civica)."""
+    return EMOCIONES.get(clave_emocion, {}).get("familia", "civica")
+
+
+def emociones_por_familia() -> dict:
+    """Agrupa las claves de emoción por familia, en el orden de la rueda de
+    Plutchik seguido de díadas y posturas cívicas.
+    """
+    orden_familias = ["joy", "trust", "fear", "surprise", "sadness",
+                       "disgust", "anger", "anticipation", "diada", "civica"]
+    agrupado = {f: [] for f in orden_familias}
+    for clave, meta in EMOCIONES.items():
+        agrupado[meta["familia"]].append(clave)
+    return {f: agrupado[f] for f in orden_familias if agrupado[f]}
+
+
 _EMOCION_SINONIMOS = {
-    "queja": "reclamo",
-    "reclamos": "reclamo",
-    "objeción": "objecion",
-    "objetar": "objecion",
-    "satisfacción": "satisfaccion",
-    "satisfecho": "satisfaccion",
-    "enojo": "enojo",
-    "enojado": "enojo",
-    "rabia": "enojo",
+    # Legadas
+    "queja": "reclamo", "reclamos": "reclamo",
+    "objeción": "objecion", "objetar": "objecion",
+    "satisfacción": "satisfaccion", "satisfecho": "satisfaccion",
+    "rabia": "enojo", "enojado": "enojo",
     "triste": "tristeza",
-    "tristeza": "tristeza",
-    "alegre": "alegria",
-    "alegría": "alegria",
-    "feliz": "alegria",
-    "felicidad": "alegria",
-    "reconocimiento": "reconocimiento",
-    "agradecimiento": "reconocimiento",
-    "gratitud": "reconocimiento",
-    "ironía": "ironia",
-    "ironico": "ironia",
-    "irónico": "ironia",
-    "burla": "ironia",
-    "preocupación": "preocupacion",
-    "preocupado": "preocupacion",
-    "inquietud": "preocupacion",
-    "calma": "calma",
-    "tranquilidad": "calma",
-    "tranquilo": "calma",
+    "alegre": "alegria", "alegría": "alegria", "feliz": "alegria", "felicidad": "alegria",
+    "agradecimiento": "reconocimiento", "gratitud": "reconocimiento",
+    "ironico": "ironia", "irónico": "ironia", "burla": "ironia",
+    "preocupado": "preocupacion", "inquietud": "preocupacion",
+    "tranquilidad": "calma", "tranquilo": "calma",
+    # Nuevas — Plutchik
+    "sereno": "serenidad", "tranquilo": "calma",
+    "eufórico": "euforia", "euforico": "euforia", "increíble": "euforia",
+    "acepto": "aceptacion", "de acuerdo": "aceptacion",
+    "confío": "confianza", "confio": "confianza", "respaldo": "confianza",
+    "admiro": "admiracion", "bravo": "admiracion", "elogio": "admiracion",
+    "aprensión": "aprension", "aprehensión": "aprension",
+    "miedo": "terror", "pánico": "terror", "panico": "terror", "alarma": "terror",
+    "sorprendido": "sorpresa", "asombrado": "asombro",
+    "melancólico": "melancolia", "melancolico": "melancolia",
+    "pena": "dolor", "duelo": "dolor",
+    "aburrido": "aburrimiento", "indiferente": "aburrimiento",
+    "disgusto": "desagrado", "me molesta": "desagrado",
+    "asco": "repulsion", "vergüenza": "repulsion", "indignación": "repulsion",
+    "molesto": "fastidio", "cansado de": "fastidio", "hartazgo": "fastidio",
+    "furioso": "furia", "iracundo": "furia",
+    "interesado": "interes", "curioso": "interes",
+    "espero que": "expectativa", "a ver si": "expectativa",
+    "vigilo": "vigilancia", "atento a": "vigilancia",
+    "optimista": "optimismo",
+    "cariño": "amor_civico", "aprecio": "amor_civico",
+    "resignado": "sumision", "toca aceptar": "sumision",
+    "sobrecogido": "asombro_temeroso",
+    "decepcionado": "desaprobacion", "no puedo creer": "desaprobacion",
+    "lamento": "remordimiento", "me arrepiento": "remordimiento",
+    "desprecio": "desprecio", "menosprecio": "desprecio",
+    "amenaza": "agresividad", "confrontación": "agresividad",
 }
 
 
 def normalizar_emocion(emocion):
-    """Devuelve una emoción canónica (10 emociones).
+    """Devuelve una emoción canónica (31 categorías).
 
     Acepta None, sinónimos, mayúsculas/espacios. Valor desconocido cae a
     EMOCION_DEFAULT ("calma").

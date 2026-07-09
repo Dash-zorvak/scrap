@@ -39,6 +39,14 @@ def _get(data, *keys, default="—"):
     return val
 
 
+def _render_card(html):
+    """Renderiza HTML dinámico eliminando líneas vacías internas que
+    Streamlit interpretaría como fin de bloque HTML (y el resto como
+    bloque de código indentado en texto literal)."""
+    limpio = "\n".join(line for line in html.split("\n") if line.strip())
+    st.markdown(limpio, unsafe_allow_html=True)
+
+
 # ── Configuración de página ───────────────────────────────────────────
 st.set_page_config(
     page_title="PANEL·SANTA ANA — Inteligencia Ciudadana",
@@ -430,7 +438,7 @@ with tab_pulso:
 
             pct_crit_obj = zona.get("pct_critica", 0) + zona.get("pct_objecion", 0)
 
-            st.markdown(f"""
+            _render_card(f"""
             <div class="exec-card" style="border-left:3px solid {tension_color}">
                 <div style="display:flex;justify-content:space-between;align-items:center">
                     <div class="exec-card-title">{zona.get('zona','—').upper()}</div>
@@ -452,7 +460,7 @@ with tab_pulso:
                 </div>
                 {citas_html}
             </div>
-            """, unsafe_allow_html=True)
+            """)
 
     # ── Pulso IQ ──────────────────────────────────────────────────────
     iq = b1.get("pulso_iq", {})
@@ -591,7 +599,7 @@ with tab_audiencia:
             cita_v = v.get("cita_destacada", "")
             cita_html = f'<div style="font-size:11px;color:var(--fg-secondary);font-style:italic;margin-top:6px">"{cita_v}"</div>' if cita_v else ""
 
-            st.markdown(f"""
+            _render_card(f"""
             <div class="exec-card">
                 <div style="display:flex;justify-content:space-between;align-items:center">
                     <div class="exec-card-title">{v.get('pagina','—')} {postura_badge}</div>
@@ -612,7 +620,7 @@ with tab_audiencia:
                 <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg-dim);margin-top:6px">
                 n_enlaces: {v.get('n_enlaces',0)}</div>
             </div>
-            """, unsafe_allow_html=True)
+            """)
     else:
         st.markdown('<div class="status-info">Sin datos de voces de influencia.</div>', unsafe_allow_html=True)
 
@@ -659,7 +667,7 @@ with tab_audiencia:
                 for e in t.get("comentarios_ejemplo", [])[:2]
             )
 
-            st.markdown(f"""
+            _render_card(f"""
             <div class="exec-card">
                 <div style="display:flex;justify-content:space-between;align-items:center">
                     <div class="exec-card-title">{t.get('tema','—').upper()} · PESO {t.get('peso',0):.2f}</div>
@@ -673,7 +681,7 @@ with tab_audiencia:
                 {f'<div style="margin:4px 0">{chips}</div>' if chips else ''}
                 {ejemplos}
             </div>
-            """, unsafe_allow_html=True)
+            """)
     else:
         st.markdown('<div class="status-info">Mínimo 10 comentarios requeridos para detectar temas emergentes.</div>', unsafe_allow_html=True)
 
@@ -809,7 +817,7 @@ with tab_riesgo:
     if fricciones:
         for fr in fricciones:
             accel_badge = "🔺 ACELERANDO" if fr.get("acelerando") else ""
-            st.markdown(f"""
+            _render_card(f"""
             <div class="pattern-card pattern-card-critical">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
                     <div style="font-family:var(--font-mono);font-size:10px;
@@ -831,7 +839,7 @@ with tab_riesgo:
                 border-top:1px solid var(--border);padding-top:6px">
                 ⟶ {fr.get('recomendacion_accion','—')}</div>
             </div>
-            """, unsafe_allow_html=True)
+            """)
     else:
         st.markdown('<div class="status-info">Sin puntos de fricción activos en el período.</div>', unsafe_allow_html=True)
 

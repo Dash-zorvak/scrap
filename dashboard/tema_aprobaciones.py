@@ -19,11 +19,13 @@ from datetime import datetime, timezone
 from dashboard.tema_taxonomia import (
     CATEGORIAS_VALIDAS,
     REMAP_LEGACY,
-    EMOCIONES_VALIDAS,
     etiqueta_tema,
-    normalizar_emocion,
     normalizar_postura,
     remapear,
+)
+from dashboard.tema_taxonomia_expandida import (
+    EMOCIONES_VALIDAS,
+    normalizar_emocion,
 )
 
 TABLA = "tema_aprobaciones"
@@ -250,7 +252,7 @@ def agregar_por_tema(db_path):
             if prev_c is None or 15 <= len(limpio) < len(prev_c):
                 ejemplos_critica[tema] = limpio
 
-    from dashboard.tema_taxonomia import EMOCIONES_VALIDAS
+    from dashboard.tema_taxonomia_expandida import EMOCIONES_VALIDAS
 
     temas = []
     for i, (tema, n) in enumerate(conteo.items()):

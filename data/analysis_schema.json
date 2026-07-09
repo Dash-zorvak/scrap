@@ -56,6 +56,8 @@
       "promedio_semanal": 0,
       "pct_diferencia": 0,
       "etiqueta": "",
+      "plataforma_label": "",
+      "periodo_label": "",
       "fecha_hoy": "",
       "n_dias_referencia": 0,
       "narrativa": "",
@@ -103,7 +105,9 @@
         "problema_principal": "",
         "citas_ejemplo": [],
         "nivel_tension": "",
-        "score_zona": 0
+        "score_zona": 0,
+        "narrativa": "",
+        "enlaces_referencia": []
       }
     ],
     "pulso_iq": {
@@ -116,12 +120,14 @@
       "engagement_rate": 0,
       "engagement_rate_formula": "ER = (reacciones + comentarios + compartidos) / impresiones * 100",
       "alcance_estimado": 0,
+      "alcance_estimado_metodo": "",
       "reacciones_positivas_pct": 0,
       "reacciones_negativas_pct": 0,
       "ratio_amor_enojo": 0,
       "ratio_amor_enojo_formula": "R = (likes + loves + cares) / (angrys + sads + hahas)",
       "porque_funciona": "",
-      "narrativa": ""
+      "narrativa": "",
+      "enlaces_referencia": []
     },
     "cierre_factual": ""
   },

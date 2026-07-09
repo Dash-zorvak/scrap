@@ -1,0 +1,116 @@
+{
+  "bloque1": {
+    "clima_narrativo": {
+      "tono_dominante": "critico",
+      "pct_favorable": 24.29,
+      "pct_neutral": 37.57,
+      "pct_critico": 38.14,
+      "n_favorable": 86,
+      "n_neutral": 133,
+      "n_critico": 135,
+      "n_total_comentarios": 354,
+      "tono_score_hoy": -0.14,
+      "tono_score_ayer": -0.09,
+      "tendencia": -0.05,
+      "etiqueta_tendencia": "empeorando",
+      "narrativa": "El clima publico medido en comentarios con sentimiento disponible se inclina hacia la critica: 135 de 354 comentarios fueron criticos, frente a 86 favorables y 133 neutrales. Esto deja una diferencia negativa de 13.84 puntos y muestra una conversacion donde la aprobacion no desaparece, pero queda por debajo del volumen de objeciones publicas. Basado en el calculo de favorables menos criticos (86-135) entre el total de comentarios, que son 354, el resultado es -0.14 puntos (negativo), lo que en la escala de -1 (todo critico) a +1 (todo favorable) confirma que la conversacion se inclina hacia la critica. Frente al periodo anterior, el tono empeoro (tendencia -0.05).",
+      "explicacion_simple": "De cada 354 comentarios con sentimiento identificado, 86 apoyan, 135 critican y 133 son neutrales. El numero final (-0.14) es simplemente cuantos mas criticaron que apoyaron, dividido entre el total.",
+      "enlaces_referencia": ["https://www.facebook.com/AlcaldiaDeSantaAnaOficial/posts/EJEMPLO_ID_1", "https://www.facebook.com/AlcaldiaDeSantaAnaOficial/posts/EJEMPLO_ID_2"],
+      "formula_usada": "NSI = (favorables - criticos) / total * 100 -- ya explicada con numeros reales dentro de 'narrativa'"
+    },
+    "indice_emociones": {
+      "conteos": {
+        "reclamo": 40, "objecion": 22, "satisfaccion": 18, "calma": 60, "enojo": 35, "tristeza": 12,
+        "alegria": 28, "reconocimiento": 15, "ironia": 9, "preocupacion": 25, "fastidio": 10, "furia": 6,
+        "aprension": 8, "terror": 2, "desagrado": 7, "repulsion": 3, "melancolia": 5, "dolor": 2,
+        "interes": 14, "expectativa": 9, "vigilancia": 4, "aceptacion": 11, "confianza": 13, "admiracion": 6,
+        "serenidad": 9, "euforia": 3, "optimismo": 7, "amor_civico": 4, "desaprobacion": 6, "desprecio": 3, "agresividad": 2
+      },
+      "emocion_dominante": "calma",
+      "narrativa": "La emocion que domina la conversacion es calma, presente en 60 de 388 comentarios clasificados por emocion (15.5%). Basado en el calculo del numero de comentarios con esa emocion entre el total clasificado (60 / 388) por 100, el resultado es 15.5%. La segunda emocion mas frecuente es reclamo, con 40 comentarios (10.3%), lo que muestra que la conversacion no es emocionalmente uniforme.",
+      "formula_usada": "% emocion = (n_emocion / total_comentarios_clasificados) * 100 -- ya explicada con numeros reales dentro de 'narrativa'",
+      "nota_ui": "conteos ahora usa las 31 claves de tema_taxonomia_expandida.EMOCIONES (8 familias primarias x 3 intensidades + 8 diadas + 7 posturas civicas heredadas). El selector de la UI filtra este dict por familia y clave; ver app_bloque1_snippets.render_indice_emociones."
+    },
+    "intensidad": {
+      "vol_hoy": 412,
+      "promedio_semanal": 620,
+      "pct_diferencia": -33.5,
+      "etiqueta": "baja",
+      "plataforma_label": "Facebook y TikTok de la Alcaldia de Santa Ana",
+      "periodo_label": "el 9 de julio de 2026",
+      "fecha_hoy": "2026-07-09",
+      "n_dias_referencia": 7,
+      "narrativa": "La intensidad mide el volumen de interacciones (reacciones + comentarios + compartidos) que recibio Facebook y TikTok de la Alcaldia de Santa Ana durante el 9 de julio de 2026, comparado con su propio promedio de los ultimos 7 dias. Hoy se registraron 412 interacciones, frente a un promedio habitual de 620; eso es 208 interacciones mas baja lo normal. Basado en el calculo de (hoy - promedio) entre el promedio (412 - 620) / 620, multiplicado por 100, el resultado es -33.5%, es decir, intensidad baja. En terminos simples: la gente esta viendo el contenido pero respondiendo menos que lo habitual: hay menos comentarios, reacciones y compartidos que en un dia/periodo normal, no que haya menos publicaciones.",
+      "explicacion_simple": "Se compara cuantas interacciones hubo hoy contra el promedio de los ultimos 7 dias en las mismas cuentas; el porcentaje solo decir si hoy hubo mas o menos actividad que lo usual, no compara con otra institucion.",
+      "enlaces_referencia": ["https://www.facebook.com/AlcaldiaDeSantaAnaOficial"],
+      "formula_usada": "delta_pct = ((vol_hoy - promedio) / promedio) * 100 -- ya explicada con numeros reales dentro de 'narrativa'"
+    },
+    "concentracion_tematica": {
+      "hhi": 0.29,
+      "nivel": "media-alta",
+      "top_tema": "apoyo_generico",
+      "n_temas": 6,
+      "ramas": [
+        {"tema": "apoyo_generico", "n": 68, "share": 0.5965, "pct_cambio_semana": 4, "acelerando": false, "emocion_dominante": "calma", "pct_apoyo": 88, "pct_critica": 3, "pct_neutral": 9},
+        {"tema": "servicios_municipales", "n": 20, "share": 0.1754, "pct_cambio_semana": 22, "acelerando": true, "emocion_dominante": "reclamo", "pct_apoyo": 25, "pct_critica": 60, "pct_neutral": 15},
+        {"tema": "gobernanza", "n": 14, "share": 0.1228, "pct_cambio_semana": -6, "acelerando": false, "emocion_dominante": "objecion", "pct_apoyo": 21, "pct_critica": 57, "pct_neutral": 22},
+        {"tema": "obras_y_servicios", "n": 8, "share": 0.0702, "pct_cambio_semana": -11, "acelerando": false, "emocion_dominante": "preocupacion", "pct_apoyo": 25, "pct_critica": 62, "pct_neutral": 13},
+        {"tema": "seguridad", "n": 4, "share": 0.0351, "pct_cambio_semana": 0, "acelerando": false, "emocion_dominante": "preocupacion", "pct_apoyo": 25, "pct_critica": 50, "pct_neutral": 25}
+      ],
+      "temas_acelerando": ["servicios_municipales"],
+      "temas_desacelerando": ["gobernanza", "obras_y_servicios"],
+      "narrativa": "La conversacion clasificada esta liderada por un tema, pero con varios temas activos: el tema 'apoyo_generico' reune 68 de 114 comentarios clasificados, equivalente al 59.65%. Las fricciones mas claras aparecen en servicios_municipales (20 comentarios, 60% criticos); gobernanza (14 comentarios, 57% criticos); obras_y_servicios (8 comentarios, 62% criticos). Temas que estan acelerando: servicios_municipales (+22% vs. la semana anterior, 20 comentarios). Temas que estan desacelerando: gobernanza (-6% vs. la semana anterior, 14 comentarios), obras_y_servicios (-11% vs. la semana anterior, 8 comentarios). Basado en el indice de concentracion (HHI = suma de cada participacion al cuadrado; en este periodo 0.60^2 + 0.18^2 + 0.12^2 + 0.07^2...), el resultado es HHI=0.29 (0 = totalmente repartido, 1 = un solo tema concentra todo).",
+      "explicacion_simple": "Se agrupan los comentarios clasificados por tema y se mide que porcentaje representa cada uno; HHI alto significa que pocos temas concentran casi toda la conversacion.",
+      "enlaces_referencia": ["https://www.facebook.com/AlcaldiaDeSantaAnaOficial/posts/EJEMPLO_TEMA_1"],
+      "formula_usada": "HHI = sum(share_i^2) donde share_i = n_tema_i / total_clasificados -- ya explicada con numeros reales dentro de 'narrativa'"
+    },
+    "metricas_rendimiento": {
+      "engagement_rate": 5.15,
+      "engagement_rate_formula": "ER = (reacciones + comentarios + compartidos) / impresiones * 100 = (348 + 354 + 71) / 15507 * 100 = 5.15%",
+      "alcance_estimado": 15507,
+      "alcance_estimado_metodo": "impresiones reportadas por la plataforma para las publicaciones del periodo (no es una suposicion: proviene del export de Meta Business Suite / TikTok Analytics de cada publicacion citada en enlaces_referencia)",
+      "reacciones_positivas": 274,
+      "reacciones_negativas": 74,
+      "reacciones_positivas_pct": 78.7,
+      "reacciones_negativas_pct": 21.3,
+      "ratio_amor_enojo": 3.7,
+      "ratio_amor_enojo_formula": "R = positivas / negativas = 274 / 74 = 3.70",
+      "porque_funciona": "El contenido con evidencia visual concreta (obra terminada, entrega directa) supera en interacciones al contenido puramente informativo del mismo periodo.",
+      "narrativa": "El engagement rate mide que porcentaje de quienes vieron el contenido interactuaron con el, calculado sobre 15,507 impresiones/vistas registradas. ER = (reacciones + comentarios + compartidos) / impresiones * 100 = (348 + 354 + 71) / 15507 * 100 = 5.15%. El ratio amor/enojo compara reacciones positivas (274: me gusta + me encanta + me importa) contra reacciones negativas (74: me enoja + me entristece + me divierte). Formula: R = positivas / negativas = 274 / 74 = 3.70. Reacciones +/-: 274 positivas y 74 negativas, sobre 348 reacciones totales registradas en las publicaciones del periodo. Estos numeros provienen de 12 publicaciones concretas del periodo; ver enlaces de referencia para verificar cada cifra en su fuente original.",
+      "enlaces_referencia": ["https://www.facebook.com/AlcaldiaDeSantaAnaOficial/posts/EJEMPLO_POST_1", "https://www.facebook.com/AlcaldiaDeSantaAnaOficial/posts/EJEMPLO_POST_2"]
+    },
+    "termometro_zonas": [
+      {
+        "zona": "Santa Ana Centro",
+        "n_comentarios": 46,
+        "pct_apoyo": 52,
+        "pct_critica": 30,
+        "pct_objecion": 10,
+        "pct_neutral": 8,
+        "emocion_dominante": "reclamo",
+        "tema_dominante": "servicios_municipales",
+        "problema_principal": "recoleccion de basura irregular",
+        "citas_ejemplo": ["Llevamos dos semanas sin que pase el camion de la basura en el centro"],
+        "nivel_tension": "medio",
+        "score_zona": 0.12,
+        "narrativa": "Esto mide el tono de los comentarios que mencionan explicitamente la zona 'Santa Ana Centro': de 46 comentarios georreferenciados a esta zona, 52% son de apoyo, 30% son criticos y 10% son objeciones, sobre el tema 'servicios_municipales'. Basado en el calculo de apoyo menos critica menos objecion, entre 100 (52 - 30 - 10) / 100, el resultado es +0.120, lo que ubica a esta zona en nivel de tension medio. Cita representativa de esta zona: 'Llevamos dos semanas sin que pase el camion de la basura en el centro'. Basado en 9 publicaciones con comentarios geolocalizados en esta zona.",
+        "enlaces_referencia": ["https://www.facebook.com/AlcaldiaDeSantaAnaOficial/posts/EJEMPLO_ZONA_1"]
+      }
+    ],
+    "pulso_iq": {
+      "valor": 48.1,
+      "cuadrante": "vigilancia",
+      "componentes": {"aprobacion": 43, "conexion": 51, "tranquilidad": 39, "diversidad_temas": 55, "presencia_zonas": 48, "consistencia": 60, "atencion": 46},
+      "narrativa": "El pulso integrado queda en 48.1 puntos porque combina, con distinto peso, 7 componentes: aprobacion ciudadana (sentimiento neto) = 43.0 (peso 1.0); conexion con la gente (engagement) = 51.0 (peso 1.0); tranquilidad (ausencia de enojo/friccion) = 39.0 (peso 1.0); diversidad de temas gestionados = 55.0 (peso 0.8); presencia territorial (cobertura de zonas) = 48.0 (peso 0.7); consistencia de publicacion = 60.0 (peso 0.9); capacidad de generar conversacion = 46.0 (peso 0.6). Formula: IQ = suma(componente_i * peso_i) / suma(peso_i) = 288.1 / 5.99 = 48.1. Como referencia cruzada con los otros bloques: la conversacion tuvo 38.14% de comentarios criticos, una concentracion tematica de HHI=0.29, y 773 interacciones totales frente a 15,507 vistas/impresiones registradas en el periodo.",
+      "formula_usada": "IQ = (aprobacion*1.0 + conexion*1.0 + tranquilidad*1.0 + diversidad*0.8 + presencia*0.7 + consistencia*0.9 + atencion*0.6) / suma_pesos -- ya explicada con numeros reales dentro de 'narrativa'"
+    },
+    "cierre_factual": "Periodo con conversacion mayoritariamente critica (38.14%), intensidad de interaccion por debajo del promedio semanal (-33.5%), y friccion concentrada en servicios municipales y gobernanza en Santa Ana Centro."
+  },
+  "_notas_de_migracion": [
+    "Los valores de ejemplo (86, 135, 354, 412, 620, 15507, etc.) son ILUSTRATIVOS para mostrar el formato; deben sustituirse por los agregados reales que ya calcula el pipeline de analisis (src/analyzer, src/intelligence) antes de escribir data/analysis.json.",
+    "indice_emociones.conteos ahora tiene 31 claves en vez de 10; actualizar dashboard/tema_aprobaciones.py y cualquier lugar que itere EMOCIONES_VALIDAS para usar tema_taxonomia_expandida.py.",
+    "concentracion_tematica.ramas.pct_cambio_semana es obligatorio ahora (antes solo existia 'acelerando' como booleano); se necesita para nombrar el delta real en el texto, no solo la flecha.",
+    "metricas_rendimiento.alcance_estimado_metodo y enlaces_referencia son nuevos: documentan de donde sale el numero (export real de la plataforma), no una suposicion.",
+    "termometro_zonas[].narrativa y enlaces_referencia son nuevos por zona."
+  ]
+}

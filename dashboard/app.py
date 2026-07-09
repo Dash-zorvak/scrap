@@ -15,8 +15,6 @@ from estilos_override import CSS_OVERRIDE
 from app_bloque1_snippets import (
     render_indice_emociones,
     render_concentracion_tematica,
-    render_metricas_rendimiento,
-    render_termometro_zonas,
 )
 
 # ── Ruta al JSON de análisis ──────────────────────────────────────────
@@ -349,10 +347,107 @@ with tab_pulso:
     render_concentracion_tematica(b1.get("concentracion_tematica", {}))
 
     # ── 05 · Métricas de Rendimiento ──────────────────────────────────
-    render_metricas_rendimiento(b1.get("metricas_rendimiento", {}))
+    st.markdown('<div class="section-header"><div class="section-title">05 · Métricas de Rendimiento</div></div>', unsafe_allow_html=True)
+    mr = b1.get("metricas_rendimiento", {})
+    if mr and any(v for v in [mr.get("engagement_rate"), mr.get("ratio_amor_enojo"), mr.get("alcance_estimado")]):
+        narrativa_mr = mr.get("narrativa", "")
+        if narrativa_mr:
+            st.markdown(f"""
+            <div class="interpretation">
+                <div class="interpretation-label">LECTURA EJECUTIVA</div>
+                <div class="interpretation-texto">{narrativa_mr}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        _expander_enlaces(mr.get("enlaces_referencia", []))
+        st.markdown(f"""
+        <div class="stat-row" style="grid-template-columns:repeat(4,1fr)">
+            <div class="stat-card">
+                <div class="stat-value">{mr.get("engagement_rate",0):.2f}</div>
+                <div class="stat-label">ENGAGEMENT RATE</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{mr.get("ratio_amor_enojo",0):.2f}</div>
+                <div class="stat-label">RATIO AMOR/ENOJO</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{mr.get("reacciones_positivas",0):,} <span style="font-size:12px;color:var(--fg-muted)">/ {mr.get("reacciones_negativas",0):,}</span></div>
+                <div class="stat-label">REACCIONES + / -</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{mr.get("alcance_estimado",0):,}</div>
+                <div class="stat-label">ALCANCE ESTIMADO</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        pfunciona = mr.get("porque_funciona", "")
+        if pfunciona:
+            st.markdown(f"""
+            <div style="background:var(--green-soft);border:1px solid var(--green-strong);border-radius:var(--r-sm);
+            padding:14px 18px;margin-bottom:10px">
+                <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.6px;
+                color:var(--green);font-weight:600;text-transform:uppercase;margin-bottom:4px">
+                POR QUÉ ESTÁ FUNCIONANDO</div>
+                <div style="font-size:13px;color:var(--fg-primary);line-height:1.7">{pfunciona}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        _card_explicacion_simple(mr.get("explicacion_simple", ""))
+        if mr.get("engagement_rate_formula"):
+            st.caption(f"Fórmula: {mr.get('engagement_rate_formula')}")
+        if mr.get("ratio_amor_enojo_formula"):
+            st.caption(f"Fórmula: {mr.get('ratio_amor_enojo_formula')}")
+    else:
+        st.markdown('<div class="status-info">Métricas de rendimiento no disponibles.</div>', unsafe_allow_html=True)
 
     # ── 06 · Termómetro de Zonas ──────────────────────────────────────
-    render_termometro_zonas(b1.get("termometro_zonas", []))
+    st.markdown('<div class="section-header"><div class="section-title">06 · Termómetro de Zonas</div></div>', unsafe_allow_html=True)
+    termometro_zonas = b1.get("termometro_zonas", [])
+    if not termometro_zonas:
+        st.markdown('<div class="status-info">Sin datos de zonas.</div>', unsafe_allow_html=True)
+    else:
+        for zona in termometro_zonas:
+            tension_color = {
+                "alto": "var(--red)",
+                "medio": "var(--amber)",
+                "bajo": "var(--green)"
+            }.get(zona.get("nivel_tension",""), "var(--fg-muted)")
+
+            citas_html = "".join(
+                f'<div style="font-style:italic;color:var(--fg-secondary);font-size:12px;margin-top:4px">"{c}"</div>'
+                for c in zona.get("citas_ejemplo", [])[:2]
+            )
+            narrativa_zona = zona.get("narrativa", "")
+            narrativa_zona_html = (
+                f'<div style="font-size:12px;color:var(--fg-primary);margin-top:8px;line-height:1.6">{narrativa_zona}</div>'
+                if narrativa_zona else ""
+            )
+
+            pct_crit_obj = zona.get("pct_critica", 0) + zona.get("pct_objecion", 0)
+
+            _render_card(f"""
+            <div class="exec-card" style="border-left:3px solid {tension_color}">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div class="exec-card-title">{zona.get('zona','—').upper()}</div>
+                    <div style="font-family:var(--font-mono);font-size:9px;
+                    color:{tension_color};font-weight:700">
+                    TENSIÓN {zona.get('nivel_tension','—').upper()}</div>
+                </div>
+                <div class="bar-tri" style="height:10px;margin:8px 0">
+                    <span class="bar-tri-pos" style="width:{zona.get('pct_apoyo',0):.0f}%"></span>
+                    <span class="bar-tri-neu" style="width:{zona.get('pct_neutral',0):.0f}%"></span>
+                    <span class="bar-tri-neg" style="width:{min(pct_crit_obj,100):.0f}%"></span>
+                </div>
+                <div style="font-size:11px;color:var(--fg-secondary)">
+                    Tema: <strong>{zona.get('tema_dominante','—')}</strong> ·
+                    Emoción: <strong>{zona.get('emocion_dominante','—')}</strong>
+                </div>
+                <div style="font-size:11px;color:var(--fg-muted);margin-top:4px;font-style:italic">
+                    {zona.get('problema_principal','—')}
+                </div>
+                {citas_html}
+                {narrativa_zona_html}
+            </div>
+            """)
+            _expander_enlaces(zona.get("enlaces_referencia", []), label=f"Ver enlaces de {zona.get('zona','esta zona')}")
 
     # ── Pulso IQ ──────────────────────────────────────────────────────
     iq = b1.get("pulso_iq", {})
@@ -360,6 +455,13 @@ with tab_pulso:
         iq_val = iq.get("valor", 0)
         iq_cuad = iq.get("cuadrante", "—")
         iq_narr = iq.get("narrativa", "—")
+        iq_comp = iq.get("componentes", {})
+        chips_iq = "".join(
+            f'<span style="font-size:11px;padding:2px 8px;background:var(--bg-elevated);'
+            f'border-radius:10px;color:var(--fg-secondary);margin:2px">{k.capitalize()} '
+            f'<strong>{v:.0f}</strong></span>'
+            for k, v in iq_comp.items() if v
+        )
         st.markdown(f"""
         <div style="margin-top:12px">
             <div class="section-header"><div class="section-title">Pulso en un Número</div></div>
@@ -368,9 +470,14 @@ with tab_pulso:
                 <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:1.5px;
                 text-transform:uppercase;color:var(--fg-muted);margin-top:8px">{iq_cuad.upper()}</div>
                 <div style="font-size:12px;color:var(--fg-secondary);margin-top:10px;line-height:1.6">{iq_narr}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;justify-content:center">{chips_iq}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
+        _card_explicacion_simple(iq.get("explicacion_simple", ""))
+        if iq.get("formula_usada"):
+            st.caption(f"Fórmula: {iq.get('formula_usada')}")
+        _expander_enlaces(iq.get("enlaces_referencia", []))
 
     # ── Cierre factual ────────────────────────────────────────────────
     cierre = b1.get("cierre_factual", "")

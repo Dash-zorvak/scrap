@@ -3,7 +3,12 @@
     "generado_en": "",
     "periodo": "",
     "plataforma": "",
-    "fecha_datos_hasta": ""
+    "fecha_datos_hasta": "",
+    "total_posts_analizados": 0,
+    "total_comentarios_analizados": 0,
+    "total_reacciones_sumadas": 0,
+    "total_impresiones_vistas": 0,
+    "enlaces_analizados": []
   },
   "bloque1": {
     "clima_narrativo": {
@@ -16,7 +21,33 @@
       "tono_score_ayer": 0,
       "tendencia": 0,
       "etiqueta_tendencia": "",
-      "narrativa": ""
+      "narrativa": "",
+      "formula_usada": "NSI = (positivos - negativos) / total * 100"
+    },
+    "indice_emociones": {
+      "reclamo": 0,
+      "objecion": 0,
+      "satisfaccion": 0,
+      "calma": 0,
+      "enojo": 0,
+      "tristeza": 0,
+      "alegria": 0,
+      "reconocimiento": 0,
+      "ironia": 0,
+      "preocupacion": 0,
+      "pct_reclamo": 0,
+      "pct_objecion": 0,
+      "pct_satisfaccion": 0,
+      "pct_calma": 0,
+      "pct_enojo": 0,
+      "pct_tristeza": 0,
+      "pct_alegria": 0,
+      "pct_reconocimiento": 0,
+      "pct_ironia": 0,
+      "pct_preocupacion": 0,
+      "emocion_dominante": "",
+      "narrativa": "",
+      "formula_usada": "% emocion = (n_emocion / total_comentarios) * 100"
     },
     "intensidad": {
       "vol_hoy": 0,
@@ -25,7 +56,8 @@
       "etiqueta": "",
       "fecha_hoy": "",
       "n_dias_referencia": 0,
-      "narrativa": ""
+      "narrativa": "",
+      "formula_usada": "Δ% = ((vol_hoy - promedio) / promedio) * 100"
     },
     "concentracion_tematica": {
       "hhi": 0,
@@ -33,13 +65,56 @@
       "estado": "",
       "top_tema": "",
       "n_temas": 0,
-      "ramas": [],
-      "narrativa": ""
+      "ramas": [
+        {
+          "tema": "",
+          "n": 0,
+          "share": 0,
+          "tendencia": "",
+          "acelerando": false,
+          "pct_cambio_semana": 0,
+          "emocion_dominante": "",
+          "pct_apoyo": 0,
+          "pct_critica": 0,
+          "pct_neutral": 0
+        }
+      ],
+      "temas_acelerando": [],
+      "temas_desacelerando": [],
+      "narrativa": "",
+      "formula_usada": "HHI = Σ(share_i²) donde share_i = n_tema_i / total_temas"
     },
-    "termometro_colonias": [],
+    "termometro_zonas": [
+      {
+        "zona": "",
+        "n_comentarios": 0,
+        "pct_apoyo": 0,
+        "pct_critica": 0,
+        "pct_objecion": 0,
+        "pct_neutral": 0,
+        "emocion_dominante": "",
+        "tema_dominante": "",
+        "problema_principal": "",
+        "citas_ejemplo": [],
+        "nivel_tension": "",
+        "score_zona": 0
+      }
+    ],
     "pulso_iq": {
       "valor": 0,
       "cuadrante": "",
+      "narrativa": "",
+      "formula_usada": "IQ = (aprobacion*1.0 + conexion*1.0 + tranquilidad*1.0 + diversidad*0.8 + presencia*0.7 + consistencia*0.9 + atencion*0.6) / suma_pesos"
+    },
+    "metricas_rendimiento": {
+      "engagement_rate": 0,
+      "engagement_rate_formula": "ER = (reacciones + comentarios + compartidos) / impresiones * 100",
+      "alcance_estimado": 0,
+      "reacciones_positivas_pct": 0,
+      "reacciones_negativas_pct": 0,
+      "ratio_amor_enojo": 0,
+      "ratio_amor_enojo_formula": "R = (likes + loves + cares) / (angrys + sads + hahas)",
+      "porque_funciona": "",
       "narrativa": ""
     },
     "cierre_factual": ""
@@ -49,22 +124,68 @@
       "pct_simpatizantes": 0,
       "pct_neutrales": 0,
       "pct_criticos": 0,
-      "n_total": 0
+      "n_total": 0,
+      "n_simpatizantes": 0,
+      "n_neutrales": 0,
+      "n_criticos": 0,
+      "formula_usada": "Segmentación por postura en comentarios aprobados"
     },
     "polarizacion": {
       "indice": 0,
       "nivel": "",
-      "narrativa": ""
+      "narrativa": "",
+      "nota_metodologica": "Limitación: solo mide conversación pública en páginas oficiales. No captura conversación privada ni otras redes.",
+      "formula_usada": "PI = |pct_simpatizantes - pct_criticos| / 100; nivel: consenso>0.6, dividida 0.3-0.6, confrontación<0.3"
     },
-    "voces_influencia": [],
-    "temas_emergentes_lda": []
+    "voces_influencia": [
+      {
+        "pagina": "",
+        "engagement": 0,
+        "publicaciones": 0,
+        "alcance_estimado": 0,
+        "reacciones_totales": 0,
+        "comentarios_totales": 0,
+        "compartidos_totales": 0,
+        "tono_predominante": "",
+        "tema_predominante": "",
+        "cita_destacada": "",
+        "postura": "",
+        "n_enlaces": 0
+      }
+    ],
+    "temas_emergentes_lda": [
+      {
+        "tema": "",
+        "peso": 0,
+        "n_comentarios": 0,
+        "pct_del_total": 0,
+        "palabras_clave": [],
+        "comentarios_ejemplo": [],
+        "tendencia": "",
+        "acelerando": false,
+        "pct_cambio_semana": 0,
+        "indice_emociones": {
+          "reclamo": 0,
+          "objecion": 0,
+          "satisfaccion": 0,
+          "enojo": 0,
+          "alegria": 0,
+          "reconocimiento": 0,
+          "emocion_dominante": ""
+        },
+        "pct_apoyo": 0,
+        "pct_critica": 0,
+        "pct_neutral": 0
+      }
+    ]
   },
   "bloque3": {
     "autenticidad": {
       "pct_organico": 0,
       "pct_coordinado": 0,
       "n_duplicados": 0,
-      "narrativa": ""
+      "narrativa": "",
+      "formula_usada": "% coordinado = n_mensajes_duplicados_o_similares / total_comentarios * 100"
     },
     "nivel_alerta": {
       "semaforo": "",
@@ -73,25 +194,76 @@
       "indice_enojo_reacciones": 0,
       "balance_confrontacion": 0,
       "n_temas_friccion": 0,
-      "alertas_cambridge": []
+      "alertas_cambridge": [],
+      "formula_riesgo": "IR = (pct_negativos*0.4 + indice_enojo*0.3 + balance_confrontacion*0.3) * sensibilidad_tema"
     },
     "velocidad_propagacion": {
       "proyeccion_24h": "",
       "tendencia_dias": [],
-      "narrativa": ""
+      "narrativa": "",
+      "temas_acelerando": [],
+      "temas_desacelerando": [],
+      "formula_usada": "Velocidad = Δcomentarios / Δtiempo; proyección = tendencia_lineal últimas 72h"
     },
-    "puntos_friccion": []
+    "puntos_friccion": [
+      {
+        "tema": "",
+        "zona": "",
+        "n_negativos": 0,
+        "pct_del_total": 0,
+        "cita": "",
+        "emocion_dominante": "",
+        "acelerando": false,
+        "reacciones_enojo": 0,
+        "n_comentarios_total": 0,
+        "enlaces_relacionados": [],
+        "recomendacion_accion": ""
+      }
+    ]
   },
   "bloque4": {
     "eco_historico": "",
     "leccion_aprendida": "",
     "brecha_percepcion_realidad": "",
-    "temas_emergentes_evolucion": [],
-    "temas_extinction": [],
+    "temas_emergentes_evolucion": [
+      {
+        "tema": "",
+        "estado": "",
+        "variacion_semanal": "",
+        "n_comentarios": 0,
+        "pct_cambio": 0,
+        "acelerando": false
+      }
+    ],
+    "temas_extinction": [
+      {
+        "tema": "",
+        "variacion_semanal": "",
+        "pct_cambio": 0
+      }
+    ],
     "contexto_no_visible": "",
     "correlacion_contenido_reaccion": "",
     "comparativa_sectorial": "",
     "proyeccion_escenario": "",
-    "recomendacion_estrategica": ""
+    "recomendacion_estrategica": "",
+    "recomendaciones_basadas_en_metricas": [
+      {
+        "numero": 1,
+        "recomendacion": "",
+        "metrica_base": "",
+        "valor_metrica": 0,
+        "umbral_accion": "",
+        "prioridad": ""
+      }
+    ],
+    "resumen_evidencia": {
+      "total_enlaces_analizados": 0,
+      "total_reacciones_sumadas": 0,
+      "total_impresiones": 0,
+      "total_comentarios": 0,
+      "periodo_cobertura": "",
+      "fuentes": []
+    }
   }
 }

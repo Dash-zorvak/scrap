@@ -168,6 +168,39 @@ tab_pulso, tab_audiencia, tab_riesgo, tab_intel = st.tabs([
 ])
 
 # ════════════════════════════════════════════════════════════
+# UTILIDADES DE RENDERIZADO
+# ════════════════════════════════════════════════════════════
+
+_EMO_DEFS = [
+    ("reclamo", "Reclamo", "var(--red)"),
+    ("objecion", "Objeción", "var(--amber)"),
+    ("satisfaccion", "Satisfacción", "var(--green)"),
+    ("calma", "Calma", "var(--green)"),
+    ("enojo", "Enojo", "var(--red)"),
+    ("tristeza", "Tristeza", "var(--red)"),
+    ("alegria", "Alegría", "var(--green)"),
+    ("reconocimiento", "Reconocimiento", "var(--green)"),
+    ("ironia", "Ironía", "var(--amber)"),
+    ("preocupacion", "Preocupación", "var(--amber)"),
+]
+
+
+def _render_emociones_barras(ie, show_caption=True):
+    """Renderiza 10 barras horizontales de emociones."""
+    for emo, label, color in _EMO_DEFS:
+        pct = ie.get(f"pct_{emo}", 0) if isinstance(ie, dict) else 0
+        st.markdown(f"""
+        <div class="bar-row">
+            <div class="bar-row-label">{label}</div>
+            <div class="bar-track">
+                <div class="bar-fill" style="width:{pct:.1f}%;background:{color}"></div>
+            </div>
+            <div class="bar-row-val">{pct:.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+# ════════════════════════════════════════════════════════════
 # BLOQUE I — PULSO GENERAL
 # ════════════════════════════════════════════════════════════
 with tab_pulso:
@@ -192,6 +225,7 @@ with tab_pulso:
     n_tot = cn.get("n_total_comentarios", 0)
     tend = cn.get("tendencia", 0)
     narrativa_cn = cn.get("narrativa", "Sin datos de clima narrativo.")
+    formula_cn = cn.get("formula_usada", "")
 
     tend_color = "var(--green)" if tend > 0.1 else ("var(--red)" if tend < -0.1 else "var(--amber)")
     tend_label = "↑ mejorando" if tend > 0.1 else ("↓ empeorando" if tend < -0.1 else "→ estable")
@@ -219,15 +253,36 @@ with tab_pulso:
         </div>
     </div>
     """, unsafe_allow_html=True)
+    if formula_cn:
+        st.caption(f"Fórmula: {formula_cn}")
 
-    # ── 02 · Intensidad ───────────────────────────────────────────────
-    st.markdown('<div class="section-header"><div class="section-title">02 · Intensidad de la Conversación</div></div>', unsafe_allow_html=True)
+    # ── 02 · Índice de Emociones (NUEVA) ───────────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">02 · Índice de Emociones</div></div>', unsafe_allow_html=True)
+    ie = b1.get("indice_emociones", {})
+    if ie and any(ie.get(f"pct_{e}", 0) for e, _, _ in _EMO_DEFS):
+        emo_dom = ie.get("emocion_dominante", "—")
+        formula_ie = ie.get("formula_usada", "")
+        st.markdown(f"""
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+            <div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-muted)">
+            EMOCIÓN DOMINANTE: <span style="color:var(--accent);font-weight:700">{emo_dom}</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+        _render_emociones_barras(ie)
+        if formula_ie:
+            st.caption(f"Fórmula: {formula_ie}")
+    else:
+        st.markdown('<div class="status-info">Índice de emociones no disponible.</div>', unsafe_allow_html=True)
+
+    # ── 03 · Intensidad ───────────────────────────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">03 · Intensidad de la Conversación</div></div>', unsafe_allow_html=True)
     it = b1.get("intensidad", {})
     vol_hoy = it.get("vol_hoy", 0)
     prom = it.get("promedio_semanal", 0)
     pct = it.get("pct_diferencia", 0)
     etiq_int = it.get("etiqueta", "—")
     narrativa_it = it.get("narrativa", "Sin datos de intensidad.")
+    formula_it = it.get("formula_usada", "")
     maxv = max(vol_hoy, prom, 1)
 
     col_hoy = "var(--red)" if pct > 15 else ("var(--blue)" if pct < -15 else "var(--accent)")
@@ -263,9 +318,11 @@ with tab_pulso:
         </div>
     </div>
     """, unsafe_allow_html=True)
+    if formula_it:
+        st.caption(f"Fórmula: {formula_it}")
 
-    # ── 03 · Concentración Temática ───────────────────────────────────
-    st.markdown('<div class="section-header"><div class="section-title">03 · Concentración Temática</div></div>', unsafe_allow_html=True)
+    # ── 04 · Concentración Temática ───────────────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">04 · Concentración Temática</div></div>', unsafe_allow_html=True)
     ct = b1.get("concentracion_tematica", {})
     ramas = ct.get("ramas", [])
     nivel_ct = ct.get("nivel", "")
@@ -274,10 +331,15 @@ with tab_pulso:
     paleta = ["var(--accent)","#a78bfa","#f59e0b","#34d399","#f472b6","#60a5fa","#fbbf24","#4ade80","#fb7185","#818cf8"]
     segmentos = "".join(f'<span style="display:inline-block;height:100%;background:{paleta[i%len(paleta)]};width:{r.get("share",0):.1f}%"></span>' for i,r in enumerate(ramas))
     filas = "".join(
-        f'<div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px">'
+        f'<div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;flex-wrap:wrap">'
         f'<span style="width:10px;height:10px;border-radius:2px;background:{paleta[i%len(paleta)]};display:inline-block;flex:none"></span>'
         f'<span style="flex:1;color:var(--fg-primary)">{r.get("tema","—")}</span>'
-        f'<span style="color:var(--fg-secondary)">{r.get("n",0)} publicaciones · {r.get("share",0):.0f}%</span>'
+        f'<span style="color:var(--fg-secondary);font-family:var(--font-mono);font-size:10px">{r.get("n",0)} pubs · {r.get("share",0):.0f}%</span>'
+        f'<div class="bar-tri" style="width:60px;height:6px;border-radius:2px;flex:none">'
+        f'<span class="bar-tri-pos" style="width:{r.get("pct_apoyo",100):.0f}%"></span>'
+        f'<span class="bar-tri-neu" style="width:{r.get("pct_neutral",0):.0f}%"></span>'
+        f'<span class="bar-tri-neg" style="width:{r.get("pct_critica",0):.0f}%"></span>'
+        f'</div>'
         f'</div>'
         for i,r in enumerate(ramas)
     )
@@ -297,11 +359,60 @@ with tab_pulso:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Sub-tarjetas ──────────────────────────────────────────────────
-    col_a, col_b = st.columns(2)
-    with col_a:
-        # Termómetro colonias
-        st.markdown('<div class="section-header"><div class="section-title">Termómetro de Colonias</div></div>', unsafe_allow_html=True)
+    temas_acel = ct.get("temas_acelerando", [])
+    temas_desacel = ct.get("temas_desacelerando", [])
+    if temas_acel or temas_desacel:
+        st.markdown(f"""
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin:6px 0 10px;font-size:12px">
+            <div><span style="color:var(--red)">🔺 TEMAS ACELERANDO:</span>
+            <span style="color:var(--fg-secondary)"> {', '.join(temas_acel) if temas_acel else '—'}</span></div>
+            <div><span style="color:var(--green)">🔻 TEMAS DESACELERANDO:</span>
+            <span style="color:var(--fg-secondary)"> {', '.join(temas_desacel) if temas_desacel else '—'}</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── 05 · Métricas de Rendimiento (NUEVA) ───────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">05 · Métricas de Rendimiento</div></div>', unsafe_allow_html=True)
+    mr = b1.get("metricas_rendimiento", {})
+    if mr and any(v for v in [mr.get("engagement_rate"), mr.get("ratio_amor_enojo"), mr.get("alcance_estimado")]):
+        st.markdown(f"""
+        <div class="stat-row" style="grid-template-columns:repeat(4,1fr)">
+            <div class="stat-card">
+                <div class="stat-value">{mr.get("engagement_rate",0):.2f}</div>
+                <div class="stat-label">ENGAGEMENT RATE</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{mr.get("ratio_amor_enojo",0):.2f}</div>
+                <div class="stat-label">RATIO AMOR/ENOJO</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{mr.get("reacciones_positivas",0):,} <span style="font-size:12px;color:var(--fg-muted)">/ {mr.get("reacciones_negativas",0):,}</span></div>
+                <div class="stat-label">REACCIONES + / -</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{mr.get("alcance_estimado",0):,}</div>
+                <div class="stat-label">ALCANCE ESTIMADO</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        pfunciona = mr.get("porque_funciona", "")
+        if pfunciona:
+            st.markdown(f"""
+            <div style="background:var(--green-soft);border:1px solid var(--green-strong);border-radius:var(--r-sm);
+            padding:14px 18px;margin-bottom:10px">
+                <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.6px;
+                color:var(--green);font-weight:600;text-transform:uppercase;margin-bottom:4px">
+                POR QUÉ ESTÁ FUNCIONANDO</div>
+                <div style="font-size:13px;color:var(--fg-primary);line-height:1.7">{pfunciona}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="status-info">Métricas de rendimiento no disponibles.</div>', unsafe_allow_html=True)
+
+    # ── 06 · Termómetro de Zonas (REDISEÑADO) ──────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">06 · Termómetro de Zonas</div></div>', unsafe_allow_html=True)
+    termometro_zonas = b1.get("termometro_zonas", [])
+    if not termometro_zonas:
         colonias = b1.get("termometro_colonias", [])
         if colonias:
             filas_col = "".join(
@@ -315,20 +426,60 @@ with tab_pulso:
             st.markdown(f'<div class="panel">{filas_col}</div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="status-info">Sin datos de zonas.</div>', unsafe_allow_html=True)
+    else:
+        for zona in termometro_zonas:
+            tension_color = {
+                "alto": "var(--red)",
+                "medio": "var(--amber)",
+                "bajo": "var(--green)"
+            }.get(zona.get("nivel_tension",""), "var(--fg-muted)")
 
-    with col_b:
-        # Pulso IQ
-        st.markdown('<div class="section-header"><div class="section-title">Pulso en un Número</div></div>', unsafe_allow_html=True)
-        iq = b1.get("pulso_iq", {})
+            citas_html = "".join(
+                f'<div style="font-style:italic;color:var(--fg-secondary);font-size:12px;margin-top:4px">"{c}"</div>'
+                for c in zona.get("citas_ejemplo", [])[:2]
+            )
+
+            pct_crit_obj = zona.get("pct_critica", 0) + zona.get("pct_objecion", 0)
+
+            st.markdown(f"""
+            <div class="exec-card" style="border-left:3px solid {tension_color}">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div class="exec-card-title">{zona.get('zona','—').upper()}</div>
+                    <div style="font-family:var(--font-mono);font-size:9px;
+                    color:{tension_color};font-weight:700">
+                    TENSIÓN {zona.get('nivel_tension','—').upper()}</div>
+                </div>
+                <div class="bar-tri" style="height:10px;margin:8px 0">
+                    <span class="bar-tri-pos" style="width:{zona.get('pct_apoyo',0):.0f}%"></span>
+                    <span class="bar-tri-neu" style="width:{zona.get('pct_neutral',0):.0f}%"></span>
+                    <span class="bar-tri-neg" style="width:{min(pct_crit_obj,100):.0f}%"></span>
+                </div>
+                <div style="font-size:11px;color:var(--fg-secondary)">
+                    Tema: <strong>{zona.get('tema_dominante','—')}</strong> ·
+                    Emoción: <strong>{zona.get('emocion_dominante','—')}</strong>
+                </div>
+                <div style="font-size:11px;color:var(--fg-muted);margin-top:4px;font-style:italic">
+                    {zona.get('problema_principal','—')}
+                </div>
+                {citas_html}
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── Pulso IQ ──────────────────────────────────────────────────────
+    iq = b1.get("pulso_iq", {})
+    if iq.get("valor") or iq.get("cuadrante"):
         iq_val = iq.get("valor", 0)
         iq_cuad = iq.get("cuadrante", "—")
         iq_narr = iq.get("narrativa", "—")
         st.markdown(f"""
-        <div class="panel" style="text-align:center">
-            <div style="font-size:64px;font-weight:700;color:var(--accent);line-height:1">{iq_val}</div>
-            <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:1.5px;
-            text-transform:uppercase;color:var(--fg-muted);margin-top:8px">{iq_cuad.upper()}</div>
-            <div style="font-size:12px;color:var(--fg-secondary);margin-top:10px;line-height:1.6">{iq_narr}</div>
+        <div style="margin-top:12px">
+            <div class="section-header"><div class="section-title">Pulso en un Número</div></div>
+            <div class="panel" style="text-align:center">
+                <div style="font-size:64px;font-weight:700;color:var(--accent);line-height:1">{iq_val}</div>
+                <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:1.5px;
+                text-transform:uppercase;color:var(--fg-muted);margin-top:8px">{iq_cuad.upper()}</div>
+                <div style="font-size:12px;color:var(--fg-secondary);margin-top:10px;line-height:1.6">{iq_narr}</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -358,13 +509,19 @@ with tab_audiencia:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── 04 · Mapa de Públicos ─────────────────────────────────────────
-    st.markdown('<div class="section-header"><div class="section-title">04 · Mapa de Públicos</div></div>', unsafe_allow_html=True)
+    # ── 07 · Mapa de Públicos ─────────────────────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">07 · Mapa de Públicos</div></div>', unsafe_allow_html=True)
     mp = b2.get("mapa_publicos", {})
     mp_sim = mp.get("pct_simpatizantes", 0)
     mp_neu = mp.get("pct_neutrales", 0)
     mp_crit = mp.get("pct_criticos", 0)
     mp_n = mp.get("n_total", 0)
+    formula_mp = mp.get("formula_usada", "")
+    n_sim = mp.get("n_simpatizantes", 0)
+    n_neu = mp.get("n_neutrales", 0)
+    n_crit = mp.get("n_criticos", 0)
+    total_posts = mp.get("total_posts_analizados", 0)
+
     st.markdown(f"""
     <div class="panel">
         <div class="panel-head">
@@ -384,12 +541,36 @@ with tab_audiencia:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── 05 · Polarización ─────────────────────────────────────────────
-    st.markdown('<div class="section-header"><div class="section-title">05 · Polarización</div></div>', unsafe_allow_html=True)
+    if n_sim or n_neu or n_crit:
+        st.markdown(f"""
+        <div class="stat-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px">
+            <div class="stat-card">
+                <div class="stat-value" style="color:var(--green)">{n_sim:,}</div>
+                <div class="stat-label">SIMPATIZANTES</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color:var(--amber)">{n_neu:,}</div>
+                <div class="stat-label">NEUTRALES</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color:var(--red)">{n_crit:,}</div>
+                <div class="stat-label">CRÍTICOS</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    if total_posts:
+        st.caption(f"De {mp_n} comentarios analizados de {total_posts} publicaciones")
+    if formula_mp:
+        st.caption(f"Fórmula: {formula_mp}")
+
+    # ── 08 · Polarización ─────────────────────────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">08 · Polarización</div></div>', unsafe_allow_html=True)
     pol = b2.get("polarizacion", {})
     pol_idx = pol.get("indice", 0)
     pol_nivel = pol.get("nivel", "—")
     pol_narr = pol.get("narrativa", "—")
+    pol_nota = pol.get("nota_metodologica", "")
     pol_color = {"confrontación": "var(--red)", "dividida": "var(--amber)", "consenso": "var(--green)"}.get(pol_nivel, "var(--accent)")
     st.markdown(f"""
     <div class="indicator indicator-{'critical' if pol_nivel=='confrontación' else ('warning' if pol_nivel=='dividida' else 'positive')}">
@@ -400,34 +581,106 @@ with tab_audiencia:
         </div>
     </div>
     """, unsafe_allow_html=True)
+    if pol_nota:
+        st.markdown(
+            f'<div class="status-info"><span class="status-label status-label-caution">LIMITACIÓN</span> '
+            f'{pol_nota}</div>',
+            unsafe_allow_html=True
+        )
 
-    # ── 06 · Voces de Influencia ──────────────────────────────────────
-    st.markdown('<div class="section-header"><div class="section-title">06 · Voces de Influencia</div></div>', unsafe_allow_html=True)
+    # ── 09 · Voces de Influencia (EXPANDIDA) ──────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">09 · Voces de Influencia</div></div>', unsafe_allow_html=True)
     voces = b2.get("voces_influencia", [])
     if voces:
-        max_eng = max((v.get("engagement", 0) for v in voces), default=1)
-        filas_v = "".join(
-            f'<div class="bar-row">'
-            f'<div class="bar-row-label">{v.get("pagina","—")}</div>'
-            f'<div class="bar-track"><div class="bar-fill bar-fill-cy" style="width:{v.get("engagement",0)/max_eng*100:.1f}%"></div></div>'
-            f'<div class="bar-row-val">{v.get("engagement",0):,} · {v.get("publicaciones",0)} posts</div>'
-            f'</div>'
-            for v in voces
-        )
-        st.markdown(f'<div class="panel">{filas_v}</div>', unsafe_allow_html=True)
+        for v in voces:
+            postura = v.get("postura", "")
+            postura_badge = ""
+            if postura:
+                pc = {"positiva": "var(--green)", "neutral": "var(--amber)", "negativa": "var(--red)"}.get(postura, "var(--fg-muted)")
+                postura_badge = f'<span style="font-family:var(--font-mono);font-size:9px;color:{pc};font-weight:600;text-transform:uppercase">· {postura}</span>'
+
+            cita_v = v.get("cita", "")
+            cita_html = f'<div style="font-size:11px;color:var(--fg-secondary);font-style:italic;margin-top:6px">"{cita_v}"</div>' if cita_v else ""
+
+            st.markdown(f"""
+            <div class="exec-card">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div class="exec-card-title">{v.get('pagina','—')} {postura_badge}</div>
+                </div>
+                <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-secondary);margin:6px 0">
+                    Engagement: <strong>{v.get('engagement',0):,}</strong> ·
+                    Reacciones: <strong>{v.get('reacciones',0):,}</strong> ·
+                    Comentarios: <strong>{v.get('comentarios',0):,}</strong> ·
+                    Compartidos: <strong>{v.get('compartidos',0):,}</strong>
+                </div>
+                <div style="font-size:11px;color:var(--fg-muted)">
+                    Tema predominante: <strong>{v.get('tema_predominante','—')}</strong> ·
+                    Tono: <strong>{v.get('tono','—')}</strong>
+                </div>
+                {cita_html}
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg-dim);margin-top:6px">
+                n_enlaces analizados: {v.get('n_enlaces_analizados',0)}</div>
+            </div>
+            """, unsafe_allow_html=True)
     else:
         st.markdown('<div class="status-info">Sin datos de voces de influencia.</div>', unsafe_allow_html=True)
 
-    # ── 07 · Temas Emergentes LDA ─────────────────────────────────────
-    st.markdown('<div class="section-header"><div class="section-title">07 · Temas Emergentes</div></div>', unsafe_allow_html=True)
+    # ── 10 · Temas Emergentes LDA (EXPANDIDA) ─────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">10 · Temas Emergentes</div></div>', unsafe_allow_html=True)
     temas_lda = b2.get("temas_emergentes_lda", [])
     if temas_lda:
         for t in temas_lda:
-            ejemplos = " · ".join(f'"{e}"' for e in t.get("comentarios_ejemplo", [])[:2])
+            tendencia_lda = t.get("tendencia", "")
+            tend_badge = ""
+            if tendencia_lda == "acelerando":
+                tend_badge = '<span style="color:var(--red);font-size:10px">🔺 ACELERANDO</span>'
+            elif tendencia_lda == "desacelerando":
+                tend_badge = '<span style="color:var(--green);font-size:10px">🔻 DESACELERANDO</span>'
+
+            pct_apoyo_t = t.get("pct_apoyo", 0)
+            pct_neu_t = t.get("pct_neutral", 0)
+            pct_crit_t = t.get("pct_critica", 0)
+
+            # Top 5 emociones del tema
+            ie_tema = t.get("indice_emociones", {})
+            emos_tema = ""
+            if ie_tema and isinstance(ie_tema, dict):
+                sorted_emos = sorted(
+                    [(k, v) for k, v in ie_tema.items() if k.startswith("pct_") and v],
+                    key=lambda x: x[1], reverse=True
+                )[:5]
+                if sorted_emos:
+                    emo_labels = []
+                    for ek, ev in sorted_emos:
+                        ename = ek.replace("pct_", "")
+                        emo_labels.append(f"{ename} {ev:.1f}%")
+                    emos_tema = " · ".join(emo_labels)
+
+            # Palabras clave como chips
+            palabras = t.get("palabras_clave", [])
+            chips = "".join(
+                f'<span style="display:inline-block;font-family:var(--font-mono);font-size:9px;color:var(--accent);background:var(--accent-soft);padding:2px 8px;border-radius:2px;margin:2px 4px 2px 0">{p}</span>'
+                for p in palabras
+            )
+
+            ejemplos = "".join(
+                f'<div style="font-size:11px;color:var(--fg-secondary);font-style:italic;margin-top:3px">"{e}"</div>'
+                for e in t.get("comentarios_ejemplo", [])[:2]
+            )
+
             st.markdown(f"""
             <div class="exec-card">
-                <div class="exec-card-title">{t.get('tema','—').upper()} · PESO {t.get('peso',0):.2f}</div>
-                <div style="font-size:12px;color:var(--fg-secondary);margin-top:4px">{ejemplos}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div class="exec-card-title">{t.get('tema','—').upper()} · PESO {t.get('peso',0):.2f}</div>
+                    {tend_badge}
+                </div>
+                <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-muted);margin:6px 0">
+                {t.get('n_comentarios',0)} coment · {t.get('pct_del_total',0):.1f}% del total ·
+                Δ sem: {t.get('pct_cambio_semana',0):.1f}%</div>
+                {f'<div class="bar-tri" style="height:6px;width:120px;margin:6px 0"><span class="bar-tri-pos" style="width:{pct_apoyo_t:.0f}%"></span><span class="bar-tri-neu" style="width:{pct_neu_t:.0f}%"></span><span class="bar-tri-neg" style="width:{pct_crit_t:.0f}%"></span></div>' if pct_apoyo_t or pct_neu_t or pct_crit_t else ''}
+                {f'<div style="font-size:10px;color:var(--fg-secondary);margin:4px 0">{emos_tema}</div>' if emos_tema else ''}
+                {f'<div style="margin:4px 0">{chips}</div>' if chips else ''}
+                {ejemplos}
             </div>
             """, unsafe_allow_html=True)
     else:
@@ -449,13 +702,14 @@ with tab_riesgo:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── 08 · Autenticidad ─────────────────────────────────────────────
-    st.markdown('<div class="section-header"><div class="section-title">08 · Autenticidad</div></div>', unsafe_allow_html=True)
+    # ── 11 · Autenticidad ─────────────────────────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">11 · Autenticidad</div></div>', unsafe_allow_html=True)
     aut = b3.get("autenticidad", {})
     aut_org = aut.get("pct_organico", 0)
     aut_coo = aut.get("pct_coordinado", 0)
     aut_dup = aut.get("n_duplicados", 0)
     aut_narr = aut.get("narrativa", "—")
+    formula_aut = aut.get("formula_usada", "")
     st.markdown(f"""
     <div class="interpretation">
         <div class="interpretation-label">LECTURA EJECUTIVA</div>
@@ -478,13 +732,16 @@ with tab_riesgo:
         </div>
     </div>
     """, unsafe_allow_html=True)
+    if formula_aut:
+        st.caption(f"Fórmula: {formula_aut}")
 
-    # ── 09 · Nivel de Alerta ──────────────────────────────────────────
-    st.markdown('<div class="section-header"><div class="section-title">09 · Nivel de Alerta</div></div>', unsafe_allow_html=True)
+    # ── 12 · Nivel de Alerta ──────────────────────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">12 · Nivel de Alerta</div></div>', unsafe_allow_html=True)
     na = b3.get("nivel_alerta", {})
     semaforo = na.get("semaforo", "verde")
     riesgo = na.get("indice_riesgo", 0)
     alertas_cb = na.get("alertas_cambridge", [])
+    formula_riesgo = na.get("formula_riesgo", "")
     sem_map = {"verde": ("positive", "var(--green)", "SITUACIÓN CONTROLADA"),
                "amarillo": ("warning", "var(--amber)", "ATENCIÓN REQUERIDA"),
                "rojo": ("critical", "var(--red)", "ALERTA ACTIVA")}
@@ -501,6 +758,8 @@ with tab_riesgo:
         </div>
     </div>
     """, unsafe_allow_html=True)
+    if formula_riesgo:
+        st.caption(f"Fórmula de riesgo: {formula_riesgo}")
 
     if alertas_cb:
         for alerta in alertas_cb:
@@ -514,11 +773,12 @@ with tab_riesgo:
             </div>
             """, unsafe_allow_html=True)
 
-    # ── 10 · Velocidad de Propagación ────────────────────────────────
-    st.markdown('<div class="section-header"><div class="section-title">10 · Velocidad de Propagación</div></div>', unsafe_allow_html=True)
+    # ── 13 · Velocidad de Propagación (EXPANDIDA) ─────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">13 · Velocidad de Propagación</div></div>', unsafe_allow_html=True)
     vp = b3.get("velocidad_propagacion", {})
     vp_proy = vp.get("proyeccion_24h", "—")
     vp_narr = vp.get("narrativa", "—")
+    vp_formula = vp.get("formula_usada", "")
     vp_col = {"acelerando": "var(--red)", "estable": "var(--accent)", "desacelerando": "var(--green)"}.get(vp_proy, "var(--fg-muted)")
     st.markdown(f"""
     <div class="exec-card">
@@ -527,23 +787,48 @@ with tab_riesgo:
         <div class="exec-card-sub">{vp_narr}</div>
     </div>
     """, unsafe_allow_html=True)
+    if vp_formula:
+        st.caption(f"Fórmula: {vp_formula}")
 
-    # ── 11 · Puntos de Fricción ───────────────────────────────────────
-    st.markdown('<div class="section-header"><div class="section-title">11 · Puntos de Fricción</div></div>', unsafe_allow_html=True)
+    temas_acel_vp = vp.get("temas_acelerando", [])
+    temas_desacel_vp = vp.get("temas_desacelerando", [])
+    if temas_acel_vp or temas_desacel_vp:
+        st.markdown(f"""
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin:6px 0 10px;font-size:12px">
+            <div><span style="color:var(--red)">🔺 TEMAS ACELERANDO:</span>
+            <span style="color:var(--fg-secondary)"> {', '.join(temas_acel_vp) if temas_acel_vp else '—'}</span></div>
+            <div><span style="color:var(--green)">🔻 TEMAS DESACELERANDO:</span>
+            <span style="color:var(--fg-secondary)"> {', '.join(temas_desacel_vp) if temas_desacel_vp else '—'}</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── 14 · Puntos de Fricción (EXPANDIDA) ───────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">14 · Puntos de Fricción</div></div>', unsafe_allow_html=True)
     fricciones = b3.get("puntos_friccion", [])
     if fricciones:
         for fr in fricciones:
+            accel_badge = "🔺 ACELERANDO" if fr.get("acelerando") else ""
             st.markdown(f"""
             <div class="pattern-card pattern-card-critical">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
                     <div style="font-family:var(--font-mono);font-size:10px;
                     color:var(--red);font-weight:600;letter-spacing:1px;
-                    text-transform:uppercase">{fr.get('tema','—')}</div>
-                    <div style="font-family:var(--font-mono);font-size:10px;
-                    color:var(--fg-muted)">{fr.get('n_negativos',0)} negativos</div>
+                    text-transform:uppercase">{fr.get('tema','—')} · {fr.get('zona','—')}</div>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <div style="font-family:var(--font-mono);font-size:10px;
+                        color:var(--fg-muted)">{fr.get('n_negativos',0)} neg · {fr.get('pct_del_total',0):.1f}%</div>
+                        <div style="font-size:10px;color:var(--red)">{accel_badge}</div>
+                    </div>
                 </div>
                 <div style="font-size:12px;color:var(--fg-secondary);
                 font-style:italic">"{fr.get('cita','—')}"</div>
+                <div style="font-family:var(--font-mono);font-size:10px;
+                color:var(--amber);margin-top:6px">
+                Emoción: {fr.get('emocion_dominante','—')} · 
+                Enojo reacciones: {fr.get('reacciones_enojo',0)}</div>
+                <div style="font-size:11px;color:var(--accent);margin-top:6px;
+                border-top:1px solid var(--border);padding-top:6px">
+                ⟶ {fr.get('recomendacion_accion','—')}</div>
             </div>
             """, unsafe_allow_html=True)
     else:
@@ -566,6 +851,26 @@ with tab_intel:
     </div>
     """, unsafe_allow_html=True)
 
+    # ── 15 · Recomendaciones Basadas en Métricas (NUEVA) ──────────────
+    recos = b4.get("recomendaciones_basadas_en_metricas", [])
+    if recos:
+        st.markdown('<div class="section-header"><div class="section-title">15 · Recomendaciones Basadas en Métricas</div></div>', unsafe_allow_html=True)
+        for r in recos:
+            prioridad_color = {"alta": "var(--red)", "media": "var(--amber)", "baja": "var(--green)"}.get(r.get("prioridad",""), "var(--fg-muted)")
+            st.markdown(f"""
+            <div class="exec-card" style="border-left:3px solid {prioridad_color}">
+                <div style="display:flex;justify-content:space-between">
+                    <div class="exec-card-title">REC #{r.get('numero',0)} · PRIORIDAD {r.get('prioridad','—').upper()}</div>
+                    <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-muted)">
+                    {r.get('metrica_base','—')}: {r.get('valor_metrica',0)}</div>
+                </div>
+                <div style="font-size:13px;color:var(--fg-primary);margin-top:6px">{r.get('recomendacion','—')}</div>
+                <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-muted);margin-top:4px">
+                Umbral de acción: {r.get('umbral_accion','—')}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── Memorándum existente ──────────────────────────────────────────
     st.markdown(f"""
     <div class="memo-container">
         <div class="memo-header">
@@ -631,3 +936,46 @@ with tab_intel:
                 {t.get('tema','—')} · {t.get('variacion_semanal','—')}
             </div>
             """, unsafe_allow_html=True)
+
+    # ── 16 · Resumen de Evidencia (NUEVA) ─────────────────────────────
+    ev = b4.get("resumen_evidencia", {})
+    enlaces = data.get("meta", {}).get("enlaces_analizados", [])
+
+    if ev or enlaces:
+        st.markdown('<div class="section-header" style="margin-top:24px"><div class="section-title">16 · Evidencia y Respaldo</div></div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="panel">
+            <div class="panel-head">
+                <div class="panel-title">FUENTES ANALIZADAS</div>
+                <div class="panel-meta">{ev.get('periodo_cobertura','—')}</div>
+            </div>
+            <div class="stat-row" style="grid-template-columns:repeat(4,1fr)">
+                <div class="stat-card">
+                    <div class="stat-value">{ev.get('total_enlaces_analizados',0)}</div>
+                    <div class="stat-label">ENLACES</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{ev.get('total_reacciones_sumadas',0):,}</div>
+                    <div class="stat-label">REACCIONES</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{ev.get('total_impresiones',0):,}</div>
+                    <div class="stat-label">IMPRESIONES</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{ev.get('total_comentarios',0):,}</div>
+                    <div class="stat-label">COMENTARIOS</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if enlaces:
+            st.markdown('<div class="exec-subheader">Lista de enlaces analizados</div>', unsafe_allow_html=True)
+            for url in enlaces:
+                st.markdown(
+                    f'<a href="{url}" target="_blank" rel="noopener" '
+                    f'style="display:block;font-family:var(--font-mono);font-size:10px;'
+                    f'color:var(--accent);margin:3px 0;text-decoration:none">🔗 {url}</a>',
+                    unsafe_allow_html=True
+                )

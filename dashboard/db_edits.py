@@ -38,13 +38,13 @@ COLUMNAS_TIKTOK_EDITABLES = {
 
 # Columnas de fb_posts que, si se corrigen manualmente, invalidan el
 # engagement ya calculado de ese post (D24) y deben disparar un recalculo
-# en la siguiente corrida de modulo3_engagement.procesar_facebook.
+# en el próximo procesamiento del pipeline de engagement.
 COLUMNAS_ENGAGEMENT_FB = {
     "likes_count", "loves_count", "cares_count", "hahas_count", "wows_count",
     "sads_count", "angrys_count", "comments_count",
 }
 
-# Lo mismo para la tabla videos (TikTok) — ver modulo3_engagement.procesar_tiktok.
+# Lo mismo para la tabla videos (TikTok).
 COLUMNAS_ENGAGEMENT_TIKTOK = {
     "views", "likes", "shares", "favorites_count", "comments_count",
 }
@@ -98,7 +98,7 @@ def update_fb_post(post_id, fields, db_path=None):
         cambio = cur.rowcount > 0
         # D24: si la correccion toca algun campo que afecta el engagement ya
         # calculado, marcar el post para que se recalcule en la siguiente
-        # corrida de modulo3_engagement en vez de quedar congelado con el
+        # corrida del pipeline de engagement en vez de quedar congelado con el
         # valor anterior a la correccion.
         if cambio and (set(campos.keys()) & COLUMNAS_ENGAGEMENT_FB):
             _marcar_recalculo(conn, "fb_posts", "post_id", post_id)

@@ -36,7 +36,6 @@ app.py                  # Dashboard del alcalde (solo lectura de JSON)
 config.py                # Rutas y configuración
 estilos.py                # Tema visual
 estilos_override.py       # Overrides de estilos
-hf_sync.py                 # Sincronización de DBs para despliegue
 panel_carga.py            # Panel de carga del analista (uso local, puerto 8502)
 dash_ui.py                 # Helpers de UI del panel de carga
 dash_ingesta.py            # Carga y revisión de lotes (capturas/PDF)

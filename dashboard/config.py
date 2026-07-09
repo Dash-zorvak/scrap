@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 # Carga variables desde un archivo .env cuando se corre en local. Se hace aqui
 # (config es lo primero que importa el dashboard) para que cualquier modulo que
 # lea variables de entorno al importarse —incluida la capa de IA en llm_groq /
-# topic_llm— ya las vea cargadas. En HF Spaces / Railway las variables vienen del
+# ya las vea cargadas. En HF Spaces / Railway las variables vienen del
 # entorno del contenedor y load_dotenv() es un no-op (no sobreescribe lo ya
 # definido), asi que es seguro en todos los despliegues.
 load_dotenv()
@@ -59,11 +59,4 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # Mínimo de comentarios analizados para considerar la muestra "suficiente" (Decisión #1)
 MIN_COMENTARIOS_MUESTRA = 15
 
-# ─── Sincronización opcional con Hugging Face Dataset (HF Spaces) ───
-# El disco de HF Spaces es efímero. Si se definen HF_DATASET_REPO y HF_TOKEN,
-# se descargan las bases persistidas al arrancar. En local/Railway es un no-op.
-try:
-    from dashboard.hf_sync import pull_dbs as _hf_pull_dbs
-    _hf_pull_dbs()
-except Exception:
-    pass
+

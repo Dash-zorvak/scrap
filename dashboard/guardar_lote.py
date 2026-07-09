@@ -279,11 +279,4 @@ def guardar_lote(lote: list, progreso_cb=None) -> dict:
     conn_tk.close()
     conn_ext.close()
 
-    # Persistir en HF Dataset si la sincronizacion esta activa (no-op en local/Railway).
-    try:
-        from dashboard.hf_sync import push_dbs as _hf_push_dbs
-        _hf_push_dbs()
-    except Exception:
-        pass
-
     return resumen

@@ -22,6 +22,8 @@
       "tendencia": 0,
       "etiqueta_tendencia": "",
       "narrativa": "",
+      "explicacion_simple": "",
+      "enlaces_referencia": [],
       "formula_usada": "NSI = (positivos - negativos) / total * 100"
     },
     "indice_emociones": {
@@ -57,6 +59,8 @@
       "fecha_hoy": "",
       "n_dias_referencia": 0,
       "narrativa": "",
+      "explicacion_simple": "",
+      "enlaces_referencia": [],
       "formula_usada": "Δ% = ((vol_hoy - promedio) / promedio) * 100"
     },
     "concentracion_tematica": {
@@ -82,6 +86,8 @@
       "temas_acelerando": [],
       "temas_desacelerando": [],
       "narrativa": "",
+      "explicacion_simple": "",
+      "enlaces_referencia": [],
       "formula_usada": "HHI = Σ(share_i²) donde share_i = n_tema_i / total_temas"
     },
     "termometro_zonas": [
@@ -128,12 +134,16 @@
       "n_simpatizantes": 0,
       "n_neutrales": 0,
       "n_criticos": 0,
+      "explicacion_simple": "",
+      "enlaces_referencia": [],
       "formula_usada": "Segmentación por postura en comentarios aprobados"
     },
     "polarizacion": {
       "indice": 0,
       "nivel": "",
       "narrativa": "",
+      "explicacion_simple": "",
+      "enlaces_referencia": [],
       "nota_metodologica": "Limitación: solo mide conversación pública en páginas oficiales. No captura conversación privada ni otras redes.",
       "formula_usada": "PI = |pct_simpatizantes - pct_criticos| / 100; nivel: consenso>0.6, dividida 0.3-0.6, confrontación<0.3"
     },
@@ -150,7 +160,8 @@
         "tema_predominante": "",
         "cita_destacada": "",
         "postura": "",
-        "n_enlaces": 0
+        "n_enlaces": 0,
+        "enlaces_referencia": []
       }
     ],
     "temas_emergentes_lda": [
@@ -199,6 +210,8 @@
       "pct_coordinado": 0,
       "n_duplicados": 0,
       "narrativa": "",
+      "explicacion_simple": "",
+      "enlaces_referencia": [],
       "formula_usada": "% coordinado = n_mensajes_duplicados_o_similares / total_comentarios * 100"
     },
     "nivel_alerta": {
@@ -208,13 +221,24 @@
       "indice_enojo_reacciones": 0,
       "balance_confrontacion": 0,
       "n_temas_friccion": 0,
-      "alertas_cambridge": [],
+      "tema_principal": "",
+      "emocion_principal": "",
+      "explicacion_simple": "",
+      "alertas_cambridge": [
+        {
+          "tipo": "",
+          "descripcion": "",
+          "enlaces_referencia": []
+        }
+      ],
       "formula_riesgo": "IR = (pct_negativos*0.4 + indice_enojo*0.3 + balance_confrontacion*0.3) * sensibilidad_tema"
     },
     "velocidad_propagacion": {
       "proyeccion_24h": "",
       "tendencia_dias": [],
       "narrativa": "",
+      "explicacion_simple": "",
+      "enlaces_referencia": [],
       "temas_acelerando": [],
       "temas_desacelerando": [],
       "formula_usada": "Velocidad = Δcomentarios / Δtiempo; proyección = tendencia_lineal últimas 72h"
@@ -231,14 +255,24 @@
         "reacciones_enojo": 0,
         "n_comentarios_total": 0,
         "enlaces_relacionados": [],
+        "explicacion_simple": "",
         "recomendacion_accion": ""
       }
     ]
   },
   "bloque4": {
-    "eco_historico": "",
-    "leccion_aprendida": "",
-    "brecha_percepcion_realidad": "",
+    "eco_historico": {
+      "narrativa": "",
+      "enlaces_referencia": []
+    },
+    "leccion_aprendida": {
+      "narrativa": "",
+      "enlaces_referencia": []
+    },
+    "brecha_percepcion_realidad": {
+      "narrativa": "",
+      "enlaces_referencia": []
+    },
     "temas_emergentes_evolucion": [
       {
         "tema": "",
@@ -256,11 +290,26 @@
         "pct_cambio": 0
       }
     ],
-    "contexto_no_visible": "",
-    "correlacion_contenido_reaccion": "",
-    "comparativa_sectorial": "",
-    "proyeccion_escenario": "",
-    "recomendacion_estrategica": "",
+    "contexto_no_visible": {
+      "narrativa": "",
+      "enlaces_referencia": []
+    },
+    "correlacion_contenido_reaccion": {
+      "narrativa": "",
+      "enlaces_referencia": []
+    },
+    "comparativa_sectorial": {
+      "narrativa": "",
+      "enlaces_referencia": []
+    },
+    "proyeccion_escenario": {
+      "narrativa": "",
+      "enlaces_referencia": []
+    },
+    "recomendacion_estrategica": {
+      "narrativa": "",
+      "enlaces_referencia": []
+    },
     "recomendaciones_basadas_en_metricas": [
       {
         "numero": 1,

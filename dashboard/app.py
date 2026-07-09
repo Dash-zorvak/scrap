@@ -47,6 +47,24 @@ def _render_card(html):
     st.markdown(limpio, unsafe_allow_html=True)
 
 
+def _expander_enlaces(enlaces, label="Ver todos los enlaces de referencia"):
+    """Muestra la lista completa de enlaces en un expander, solo si hay datos."""
+    if enlaces:
+        with st.expander(f"{label} ({len(enlaces)})"):
+            for url in enlaces:
+                st.markdown(f"- {url}")
+
+
+def _card_explicacion_simple(texto):
+    """Card de lenguaje llano, siempre visible ANTES de la fórmula técnica."""
+    if texto:
+        st.markdown(f"""
+<div style="background:var(--accent-soft);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:8px;font-size:13px;color:var(--fg-primary)">
+{texto}
+</div>
+""", unsafe_allow_html=True)
+
+
 # ── Configuración de página ───────────────────────────────────────────
 st.set_page_config(
     page_title="PANEL·SANTA ANA — Inteligencia Ciudadana",
@@ -244,6 +262,9 @@ with tab_pulso:
         <div class="interpretation-label">LECTURA EJECUTIVA</div>
         <div class="interpretation-texto">{narrativa_cn}</div>
     </div>
+    """, unsafe_allow_html=True)
+    _expander_enlaces(cn.get("enlaces_referencia", []))
+    st.markdown(f"""
     <div class="panel">
         <div class="panel-head">
             <div class="panel-title">TONO DOMINANTE · {dom.upper()}</div>
@@ -262,6 +283,7 @@ with tab_pulso:
         </div>
     </div>
     """, unsafe_allow_html=True)
+    _card_explicacion_simple(cn.get("explicacion_simple", ""))
     if formula_cn:
         st.caption(f"Fórmula: {formula_cn}")
 
@@ -278,8 +300,10 @@ with tab_pulso:
         </div>
         """, unsafe_allow_html=True)
         _render_emociones_barras(ie)
+        _card_explicacion_simple(ie.get("explicacion_simple", ""))
         if formula_ie:
             st.caption(f"Fórmula: {formula_ie}")
+        _expander_enlaces(ie.get("enlaces_referencia", []))
     else:
         st.markdown('<div class="status-info">Índice de emociones no disponible.</div>', unsafe_allow_html=True)
 
@@ -298,37 +322,39 @@ with tab_pulso:
     signo = f"+{pct:.0f}%" if pct > 0 else f"{pct:.0f}%"
 
     st.markdown(f"""
-    <div class="interpretation">
-        <div class="interpretation-label">LECTURA EJECUTIVA</div>
-        <div class="interpretation-texto">{narrativa_it}</div>
-    </div>
-    <div class="panel">
-        <div class="panel-head">
-            <div class="panel-title">INTENSIDAD DEL ÚLTIMO DÍA</div>
-            <div class="panel-meta">{it.get('fecha_hoy','—')} ·
-            {it.get('n_dias_referencia',0)} DÍAS DE REFERENCIA</div>
-        </div>
-        <div style="display:flex;align-items:baseline;gap:14px;margin:4px 0 12px">
-            <span style="font-size:44px;font-weight:700;line-height:1;
-            color:{col_hoy}">{signo}</span>
-            <span style="font-size:15px;color:var(--fg-secondary)">{etiq_int}</span>
-        </div>
-        <div class="bar-row">
-            <div class="bar-row-label">ÚLTIMO DÍA</div>
-            <div class="bar-track"><div class="bar-fill"
-            style="width:{vol_hoy/maxv*100:.1f}%;background:{col_hoy}"></div></div>
-            <div class="bar-row-val">{vol_hoy:,}</div>
-        </div>
-        <div class="bar-row">
-            <div class="bar-row-label">PROMEDIO</div>
-            <div class="bar-track"><div class="bar-fill bar-fill-blu"
-            style="width:{prom/maxv*100:.1f}%"></div></div>
-            <div class="bar-row-val">{prom:,}</div>
+    <div class="exec-card">
+        <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.6px;color:var(--accent);font-weight:600;text-transform:uppercase;margin-bottom:4px">LECTURA EJECUTIVA</div>
+        <div style="margin-bottom:12px;font-size:13px;color:var(--fg-primary);line-height:1.7">{narrativa_it}</div>
+        <div style="border-top:1px solid var(--border);padding-top:12px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">
+                <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-muted);letter-spacing:0.6px">INTENSIDAD DEL ÚLTIMO DÍA</div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg-dim)">
+                {it.get('fecha_hoy','—')} · {it.get('n_dias_referencia',0)} DÍAS DE REFERENCIA</div>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:14px;margin:4px 0 12px">
+                <span style="font-size:44px;font-weight:700;line-height:1;
+                color:{col_hoy}">{signo}</span>
+                <span style="font-size:15px;color:var(--fg-secondary)">{etiq_int}</span>
+            </div>
+            <div class="bar-row">
+                <div class="bar-row-label">ÚLTIMO DÍA</div>
+                <div class="bar-track"><div class="bar-fill"
+                style="width:{vol_hoy/maxv*100:.1f}%;background:{col_hoy}"></div></div>
+                <div class="bar-row-val">{vol_hoy:,}</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-row-label">PROMEDIO</div>
+                <div class="bar-track"><div class="bar-fill bar-fill-blu"
+                style="width:{prom/maxv*100:.1f}%"></div></div>
+                <div class="bar-row-val">{prom:,}</div>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
+    _card_explicacion_simple(it.get("explicacion_simple", ""))
     if formula_it:
         st.caption(f"Fórmula: {formula_it}")
+    _expander_enlaces(it.get("enlaces_referencia", []))
 
     # ── 04 · Concentración Temática ───────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">04 · Concentración Temática</div></div>', unsafe_allow_html=True)
@@ -358,6 +384,9 @@ with tab_pulso:
         <div class="interpretation-label">LECTURA EJECUTIVA</div>
         <div class="interpretation-texto">{narrativa_ct}</div>
     </div>
+    """, unsafe_allow_html=True)
+    _expander_enlaces(ct.get("enlaces_referencia", []))
+    st.markdown(f"""
     <div class="panel">
         <div class="panel-head">
             <div class="panel-title" style="color:{col_ct}">{ct.get('estado','—').upper()}</div>
@@ -367,6 +396,7 @@ with tab_pulso:
         <div style="margin-top:12px">{filas}</div>
     </div>
     """, unsafe_allow_html=True)
+    _card_explicacion_simple(ct.get("explicacion_simple", ""))
 
     temas_acel = ct.get("temas_acelerando", [])
     temas_desacel = ct.get("temas_desacelerando", [])
@@ -519,6 +549,8 @@ with tab_audiencia:
     n_crit = mp.get("n_criticos", 0)
     total_posts = mp.get("total_posts_analizados", 0)
 
+    _card_explicacion_simple(mp.get("explicacion_simple",""))
+
     st.markdown(f"""
     <div class="panel">
         <div class="panel-head">
@@ -561,6 +593,8 @@ with tab_audiencia:
     if formula_mp:
         st.caption(f"Fórmula: {formula_mp}")
 
+    _expander_enlaces(mp.get("enlaces_referencia",[]))
+
     # ── 08 · Polarización ─────────────────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">08 · Polarización</div></div>', unsafe_allow_html=True)
     pol = b2.get("polarizacion", {})
@@ -584,6 +618,9 @@ with tab_audiencia:
             f'{pol_nota}</div>',
             unsafe_allow_html=True
         )
+
+    _card_explicacion_simple(pol.get("explicacion_simple",""))
+    _expander_enlaces(pol.get("enlaces_referencia",[]))
 
     # ── 09 · Voces de Influencia (EXPANDIDA) ──────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">09 · Voces de Influencia</div></div>', unsafe_allow_html=True)
@@ -621,6 +658,7 @@ with tab_audiencia:
                 n_enlaces: {v.get('n_enlaces',0)}</div>
             </div>
             """)
+            _expander_enlaces(v.get("enlaces_referencia",[]), label="Ver enlaces de esta voz")
     else:
         st.markdown('<div class="status-info">Sin datos de voces de influencia.</div>', unsafe_allow_html=True)
 
@@ -710,14 +748,14 @@ with tab_riesgo:
     aut_narr = aut.get("narrativa", "—")
     formula_aut = aut.get("formula_usada", "")
     st.markdown(f"""
-    <div class="interpretation">
-        <div class="interpretation-label">LECTURA EJECUTIVA</div>
-        <div class="interpretation-texto">{aut_narr}</div>
-    </div>
     <div class="panel">
         <div class="panel-head">
             <div class="panel-title">ORGÁNICO VS COORDINADO</div>
             <div class="panel-meta">{aut_dup} MENSAJES DUPLICADOS DETECTADOS</div>
+        </div>
+        <div style="font-size:13px;color:var(--fg-secondary);line-height:1.7;
+        margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+            {aut_narr}
         </div>
         <div class="bar-row">
             <div class="bar-row-label">ORGÁNICO</div>
@@ -731,6 +769,8 @@ with tab_riesgo:
         </div>
     </div>
     """, unsafe_allow_html=True)
+    _card_explicacion_simple(aut.get("explicacion_simple", ""))
+    _expander_enlaces(aut.get("enlaces_referencia", []))
     if formula_aut:
         st.caption(f"Fórmula: {formula_aut}")
 
@@ -739,12 +779,19 @@ with tab_riesgo:
     na = b3.get("nivel_alerta", {})
     semaforo = na.get("semaforo", "verde")
     riesgo = na.get("indice_riesgo", 0)
+    tema_ppal = na.get("tema_principal", "")
+    emocion_ppal = na.get("emocion_principal", "")
     alertas_cb = na.get("alertas_cambridge", [])
     formula_riesgo = na.get("formula_riesgo", "")
     sem_map = {"verde": ("positive", "var(--green)", "SITUACIÓN CONTROLADA"),
                "amarillo": ("warning", "var(--amber)", "ATENCIÓN REQUERIDA"),
                "rojo": ("critical", "var(--red)", "ALERTA ACTIVA")}
     sem_cls, sem_col, sem_lbl = sem_map.get(semaforo, sem_map["verde"])
+
+    riesgo_sub = f"Índice de riesgo {riesgo}/100"
+    if tema_ppal or emocion_ppal:
+        riesgo_sub += f" — impulsado por {tema_ppal}" if tema_ppal else ""
+        riesgo_sub += f" con emoción dominante {emocion_ppal}" if emocion_ppal else ""
 
     st.markdown(f"""
     <div class="indicator indicator-{sem_cls}">
@@ -753,7 +800,7 @@ with tab_riesgo:
             <div class="indicator-text">{sem_lbl}</div>
             <div style="font-family:var(--font-mono);font-size:11px;
             color:var(--fg-muted);margin-top:4px">
-            ÍNDICE DE RIESGO: <span style="color:{sem_col}">{riesgo}/100</span></div>
+            {riesgo_sub}</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -768,9 +815,10 @@ with tab_riesgo:
                 color:var(--red);letter-spacing:1.4px;font-weight:600;
                 text-transform:uppercase">{alerta.get('tipo','—')}</div>
                 <div style="font-size:12px;color:var(--fg-secondary);
-                margin-top:4px">{alerta.get('detalle','—')}</div>
+                margin-top:4px">{alerta.get('descripcion','—')}</div>
             </div>
             """, unsafe_allow_html=True)
+            _expander_enlaces(alerta.get("enlaces_referencia", []))
 
     # ── 13 · Velocidad de Propagación (EXPANDIDA) ─────────────────────
     st.markdown('<div class="section-header"><div class="section-title">13 · Velocidad de Propagación</div></div>', unsafe_allow_html=True)
@@ -788,6 +836,8 @@ with tab_riesgo:
     """, unsafe_allow_html=True)
     if vp_formula:
         st.caption(f"Fórmula: {vp_formula}")
+    _card_explicacion_simple(vp.get("explicacion_simple", ""))
+    _expander_enlaces(vp.get("enlaces_referencia", []))
 
     # Serie diaria de tendencia
     tendencia_dias = vp.get("tendencia_dias", [])
@@ -840,6 +890,8 @@ with tab_riesgo:
                 ⟶ {fr.get('recomendacion_accion','—')}</div>
             </div>
             """)
+            _card_explicacion_simple(fr.get("explicacion_simple", ""))
+            _expander_enlaces(fr.get("enlaces_relacionados", []), label="Ver enlaces de este punto")
     else:
         st.markdown('<div class="status-info">Sin puntos de fricción activos en el período.</div>', unsafe_allow_html=True)
 
@@ -902,8 +954,14 @@ with tab_intel:
         ("09", "Recomendación Estratégica", "recomendacion_estrategica"),
     ]
     for num, titulo, key in _secciones:
-        texto = b4.get(key, "")
-        if texto:
+        raw = b4.get(key, {})
+        if isinstance(raw, dict):
+            texto = raw.get("narrativa", "—")
+            enlaces = raw.get("enlaces_referencia", [])
+        else:
+            texto = raw if raw else "—"
+            enlaces = []
+        if texto and texto != "—":
             st.markdown(f"""
             <div class="memo-section">
                 <div class="memo-section-number">§ {num}</div>
@@ -912,6 +970,7 @@ with tab_intel:
             </div>
             <hr class="memo-divider">
             """, unsafe_allow_html=True)
+        _expander_enlaces(enlaces, label=f"Ver fuentes — {titulo}")
 
     # Temas emergentes evolución
     temas_evo = b4.get("temas_emergentes_evolucion", [])

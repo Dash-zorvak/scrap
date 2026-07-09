@@ -290,18 +290,10 @@ with tab_pulso:
     n_tot = cn.get("n_total_comentarios", 0)
     tend = cn.get("tendencia", 0)
     narrativa_cn = cn.get("narrativa", "Sin datos de clima narrativo.")
-    formula_cn = cn.get("formula_usada", "")
 
     tend_color = "var(--green)" if tend > 0.1 else ("var(--red)" if tend < -0.1 else "var(--amber)")
     tend_label = "↑ mejorando" if tend > 0.1 else ("↓ empeorando" if tend < -0.1 else "→ estable")
 
-    st.markdown(f"""
-    <div class="interpretation">
-        <div class="interpretation-label">LECTURA EJECUTIVA</div>
-        <div class="interpretation-texto">{narrativa_cn}</div>
-    </div>
-    """, unsafe_allow_html=True)
-    _expander_enlaces(cn.get("enlaces_referencia", []))
     st.markdown(f"""
     <div class="panel">
         <div class="panel-head">
@@ -321,9 +313,13 @@ with tab_pulso:
         </div>
     </div>
     """, unsafe_allow_html=True)
-    _card_explicacion_simple(cn.get("explicacion_simple", ""))
-    if formula_cn:
-        st.caption(f"Fórmula: {formula_cn}")
+    st.markdown(f"""
+    <div class="interpretation">
+        <div class="interpretation-label">LECTURA EJECUTIVA</div>
+        <div class="interpretation-texto">{narrativa_cn}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    _expander_enlaces(cn.get("enlaces_referencia", []))
 
     # ── 02 · Índice de Emociones (NUEVA) ───────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">02 · Índice de Emociones</div></div>', unsafe_allow_html=True)

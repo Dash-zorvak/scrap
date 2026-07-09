@@ -58,7 +58,7 @@ El campo `enlaces_referencia` debe contener **la lista completa** de URLs de los
 
 | Sección | Reglas |
 |---------|--------|
-| Clima Narrativo | `explicacion_simple` debe traducir el tono dominante, porcentajes y tendencia a lenguaje llano. `enlaces_referencia` debe incluir los posts representativos del período. |
+| Clima Narrativo | `narrativa` debe traducir el tono dominante, los tres porcentajes, el total de comentarios y el índice de sentimiento neto (NSI) en prosa con cifras reales — nunca genérica ni sin datos (ver ejemplo de referencia en el equipo). NO debe citar la fórmula en crudo; la fórmula solo informa el cálculo detrás del número. `explicacion_simple` ya no aplica a esta sección (fusionada en `narrativa`). `enlaces_referencia` debe incluir los posts representativos del período. |
 | Intensidad | `explicacion_simple` debe explicar qué significa el Δ% y la etiqueta. `enlaces_referencia` = posts con mayor volumen del período. |
 | Concentración Temática | `explicacion_simple` debe describir la distribución temática sin usar "HHI". `enlaces_referencia` = posts que cubren los temas principales. |
 

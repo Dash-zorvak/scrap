@@ -21,8 +21,7 @@
       "tono_score_ayer": 0,
       "tendencia": 0,
       "etiqueta_tendencia": "",
-      "narrativa": "",
-      "explicacion_simple": "",
+      "narrativa": "De {n_total_comentarios} comentarios en el período, el tono predominante es {tono_dominante}: un {pct_favorable}% de los comentarios son favorables, {pct_neutral}% neutros y {pct_critico}% críticos. El índice de sentimiento neto se mantiene en {NSI} puntos sobre 100, reflejando [lectura cualitativa sostenida por la cifra], especialmente en [tema(s) concreto(s) si hay datos].",
       "enlaces_referencia": [],
       "formula_usada": "NSI = (positivos - negativos) / total * 100"
     },

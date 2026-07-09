@@ -1,0 +1,1261 @@
+[
+  {
+    "name": "chore/limpieza-conservadora",
+    "last_commit_date": "2026-06-30T16:27:41-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "dddbadd2",
+    "ahead": 4,
+    "behind": 96,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 92,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "diag/llm-empty-response-logging",
+    "last_commit_date": "2026-07-03T11:23:25-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "98661bfb",
+    "ahead": 0,
+    "behind": 90,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 97,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "docs/despliegue-cloudflare",
+    "last_commit_date": "2026-06-28T19:50:38-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "3152bdb8",
+    "ahead": 3,
+    "behind": 113,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 74,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "docs/panel-remoto-seguro",
+    "last_commit_date": "2026-06-29T09:43:56-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "bcd009f7",
+    "ahead": 2,
+    "behind": 112,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 75,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/bandera-confianza-tono",
+    "last_commit_date": "2026-06-24T12:16:53-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "7bbeca97",
+    "ahead": 2,
+    "behind": 141,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 48,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/bloque1-indices",
+    "last_commit_date": "2026-06-24T14:26:37-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "6a92f42e",
+    "ahead": 2,
+    "behind": 139,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 50,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/bloque2-polarizacion",
+    "last_commit_date": "2026-06-24T14:42:53-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "dac2d12b",
+    "ahead": 2,
+    "behind": 138,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 51,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/bloque3-riesgo",
+    "last_commit_date": "2026-06-24T15:13:47-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "b7f3bbb1",
+    "ahead": 2,
+    "behind": 137,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 52,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/bloque4-memoria",
+    "last_commit_date": "2026-06-24T15:42:11-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "30e91ec6",
+    "ahead": 3,
+    "behind": 136,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 53,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/capa3-dichos-senales",
+    "last_commit_date": "2026-06-24T12:37:40-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "9a9e719a",
+    "ahead": 1,
+    "behind": 140,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 49,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/capa3-idioms",
+    "last_commit_date": "2026-06-24T17:16:48-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "b76a3922",
+    "ahead": 1,
+    "behind": 133,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 55,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/capa4-honestidad",
+    "last_commit_date": "2026-06-24T16:52:27-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "be79bb83",
+    "ahead": 1,
+    "behind": 135,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 54,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/d3-contagio-seccion07",
+    "last_commit_date": "2026-07-03T15:52:08-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "5a885bd2",
+    "ahead": 0,
+    "behind": 77,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 102,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/d4-d5-validacion-enojo-critico-y-limpieza",
+    "last_commit_date": "2026-07-03T17:49:36-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "06eb4295",
+    "ahead": 1,
+    "behind": 75,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 103,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/d6-filtrado-contexto-estacion",
+    "last_commit_date": "2026-07-03T17:49:36-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "48025eb2",
+    "ahead": 0,
+    "behind": 72,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 104,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/d7-eliminar-constantes-tabla-muertas",
+    "last_commit_date": "2026-07-04T11:18:52-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "28411f17",
+    "ahead": 0,
+    "behind": 66,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 106,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/dashboard-traduccion-referencias",
+    "last_commit_date": "2026-06-28T10:52:53-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "2cc6c439",
+    "ahead": 8,
+    "behind": 122,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 65,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/dotenv-local-nim",
+    "last_commit_date": "2026-06-25T10:43:25-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "849dcd7e",
+    "ahead": 1,
+    "behind": 131,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 57,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/filtro-plataforma",
+    "last_commit_date": "2026-06-29T18:10:48-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "b040c3c7",
+    "ahead": 10,
+    "behind": 103,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 85,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/fix-textos-cards",
+    "last_commit_date": "2026-06-30T14:37:54-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "a1297c81",
+    "ahead": 7,
+    "behind": 97,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 91,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/ia-cascada-nim",
+    "last_commit_date": "2026-06-25T10:11:46-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "61bb9e9c",
+    "ahead": 1,
+    "behind": 132,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 56,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/ia-clasificacion-contexto",
+    "last_commit_date": "2026-06-24T09:38:45-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "6ed0adb0",
+    "ahead": 1,
+    "behind": 143,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 47,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/medalla-estructura-plantilla",
+    "last_commit_date": "2026-06-30T12:51:24-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "4a4d1210",
+    "ahead": 2,
+    "behind": 98,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 90,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/medalla-pdf-editor-db",
+    "last_commit_date": "2026-06-29T12:24:21-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "873c128d",
+    "ahead": 5,
+    "behind": 110,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 77,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/mover-aprobar-comentarios-panel-carga",
+    "last_commit_date": "2026-07-03T13:02:35-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "50927438",
+    "ahead": 1,
+    "behind": 83,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 99,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/pipeline-incremental",
+    "last_commit_date": "2026-06-29T18:58:46-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "aff0a91a",
+    "ahead": 8,
+    "behind": 102,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 86,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/revision-no-bloqueante-y-progreso-lote",
+    "last_commit_date": "2026-06-27T13:58:41-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "62c12ed4",
+    "ahead": 2,
+    "behind": 126,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 62,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/separar-dashboard-panel",
+    "last_commit_date": "2026-06-28T19:36:56-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "abfbc4eb",
+    "ahead": 2,
+    "behind": 114,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 73,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/spinner-render-revisor-temas",
+    "last_commit_date": "2026-07-03T13:02:35-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "cb41eafd",
+    "ahead": 0,
+    "behind": 81,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 100,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/temas-aprobacion-manual",
+    "last_commit_date": "2026-06-25T12:38:22-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "2c019002",
+    "ahead": 3,
+    "behind": 130,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 58,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/texto-opencode-zen",
+    "last_commit_date": "2026-06-28T16:33:16-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "c7a32d80",
+    "ahead": 1,
+    "behind": 116,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 71,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "feat/universo-temas-ia-manual",
+    "last_commit_date": "2026-07-03T15:03:16-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "956d1922",
+    "ahead": 0,
+    "behind": 79,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 101,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/bert-retry-cooldown-d30",
+    "last_commit_date": "2026-07-07T10:55:36-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "f36e84b1",
+    "ahead": 0,
+    "behind": 23,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 128,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/bloque4-narrativa-cascada-nim",
+    "last_commit_date": "2026-06-27T13:31:33-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "95f7b2b4",
+    "ahead": 1,
+    "behind": 127,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 61,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/cache-narrativa-max-d28",
+    "last_commit_date": "2026-07-07T10:54:27-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "1eb68953",
+    "ahead": 0,
+    "behind": 23,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 126,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/categoria-nombre-y-llamada-duplicada-engagement",
+    "last_commit_date": "2026-07-04T16:05:24-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "5cb4d883",
+    "ahead": 0,
+    "behind": 59,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 109,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/coherencia-analitica",
+    "last_commit_date": "2026-06-30T19:00:22-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "6cc09bd5",
+    "ahead": 4,
+    "behind": 95,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 93,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/columnas-requeridas-constantes-d32",
+    "last_commit_date": "2026-07-07T10:57:59-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "62b2fba7",
+    "ahead": 0,
+    "behind": 23,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 130,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/contradiccion-saldo-narrativa",
+    "last_commit_date": "2026-07-04T17:03:49-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "0cd4767c",
+    "ahead": 0,
+    "behind": 57,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 111,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/d16-sent-comentarios-to-score-sentimiento",
+    "last_commit_date": "2026-07-06T16:01:51-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "51599b7a",
+    "ahead": 0,
+    "behind": 48,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 114,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/d17-post-ids-por-tema-comentarios",
+    "last_commit_date": "2026-07-06T16:11:39-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "fd376a5d",
+    "ahead": 0,
+    "behind": 49,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 115,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/d18-engagement-connection-finally",
+    "last_commit_date": "2026-07-06T16:33:54-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "921f1605",
+    "ahead": 0,
+    "behind": 48,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 116,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/d19-warn-dropped-null-dates-connection-close",
+    "last_commit_date": "2026-07-06T16:49:40-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "258ba23a",
+    "ahead": 0,
+    "behind": 41,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 117,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/d20-temas-emergentes-filtro-periodo",
+    "last_commit_date": "2026-07-06T17:10:37-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "437aca39",
+    "ahead": 0,
+    "behind": 40,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 118,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/d21-llm-respuesta-vacia-reintento",
+    "last_commit_date": "2026-07-06T17:39:19-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "6296ac46",
+    "ahead": 0,
+    "behind": 39,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 119,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/d9-silent-llm-fallback-logging",
+    "last_commit_date": "2026-07-04T11:44:05-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "7a78cfb5",
+    "ahead": 0,
+    "behind": 63,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 107,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/date-input-rango-calendario",
+    "last_commit_date": "2026-06-26T14:53:44-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "88746f0e",
+    "ahead": 1,
+    "behind": 129,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 59,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/dedup-posts-url-duplicados",
+    "last_commit_date": "2026-06-27T18:16:20-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "71bea847",
+    "ahead": 2,
+    "behind": 123,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 64,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/dedupe-reasignar-comentarios-keep",
+    "last_commit_date": "2026-07-07T12:18:49-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "e1e80883",
+    "ahead": 0,
+    "behind": 8,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 135,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/deepseek-thinking-desactivado",
+    "last_commit_date": "2026-07-06T13:52:37-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "bcce4f94",
+    "ahead": 0,
+    "behind": 55,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 112,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/editor-tiktok-registros",
+    "last_commit_date": "2026-06-29T13:27:53-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "1bb6c7de",
+    "ahead": 1,
+    "behind": 107,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 80,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/editor-tiktok-syntax",
+    "last_commit_date": "2026-06-29T13:39:20-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "66e73289",
+    "ahead": 1,
+    "behind": 106,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 81,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/eliminar-codigo-muerto-dash-metrics",
+    "last_commit_date": "2026-07-04T16:33:12-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "33ae3876",
+    "ahead": 0,
+    "behind": 56,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 110,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/eliminar-trends-reporting-huerfanos",
+    "last_commit_date": "2026-07-07T12:16:24-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "59df0f79",
+    "ahead": 0,
+    "behind": 9,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 133,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/estabilizar-cluster-id-modulo1",
+    "last_commit_date": "2026-07-06T18:10:26-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "1f4d181c",
+    "ahead": 0,
+    "behind": 38,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 120,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/fstring-backslash-ocean",
+    "last_commit_date": "2026-06-22T15:36:49-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "9dd96547",
+    "ahead": 0,
+    "behind": 145,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 45,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/groq-client-key-refresh-d29",
+    "last_commit_date": "2026-07-07T10:54:57-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "899403d1",
+    "ahead": 0,
+    "behind": 23,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 127,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/groq-confianza-real-sentimiento",
+    "last_commit_date": "2026-07-07T10:14:33-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "7f5825c3",
+    "ahead": 0,
+    "behind": 29,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 123,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/incrementalidad-por-comentario-sentimiento",
+    "last_commit_date": "2026-07-06T18:38:41-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "f8c200b8",
+    "ahead": 0,
+    "behind": 37,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 121,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/log-warning-oficiales-vacio-d27",
+    "last_commit_date": "2026-07-07T10:35:02-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "11c9b92d",
+    "ahead": 0,
+    "behind": 27,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 125,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/medalla-adaptativa",
+    "last_commit_date": "2026-06-30T09:23:37-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "eb7ed3f6",
+    "ahead": 2,
+    "behind": 99,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 89,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/medalla-descarga-directa",
+    "last_commit_date": "2026-06-29T19:22:28-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "63faade5",
+    "ahead": 5,
+    "behind": 101,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 87,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/narrativa-cache-rate-limit",
+    "last_commit_date": "2026-06-28T16:10:52-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "8b37c6a4",
+    "ahead": 1,
+    "behind": 117,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 70,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/periodo-selector",
+    "last_commit_date": "2026-06-28T14:22:10-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "0aad6da5",
+    "ahead": 2,
+    "behind": 120,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 67,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/periodos-cutoff-logger-d33",
+    "last_commit_date": "2026-07-07T10:58:31-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "e38512de",
+    "ahead": 0,
+    "behind": 23,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 131,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/polarizacion-consistente",
+    "last_commit_date": "2026-06-28T15:33:31-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "eacde589",
+    "ahead": 3,
+    "behind": 118,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 69,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/reacciones-temas-v2",
+    "last_commit_date": "2026-06-22T15:10:42-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "67eace90",
+    "ahead": 5,
+    "behind": 147,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 44,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/recalculo-engagement-post-editor",
+    "last_commit_date": "2026-07-06T19:00:58-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "4d722bdc",
+    "ahead": 0,
+    "behind": 36,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 122,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/redondeo-sentimiento-100-d26",
+    "last_commit_date": "2026-07-07T10:34:04-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "a5183e12",
+    "ahead": 0,
+    "behind": 27,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 124,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/reportlab-requirements",
+    "last_commit_date": "2026-06-29T13:06:01-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "723905e2",
+    "ahead": 1,
+    "behind": 108,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 79,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/restaura-filtra-fecha",
+    "last_commit_date": "2026-07-02T15:11:20-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "e52159d1",
+    "ahead": 0,
+    "behind": 92,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 95,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/revert-medalla-pdf-params",
+    "last_commit_date": "2026-07-03T12:01:59-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "d59e4581",
+    "ahead": 0,
+    "behind": 89,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 98,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/revision-general-dashboard",
+    "last_commit_date": "2026-06-28T13:46:43-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "e900514f",
+    "ahead": 10,
+    "behind": 121,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 66,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/selectores-fantasma-override-d34",
+    "last_commit_date": "2026-07-07T11:27:14-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "0643083b",
+    "ahead": 0,
+    "behind": 22,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 132,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/sentiment-na-ambiguo",
+    "last_commit_date": "2026-06-29T19:41:05-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "5a3d82de",
+    "ahead": 3,
+    "behind": 100,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 88,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/sentimiento-fuente",
+    "last_commit_date": "2026-06-28T14:47:19-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "2ebd623e",
+    "ahead": 1,
+    "behind": 119,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 68,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/storage-db-message-none",
+    "last_commit_date": "2026-07-07T12:17:16-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "7357590c",
+    "ahead": 0,
+    "behind": 9,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 134,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/temas-postura-apoyo-critica",
+    "last_commit_date": "2026-06-27T17:56:20-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "7c0e3c6d",
+    "ahead": 3,
+    "behind": 124,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 63,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/tiktok-id-colision",
+    "last_commit_date": "2026-06-29T16:24:54-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "bcd21cf9",
+    "ahead": 2,
+    "behind": 105,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 83,
+    "pr_state": "closed",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/tiktok-id-unico",
+    "last_commit_date": "2026-06-29T16:33:12-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "5732f6f2",
+    "ahead": 1,
+    "behind": 104,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 84,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/timeout-y-tono-bloque4",
+    "last_commit_date": "2026-06-28T19:01:09-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "06e178e6",
+    "ahead": 2,
+    "behind": 115,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 72,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/toast-topic-llm-logging-d31",
+    "last_commit_date": "2026-07-07T10:57:13-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "ef47fd7b",
+    "ahead": 0,
+    "behind": 23,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 129,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/unifica-bloque3-fuente",
+    "last_commit_date": "2026-07-03T09:49:57-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "50ee1501",
+    "ahead": 0,
+    "behind": 91,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 96,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/unificar-carga-engagement-periodo",
+    "last_commit_date": "2026-07-04T15:06:16-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "529b3f73",
+    "ahead": 0,
+    "behind": 62,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 108,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/universo-tema-comentarios",
+    "last_commit_date": "2026-07-02T14:43:19-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "8094dcbc",
+    "ahead": 0,
+    "behind": 93,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 94,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/ux-proxy-100-temas",
+    "last_commit_date": "2026-06-19T20:01:17-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "ae00dbf9",
+    "ahead": 2,
+    "behind": 148,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 43,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/vision-phi-default-cascade",
+    "last_commit_date": "2026-06-26T19:21:32-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "67128882",
+    "ahead": 1,
+    "behind": 128,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 60,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/vision-phi4-multimodal",
+    "last_commit_date": "2026-06-29T10:21:08-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "4667a168",
+    "ahead": 1,
+    "behind": 111,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 76,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "fix/vision-robustez-cascada",
+    "last_commit_date": "2026-06-29T12:54:43-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "f4989b02",
+    "ahead": 2,
+    "behind": 109,
+    "merged_into_main": false,
+    "has_open_pr": false,
+    "pr_number": 78,
+    "pr_state": "merged",
+    "protected": false
+  }
+,
+  {
+    "name": "test/regresion-d8-d9-manejo-errores",
+    "last_commit_date": "2026-07-06T15:06:47-06:00",
+    "last_commit_author": "Dago-R",
+    "last_commit_sha": "4a1c7bf8",
+    "ahead": 0,
+    "behind": 49,
+    "merged_into_main": true,
+    "has_open_pr": false,
+    "pr_number": 113,
+    "pr_state": "merged",
+    "protected": false
+  }
+]

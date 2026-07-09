@@ -12,7 +12,8 @@ SCHEMA_VIDEOS = """CREATE TABLE IF NOT EXISTS videos (
     likes INTEGER,
     shares INTEGER,
     favorites_count INTEGER,
-    comments_count INTEGER
+    comments_count INTEGER,
+    post_url TEXT
 )"""
 
 SCHEMA_COMMENTS = """CREATE TABLE IF NOT EXISTS comments (
@@ -30,6 +31,10 @@ def _ensure_tiktok_schema(conn: sqlite3.Connection):
     existing = conn.execute("PRAGMA table_info(videos)").fetchall()
     if not existing:
         conn.execute(SCHEMA_VIDEOS)
+    else:
+        cols = {row[1] for row in existing}
+        if "post_url" not in cols:
+            conn.execute("ALTER TABLE videos ADD COLUMN post_url TEXT")
     existing = conn.execute("PRAGMA table_info(comments)").fetchall()
     if not existing:
         conn.execute(SCHEMA_COMMENTS)
@@ -43,8 +48,8 @@ def insertar_video(conn: sqlite3.Connection, datos: dict, video_id: str) -> bool
         conn.execute(
             """INSERT OR REPLACE INTO videos
                (id, account_id, description, created_at, views, likes,
-                shares, favorites_count, comments_count)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                shares, favorites_count, comments_count, post_url)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 video_id,
                 datos.get("account_id"),
@@ -55,6 +60,7 @@ def insertar_video(conn: sqlite3.Connection, datos: dict, video_id: str) -> bool
                 datos.get("shares", 0) or 0,
                 datos.get("favorites_count", 0) or 0,
                 comments_count,
+                datos.get("post_url") or None,
             ),
         )
         conn.commit()

@@ -33,7 +33,7 @@ COLUMNAS_EDITABLES = {
 # Columnas editables de la tabla videos (TikTok).
 COLUMNAS_TIKTOK_EDITABLES = {
     "account_id", "description", "created_at", "views", "likes",
-    "shares", "favorites_count", "comments_count",
+    "shares", "favorites_count", "comments_count", "post_url",
 }
 
 # Columnas de fb_posts que, si se corrigen manualmente, invalidan el

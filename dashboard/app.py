@@ -6,6 +6,7 @@ los cuatro bloques ejecutivos. Sin cálculo en runtime, sin ML, sin LLM.
 
 import json
 import os
+import pandas as pd
 import streamlit as st
 from datetime import datetime
 
@@ -785,7 +786,6 @@ with tab_riesgo:
     if tendencia_dias:
         st.markdown('<div style="margin:12px 0 6px;font-size:12px;color:var(--fg-secondary)">Tendencia diaria</div>', unsafe_allow_html=True)
         if isinstance(tendencia_dias[0], dict):
-            import pandas as pd
             df = pd.DataFrame(tendencia_dias)
         else:
             df = pd.DataFrame({"valor": tendencia_dias})

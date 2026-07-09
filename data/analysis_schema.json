@@ -103,25 +103,43 @@
         "problema_principal": "",
         "citas_ejemplo": [],
         "nivel_tension": "",
-        "score_zona": 0
+        "score_zona": 0,
+        "narrativa": "",
+        "explicacion_simple": "",
+        "enlaces_referencia": []
       }
     ],
     "pulso_iq": {
       "valor": 0,
       "cuadrante": "",
+      "componentes": {
+        "aprobacion": 0,
+        "conexion": 0,
+        "tranquilidad": 0,
+        "diversidad": 0,
+        "presencia": 0,
+        "consistencia": 0,
+        "atencion": 0
+      },
       "narrativa": "",
+      "explicacion_simple": "",
+      "enlaces_referencia": [],
       "formula_usada": "IQ = (aprobacion*1.0 + conexion*1.0 + tranquilidad*1.0 + diversidad*0.8 + presencia*0.7 + consistencia*0.9 + atencion*0.6) / suma_pesos"
     },
     "metricas_rendimiento": {
       "engagement_rate": 0,
       "engagement_rate_formula": "ER = (reacciones + comentarios + compartidos) / impresiones * 100",
       "alcance_estimado": 0,
+      "reacciones_positivas": 0,
+      "reacciones_negativas": 0,
       "reacciones_positivas_pct": 0,
       "reacciones_negativas_pct": 0,
       "ratio_amor_enojo": 0,
       "ratio_amor_enojo_formula": "R = (likes + loves + cares) / (angrys + sads + hahas)",
       "porque_funciona": "",
-      "narrativa": ""
+      "narrativa": "",
+      "explicacion_simple": "",
+      "enlaces_referencia": []
     },
     "cierre_factual": ""
   },

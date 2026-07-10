@@ -321,22 +321,91 @@ with tab_pulso:
     """, unsafe_allow_html=True)
     _expander_enlaces(cn.get("enlaces_referencia", []))
 
-    # ── 02 · Índice de Emociones (NUEVA) ───────────────────────────────
+    # ── 02 · Índice de Emociones ───────────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">02 · Índice de Emociones</div></div>', unsafe_allow_html=True)
     ie = b1.get("indice_emociones", {})
-    if ie and any(ie.get(f"pct_{e}", 0) for e, _, _ in _EMO_DEFS):
+    has_data = ie and any(ie.get(f"pct_{e}", 0) for e, _, _ in _EMO_DEFS)
+    if has_data:
         emo_dom = ie.get("emocion_dominante", "—")
-        formula_ie = ie.get("formula_usada", "")
+        emos_ordenadas = sorted(_EMO_DEFS, key=lambda t: ie.get(f"pct_{t[0]}", 0), reverse=True)
+
+        st.session_state.setdefault("b1_emo_activa", emos_ordenadas[0][0])
+        emo_activa = st.session_state["b1_emo_activa"]
+
+        e, label, color = next(
+            t for t in emos_ordenadas if t[0] == emo_activa
+        )
+        pct = ie.get(f"pct_{e}", 0)
+
         st.markdown(f"""
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
             <div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-muted)">
             EMOCIÓN DOMINANTE: <span style="color:var(--accent);font-weight:700">{emo_dom}</span></div>
         </div>
         """, unsafe_allow_html=True)
-        _render_emociones_barras(ie)
+
+        st.markdown(f"""
+        <div class="bar-row" style="margin-bottom:6px">
+            <div class="bar-row-label">{label}</div>
+            <div class="bar-track">
+                <div class="bar-fill" style="width:{pct:.1f}%;background:{color}"></div>
+            </div>
+            <div class="bar-row-val">{pct:.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Pill selector — CSS override + horizontal radio
+        st.markdown("""
+        <style>
+        div[data-testid="stRadio"] > div {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            gap: 6px;
+            padding-bottom: 6px;
+            scrollbar-width: thin;
+        }
+        div[data-testid="stRadio"] label {
+            display: inline-flex !important;
+            align-items: center;
+            padding: 5px 14px;
+            border-radius: 20px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            font-size: 12px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+            transition: all 0.15s;
+            flex-shrink: 0;
+            color: var(--fg-secondary);
+        }
+        div[data-testid="stRadio"] input[type="radio"] {
+            display: none !important;
+        }
+        div[data-testid="stRadio"] label:has(input:checked) {
+            background: var(--accent-soft);
+            border-color: var(--accent);
+            color: var(--accent);
+            font-weight: 700;
+        }
+        div[data-testid="stRadio"] label:hover {
+            border-color: var(--accent);
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        emo_labels = {e: label for e, label, _ in _EMO_DEFS}
+        st.radio(
+            "Seleccionar emoción",
+            options=[e for e, _, _ in emos_ordenadas],
+            format_func=lambda e: f"{emo_labels[e]} {ie.get(f'pct_{e}',0):.1f}%",
+            key="b1_emo_activa",
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+
         _card_explicacion_simple(ie.get("explicacion_simple", ""))
-        if formula_ie:
-            st.caption(f"Fórmula: {formula_ie}")
         _expander_enlaces(ie.get("enlaces_referencia", []))
     else:
         st.markdown('<div class="status-info">Índice de emociones no disponible.</div>', unsafe_allow_html=True)
@@ -349,7 +418,6 @@ with tab_pulso:
     pct = it.get("pct_diferencia", 0)
     etiq_int = it.get("etiqueta", "—")
     narrativa_it = it.get("narrativa", "Sin datos de intensidad.")
-    formula_it = it.get("formula_usada", "")
     maxv = max(vol_hoy, prom, 1)
 
     col_hoy = "var(--red)" if pct > 15 else ("var(--blue)" if pct < -15 else "var(--accent)")
@@ -385,15 +453,12 @@ with tab_pulso:
         </div>
     </div>
     """, unsafe_allow_html=True)
-    _card_explicacion_simple(it.get("explicacion_simple", ""))
-    if formula_it:
-        st.caption(f"Fórmula: {formula_it}")
     _expander_enlaces(it.get("enlaces_referencia", []))
 
     # ── 04 · Concentración Temática ───────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">04 · Concentración Temática</div></div>', unsafe_allow_html=True)
     ct = b1.get("concentracion_tematica", {})
-    ramas = ct.get("ramas", [])
+    ramas = sorted(ct.get("ramas", []), key=lambda r: r.get("share", 0), reverse=True)
     nivel_ct = ct.get("nivel", "")
     narrativa_ct = ct.get("narrativa", "Sin datos de concentración temática.")
     col_ct = {"dominado": "var(--red)", "liderado": "var(--amber)", "fragmentado": "var(--green)"}.get(nivel_ct, "var(--accent)")
@@ -427,10 +492,9 @@ with tab_pulso:
             <div class="panel-meta">{ct.get('n_temas',0)} TEMAS</div>
         </div>
         <div class="bar-tri" style="height:18px;border-radius:3px">{segmentos}</div>
-        <div style="margin-top:12px">{filas}</div>
+        <div style="margin-top:12px"><div style="max-height:180px;overflow-y:auto;padding-right:6px;margin-top:4px">{filas}</div></div>
     </div>
     """, unsafe_allow_html=True)
-    _card_explicacion_simple(ct.get("explicacion_simple", ""))
 
     temas_acel = ct.get("temas_acelerando", [])
     temas_desacel = ct.get("temas_desacelerando", [])

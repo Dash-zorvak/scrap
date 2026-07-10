@@ -21,7 +21,10 @@
       "tono_score_ayer": 0,
       "tendencia": 0,
       "etiqueta_tendencia": "",
-      "narrativa": "De {n_total_comentarios} comentarios en el período, el tono predominante es {tono_dominante}: un {pct_favorable}% de los comentarios son favorables, {pct_neutral}% neutros y {pct_critico}% críticos. El índice de sentimiento neto se mantiene en {NSI} puntos sobre 100, reflejando [lectura cualitativa sostenida por la cifra], especialmente en [tema(s) concreto(s) si hay datos].",
+      "narrativa": {
+        "type": "string",
+        "description": "Card de Clima Narrativo. Estructura fija, sin relleno ni adjetivos sin cifra o tema detrás («moderado», «cierto margen para la crítica», «señales mixtas» solos quedan prohibidos): (1) Cifras crudas: total de comentarios, % favorable/neutral/crítico y el índice de sentimiento neto sobre 100 (nunca mencionar 'NSI' ni la fórmula). (2) El dato que más importa: la comparación exacta contra el período anterior en puntos (ej. '+3.2 pts'), nunca una palabra vaga como 'mejorando'; si no hay período previo, decirlo explícitamente. (3) El ancla concreta: el tema real (no genérico) que concentra la crítica o el apoyo, con su peso numérico (conteo o %); si no hay dato de tema, decirlo explícitamente en vez de inventarlo. (4) Conclusión: una frase final que empiece con 'Conclusión:' y diga qué significa el número para la gestión — un veredicto, no una repetición de las cifras ya dichas. Plantilla: 'De {n_total_comentarios} comentarios del período, {pct_favorable}% son favorables, {pct_neutral}% neutros y {pct_critico}% críticos — saldo neto de {NSI} puntos sobre 100 ({tendencia en puntos exactos} respecto al período anterior). {Tema concreto} concentra {peso} de los comentarios {favorables/críticos}. Conclusión: {veredicto directo, sin relleno}.' Ejemplo: 'De 430 comentarios del período, 37% son favorables, 33% neutros y 29% críticos — saldo neto de 8.0 puntos sobre 100 (+3.2 pts respecto al período anterior). «Obras públicas» concentra el 61% de los comentarios críticos. Conclusión: el saldo es positivo pero depende de un solo tema — si la crítica en obras públicas escala, el balance se revierte.'"
+      },
       "enlaces_referencia": [],
       "formula_usada": "NSI = (positivos - negativos) / total * 100"
     },
@@ -103,7 +106,10 @@
       "pct_desprecio": 0,
       "pct_agresividad": 0,
       "emocion_dominante": "",
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Sin relleno ni adjetivos sueltos («moderado», «cierto margen para la crítica», «señales mixtas») que no estén anclados a una cifra o a un tema concreto. Estructura fija, en este orden:\n\n1. Cifras crudas: total de comentarios analizados, la emoción dominante (emocion_dominante) y su %, y las dos emociones siguientes en peso con su % (nombra la emoción exacta, nunca «sentimiento» genérico).\n2. El dato que más importa: la comparación exacta del % de la emoción dominante contra el período anterior, en puntos (ej. «+3.2 pts»). Si no hay período previo, decirlo explícitamente («no hay período anterior para comparar»).\n3. El ancla concreta: el tema real (no genérico) que concentra esa emoción dominante, con su peso numérico (conteo o %). Si no hay dato de tema, decir «no hay datos suficientes para atribuir un tema concreto» — nunca inventarlo.\n4. Conclusión: una frase final que empiece con «Conclusión:» y diga qué significa ese predominio emocional para la gestión — un veredicto, no una repetición de las cifras ya dichas."
+      },
       "formula_usada": "% emocion = (n_emocion / total_comentarios) * 100"
     },
     "intensidad": {
@@ -124,24 +130,35 @@
       "estado": "",
       "top_tema": "",
       "n_temas": 0,
-      "ramas": [
-        {
-          "tema": "",
-          "n": 0,
-          "share": 0,
-          "tendencia": "",
-          "acelerando": false,
-          "pct_cambio_semana": 0,
-          "emocion_dominante": "",
-          "pct_apoyo": 0,
-          "pct_critica": 0,
-          "pct_neutral": 0
-        }
-      ],
+      "ramas": {
+        "type": "array",
+        "description": "Debe incluir todos los temas englobantes detectados en el período (ver dashboard/tema_taxonomia.py), sin omitir los de porcentaje pequeño y sin agruparlos en un genérico «otros». La suma de todos los share de la lista debe ser 100 (± error de redondeo de 0.1). Ordenar de mayor a menor share.",
+        "items": [
+          {
+            "tema": "",
+            "n": 0,
+            "doc_count": 0,
+            "share": {
+              "type": "number",
+              "description": "OBLIGATORIO calcular así:\n1. Suma doc_count de TODAS las ramas listadas (no del dataset completo, no de publicaciones totales, no de comentarios totales del período).\n2. share_del_tema = round( (doc_count_del_tema / suma_total_de_doc_count) * 100, 1 )\n3. La suma de TODOS los «share» del arreglo «ramas» debe dar 100 (±0.1 por redondeo). Si no da 100, el cálculo está mal y hay que corregirlo antes de escribir el JSON.\n\nPROHIBIDO: dividir doc_count entre el total general de comentarios/posts de todo el dataset, entre el total de publicaciones del período, o entre cualquier número que no sea la suma de los doc_count de las propias «ramas».\n\nEjemplo de validación (con los datos reales detectados):\n  apoyo_generico: 68, obras_servicios: 8, gobernanza: 8, no_aplica: 5, salud: 3, movilidad: 2 (+ los demás temas hasta completar el conteo real)\n  suma_total = suma de doc_count de las 9 ramas\n  share(apoyo_generico) = round(68 / suma_total * 100, 1)  ← esto debe dar un número grande (probablemente 40-70%), NUNCA «1%»."
+            },
+            "tendencia": "",
+            "acelerando": false,
+            "pct_cambio_semana": 0,
+            "emocion_dominante": "",
+            "pct_apoyo": 0,
+            "pct_critica": 0,
+            "pct_neutral": 0
+          }
+        ]
+      },
       "temas_acelerando": [],
       "temas_desacelerando": [],
-      "narrativa": "",
-      "explicacion_simple": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Prosa ejecutiva sobre la concentración temática. No es «cifra + adjetivo bonito». Estructura fija, en este orden:\n\n1. Cifra cruda, sin calificarla: el tema dominante (ramas[0].tema) y su peso real (share/doc_count) tal cual, sin decir «moderadamente concentrado» ni etiquetas suaves.\n2. El dato que más importa, aislado: el hecho más relevante del período sobre la distribución temática (ej. cuántos temas concentran la mayoría de los comentarios, o la brecha entre el primer y segundo tema), como afirmación aislada, no mezclada con otras cifras.\n3. La derivación matemática a la vista: mostrar el cálculo real detrás del porcentaje citado usando los números reales del período (ej. «si el tema X tiene 312 de los 740 comentarios totales, 312 ÷ 740 = 42%»). No esconder la cuenta.\n4. Ancla tangible y nombrada, nunca genérica: no decir «un tema domina», decir cuál tema exacto y por qué es real (ej. el subtema o publicación concreta que explica ese peso). Si no hay ese detalle, decir «no hay datos suficientes para atribuir un tema concreto».\n5. Veredicto explícito con etiqueta: una frase final que empiece con «Conclusión:» y remate con un nombre contundente coherente con nivel (ej. «= AGENDA DOMINADA POR UN SOLO TEMA» si nivel es «dominado», «= AGENDA FRAGMENTADA SIN DOMINANTE CLARO» si es «fragmentado»).\n\nNunca usar la sigla «HHI» — esa jerga va solo en formula_usada."
+      },
+      "explicacion_simple": "Ya no aplica a esta sección (fusionada en narrativa).",
       "enlaces_referencia": [],
       "formula_usada": "HHI = Σ(share_i²) donde share_i = n_tema_i / total_temas"
     },
@@ -159,8 +176,11 @@
         "citas_ejemplo": [],
         "nivel_tension": "",
         "score_zona": 0,
-        "narrativa": "",
-        "explicacion_simple": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Prosa ejecutiva de la intensidad de la conversación. Sin relleno ni adjetivos sueltos («moderado», «cierto margen para la crítica», «señales mixtas») que no estén anclados a una cifra o a un tema concreto. Estructura fija, en este orden:\n\n1. Cifras crudas: volumen de comentarios de hoy (vol_hoy) y el promedio de los días de referencia (promedio_semanal), sin decir la palabra «fórmula» ni mostrar la ecuación.\n2. El dato que más importa: la variación exacta contra el promedio de referencia en puntos porcentuales, con signo (ej. «+18 pts» o «-12 pts»), usando el mismo valor que pct_diferencia. Nunca una palabra vaga como «aumentando». Si n_dias_referencia es 0 o no hay promedio disponible, decirlo explícitamente.\n3. El ancla concreta: el tema o publicación real (no genérico) que concentra el volumen del pico o la caída, con su peso numérico (conteo o %). Si no hay dato de tema, decir «no hay datos suficientes para atribuir un tema concreto» — nunca inventarlo.\n4. Conclusión: una frase final que empiece con «Conclusión:» y diga qué significa la variación de volumen para la gestión — un veredicto, no una repetición de las cifras ya dichas."
+      },
+      "explicacion_simple": "Ya no aplica a esta sección (fusionada en narrativa).",
         "enlaces_referencia": []
       }
     ],

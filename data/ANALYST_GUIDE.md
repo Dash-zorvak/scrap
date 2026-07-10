@@ -58,9 +58,7 @@ El campo `enlaces_referencia` debe contener **la lista completa** de URLs de los
 
 | Sección | Reglas |
 |---------|--------|
-| Clima Narrativo | `narrativa` debe traducir el tono dominante, los tres porcentajes, el total de comentarios y el índice de sentimiento neto (NSI) en prosa con cifras reales — nunca genérica ni sin datos (ver ejemplo de referencia en el equipo). NO debe citar la fórmula en crudo; la fórmula solo informa el cálculo detrás del número. `explicacion_simple` ya no aplica a esta sección (fusionada en `narrativa`). `enlaces_referencia` debe incluir los posts representativos del período. |
-| Intensidad | `explicacion_simple` debe explicar qué significa el Δ% y la etiqueta. `enlaces_referencia` = posts con mayor volumen del período. |
-| Concentración Temática | `explicacion_simple` debe describir la distribución temática sin usar "HHI". `enlaces_referencia` = posts que cubren los temas principales. |
+| Clima Narrativo | `narrativa` sigue exactamente la descripción del campo `narrativa` en `data/analysis_schema.json` (bloque1.clima_narrativo). No dupliques la plantilla aquí para evitar que ambos textos queden desincronizados. `enlaces_referencia` debe incluir los posts representativos del período. |
 
 ---
 
@@ -172,10 +170,44 @@ Cada una de las 8 secciones narrativas de Bloque IV (`eco_historico`, `leccion_a
 
 ---
 
+## Plantilla obligatoria de `narrativa` (Clima Narrativo)
+
+Sin relleno ni adjetivos sueltos («moderado», «cierto margen para la crítica»,
+«señales mixtas») que no estén anclados a una cifra o a un tema concreto.
+Estructura fija, en este orden:
+
+1. Cifras crudas: total de comentarios, % favorable/neutral/crítico y el
+   índice de sentimiento neto ya calculado sobre 100 (nunca la palabra "NSI"
+   ni la fórmula).
+2. El dato que más importa: la comparación exacta contra el período anterior
+   en puntos (ej. "+3.2 pts"), nunca una palabra vaga como "mejorando". Si no
+   hay período previo, decirlo explícitamente.
+3. El ancla concreta: el tema real (no genérico) que concentra la crítica o
+   el apoyo, con su peso numérico (conteo o %). Si no hay dato de tema, decir
+   "no hay datos suficientes para atribuir un tema concreto" — nunca inventarlo.
+4. Conclusión: una frase final que empiece con "Conclusión:" y diga qué
+   significa el número para la gestión — un veredicto, no una repetición de
+   las cifras ya dichas.
+
+Plantilla:
+"De {n_total_comentarios} comentarios del período, {pct_favorable}% son
+favorables, {pct_neutral}% neutros y {pct_critico}% críticos — saldo neto de
+{NSI} puntos sobre 100 ({tendencia en puntos exactos} respecto al período
+anterior). {Tema concreto} concentra {peso} de los comentarios
+{favorables/críticos}. Conclusión: {veredicto directo, sin relleno}."
+
+Ejemplo:
+"De 430 comentarios del período, 37% son favorables, 33% neutros y 29%
+críticos — saldo neto de 8.0 puntos sobre 100 (+3.2 pts respecto al período
+anterior). «Obras públicas» concentra el 61% de los comentarios críticos.
+Conclusión: el saldo es positivo pero depende de un solo tema — si la crítica
+en obras públicas escala, el balance se revierte."
+
 ## Validación rápida pre-entrega
 
 Antes de guardar el JSON, verifique:
 
+- [ ] `narrativa` de Clima Narrativo tiene una frase "Conclusión:" explícita y ningún adjetivo sin cifra o tema detrás.
 - [ ] Ninguna `narrativa` contiene HHI, NSI, IR, PI, ER.
 - [ ] Ninguna `narrativa` contiene "censura" o "autocensura".
 - [ ] Engagement = reacciones + comentarios + compartidos (consistencia).

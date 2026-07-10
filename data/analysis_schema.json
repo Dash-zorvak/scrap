@@ -212,7 +212,10 @@
       "ratio_amor_enojo": 0,
       "ratio_amor_enojo_formula": "R = (likes + loves + cares) / (angrys + sads + hahas)",
       "porque_funciona": "",
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Redacta la narrativa de Métricas de Rendimiento en ESTE ORDEN FIJO, sin relleno ni adjetivos sueltos («moderado», «cierto margen», «señales mixtas») que no estén anclados a una cifra o tema concreto:\n\n1. CIFRAS CRUDAS: reacciones_positivas y reacciones_negativas (conteo), sus porcentajes (reacciones_positivas_pct / reacciones_negativas_pct), y el índice neto de reacción = reacciones_positivas_pct − reacciones_negativas_pct, redondeado a 1 decimal (nunca llamarlo «NSI» ni mostrar la resta como fórmula, solo el resultado, ej. «un índice neto de reacción de 73.3 sobre 100»). Incluir también engagement_rate y alcance_estimado como cifras crudas.\n2. EL DATO QUE MÁS IMPORTA: comparación exacta del engagement_rate (o de las reacciones totales) contra el período anterior, en puntos exactos (ej. «+3.2 pts»). Actualmente no existe un campo de período anterior en los datos, así que mientras no exista, esta narrativa debe decir explícitamente: «no hay período anterior disponible con el que comparar». No usar palabras vagas como «mejorando».\n3. EL ANCLA CONCRETA: la publicación o tema real que concentra el rendimiento, tomado del mismo dato usado en «porque_funciona» (ej. «el video del habitante de Altos del Palmar con 690 reacciones»), incluyendo su peso numérico exacto. Si porque_funciona está vacío, decir explícitamente «no hay datos suficientes para atribuir el rendimiento a una publicación concreta» — nunca inventarlo.\n4. CONCLUSIÓN: una frase final que empiece con «Conclusión:» y diga qué significa el número para la gestión (un veredicto, no una repetición de las cifras ya dichas)."
+      },
       "explicacion_simple": "",
       "enlaces_referencia": []
     },

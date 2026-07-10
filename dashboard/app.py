@@ -465,15 +465,10 @@ with tab_pulso:
     paleta = ["var(--accent)","#a78bfa","#f59e0b","#34d399","#f472b6","#60a5fa","#fbbf24","#4ade80","#fb7185","#818cf8"]
     segmentos = "".join(f'<span style="display:inline-block;height:100%;background:{paleta[i%len(paleta)]};width:{r.get("share",0):.1f}%"></span>' for i,r in enumerate(ramas))
     filas = "".join(
-        f'<div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;flex-wrap:wrap">'
+        f'<div style="display:flex;align-items:center;gap:6px;font-size:12px;flex:0 0 auto;white-space:nowrap;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px">'
         f'<span style="width:10px;height:10px;border-radius:2px;background:{paleta[i%len(paleta)]};display:inline-block;flex:none"></span>'
-        f'<span style="flex:1;color:var(--fg-primary)">{r.get("tema","—")}</span>'
-        f'<span style="color:var(--fg-secondary);font-family:var(--font-mono);font-size:10px">{r.get("n",0)} pubs · {r.get("share",0):.0f}%</span>'
-        f'<div class="bar-tri" style="width:60px;height:6px;border-radius:2px;flex:none">'
-        f'<span class="bar-tri-pos" style="width:{r.get("pct_apoyo",100):.0f}%"></span>'
-        f'<span class="bar-tri-neu" style="width:{r.get("pct_neutral",0):.0f}%"></span>'
-        f'<span class="bar-tri-neg" style="width:{r.get("pct_critica",0):.0f}%"></span>'
-        f'</div>'
+        f'<span style="color:var(--fg-primary)">{r.get("tema","—")}</span>'
+        f'<span style="color:var(--fg-secondary)">{r.get("n",0)} pubs · {r.get("share",0):.0f}%</span>'
         f'</div>'
         for i,r in enumerate(ramas)
     )
@@ -492,7 +487,7 @@ with tab_pulso:
             <div class="panel-meta">{ct.get('n_temas',0)} TEMAS</div>
         </div>
         <div class="bar-tri" style="height:18px;border-radius:3px">{segmentos}</div>
-        <div style="margin-top:12px"><div style="max-height:180px;overflow-y:auto;padding-right:6px;margin-top:4px">{filas}</div></div>
+        <div style="margin-top:12px"><div style="display:flex;flex-direction:row;gap:10px;overflow-x:auto;overflow-y:hidden;padding-bottom:8px;margin-top:8px;max-width:100%">{filas}</div></div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -522,24 +517,11 @@ with tab_pulso:
             """, unsafe_allow_html=True)
         _expander_enlaces(mr.get("enlaces_referencia", []))
         st.markdown(f"""
-        <div class="stat-row" style="grid-template-columns:repeat(4,1fr)">
-            <div class="stat-card">
-                <div class="stat-value">{mr.get("engagement_rate",0):.2f}</div>
-                <div class="stat-label">ENGAGEMENT RATE</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{mr.get("ratio_amor_enojo",0):.2f}</div>
-                <div class="stat-label">RATIO AMOR/ENOJO</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{mr.get("reacciones_positivas",0):,} <span style="font-size:12px;color:var(--fg-muted)">/ {mr.get("reacciones_negativas",0):,}</span></div>
-                <div class="stat-label">REACCIONES + / -</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{mr.get("alcance_estimado",0):,}</div>
-                <div class="stat-label">ALCANCE ESTIMADO</div>
-            </div>
-        </div>
+        <p style="font-size:11px;color:var(--fg-muted);margin-top:4px;margin-bottom:10px">
+        Engagement: {mr.get("engagement_rate",0):.1f}% · Ratio amor/enojo:
+        {mr.get("ratio_amor_enojo",0):.1f} · Reacciones: {mr.get("reacciones_positivas",0):,}
+        / {mr.get("reacciones_negativas",0):,} · Alcance estimado:
+        {mr.get("alcance_estimado",0):,}</p>
         """, unsafe_allow_html=True)
         pfunciona = mr.get("porque_funciona", "")
         if pfunciona:
@@ -553,10 +535,6 @@ with tab_pulso:
             </div>
             """, unsafe_allow_html=True)
         _card_explicacion_simple(mr.get("explicacion_simple", ""))
-        if mr.get("engagement_rate_formula"):
-            st.caption(f"Fórmula: {mr.get('engagement_rate_formula')}")
-        if mr.get("ratio_amor_enojo_formula"):
-            st.caption(f"Fórmula: {mr.get('ratio_amor_enojo_formula')}")
     else:
         st.markdown('<div class="status-info">Métricas de rendimiento no disponibles.</div>', unsafe_allow_html=True)
 

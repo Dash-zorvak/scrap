@@ -610,7 +610,7 @@ with tab_pulso:
         <div style="display:flex;flex-direction:row;gap:12px;overflow-x:auto;
         overflow-y:hidden;padding-bottom:8px;max-width:100%">{''.join(cards_html)}</div>
         """
-        st.markdown(scroll_container, unsafe_allow_html=True)
+        st.markdown(" ".join(scroll_container.split()), unsafe_allow_html=True)
 
         for lugar in sorted_lugares:
             _expander_enlaces(lugar.get("enlaces_referencia", []), label=f"Ver enlaces de {lugar.get('lugar','este lugar')}")
@@ -641,8 +641,6 @@ with tab_pulso:
         </div>
         """, unsafe_allow_html=True)
         _card_explicacion_simple(iq.get("explicacion_simple", ""))
-        if iq.get("formula_usada"):
-            st.caption(f"Fórmula: {iq.get('formula_usada')}")
         _expander_enlaces(iq.get("enlaces_referencia", []))
 
     # ── Cierre factual ────────────────────────────────────────────────

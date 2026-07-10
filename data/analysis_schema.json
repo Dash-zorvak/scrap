@@ -228,10 +228,12 @@
         "consistencia": 0,
         "atencion": 0
       },
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Redacta la narrativa de Pulso en un Número en ESTE ORDEN FIJO, sin relleno ni adjetivos sueltos («moderado», «cierto margen», «señales mixtas») que no estén anclados a una cifra o tema concreto. NO recalcules estos datos — reutiliza los mismos valores ya definidos en otras secciones de bloque1 para no duplicar ni contradecir cifras:\n\n1. CIFRAS CRUDAS: toma n_total_comentarios, pct_favorable, pct_neutral y pct_critico directamente de bloque1.clima_narrativo, más el valor del índice compuesto (valor de pulso_iq) sobre 100. Nunca llamarlo «NSI» ni mostrar la fórmula de ponderación por dimensión.\n2. EL DATO QUE MÁS IMPORTA: la comparación exacta contra el período anterior en puntos (toma el mismo dato de tendencia que ya usa clima_narrativo, ej. «+3.2 pts»). Si clima_narrativo no tiene período anterior disponible, decirlo explícitamente aquí también — nunca usar «mejorando» o similar.\n3. EL ANCLA CONCRETA: el tema con mayor peso numérico tomado de bloque1.concentracion_tematica.ramas (el de mayor «share»), citado por su nombre real y su % exacto — nunca una lista genérica de «temas más comentados». Si ramas está vacío, decir «no hay datos suficientes para atribuir un tema concreto».\n4. CONCLUSIÓN: una frase que empiece con «Conclusión:» y explique qué significa el número (y su cuadrante, ej. «RESPALDO MODERADO») para la gestión — un veredicto, no una repetición de las cifras ya dichas."
+      },
       "explicacion_simple": "",
-      "enlaces_referencia": [],
-      "formula_usada": "IQ = (aprobacion*1.0 + conexion*1.0 + tranquilidad*1.0 + diversidad*0.8 + presencia*0.7 + consistencia*0.9 + atencion*0.6) / suma_pesos"
+      "enlaces_referencia": []
     },
     "metricas_rendimiento": {
       "engagement_rate": 0,

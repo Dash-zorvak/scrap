@@ -538,57 +538,40 @@ with tab_pulso:
     else:
         st.markdown('<div class="status-info">Métricas de rendimiento no disponibles.</div>', unsafe_allow_html=True)
 
-    # ── 06 · Termómetro de Zonas (REDISEÑADO) ──────────────────────────
-    st.markdown('<div class="section-header"><div class="section-title">06 · Termómetro de Zonas</div></div>', unsafe_allow_html=True)
-    termometro_zonas = b1.get("termometro_zonas", [])
-    if not termometro_zonas:
-        st.markdown('<div class="status-info">Sin datos de zonas.</div>', unsafe_allow_html=True)
+    # ── 06 · Termómetro de Lugares ─────────────────────────────────────
+    st.markdown('<div class="section-header"><div class="section-title">06 · Termómetro de Lugares</div></div>', unsafe_allow_html=True)
+    emo_color_map = {emo: color for emo, _, color in _EMO_DEFS}
+    termometro_lugares = b1.get("termometro_lugares", [])
+    if not termometro_lugares:
+        st.markdown('<div class="status-info">Sin datos de lugares.</div>', unsafe_allow_html=True)
     else:
-        for zona in termometro_zonas:
-            tension_color = {
-                "alto": "var(--red)",
-                "medio": "var(--amber)",
-                "bajo": "var(--green)"
-            }.get(zona.get("nivel_tension",""), "var(--fg-muted)")
+        for lugar in termometro_lugares:
+            emo_dom = lugar.get("emocion_dominante", "")
+            border_color = emo_color_map.get(emo_dom, "var(--fg-muted)")
 
             citas_html = "".join(
                 f'<div style="font-style:italic;color:var(--fg-secondary);font-size:12px;margin-top:4px">"{c}"</div>'
-                for c in zona.get("citas_ejemplo", [])[:2]
+                for c in lugar.get("citas_ejemplo", [])[:2]
             )
 
-            pct_crit_obj = zona.get("pct_critica", 0) + zona.get("pct_objecion", 0)
-
-            narrativa_zona = zona.get("narrativa", "")
-            narrativa_zona_html = (
-                f'<div style="font-size:12px;color:var(--fg-primary);margin-top:8px;line-height:1.6">{narrativa_zona}</div>'
-                if narrativa_zona else ""
+            narrativa_txt = lugar.get("narrativa", "")
+            narrativa_html = (
+                f'<div style="font-size:12px;color:var(--fg-primary);margin-top:8px;line-height:1.6">{narrativa_txt}</div>'
+                if narrativa_txt else ""
             )
 
             _render_card(f"""
-            <div class="exec-card" style="border-left:3px solid {tension_color}">
+            <div class="exec-card" style="border-left:3px solid {border_color}">
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                    <div class="exec-card-title">{zona.get('zona','—').upper()}</div>
-                    <div style="font-family:var(--font-mono);font-size:9px;
-                    color:{tension_color};font-weight:700">
-                    TENSIÓN {zona.get('nivel_tension','—').upper()}</div>
-                </div>
-                <div class="bar-tri" style="height:10px;margin:8px 0">
-                    <span class="bar-tri-pos" style="width:{zona.get('pct_apoyo',0):.0f}%"></span>
-                    <span class="bar-tri-neu" style="width:{zona.get('pct_neutral',0):.0f}%"></span>
-                    <span class="bar-tri-neg" style="width:{min(pct_crit_obj,100):.0f}%"></span>
-                </div>
-                <div style="font-size:11px;color:var(--fg-secondary)">
-                    Tema: <strong>{zona.get('tema_dominante','—')}</strong> ·
-                    Emoción: <strong>{zona.get('emocion_dominante','—')}</strong>
-                </div>
-                <div style="font-size:11px;color:var(--fg-muted);margin-top:4px;font-style:italic">
-                    {zona.get('problema_principal','—')}
+                    <div class="exec-card-title">{lugar.get('lugar','—').upper()}</div>
+                    <div style="font-size:10px;color:{border_color};font-weight:600">
+                    {lugar.get('n_comentarios',0)} comentarios · {emo_dom.upper() if emo_dom else '—'}</div>
                 </div>
                 {citas_html}
-                {narrativa_zona_html}
+                {narrativa_html}
             </div>
             """)
-            _expander_enlaces(zona.get("enlaces_referencia", []), label=f"Ver enlaces de {zona.get('zona','esta zona')}")
+            _expander_enlaces(lugar.get("enlaces_referencia", []), label=f"Ver enlaces de {lugar.get('lugar','este lugar')}")
 
     # ── Pulso IQ ──────────────────────────────────────────────────────
     iq = b1.get("pulso_iq", {})

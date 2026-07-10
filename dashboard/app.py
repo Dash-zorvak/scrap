@@ -540,37 +540,79 @@ with tab_pulso:
 
     # ── 06 · Termómetro de Lugares ─────────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">06 · Termómetro de Lugares</div></div>', unsafe_allow_html=True)
-    emo_color_map = {emo: color for emo, _, color in _EMO_DEFS}
     termometro_lugares = b1.get("termometro_lugares", [])
     if not termometro_lugares:
         st.markdown('<div class="status-info">Sin datos de lugares.</div>', unsafe_allow_html=True)
     else:
-        for lugar in termometro_lugares:
+        # a) Sort by nivel_tension descending
+        sorted_lugares = sorted(termometro_lugares, key=lambda x: x.get("nivel_tension", 0), reverse=True)
+
+        def tension_color(t):
+            if t > 60: return "var(--red)"
+            if t > 30: return "var(--amber)"
+            return "var(--green)"
+
+        cards_html = []
+        for lugar in sorted_lugares:
+            tension = lugar.get("nivel_tension", 0)
+            border_color = tension_color(tension)
             emo_dom = lugar.get("emocion_dominante", "")
-            border_color = emo_color_map.get(emo_dom, "var(--fg-muted)")
+
+            # b) Thermometer bar
+            thermo_bar = f"""
+            <div style="position:relative;height:6px;border-radius:3px;
+            background:linear-gradient(to right, var(--green), var(--amber), var(--red));
+            margin:6px 0 10px 0">
+                <div style="position:absolute;top:-3px;left:{tension}%;
+                width:2px;height:12px;background:#fff;border-radius:1px;
+                box-shadow:0 0 3px rgba(0,0,0,0.4)"></div>
+            </div>
+            """
 
             citas_html = "".join(
                 f'<div style="font-style:italic;color:var(--fg-secondary);font-size:12px;margin-top:4px">"{c}"</div>'
-                for c in lugar.get("citas_ejemplo", [])[:2]
+                for c in lugar.get("citas_ejemplo", [])[:1]
             )
+
+            tema_str = ""
+            td = lugar.get("tema_dominante", "")
+            if td:
+                tema_str = (
+                    f'<div style="font-size:11px;color:var(--fg-muted);margin-top:4px">'
+                    f'⚑ {td.replace("_"," ").title()} ({lugar.get("n_tema_dominante",0)} críticos)</div>'
+                )
 
             narrativa_txt = lugar.get("narrativa", "")
             narrativa_html = (
-                f'<div style="font-size:12px;color:var(--fg-primary);margin-top:8px;line-height:1.6">{narrativa_txt}</div>'
+                f'<div style="font-size:12px;color:var(--fg-primary);margin-top:6px;line-height:1.6">{narrativa_txt}</div>'
                 if narrativa_txt else ""
             )
 
-            _render_card(f"""
-            <div class="exec-card" style="border-left:3px solid {border_color}">
+            card = f"""
+            <div class="exec-card" style="flex:0 0 auto;width:340px;white-space:normal;
+            border-left:3px solid {border_color}">
                 <div style="display:flex;justify-content:space-between;align-items:center">
                     <div class="exec-card-title">{lugar.get('lugar','—').upper()}</div>
                     <div style="font-size:10px;color:{border_color};font-weight:600">
-                    {lugar.get('n_comentarios',0)} comentarios · {emo_dom.upper() if emo_dom else '—'}</div>
+                    {lugar.get('n_comentarios',0)} coms · {emo_dom.upper() if emo_dom else '—'}</div>
                 </div>
+                <div style="font-size:10px;color:var(--fg-muted);margin-top:2px">
+                Tensión {tension:.0f}%</div>
+                {thermo_bar}
+                {tema_str}
                 {citas_html}
                 {narrativa_html}
             </div>
-            """)
+            """
+            cards_html.append(card)
+
+        scroll_container = f"""
+        <div style="display:flex;flex-direction:row;gap:12px;overflow-x:auto;
+        overflow-y:hidden;padding-bottom:8px;max-width:100%">{''.join(cards_html)}</div>
+        """
+        st.markdown(scroll_container, unsafe_allow_html=True)
+
+        for lugar in sorted_lugares:
             _expander_enlaces(lugar.get("enlaces_referencia", []), label=f"Ver enlaces de {lugar.get('lugar','este lugar')}")
 
     # ── Pulso IQ ──────────────────────────────────────────────────────

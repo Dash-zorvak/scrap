@@ -162,10 +162,13 @@
       "enlaces_referencia": [],
       "formula_usada": "HHI = Σ(share_i²) donde share_i = n_tema_i / total_temas"
     },
-    "termometro_lugares": [
+        "termometro_lugares": [
       {
         "lugar": "",
         "n_comentarios": 0,
+        "tema_dominante": "",
+        "n_tema_dominante": 0,
+        "nivel_tension": 0,
         "pct_serenidad": 0,
         "pct_alegria": 0,
         "pct_euforia": 0,
@@ -208,7 +211,7 @@
         "citas_ejemplo": [],
         "narrativa": {
           "type": "string",
-          "description": "Redacta la narrativa de CADA LUGAR en UNA SOLA card, en este orden fijo (sin mezclar pasos):\n\n1. CIFRA CRUDA SIN CALIFICAR: el conteo real de comentarios y su desglose de emociones dominantes, ej. 'De 42 comentarios sobre [lugar], 18 mostraron enojo y 3 furia' — nunca decir 'clima moderadamente favorable' o similar.\n2. EL DATO QUE MÁS IMPORTA, AISLADO: la cifra o hecho más relevante del lugar, en su propia frase, sin mezclarlo con otras cifras.\n3. LA DERIVACIÓN MATEMÁTICA A LA VISTA: si se usa un porcentaje o proporción, mostrar el cálculo completo (ej. '18 de 42 comentarios = 42.9%'), nunca esconder la operación.\n4. ANCLA TANGIBLE Y NOMBRADA: citar el ejemplo concreto de citas_ejemplo y explicar POR QUÉ es tangible (qué lo hace real, no genérico) — nunca decir solo 'evidencia' o 'emoción real' sin nombrar el hecho específico.\n5. VEREDICTO: una frase que empiece con 'Conclusión:' y cierre con un nombre contundente en mayúsculas tipo '= ALERTA TERRITORIAL' o '= RESPALDO SÓLIDO', que resuma en una etiqueta lo que significa el número para la gestión."
+          "description": "Redacta la narrativa de CADA LUGAR en UNA SOLA card, en este orden fijo (sin mezclar pasos), y NUNCA generalices el veredicto a 'la gestión municipal' completa — el veredicto debe quedar acotado específicamente a este lugar:\n\n1. CIFRA CRUDA SIN CALIFICAR: conteo real de comentarios y desglose de las 1-2 emociones dominantes (nunca 'clima moderado', solo números).\n2. EL DATO QUE MÁS IMPORTA, AISLADO: si existe tema_dominante, este es normalmente el dato más importante: cuántos de los comentarios de esa emoción están atados a ese tema específico.\n3. LA DERIVACIÓN MATEMÁTICA A LA VISTA: mostrar la división exacta (ej. '6 de 8 comentarios de enojo = 75%').\n4. ANCLA TANGIBLE Y NOMBRADA: usa tema_dominante + una cita real de citas_ejemplo para explicar POR QUÉ la gente de este lugar siente lo que siente — ej. 'la gente de Villa Real 2 es crítica porque su enojo está atado a promesas incumplidas específicamente con ellos, no a una queja genérica contra la alcaldía' — nunca decir solo 'opinión real, no un dato genérico' sin nombrar la causa.\n5. CONCLUSIÓN: una frase que empiece con 'Conclusión:' y cierre con un nombre contundente en mayúsculas acotado a ESTE lugar (ej. '= ALERTA TERRITORIAL EN VILLA REAL 2'), nunca una conclusión que suene a veredicto sobre toda la gestión."
         },
         "enlaces_referencia": []
       }

@@ -405,6 +405,13 @@ with tab_pulso:
             label_visibility="collapsed",
         )
 
+        narrativa_ie = _get(ie, "narrativa", default="—")
+        st.markdown(f"""
+        <div class="interpretation">
+            <div class="interpretation-label">LECTURA EJECUTIVA</div>
+            <div class="interpretation-texto">{narrativa_ie}</div>
+        </div>
+        """, unsafe_allow_html=True)
         _card_explicacion_simple(ie.get("explicacion_simple", ""))
         _expander_enlaces(ie.get("enlaces_referencia", []))
     else:

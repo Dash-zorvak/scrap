@@ -880,7 +880,7 @@ with tab_audiencia:
             _render_card(f"""
             <div class="exec-card">
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                    <div class="exec-card-title">{t.get('tema','—').upper()} · PESO {t.get('peso',0):.2f}</div>
+                    <div class="exec-card-title">{t.get('tema','—').upper()} · PESO {t.get('peso',0):.2f} ({t.get('n_comentarios',0)} coment)</div>
                     {tend_badge}
                 </div>
                 <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-muted);margin:6px 0">

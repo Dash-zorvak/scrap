@@ -598,6 +598,28 @@ with tab_pulso:
                 if narrativa_txt else ""
             )
 
+            _emo_fields = [
+                "pct_serenidad","pct_alegria","pct_euforia","pct_aceptacion","pct_confianza",
+                "pct_admiracion","pct_aprension","pct_preocupacion","pct_terror","pct_distraccion",
+                "pct_sorpresa","pct_asombro","pct_melancolia","pct_tristeza","pct_dolor",
+                "pct_aburrimiento","pct_desagrado","pct_repulsion","pct_fastidio","pct_enojo",
+                "pct_furia","pct_interes","pct_expectativa","pct_vigilancia","pct_optimismo",
+                "pct_amor_civico","pct_sumision","pct_asombro_temeroso","pct_desaprobacion",
+                "pct_remordimiento","pct_desprecio","pct_agresividad","pct_reclamo","pct_objecion",
+                "pct_satisfaccion","pct_calma","pct_reconocimiento","pct_ironia",
+            ]
+            top_emos = sorted(
+                ((f.replace("pct_", "").replace("_", " ").title(), lugar.get(f, 0)) for f in _emo_fields),
+                key=lambda t: t[1], reverse=True,
+            )
+            top_emos = [(name, val) for name, val in top_emos if val > 0][:3]
+            emo_chips = "".join(
+                f'<span style="font-size:11px;padding:2px 8px;background:var(--bg-elevated);'
+                f'border-radius:10px;color:var(--fg-secondary);margin:2px">{name} '
+                f'<strong>{val:.1f}%</strong></span>'
+                for name, val in top_emos
+            )
+
             card = f"""
             <div class="exec-card" style="flex:0 0 auto;width:340px;white-space:normal;
             border-left:3px solid {border_color}">
@@ -610,6 +632,7 @@ with tab_pulso:
                 Tensión {tension:.0f}%</div>
                 {thermo_bar}
                 {tema_str}
+                {emo_chips}
                 {citas_html}
                 {narrativa_html}
             </div>

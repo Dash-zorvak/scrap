@@ -188,20 +188,27 @@ Estructura fija, en este orden:
 4. Conclusión: una frase final que empiece con "Conclusión:" y diga qué
    significa el número para la gestión — un veredicto, no una repetición de
    las cifras ya dichas.
+5. Cierre obligatorio: después de la frase de Conclusión, en una línea nueva,
+   agregar "= NOMBRE CONTUNDENTE EN MAYÚSCULAS" — un título corto (2 a 5
+   palabras) que resuma el veredicto como una etiqueta, no una oración.
+   Debe derivarse del dato/ancla ya mencionado en esta misma narrativa, nunca
+   un nombre genérico tipo "= RESULTADO POSITIVO".
 
 Plantilla:
 "De {n_total_comentarios} comentarios del período, {pct_favorable}% son
 favorables, {pct_neutral}% neutros y {pct_critico}% críticos — saldo neto de
 {NSI} puntos sobre 100 ({tendencia en puntos exactos} respecto al período
 anterior). {Tema concreto} concentra {peso} de los comentarios
-{favorables/críticos}. Conclusión: {veredicto directo, sin relleno}."
+{favorables/críticos}. Conclusión: {veredicto directo, sin relleno}.
+= {NOMBRE CONTUNDENTE}"
 
 Ejemplo:
 "De 430 comentarios del período, 37% son favorables, 33% neutros y 29%
 críticos — saldo neto de 8.0 puntos sobre 100 (+3.2 pts respecto al período
 anterior). «Obras públicas» concentra el 61% de los comentarios críticos.
 Conclusión: el saldo es positivo pero depende de un solo tema — si la crítica
-en obras públicas escala, el balance se revierte."
+en obras públicas escala, el balance se revierte.
+= OBRAS PÚBLICAS DOMINA LA CRÍTICA"
 
 ## Validación rápida pre-entrega
 
@@ -217,3 +224,4 @@ Antes de guardar el JSON, verifique:
 - [ ] Bloque IV: cada sección es `{"narrativa": "...", "enlaces_referencia": [...]}`.
 - [ ] Bloque IV: cada `enlaces_referencia` contiene las URLs reales, no está vacío si la narrativa hace afirmaciones específicas.
 - [ ] Ninguna afirmación se basa en datos fuera del período del `meta.periodo`.
+- [ ] Toda narrativa termina con una línea "= NOMBRE CONTUNDENTE" derivada del ancla mencionada.

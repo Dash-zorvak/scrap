@@ -289,7 +289,7 @@ with tab_pulso:
     dom = cn.get("tono_dominante", "—")
     n_tot = cn.get("n_total_comentarios", 0)
     tend = cn.get("tendencia", 0)
-    narrativa_cn = cn.get("narrativa", "Sin datos de clima narrativo.")
+    narrativa_cn = _get(cn, "narrativa", default="Sin datos de clima narrativo.")
 
     tend_color = "var(--green)" if tend > 0.1 else ("var(--red)" if tend < -0.1 else "var(--amber)")
     tend_label = "↑ mejorando" if tend > 0.1 else ("↓ empeorando" if tend < -0.1 else "→ estable")
@@ -417,7 +417,7 @@ with tab_pulso:
     prom = it.get("promedio_semanal", 0)
     pct = it.get("pct_diferencia", 0)
     etiq_int = it.get("etiqueta", "—")
-    narrativa_it = it.get("narrativa", "Sin datos de intensidad.")
+    narrativa_it = _get(it, "narrativa", default="Sin datos de intensidad.")
     maxv = max(vol_hoy, prom, 1)
 
     col_hoy = "var(--red)" if pct > 15 else ("var(--blue)" if pct < -15 else "var(--accent)")
@@ -458,17 +458,17 @@ with tab_pulso:
     # ── 04 · Concentración Temática ───────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">04 · Concentración Temática</div></div>', unsafe_allow_html=True)
     ct = b1.get("concentracion_tematica", {})
-    ramas = sorted(ct.get("ramas", []), key=lambda r: r.get("share", 0), reverse=True)
+    ramas = sorted(ct.get("ramas", []), key=lambda r: _get(r, "share", default=0), reverse=True)
     nivel_ct = ct.get("nivel", "")
-    narrativa_ct = ct.get("narrativa", "Sin datos de concentración temática.")
+    narrativa_ct = _get(ct, "narrativa", default="Sin datos de concentración temática.")
     col_ct = {"dominado": "var(--red)", "liderado": "var(--amber)", "fragmentado": "var(--green)"}.get(nivel_ct, "var(--accent)")
     paleta = ["var(--accent)","#a78bfa","#f59e0b","#34d399","#f472b6","#60a5fa","#fbbf24","#4ade80","#fb7185","#818cf8"]
-    segmentos = "".join(f'<span style="display:inline-block;height:100%;background:{paleta[i%len(paleta)]};width:{r.get("share",0):.1f}%"></span>' for i,r in enumerate(ramas))
+    segmentos = "".join(f'<span style="display:inline-block;height:100%;background:{paleta[i%len(paleta)]};width:{_get(r, "share", default=0):.1f}%"></span>' for i,r in enumerate(ramas))
     filas = "".join(
         f'<div style="display:flex;align-items:center;gap:6px;font-size:12px;flex:0 0 auto;white-space:nowrap;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px">'
         f'<span style="width:10px;height:10px;border-radius:2px;background:{paleta[i%len(paleta)]};display:inline-block;flex:none"></span>'
         f'<span style="color:var(--fg-primary)">{r.get("tema","—")}</span>'
-        f'<span style="color:var(--fg-secondary)">{r.get("n",0)} pubs · {r.get("share",0):.0f}%</span>'
+        f'<span style="color:var(--fg-secondary)">{r.get("n",0)} pubs · {_get(r, "share", default=0):.0f}%</span>'
         f'</div>'
         for i,r in enumerate(ramas)
     )
@@ -507,7 +507,7 @@ with tab_pulso:
     st.markdown('<div class="section-header"><div class="section-title">05 · Métricas de Rendimiento</div></div>', unsafe_allow_html=True)
     mr = b1.get("metricas_rendimiento", {})
     if mr and any(v for v in [mr.get("engagement_rate"), mr.get("ratio_amor_enojo"), mr.get("alcance_estimado")]):
-        narrativa_mr = mr.get("narrativa", "")
+        narrativa_mr = _get(mr, "narrativa", default="")
         if narrativa_mr:
             st.markdown(f"""
             <div class="interpretation">
@@ -620,7 +620,7 @@ with tab_pulso:
     if iq.get("valor") or iq.get("cuadrante"):
         iq_val = iq.get("valor", 0)
         iq_cuad = iq.get("cuadrante", "—")
-        iq_narr = iq.get("narrativa", "—")
+        iq_narr = _get(iq, "narrativa", default="—")
         iq_comp = iq.get("componentes", {})
         chips_iq = "".join(
             f'<span style="font-size:11px;padding:2px 8px;background:var(--bg-elevated);'
@@ -733,7 +733,7 @@ with tab_audiencia:
     pol = b2.get("polarizacion", {})
     pol_idx = pol.get("indice", 0)
     pol_nivel = pol.get("nivel", "—")
-    pol_narr = pol.get("narrativa", "—")
+    pol_narr = _get(pol, "narrativa", default="—")
     pol_nota = pol.get("nota_metodologica", "")
     pol_color = {"confrontación": "var(--red)", "dividida": "var(--amber)", "consenso": "var(--green)"}.get(pol_nivel, "var(--accent)")
     st.markdown(f"""
@@ -878,7 +878,7 @@ with tab_riesgo:
     aut_org = aut.get("pct_organico", 0)
     aut_coo = aut.get("pct_coordinado", 0)
     aut_dup = aut.get("n_duplicados", 0)
-    aut_narr = aut.get("narrativa", "—")
+    aut_narr = _get(aut, "narrativa", default="—")
     formula_aut = aut.get("formula_usada", "")
     st.markdown(f"""
     <div class="panel">
@@ -957,7 +957,7 @@ with tab_riesgo:
     st.markdown('<div class="section-header"><div class="section-title">13 · Velocidad de Propagación</div></div>', unsafe_allow_html=True)
     vp = b3.get("velocidad_propagacion", {})
     vp_proy = vp.get("proyeccion_24h", "—")
-    vp_narr = vp.get("narrativa", "—")
+    vp_narr = _get(vp, "narrativa", default="—")
     vp_formula = vp.get("formula_usada", "")
     vp_col = {"acelerando": "var(--red)", "estable": "var(--accent)", "desacelerando": "var(--green)"}.get(vp_proy, "var(--fg-muted)")
     st.markdown(f"""
@@ -1089,7 +1089,7 @@ with tab_intel:
     for num, titulo, key in _secciones:
         raw = b4.get(key, {})
         if isinstance(raw, dict):
-            texto = raw.get("narrativa", "—")
+            texto = _get(raw, "narrativa", default="—")
             enlaces = raw.get("enlaces_referencia", [])
         else:
             texto = raw if raw else "—"

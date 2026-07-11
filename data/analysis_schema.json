@@ -264,6 +264,7 @@
       "n_simpatizantes": 0,
       "n_neutrales": 0,
       "n_criticos": 0,
+      "total_posts_analizados": 0,
       "explicacion_simple": "",
       "enlaces_referencia": [],
       "formula_usada": "Segmentación por postura en comentarios aprobados"

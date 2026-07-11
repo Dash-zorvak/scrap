@@ -64,6 +64,10 @@ El campo `enlaces_referencia` debe contener **la lista completa** de URLs de los
 
 ## Bloque II — Segmentación de Audiencia
 
+### Mapa de Públicos — `total_posts_analizados`
+
+`total_posts_analizados` debe ser el conteo total de publicaciones del período de las cuales se extrajeron los comentarios usados en `mapa_publicos`. No es el total de comentarios, ni el total de posts del dataset completo — solo los que alimentan esta segmentación específica.
+
 ### Voces de Influencia — Corrección de cálculo
 
 Cada entrada de `voces_influencia` debe tener **todos** estos campos derivados de la misma fuente de datos, sin inconsistencias matemáticas:

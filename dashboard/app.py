@@ -461,6 +461,9 @@ with tab_pulso:
     </div>
     """, unsafe_allow_html=True)
     _expander_enlaces(it.get("enlaces_referencia", []))
+    formula_it = _get(it, "formula_usada", default="")
+    if formula_it:
+        st.caption(f"Fórmula: {formula_it}")
 
     # ── 04 · Concentración Temática ───────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">04 · Concentración Temática</div></div>', unsafe_allow_html=True)

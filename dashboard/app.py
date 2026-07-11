@@ -769,15 +769,21 @@ with tab_audiencia:
             cita_v = v.get("cita_destacada", "")
             cita_html = f'<div style="font-size:11px;color:var(--fg-secondary);font-style:italic;margin-top:6px">"{cita_v}"</div>' if cita_v else ""
 
+            eng = v.get("engagement", 0)
+            sum_sub = v.get("reacciones_totales", 0) + v.get("comentarios_totales", 0) + v.get("compartidos_totales", 0)
+            inconsistente = eng > 0 and sum_sub == 0
+            inc_badge = '<span style="font-family:var(--font-mono);font-size:9px;color:var(--amber);font-weight:600;text-transform:uppercase">⚠️ Dato inconsistente: engagement reportado sin submétricas</span>' if inconsistente else ""
+
             _render_card(f"""
             <div class="exec-card">
                 <div style="display:flex;justify-content:space-between;align-items:center">
                     <div class="exec-card-title">{v.get('pagina','—')} {postura_badge}</div>
                 </div>
+                {inc_badge}
                 <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-secondary);margin:6px 0">
                     Publicaciones: <strong>{v.get('publicaciones',0):,}</strong> ·
                     Alcance: <strong>{v.get('alcance_estimado',0):,}</strong> ·
-                    Engagement: <strong>{v.get('engagement',0):,}</strong> ·
+                    Engagement: <strong>{eng:,}</strong> ·
                     Reacciones: <strong>{v.get('reacciones_totales',0):,}</strong> ·
                     Comentarios: <strong>{v.get('comentarios_totales',0):,}</strong> ·
                     Compartidos: <strong>{v.get('compartidos_totales',0):,}</strong>

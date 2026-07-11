@@ -953,6 +953,31 @@ with tab_riesgo:
         </div>
     </div>
     """, unsafe_allow_html=True)
+    na_pct_neg = na.get("pct_negativos", 0)
+    na_idx_enojo = na.get("indice_enojo_reacciones", 0)
+    na_bal_conf = na.get("balance_confrontacion", 0)
+    na_n_fricc = na.get("n_temas_friccion", 0)
+    st.markdown(f"""
+    <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px">
+        <div class="stat-card">
+            <div class="stat-value" style="color:var(--red)">{na_pct_neg:.1f}%</div>
+            <div class="stat-label">% NEGATIVOS</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" style="color:var(--amber)">{na_idx_enojo:.1f}</div>
+            <div class="stat-label">ÍNDICE ENOJO</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" style="color:var(--red)">{na_bal_conf:.1f}</div>
+            <div class="stat-label">BALANCE CONFRONTACIÓN</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" style="color:var(--amber)">{na_n_fricc}</div>
+            <div class="stat-label">TEMAS EN FRICCIÓN</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    _card_explicacion_simple(na.get("explicacion_simple", ""))
     if formula_riesgo:
         st.caption(f"Fórmula de riesgo: {formula_riesgo}")
 

@@ -1016,6 +1016,12 @@ with tab_riesgo:
     if fricciones:
         for fr in fricciones:
             accel_badge = "🔺 ACELERANDO" if fr.get("acelerando") else ""
+            n_comp_total = fr.get("n_comentarios_total", 0)
+            n_neg = fr.get("n_negativos", 0)
+            if n_comp_total > 0:
+                fr_count_str = f"{n_neg} de {n_comp_total} comentarios ({fr.get('pct_del_total', 0):.1f}%)"
+            else:
+                fr_count_str = f"{n_neg} neg"
             _render_card(f"""
             <div class="pattern-card pattern-card-critical">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -1024,7 +1030,7 @@ with tab_riesgo:
                     text-transform:uppercase">{fr.get('tema','—')} · {fr.get('zona','—')}</div>
                     <div style="display:flex;gap:8px;align-items:center">
                         <div style="font-family:var(--font-mono);font-size:10px;
-                        color:var(--fg-muted)">{fr.get('n_negativos',0)} neg · {fr.get('pct_del_total',0):.1f}%</div>
+                        color:var(--fg-muted)">{fr_count_str}</div>
                         <div style="font-size:10px;color:var(--red)">{accel_badge}</div>
                     </div>
                 </div>

@@ -6,6 +6,7 @@ los cuatro bloques ejecutivos. Sin cálculo en runtime, sin ML, sin LLM.
 
 import json
 import os
+import sys
 import pandas as pd
 import streamlit as st
 from datetime import datetime
@@ -15,6 +16,9 @@ from estilos_override import CSS_OVERRIDE
 
 # ── Ruta al JSON de análisis ──────────────────────────────────────────
 _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _BASE not in sys.path:
+    sys.path.insert(0, _BASE)
+from src.analyzer.iq_engine import DIMENSION_WEIGHTS, DIMENSION_LABELS
 ANALYSIS_PATH = os.path.join(_BASE, "data", "analysis.json")
 
 
@@ -675,6 +679,15 @@ with tab_pulso:
         """, unsafe_allow_html=True)
         _card_explicacion_simple(iq.get("explicacion_simple", ""))
         _expander_enlaces(iq.get("enlaces_referencia", []))
+
+        with st.expander("Ver cómo se pondera cada dimensión"):
+            for dim_key, weight in DIMENSION_WEIGHTS.items():
+                label = DIMENSION_LABELS.get(dim_key, {}).get("label", dim_key)
+                st.markdown(f"- **{label}** — peso {weight}")
+            st.markdown(
+                "_El índice de Pulso combina estas 7 dimensiones usando un "
+                "promedio ponderado por estos pesos fijos._"
+            )
 
     # ── Cierre factual ────────────────────────────────────────────────
     cierre = b1.get("cierre_factual", "")

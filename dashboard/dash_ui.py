@@ -9,16 +9,20 @@ from config import FACEBOOK_DB, TIKTOK_DB, TK_ACCOUNTS
 
 
 def _safe_query(query, db_path, params=None):
+    conn = None
     try:
         conn = sqlite3.connect(db_path)
         if params:
             df = pd.read_sql_query(query, conn, params=params)
         else:
             df = pd.read_sql_query(query, conn)
-        conn.close()
         return df
-    except Exception:
+    except Exception as e:
+        st.warning(f"⚠️ Error al consultar la base de datos: {e}")
         return None
+    finally:
+        if conn:
+            conn.close()
 
 
 def _post_links_html(filas, max_links=8):

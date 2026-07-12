@@ -758,7 +758,6 @@ with tab_audiencia:
     mp_neu = mp.get("pct_neutrales", 0)
     mp_crit = mp.get("pct_criticos", 0)
     mp_n = mp.get("n_total", 0)
-    formula_mp = mp.get("formula_usada", "")
     n_sim = mp.get("n_simpatizantes", 0)
     n_neu = mp.get("n_neutrales", 0)
     n_crit = mp.get("n_criticos", 0)
@@ -805,8 +804,6 @@ with tab_audiencia:
 
     if total_posts:
         st.caption(f"De {mp_n} comentarios analizados de {total_posts} publicaciones")
-    if formula_mp:
-        st.caption(f"Fórmula: {formula_mp}")
 
     _expander_enlaces(mp.get("enlaces_referencia",[]))
 
@@ -967,7 +964,6 @@ with tab_riesgo:
     aut_coo = aut.get("pct_coordinado", 0)
     aut_dup = aut.get("n_duplicados", 0)
     aut_narr = _get(aut, "narrativa", default="—")
-    formula_aut = aut.get("formula_usada", "")
     st.markdown(f"""
     <div class="panel">
         <div class="panel-head">
@@ -992,8 +988,6 @@ with tab_riesgo:
     """, unsafe_allow_html=True)
     _card_explicacion_simple(aut.get("explicacion_simple", ""))
     _expander_enlaces(aut.get("enlaces_referencia", []))
-    if formula_aut:
-        st.caption(f"Fórmula: {formula_aut}")
 
     # ── 12 · Nivel de Alerta ──────────────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">12 · Nivel de Alerta</div></div>', unsafe_allow_html=True)
@@ -1003,7 +997,6 @@ with tab_riesgo:
     tema_ppal = na.get("tema_principal", "")
     emocion_ppal = na.get("emocion_principal", "")
     alertas_cb = na.get("alertas_cambridge", [])
-    formula_riesgo = na.get("formula_riesgo", "")
     sem_map = {"verde": ("positive", "var(--green)", "SITUACIÓN CONTROLADA"),
                "amarillo": ("warning", "var(--amber)", "ATENCIÓN REQUERIDA"),
                "rojo": ("critical", "var(--red)", "ALERTA ACTIVA")}
@@ -1050,8 +1043,6 @@ with tab_riesgo:
     </div>
     """, unsafe_allow_html=True)
     _card_explicacion_simple(na.get("explicacion_simple", ""))
-    if formula_riesgo:
-        st.caption(f"Fórmula de riesgo: {formula_riesgo}")
 
     if alertas_cb:
         for alerta in alertas_cb:
@@ -1061,7 +1052,7 @@ with tab_riesgo:
                 color:var(--red);letter-spacing:1.4px;font-weight:600;
                 text-transform:uppercase">{alerta.get('tipo','—')}</div>
                 <div style="font-size:12px;color:var(--fg-secondary);
-                margin-top:4px">{alerta.get('descripcion','—')}</div>
+                margin-top:4px">{_get(alerta, 'descripcion', default='—')}</div>
             </div>
             """, unsafe_allow_html=True)
             _expander_enlaces(alerta.get("enlaces_referencia", []))
@@ -1071,7 +1062,6 @@ with tab_riesgo:
     vp = b3.get("velocidad_propagacion", {})
     vp_proy = vp.get("proyeccion_24h", "—")
     vp_narr = _get(vp, "narrativa", default="—")
-    vp_formula = vp.get("formula_usada", "")
     vp_col = {"acelerando": "var(--red)", "estable": "var(--accent)", "desacelerando": "var(--green)"}.get(vp_proy, "var(--fg-muted)")
     st.markdown(f"""
     <div class="exec-card">
@@ -1080,8 +1070,6 @@ with tab_riesgo:
         <div class="exec-card-sub">{vp_narr}</div>
     </div>
     """, unsafe_allow_html=True)
-    if vp_formula:
-        st.caption(f"Fórmula: {vp_formula}")
     _card_explicacion_simple(vp.get("explicacion_simple", ""))
     _expander_enlaces(vp.get("enlaces_referencia", []))
 

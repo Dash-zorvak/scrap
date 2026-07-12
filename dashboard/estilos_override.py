@@ -1,26 +1,12 @@
-"""Override de tipografia: jerarquia visual legible sin tocar estilos.py.
+"""Override de selectores específicos que no cubre estilos.py.
 
-estilos.py define una escala de fuentes (--fs-*) usada en todo el dashboard,
-pero los tamanos eran demasiado pequenos y obligaban a hacer zoom. Aqui se
-REDEFINE esa escala con tamanos mas grandes y una jerarquia clara
-(titulo > subtitulo > metrica > narrativa > referencia). Se inyecta DESPUES de
-estilos.CSS en app.py, asi que prevalece sin necesidad de reescribir el archivo
-grande de estilos.
+La escala --fs- vive únicamente en estilos.py; aquí ya no se redefine.
+Se inyecta DESPUÉS de estilos.CSS en app.py para ajustar métricas
+nativas de Streamlit y tipografía de cuerpo con !important.
 """
 
 CSS_OVERRIDE = """
 <style>
-:root {
-  --fs-overline: 11px;
-  --fs-label: 12px;
-  --fs-meta: 12.5px;
-  --fs-body: 15px;
-  --fs-h-sm: 16px;
-  --fs-h-md: 21px;
-  --fs-h-lg: 28px;
-  --fs-kpi: 40px;
-  --fs-hero: 52px;
-}
 
 /* Texto narrativo: el cuerpo que lee el alcalde. */
 .stMarkdown p, .stMarkdown li {

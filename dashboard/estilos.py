@@ -77,15 +77,15 @@ CSS = """
   --font-mono:    'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --font-display: var(--font-sans);
 
-  --fs-overline:  10px;
-  --fs-label:     11px;
-  --fs-meta:      11px;
-  --fs-body:      13px;
-  --fs-h-sm:      14px;
-  --fs-h-md:      18px;
-  --fs-h-lg:      24px;
-  --fs-kpi:       32px;
-  --fs-hero:      56px;
+  --fs-overline:  11px;
+  --fs-label:     12px;
+  --fs-meta:      12.5px;
+  --fs-body:      15px;
+  --fs-h-sm:      16px;
+  --fs-h-md:      21px;
+  --fs-h-lg:      28px;
+  --fs-kpi:       40px;
+  --fs-hero:      52px;
 
   --r-sm: 2px;
   --r-md: 4px;

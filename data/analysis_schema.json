@@ -393,15 +393,24 @@
   },
   "bloque4": {
     "eco_historico": {
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Sin relleno ni adjetivos sueltos. Estructura fija: (1) Cifra cruda del patrón de ESTE período (ej. % de apoyo genérico, tema dominante). (2) Comparación explícita con el patrón de períodos anteriores REALES ya presentes en los datos, con cifra exacta de esos períodos; si no hay datos de períodos anteriores disponibles, decirlo explícitamente en vez de inventar un patrón histórico. Prohibido mencionar eventos o publicaciones que no ocurrieron dentro de 'meta.periodo' (ej. hechos de archivos o campañas anteriores no incluidos en este análisis). (3) Ancla concreta: la publicación de ESTE período que mejor ejemplifica la continuidad o ruptura del patrón, citada por su enlace real. (4) Conclusión: una frase que empiece con 'Conclusión:' y diga qué significa esa continuidad/ruptura para la gestión. (5) Cierre obligatorio en línea nueva: '= NOMBRE CONTUNDENTE EN MAYÚSCULAS' derivado del ancla ya mencionada."
+      },
       "enlaces_referencia": []
     },
     "leccion_aprendida": {
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda del patrón de rendimiento identificado (ej. tipo de contenido con mayor engagement) con su cifra exacta. (2) El contraste cuantitativo entre lo que funciona y lo que no (ej. X vs Y comentarios promedio) — cada cifra debe poder rastrearse a un post concreto en 'enlaces_referencia'; nunca un número sin publicación asociada. (3) Ancla concreta: el post específico (con enlace real) que mejor ilustra la lección. (4) Conclusión: qué debería replicar o evitar la gestión a futuro, no una repetición de las cifras. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS' en línea nueva."
+      },
       "enlaces_referencia": []
     },
     "brecha_percepcion_realidad": {
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda de percepción declarada (ej. % favorable en comentarios) y cifra cruda de comportamiento real medible (ej. % de reacciones negativas específicas) — cada una citando el post o conjunto de posts de origen en 'enlaces_referencia'; ninguna cifra sin su fuente. (2) El dato que más importa: la brecha numérica exacta entre ambas, en puntos. (3) Ancla concreta: el post donde esa brecha se observa con más claridad, con enlace real. (4) Conclusión: qué riesgo u oportunidad revela esa brecha para la gestión. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS'."
+      },
       "enlaces_referencia": []
     },
     "temas_emergentes_evolucion": [
@@ -422,23 +431,38 @@
       }
     ],
     "contexto_no_visible": {
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda de lo que NO se explica solo con los datos internos del panel (ej. % o conteo de conversación atípica). (2) El factor de contexto externo identificado, SOLO si hay evidencia verificable en los datos del período (con enlace); si no hay evidencia, decir explícitamente 'no hay datos suficientes para atribuir esto a un factor de contexto externo verificable' — prohibido inventar eventos externos sin fuente (ej. clima, sucesos locales, elecciones) que no tengan un enlace_referencia real que los sustente. (3) Ancla concreta: el post o comentario específico que conecta ese contexto con la conversación, con enlace real. (4) Conclusión. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS'."
+      },
       "enlaces_referencia": []
     },
     "correlacion_contenido_reaccion": {
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda de los promedios comparados (ej. X comentarios/post de una cuenta vs Y de otra). (2) El dato que más importa: la magnitud exacta de la diferencia y qué variable de contenido la explica (formato, tono, tema). (3) Ancla concreta: el conjunto de posts detrás de CADA promedio comparado, con 'enlaces_referencia' completo para ambos grupos — nunca un promedio sin la lista de posts que lo sostienen. (4) Conclusión. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS'."
+      },
       "enlaces_referencia": []
     },
     "comparativa_sectorial": {
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda de la métrica propia del período. (2) Cifra cruda de comparación sectorial u histórica SOLO si existe un dato real de referencia en el dataset; si no existe, decir explícitamente 'no hay datos sectoriales comparables disponibles' en vez de inventar un promedio de referencia. (3) Ancla concreta con enlace real si la comparación se basa en una publicación específica. (4) Conclusión: qué posición relativa revela esa comparación. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS'."
+      },
       "enlaces_referencia": []
     },
     "proyeccion_escenario": {
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda: reutilizar 'proyeccion_24h' y 'tendencia_dias' ya definidos en bloque3.velocidad_propagacion — no recalcular ni contradecir esos valores aquí. (2) El escenario más probable (crecimiento, estabilización o caída) con su cifra de cambio esperado en %. (3) Ancla concreta: el tema o publicación que impulsaría ese escenario, con enlace real. (4) Conclusión: qué acción preventiva o de aprovechamiento sugiere ese escenario. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS'."
+      },
       "enlaces_referencia": []
     },
     "recomendacion_estrategica": {
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda del problema u oportunidad medible que motiva la recomendación, citando la sección/métrica exacta de bloque1-3 de donde sale. (2) El dato que más importa: por qué esta es la prioridad frente a otras métricas (comparación de magnitud). (3) Ancla concreta: la acción específica, con plazo y a quién le corresponde ejecutarla — nunca una recomendación genérica tipo 'mejorar la comunicación'. (4) Conclusión: qué pasa si NO se actúa (costo de omisión), no una repetición de las cifras. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS'."
+      },
       "enlaces_referencia": []
     },
     "recomendaciones_basadas_en_metricas": [

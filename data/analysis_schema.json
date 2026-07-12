@@ -151,7 +151,11 @@
             "emocion_dominante": "",
             "pct_apoyo": 0,
             "pct_critica": 0,
-            "pct_neutral": 0
+        "pct_neutral": 0,
+        "narrativa": {
+          "type": "string",
+          "description": "Redacta la narrativa de CADA tema emergente en una sola card, estructura fija: (1) Cifra cruda: n_comentarios y pct_del_total de este tema — nunca mostrar solo el peso LDA crudo sin el n absoluto. (2) El dato que más importa: pct_cambio_semana exacto y si acelerando es true o false, traducido a lenguaje natural (ej. '+45% respecto a la semana pasada, en aceleración'). (3) Ancla concreta: usar comentarios_ejemplo (al menos una cita real) + palabras_clave para explicar de qué trata realmente el tema, no solo repetir palabras_clave sueltas. (4) Conclusión: qué significa esta emergencia/desaceleración para la agenda pública — nunca repetir las cifras ya dichas. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS' derivado del tema, nunca genérico."
+        }
           }
         ]
       },
@@ -271,6 +275,10 @@
       "n_neutrales": 0,
       "n_criticos": 0,
       "total_posts_analizados": 0,
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda: n_total, y el desglose exacto n_simpatizantes/n_neutrales/n_criticos con sus pct_simpatizantes/pct_neutrales/pct_criticos correspondientes, más total_posts_analizados como base. (2) El dato que más importa: cuál de los tres grupos es mayoría y por cuántos puntos supera al segundo grupo. (3) Ancla concreta: si hay un tema o publicación real que explica por qué ese grupo es mayoría (tomar de otras secciones si aplica), citarlo con enlace; si no hay ese detalle, decir 'no hay datos suficientes para atribuir esto a un tema concreto'. (4) Conclusión: qué significa esa segmentación de públicos para la gestión. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS'."
+      },
       "explicacion_simple": "",
       "enlaces_referencia": [],
       "formula_usada": "Segmentación por postura en comentarios aprobados"
@@ -301,6 +309,10 @@
         "cita_destacada": "",
         "postura": "",
         "n_enlaces": 0,
+        "narrativa": {
+          "type": "string",
+          "description": "Redacta la narrativa de CADA voz de influencia en una sola card, estructura fija: (1) Cifra cruda: engagement, publicaciones y alcance_estimado de esta página/cuenta. (2) El dato que más importa: cuál submétrica (reacciones_totales, comentarios_totales o compartidos_totales) domina el engagement total y qué % representa, mostrando la división exacta (ej. '600 de 900 = 67% son reacciones'). (3) Ancla concreta: usar cita_destacada + tema_predominante para explicar POR QUÉ esta voz tiene ese tono/postura — nunca dejar la cita sin conectarla al tema. Si cita_destacada está vacío, decir 'no hay cita destacada disponible para esta voz'. (4) Conclusión: qué representa esta voz para el mapa de influencia (aliado, crítico, neutral relevante) — nunca generalizar a toda la audiencia. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS' acotado a esta voz, nunca genérico."
+        },
         "enlaces_referencia": []
       }
     ],

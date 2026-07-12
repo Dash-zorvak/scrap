@@ -416,6 +416,10 @@
         "reacciones_enojo": 0,
         "n_comentarios_total": 0,
         "enlaces_relacionados": [],
+        "narrativa": {
+          "type": "string",
+          "description": "Estructura fija: (1) Cifra cruda: n_negativos, n_comentarios_total y pct_del_total de este punto de fricción, mostrando la derivación exacta (ej. '6 de 8 comentarios = 75%'). (2) El dato que más importa: emocion_dominante y reacciones_enojo, y si acelerando es true o false. (3) Ancla concreta: usar 'cita' textual del comentario, conectada al tema y zona; los enlaces reales de esa cita deben estar en enlaces_relacionados. Si cita está vacía, decir 'no hay cita disponible para este punto de fricción'. (4) Conclusión: qué representa este punto de fricción para la gestión — un veredicto, no una repetición de las cifras. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS' derivado del tema/zona, nunca genérico."
+        },
         "explicacion_simple": "",
         "recomendacion_accion": ""
       }

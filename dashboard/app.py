@@ -577,6 +577,17 @@ with tab_pulso:
             if t > 30: return "var(--amber)"
             return "var(--green)"
 
+        _emo_fields = [
+            "pct_serenidad","pct_alegria","pct_euforia","pct_aceptacion","pct_confianza",
+            "pct_admiracion","pct_aprension","pct_preocupacion","pct_terror","pct_distraccion",
+            "pct_sorpresa","pct_asombro","pct_melancolia","pct_tristeza","pct_dolor",
+            "pct_aburrimiento","pct_desagrado","pct_repulsion","pct_fastidio","pct_enojo",
+            "pct_furia","pct_interes","pct_expectativa","pct_vigilancia","pct_optimismo",
+            "pct_amor_civico","pct_sumision","pct_asombro_temeroso","pct_desaprobacion",
+            "pct_remordimiento","pct_desprecio","pct_agresividad","pct_reclamo","pct_objecion",
+            "pct_satisfaccion","pct_calma","pct_reconocimiento","pct_ironia",
+        ]
+
         cards_html = []
         for lugar in sorted_lugares:
             tension = lugar.get("nivel_tension", 0)
@@ -613,16 +624,6 @@ with tab_pulso:
                 if narrativa_txt else ""
             )
 
-            _emo_fields = [
-                "pct_serenidad","pct_alegria","pct_euforia","pct_aceptacion","pct_confianza",
-                "pct_admiracion","pct_aprension","pct_preocupacion","pct_terror","pct_distraccion",
-                "pct_sorpresa","pct_asombro","pct_melancolia","pct_tristeza","pct_dolor",
-                "pct_aburrimiento","pct_desagrado","pct_repulsion","pct_fastidio","pct_enojo",
-                "pct_furia","pct_interes","pct_expectativa","pct_vigilancia","pct_optimismo",
-                "pct_amor_civico","pct_sumision","pct_asombro_temeroso","pct_desaprobacion",
-                "pct_remordimiento","pct_desprecio","pct_agresividad","pct_reclamo","pct_objecion",
-                "pct_satisfaccion","pct_calma","pct_reconocimiento","pct_ironia",
-            ]
             top_emos = sorted(
                 ((f.replace("pct_", "").replace("_", " ").title(), lugar.get(f, 0)) for f in _emo_fields),
                 key=lambda t: t[1], reverse=True,
@@ -662,6 +663,23 @@ with tab_pulso:
 
         for lugar in sorted_lugares:
             _expander_enlaces(lugar.get("enlaces_referencia", []), label=f"Ver enlaces de {lugar.get('lugar','este lugar')}")
+
+            all_emos = sorted(
+                ((f.replace("pct_", "").replace("_", " ").title(), lugar.get(f, 0)) for f in _emo_fields),
+                key=lambda t: t[1], reverse=True,
+            )
+            all_emos = [(name, val) for name, val in all_emos if val > 0]
+            if len(all_emos) > 3:
+                with st.expander(f"Ver las {len(all_emos)} emociones completas de {lugar.get('lugar','este lugar')}"):
+                    rows_html = "".join(
+                        f'<div class="bar-row" style="margin-bottom:4px">'
+                        f'<div class="bar-row-label">{name}</div>'
+                        f'<div class="bar-track"><div class="bar-fill" style="width:{val:.1f}%;background:var(--accent)"></div></div>'
+                        f'<div class="bar-row-val">{val:.1f}%</div>'
+                        f'</div>'
+                        for name, val in all_emos
+                    )
+                    st.markdown(rows_html, unsafe_allow_html=True)
 
     # ── Pulso IQ ──────────────────────────────────────────────────────
     iq = b1.get("pulso_iq", {})

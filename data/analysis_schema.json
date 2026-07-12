@@ -421,7 +421,24 @@
           "description": "Estructura fija: (1) Cifra cruda: n_negativos, n_comentarios_total y pct_del_total de este punto de fricción, mostrando la derivación exacta (ej. '6 de 8 comentarios = 75%'). (2) El dato que más importa: emocion_dominante y reacciones_enojo, y si acelerando es true o false. (3) Ancla concreta: usar 'cita' textual del comentario, conectada al tema y zona; los enlaces reales de esa cita deben estar en enlaces_relacionados. Si cita está vacía, decir 'no hay cita disponible para este punto de fricción'. (4) Conclusión: qué representa este punto de fricción para la gestión — un veredicto, no una repetición de las cifras. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS' derivado del tema/zona, nunca genérico."
         },
         "explicacion_simple": "",
-        "recomendacion_accion": ""
+        "recomendacion_accion": {
+          "accion": {
+            "type": "string",
+            "description": "La acción concreta y específica a ejecutar, nunca genérica (ej. 'publicar respuesta oficial sobre bacheo en Colonia Belén' — nunca 'mejorar la comunicación')."
+          },
+          "plazo": {
+            "type": "string",
+            "description": "El plazo concreto para ejecutar la acción (ej. '24 horas', '3 días hábiles'). Nunca dejar en blanco ni usar 'lo antes posible'."
+          },
+          "responsable": {
+            "type": "string",
+            "description": "El área o cargo responsable de ejecutar la acción (ej. 'Comunicación Municipal', 'Dirección de Obras'). Nunca dejar genérico como 'la alcaldía'."
+          },
+          "metrica_exito": {
+            "type": "string",
+            "description": "Cómo se medirá si la acción funcionó, anclado a una métrica ya existente en este punto de fricción (ej. 'reducir pct_del_total de este tema por debajo de 10% en el próximo período')."
+          }
+        }
       }
     ]
   },

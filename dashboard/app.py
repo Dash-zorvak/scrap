@@ -1112,8 +1112,15 @@ with tab_riesgo:
                 Emoción: {fr.get('emocion_dominante','—')} · 
                 Enojo reacciones: {fr.get('reacciones_enojo',0)}</div>
                 <div style="font-size:11px;color:var(--accent);margin-top:6px;
-                border-top:1px solid var(--border);padding-top:6px">
-                ⟶ {fr.get('recomendacion_accion','—')}</div>
+                border-top:1px solid var(--border);padding-top:6px">{''.join(
+                    f'<div style="margin-bottom:3px"><strong>{label}:</strong> {val}</div>'
+                    for label, val in [
+                        ("Acción", fr.get("recomendacion_accion", {}).get("accion", "—")),
+                        ("Plazo", fr.get("recomendacion_accion", {}).get("plazo", "—")),
+                        ("Responsable", fr.get("recomendacion_accion", {}).get("responsable", "—")),
+                        ("Métrica de éxito", fr.get("recomendacion_accion", {}).get("metrica_exito", "—")),
+                    ] if val and val != "—"
+                ) or '⟶ Sin recomendación estructurada'}</div>
             </div>
             """)
             _card_explicacion_simple(fr.get("explicacion_simple", ""))

@@ -4,6 +4,7 @@ Lee data/analysis.json generado por el analista externo y renderiza
 los cuatro bloques ejecutivos. Sin cálculo en runtime, sin ML, sin LLM.
 """
 
+import hashlib
 import json
 import os
 import sys
@@ -476,14 +477,17 @@ with tab_pulso:
     narrativa_ct = _get(ct, "narrativa", default="Sin datos de concentración temática.")
     col_ct = {"dominado": "var(--red)", "liderado": "var(--amber)", "fragmentado": "var(--green)"}.get(nivel_ct, "var(--accent)")
     paleta = ["var(--accent)","#a78bfa","#f59e0b","#34d399","#f472b6","#60a5fa","#fbbf24","#4ade80","#fb7185","#818cf8"]
-    segmentos = "".join(f'<span style="display:inline-block;height:100%;background:{paleta[i%len(paleta)]};width:{_get(r, "share", default=0):.1f}%"></span>' for i,r in enumerate(ramas))
+    def _color_por_tema(tema):
+        idx = int(hashlib.md5(str(tema).encode("utf-8")).hexdigest(), 16) % len(paleta)
+        return paleta[idx]
+    segmentos = "".join(f'<span style="display:inline-block;height:100%;background:{_color_por_tema(r.get("tema",""))};width:{_get(r, "share", default=0):.1f}%"></span>' for r in ramas)
     filas = "".join(
         f'<div style="display:flex;align-items:center;gap:6px;font-size:12px;flex:0 0 auto;white-space:nowrap;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px">'
-        f'<span style="width:10px;height:10px;border-radius:2px;background:{paleta[i%len(paleta)]};display:inline-block;flex:none"></span>'
+        f'<span style="width:10px;height:10px;border-radius:2px;background:{_color_por_tema(r.get("tema",""))};display:inline-block;flex:none"></span>'
         f'<span style="color:var(--fg-primary)">{r.get("tema","—")}</span>'
         f'<span style="color:var(--fg-secondary)">{r.get("n",0)} pubs · {_get(r, "share", default=0):.0f}%</span>'
         f'</div>'
-        for i,r in enumerate(ramas)
+        for r in ramas
     )
 
     st.markdown(f"""

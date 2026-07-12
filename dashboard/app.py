@@ -598,10 +598,17 @@ with tab_pulso:
             thermo_bar = f"""
             <div style="position:relative;height:6px;border-radius:3px;
             background:linear-gradient(to right, var(--green), var(--amber), var(--red));
-            margin:6px 0 10px 0">
+            margin:6px 0 2px 0">
                 <div style="position:absolute;top:-3px;left:{tension}%;
                 width:2px;height:12px;background:#fff;border-radius:1px;
                 box-shadow:0 0 3px rgba(0,0,0,0.4)"></div>
+            </div>
+            <div style="position:relative;height:10px;margin-bottom:8px;
+            font-family:var(--font-mono);font-size:8px;color:var(--fg-muted)">
+                <span style="position:absolute;left:0%">0</span>
+                <span style="position:absolute;left:30%;transform:translateX(-50%)">30</span>
+                <span style="position:absolute;left:60%;transform:translateX(-50%)">60</span>
+                <span style="position:absolute;left:100%;transform:translateX(-100%)">100</span>
             </div>
             """
 

@@ -259,13 +259,14 @@ def _render_emociones_barras(ie, show_caption=True):
     """Renderiza 10 barras horizontales de emociones."""
     for emo, label, color in _EMO_DEFS:
         pct = ie.get(f"pct_{emo}", 0) if isinstance(ie, dict) else 0
+        n_abs = ie.get(emo, 0) if isinstance(ie, dict) else 0
         st.markdown(f"""
         <div class="bar-row">
             <div class="bar-row-label">{label}</div>
             <div class="bar-track">
                 <div class="bar-fill" style="width:{pct:.1f}%;background:{color}"></div>
             </div>
-            <div class="bar-row-val">{pct:.1f}%</div>
+            <div class="bar-row-val">{pct:.1f}% ({n_abs})</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -355,7 +356,7 @@ with tab_pulso:
             <div class="bar-track">
                 <div class="bar-fill" style="width:{pct:.1f}%;background:{color}"></div>
             </div>
-            <div class="bar-row-val">{pct:.1f}%</div>
+            <div class="bar-row-val">{pct:.1f}% ({ie.get(e, 0)})</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -404,7 +405,7 @@ with tab_pulso:
         st.radio(
             "Seleccionar emoción",
             options=[e for e, _, _ in emos_ordenadas],
-            format_func=lambda e: f"{emo_labels[e]} {ie.get(f'pct_{e}',0):.1f}%",
+            format_func=lambda e: f"{emo_labels[e]} {ie.get(f'pct_{e}',0):.1f}% ({ie.get(e,0)})",
             key="b1_emo_activa",
             horizontal=True,
             label_visibility="collapsed",

@@ -1271,6 +1271,17 @@ with tab_intel:
         </div>
         """, unsafe_allow_html=True)
 
+        _ev_narr = _get(ev, "narrativa", default="")
+        if _ev_narr:
+            st.markdown(f"""
+            <div class="memo-section">
+                <div class="memo-section-number">§ 16</div>
+                <div class="memo-section-title">Resumen de Evidencia</div>
+                <div class="memo-body">{_ev_narr}</div>
+            </div>
+            <hr class="memo-divider">
+            """, unsafe_allow_html=True)
+
         if enlaces:
             st.markdown('<div class="exec-subheader">Lista de enlaces analizados</div>', unsafe_allow_html=True)
             for url in enlaces:

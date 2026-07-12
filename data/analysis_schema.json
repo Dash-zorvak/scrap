@@ -151,11 +151,7 @@
             "emocion_dominante": "",
             "pct_apoyo": 0,
             "pct_critica": 0,
-        "pct_neutral": 0,
-        "narrativa": {
-          "type": "string",
-          "description": "Redacta la narrativa de CADA tema emergente en una sola card, estructura fija: (1) Cifra cruda: n_comentarios y pct_del_total de este tema — nunca mostrar solo el peso LDA crudo sin el n absoluto. (2) El dato que más importa: pct_cambio_semana exacto y si acelerando es true o false, traducido a lenguaje natural (ej. '+45% respecto a la semana pasada, en aceleración'). (3) Ancla concreta: usar comentarios_ejemplo (al menos una cita real) + palabras_clave para explicar de qué trata realmente el tema, no solo repetir palabras_clave sueltas. (4) Conclusión: qué significa esta emergencia/desaceleración para la agenda pública — nunca repetir las cifras ya dichas. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS' derivado del tema, nunca genérico."
-        }
+            "pct_neutral": 0
           }
         ]
       },
@@ -352,7 +348,11 @@
         },
         "pct_apoyo": 0,
         "pct_critica": 0,
-        "pct_neutral": 0
+        "pct_neutral": 0,
+        "narrativa": {
+          "type": "string",
+          "description": "Redacta la narrativa de CADA tema emergente en una sola card, estructura fija: (1) Cifra cruda: n_comentarios y pct_del_total de este tema — nunca mostrar solo el peso LDA crudo sin el n absoluto. (2) El dato que más importa: pct_cambio_semana exacto y si acelerando es true o false, traducido a lenguaje natural (ej. '+45% respecto a la semana pasada, en aceleración'). (3) Ancla concreta: usar comentarios_ejemplo (al menos una cita real) + palabras_clave para explicar de qué trata realmente el tema, no solo repetir palabras_clave sueltas. (4) Conclusión: qué significa esta emergencia/desaceleración para la agenda pública — nunca repetir las cifras ya dichas. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS' derivado del tema, nunca genérico."
+        }
       }
     ]
   },

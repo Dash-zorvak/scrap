@@ -119,7 +119,10 @@
       "etiqueta": "",
       "fecha_hoy": "",
       "n_dias_referencia": 0,
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda: vol_hoy y promedio_semanal, con n_dias_referencia. (2) El dato que más importa: pct_diferencia exacto respecto al promedio, traducido a lenguaje natural sin nombrar 'Δ%' ni la fórmula (ej. '36% más que el promedio de los últimos 7 días', nunca la ecuación). (3) Ancla concreta: si hay una publicación específica que explica un pico o valle, citarla con enlace real en 'enlaces_referencia'; si no hay una publicación identificable, decir 'no hay una publicación específica que explique la variación' — nunca inventar causa. (4) Conclusión: qué significa esa variación de intensidad para la gestión. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS' en línea nueva."
+      },
       "explicacion_simple": "",
       "enlaces_referencia": [],
       "formula_usada": "Δ% = ((vol_hoy - promedio) / promedio) * 100"
@@ -253,7 +256,10 @@
       "explicacion_simple": "",
       "enlaces_referencia": []
     },
-    "cierre_factual": ""
+    "cierre_factual": {
+  "type": "string",
+  "description": "Es la última línea que lee el alcalde en Bloque I: UNA sola frase factual (no una lista, no relleno) que combine una cifra cruda ya presentada en otra sección de bloque1 (no inventar una nueva) con su ancla concreta (tema o publicación real). Prohibido usar adjetivos sueltos sin cifra detrás ('panorama estable', 'clima positivo'). Formato: '{Cifra + tema concreto} definieron la semana en la conversación digital municipal.'"
+}
   },
   "bloque2": {
     "mapa_publicos": {
@@ -272,7 +278,10 @@
     "polarizacion": {
       "indice": 0,
       "nivel": "",
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda: indice (sobre 1) y nivel (consenso/dividida/confrontación), con los % de simpatizantes/críticos que lo componen (tomar de bloque2.mapa_publicos, no recalcular). (2) El dato que más importa: la diferencia exacta en puntos entre pct_simpatizantes y pct_criticos. (3) Ancla concreta: el tema o publicación real que más concentra la división, con enlace. Si el texto público parece unánime pero las reacciones (hahas/sads/angrys) sugieren lo contrario, describirlo como 'una limitación metodológica de medir solo texto público' — PROHIBIDO usar las palabras 'censura' o 'autocensura' en cualquier forma. (4) Conclusión. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS'."
+      },
       "explicacion_simple": "",
       "enlaces_referencia": [],
       "nota_metodologica": "Limitación: solo mide conversación pública en páginas oficiales. No captura conversación privada ni otras redes.",
@@ -340,7 +349,10 @@
       "pct_organico": 0,
       "pct_coordinado": 0,
       "n_duplicados": 0,
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda: pct_organico, pct_coordinado y n_duplicados. (2) El dato que más importa: qué tan relevante es pct_coordinado para la fiabilidad de la conversación medida, sin usar siglas. (3) Ancla concreta: un ejemplo real de mensaje duplicado o similar detectado (cita o enlace); si n_duplicados es 0 o no hay ejemplo, decirlo explícitamente. (4) Conclusión: qué tan confiable es la conversación medida (orgánica vs coordinada) para la gestión. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS'."
+      },
       "explicacion_simple": "",
       "enlaces_referencia": [],
       "formula_usada": "% coordinado = n_mensajes_duplicados_o_similares / total_comentarios * 100"
@@ -358,7 +370,10 @@
       "alertas_cambridge": [
         {
           "tipo": "",
-          "descripcion": "",
+          "descripcion": {
+            "type": "string",
+            "description": "Estructura fija para cada alerta: (1) Cifra cruda: el tipo de alerta ('tipo') y el porcentaje/conteo exacto que la dispara (ej. '23.5% de las reacciones son hahas/sads/angrys'). (2) La derivación matemática a la vista: de qué universo sale ese porcentaje (ej. 'X de Y reacciones totales'). (3) Ancla concreta: los posts específicos donde se concentra la alerta — sus URLs deben estar TODAS en 'enlaces_referencia' (no una muestra); si se citan '3 posts', deben aparecer los 3 enlaces. (4) Conclusión: qué acción o vigilancia sugiere esta alerta. Nunca dejar la alerta como solo un número sin explicar qué la originó."
+          },
           "enlaces_referencia": []
         }
       ],
@@ -367,7 +382,10 @@
     "velocidad_propagacion": {
       "proyeccion_24h": "",
       "tendencia_dias": [],
-      "narrativa": "",
+      "narrativa": {
+        "type": "string",
+        "description": "Estructura fija: (1) Cifra cruda: proyeccion_24h y la tendencia numérica de tendencia_dias. (2) El dato que más importa: nombrar los temas específicos de 'temas_acelerando' y 'temas_desacelerando' con su % de cambio exacto (ej. 'obras públicas −45%, drones agrícolas +100%') — PROHIBIDO describir la curva de forma genérica sin nombrar qué temas suben o bajan. (3) Ancla concreta: la publicación real detrás del tema que más acelera, con enlace. (4) Conclusión: qué proyección implica esa aceleración/desaceleración para las próximas 24h. (5) Cierre '= NOMBRE CONTUNDENTE EN MAYÚSCULAS'."
+      },
       "explicacion_simple": "",
       "enlaces_referencia": [],
       "temas_acelerando": [],

@@ -1129,10 +1129,10 @@ with tab_riesgo:
                 border-top:1px solid var(--border);padding-top:6px">{''.join(
                     f'<div style="margin-bottom:3px"><strong>{label}:</strong> {val}</div>'
                     for label, val in [
-                        ("Acción", fr.get("recomendacion_accion", {}).get("accion", "—")),
-                        ("Plazo", fr.get("recomendacion_accion", {}).get("plazo", "—")),
-                        ("Responsable", fr.get("recomendacion_accion", {}).get("responsable", "—")),
-                        ("Métrica de éxito", fr.get("recomendacion_accion", {}).get("metrica_exito", "—")),
+                        ("Acción", _get(fr, "recomendacion_accion", "accion", default="—")),
+                        ("Plazo", _get(fr, "recomendacion_accion", "plazo", default="—")),
+                        ("Responsable", _get(fr, "recomendacion_accion", "responsable", default="—")),
+                        ("Métrica de éxito", _get(fr, "recomendacion_accion", "metrica_exito", default="—")),
                     ] if val and val != "—"
                 ) or '⟶ Sin recomendación estructurada'}</div>
             </div>

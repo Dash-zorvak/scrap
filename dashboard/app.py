@@ -473,6 +473,8 @@ with tab_pulso:
     st.markdown('<div class="section-header"><div class="section-title">04 · Concentración Temática</div></div>', unsafe_allow_html=True)
     ct = b1.get("concentracion_tematica", {})
     ramas = sorted(ct.get("ramas", []), key=lambda r: _get(r, "share", default=0), reverse=True)
+    _suma_shares_ct = sum(_get(r, "share", default=0) for r in ramas)
+    _shares_ct_invalidos = bool(ramas) and abs(_suma_shares_ct - 100) > 1.5
     nivel_ct = ct.get("nivel", "")
     narrativa_ct = _get(ct, "narrativa", default="Sin datos de concentración temática.")
     col_ct = {"dominado": "var(--red)", "liderado": "var(--amber)", "fragmentado": "var(--green)"}.get(nivel_ct, "var(--accent)")
@@ -494,6 +496,13 @@ with tab_pulso:
     </div>
     """, unsafe_allow_html=True)
     _expander_enlaces(ct.get("enlaces_referencia", []))
+    if _shares_ct_invalidos:
+        st.markdown(
+            f'<div class="status-warning">⚠️ Los porcentajes de esta sección suman '
+            f'{_suma_shares_ct:.1f}% en lugar de 100%. Los datos de origen '
+            'pueden estar incompletos o mal calculados.</div>',
+            unsafe_allow_html=True,
+        )
     st.markdown(f"""
     <div class="panel">
         <div class="panel-head">

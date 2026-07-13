@@ -14,9 +14,6 @@ import json
 import sys
 import os
 
-# Allow running from repo root
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
 from analytics.schema_validator import validar
 
 

@@ -21,8 +21,8 @@ FACEBOOK_DB = _cfg.FACEBOOK_DB
 FB_PAGES_OFICIALES = _cfg.FB_PAGES_OFICIALES
 TK_ACCOUNTS = _cfg.TK_ACCOUNTS
 
-from capturas_store import borrar_capturas  # noqa: E402
-import db_edits  # noqa: E402
+from dashboard.capturas_store import borrar_capturas  # noqa: E402
+from dashboard import db_edits  # noqa: E402
 
 from src.storage.db import LocalStorage
 

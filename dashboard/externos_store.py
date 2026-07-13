@@ -14,6 +14,7 @@ import os
 import sqlite3
 import sys
 
+# DEUDA TÉCNICA: path hack temporal. Migrar a pyproject.toml cuando se consolide el paquete.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dashboard.config import EXTERNOS_DB  # noqa: E402
 

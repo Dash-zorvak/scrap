@@ -36,7 +36,11 @@ def _fb_post_insert_dict(datos: dict, post_id: str) -> dict:
         "sads_count": datos.get("sads_count", 0) or 0,
         "wows_count": datos.get("wows_count", 0) or 0,
         "angrys_count": datos.get("angrys_count", 0) or 0,
-        "comments_count": datos.get("comments_count", 0) or len(comentarios),
+        "comments_count": (
+            datos["comments_count"]
+            if datos.get("comments_count") is not None
+            else len(comentarios)
+        ),
         "shares_count": datos.get("shares_count", 0) or 0,
         "views_count": datos.get("views_count", 0) or 0,
         "post_url": datos.get("post_url", ""),
@@ -147,136 +151,143 @@ def guardar_lote(lote: list, progreso_cb=None) -> dict:
     fb_firmas = _cargar_firmas_fb(ruta_fb)
 
     conn_tk = sqlite3.connect(ruta_tk)
+    conn_ext = None
     try:
-        tk_ids_existentes = obtener_ids_videos(conn_tk)
-    except Exception:
-        tk_ids_existentes = set()
-    tk_firmas = _cargar_firmas_tk(ruta_tk)
-
-    asegurar_tablas_externas(ruta_ext)
-    conn_ext = sqlite3.connect(ruta_ext)
-    try:
-        ext_ids_existentes = obtener_ids_posts_externos(conn_ext)
-    except Exception:
-        ext_ids_existentes = set()
-
-    for _idx, item in enumerate(revisados, start=1):
-        datos = item.get("datos_revisados", {})
-        plataforma = datos.get("plataforma")
-
         try:
-            if plataforma == "facebook":
-                post_id = resolver_id_post(datos, fb_ids_existentes, fb_firmas)
-                fb_ids_existentes.add(post_id)
-                post_dict = _fb_post_insert_dict(datos, post_id)
-                ok = store.insert_fb_post(post_dict)
-                if not ok:
-                    resumen["errores"].append(f"Error insertando post FB: {post_id}")
-                    continue
-                resumen["fb_posts"] += 1
+            tk_ids_existentes = obtener_ids_videos(conn_tk)
+        except Exception:
+            tk_ids_existentes = set()
+        tk_firmas = _cargar_firmas_tk(ruta_tk)
 
-                comentarios = datos.get("comentarios") or []
-                for idx, c in enumerate(comentarios):
-                    texto = c.get("texto", "")
-                    if not texto:
-                        continue
-                    cid = generar_id_comentario(post_id, texto, idx)
-                    cdict = _fb_comment_insert_dict(c, cid, post_id)
-                    ok = store.insert_fb_comment(cdict)
-                    if ok:
-                        resumen["fb_comments"] += 1
-                    else:
-                        resumen["errores"].append(f"Error insertando comentario FB: {cid}")
+        asegurar_tablas_externas(ruta_ext)
+        conn_ext = sqlite3.connect(ruta_ext)
+        try:
+            ext_ids_existentes = obtener_ids_posts_externos(conn_ext)
+        except Exception:
+            ext_ids_existentes = set()
 
-                # Persistir las capturas subidas para poder incrustar la
-                # publicacion en el informe PDF de la medalla mas adelante.
-                try:
-                    from dashboard.capturas_store import guardar_capturas
-                    guardar_capturas(post_id, item.get("imagenes"))
-                except Exception:
-                    pass
+        for _idx, item in enumerate(revisados, start=1):
+            datos = item.get("datos_revisados", {})
+            plataforma = datos.get("plataforma")
 
-                item["post_id"] = post_id
-                item["estado"] = "guardado"
-
-            elif plataforma == "tiktok":
-                # Igual que Facebook: el id se resuelve por contenido
-                # (resolver_id_post + firma_contenido). Re-subir el mismo video
-                # (identidad fiable) reutiliza su id -> upsert; videos distintos
-                # o sin identidad reciben ids unicos -> nunca se sobrescriben.
-                video_id = resolver_id_post(datos, tk_ids_existentes, tk_firmas)
-                tk_ids_existentes.add(video_id)
-                ok = insertar_video(conn_tk, datos, video_id)
-                if not ok:
-                    resumen["errores"].append(f"Error insertando video TK: {video_id}")
-                    continue
-                resumen["tk_videos"] += 1
-
-                comentarios = datos.get("comentarios") or []
-                for idx, c in enumerate(comentarios):
-                    texto = c.get("texto", "")
-                    if not texto:
-                        continue
-                    cid = generar_id_comentario(video_id, texto, idx)
-                    ok = insertar_comentario_tiktok(conn_tk, cid, video_id, texto)
-                    if ok:
-                        resumen["tk_comments"] += 1
-                    else:
-                        resumen["errores"].append(f"Error insertando comentario TK: {cid}")
-
-                item["video_id"] = video_id
-                item["estado"] = "guardado"
-
-            elif plataforma == "externos":
-                base = _base_para_hash(datos)
-                post_id = generar_id_post(base, ext_ids_existentes)
-                ext_ids_existentes.add(post_id)
-                ok = insertar_post_externo(conn_ext, datos, post_id)
-                if not ok:
-                    resumen["errores"].append(f"Error insertando post externo: {post_id}")
-                    continue
-                resumen["ext_posts"] += 1
-
-                comentarios = datos.get("comentarios") or []
-                for idx, c in enumerate(comentarios):
-                    texto = c.get("texto", "")
-                    if not texto:
-                        continue
-                    cid = generar_id_comentario(post_id, texto, idx)
-                    try:
-                        insertar_comentario_externo(conn_ext, cid, post_id, texto, c.get("autor"))
-                        resumen["ext_comments"] += 1
-                    except Exception:
-                        resumen["errores"].append(f"Error insertando comentario externo: {cid}")
-
-                conn_ext.commit()
-                try:
-                    agregar_pagina_externa(datos.get("page_name", ""), ruta_ext)
-                except Exception:
-                    pass
-
-                item["post_id"] = post_id
-                item["estado"] = "guardado"
-
-            else:
-                raise ValueError(f"Plataforma no soportada: {plataforma}")
-
-        except Exception as e:
-            resumen["errores"].append(f"Error procesando item {item.get('id_temporal','?')}: {e}")
-            logger.exception(f"Error en guardar_lote para item {item.get('id_temporal')}")
-
-        if progreso_cb is not None:
-            etiqueta = (
-                datos.get("page_name")
-                or datos.get("account_id")
-                or item.get("id_temporal", "")
-            )
             try:
-                progreso_cb(_idx, total, etiqueta)
-            except Exception:
-                pass
+                if plataforma == "facebook":
+                    post_id = resolver_id_post(datos, fb_ids_existentes, fb_firmas)
+                    fb_ids_existentes.add(post_id)
+                    post_dict = _fb_post_insert_dict(datos, post_id)
+                    ok = store.insert_fb_post(post_dict)
+                    if not ok:
+                        resumen["errores"].append(f"Error insertando post FB: {post_id}")
+                        continue
+                    resumen["fb_posts"] += 1
 
-    conn_tk.close()
-    conn_ext.close()
+                    comentarios = datos.get("comentarios") or []
+                    for idx, c in enumerate(comentarios):
+                        texto = c.get("texto", "")
+                        if not texto:
+                            continue
+                        cid = generar_id_comentario(post_id, texto, idx)
+                        cdict = _fb_comment_insert_dict(c, cid, post_id)
+                        ok = store.insert_fb_comment(cdict)
+                        if ok:
+                            resumen["fb_comments"] += 1
+                        else:
+                            resumen["errores"].append(f"Error insertando comentario FB: {cid}")
+
+                    # Persistir las capturas subidas para poder incrustar la
+                    # publicacion en el informe PDF de la medalla mas adelante.
+                    # TODO: al hacer upsert (post ya existe), limpiar capturas
+                    # anteriores antes de guardar las nuevas para evitar acumulación.
+                    # Ver: dashboard/capturas_store.borrar_capturas()
+                    try:
+                        from dashboard.capturas_store import guardar_capturas
+                        guardar_capturas(post_id, item.get("imagenes"))
+                    except Exception:
+                        pass
+
+                    item["post_id"] = post_id
+                    item["estado"] = "guardado"
+
+                elif plataforma == "tiktok":
+                    # Igual que Facebook: el id se resuelve por contenido
+                    # (resolver_id_post + firma_contenido). Re-subir el mismo video
+                    # (identidad fiable) reutiliza su id -> upsert; videos distintos
+                    # o sin identidad reciben ids unicos -> nunca se sobrescriben.
+                    video_id = resolver_id_post(datos, tk_ids_existentes, tk_firmas)
+                    tk_ids_existentes.add(video_id)
+                    ok = insertar_video(conn_tk, datos, video_id)
+                    if not ok:
+                        resumen["errores"].append(f"Error insertando video TK: {video_id}")
+                        continue
+                    resumen["tk_videos"] += 1
+
+                    comentarios = datos.get("comentarios") or []
+                    for idx, c in enumerate(comentarios):
+                        texto = c.get("texto", "")
+                        if not texto:
+                            continue
+                        cid = generar_id_comentario(video_id, texto, idx)
+                        ok = insertar_comentario_tiktok(conn_tk, cid, video_id, texto)
+                        if ok:
+                            resumen["tk_comments"] += 1
+                        else:
+                            resumen["errores"].append(f"Error insertando comentario TK: {cid}")
+
+                    item["video_id"] = video_id
+                    item["estado"] = "guardado"
+
+                elif plataforma == "externos":
+                    base = _base_para_hash(datos)
+                    post_id = generar_id_post(base, ext_ids_existentes)
+                    ext_ids_existentes.add(post_id)
+                    ok = insertar_post_externo(conn_ext, datos, post_id)
+                    if not ok:
+                        resumen["errores"].append(f"Error insertando post externo: {post_id}")
+                        continue
+                    resumen["ext_posts"] += 1
+
+                    comentarios = datos.get("comentarios") or []
+                    for idx, c in enumerate(comentarios):
+                        texto = c.get("texto", "")
+                        if not texto:
+                            continue
+                        cid = generar_id_comentario(post_id, texto, idx)
+                        try:
+                            insertar_comentario_externo(conn_ext, cid, post_id, texto, c.get("autor"))
+                            resumen["ext_comments"] += 1
+                        except Exception:
+                            resumen["errores"].append(f"Error insertando comentario externo: {cid}")
+
+                    conn_ext.commit()
+                    try:
+                        agregar_pagina_externa(datos.get("page_name", ""), ruta_ext)
+                    except Exception:
+                        pass
+
+                    item["post_id"] = post_id
+                    item["estado"] = "guardado"
+
+                else:
+                    raise ValueError(f"Plataforma no soportada: {plataforma}")
+
+            except Exception as e:
+                resumen["errores"].append(f"Error procesando item {item.get('id_temporal','?')}: {e}")
+                logger.exception(f"Error en guardar_lote para item {item.get('id_temporal')}")
+
+            if progreso_cb is not None:
+                etiqueta = (
+                    datos.get("page_name")
+                    or datos.get("account_id")
+                    or item.get("id_temporal", "")
+                )
+                try:
+                    progreso_cb(_idx, total, etiqueta)
+                except Exception:
+                    pass
+
+    finally:
+        conn_tk.close()
+        if conn_ext is not None:
+            conn_ext.close()
 
     return resumen

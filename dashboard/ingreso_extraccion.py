@@ -717,9 +717,15 @@ def _deduplicar_posts(posts: list) -> list:
             key = enlace
         else:
             texto = (post.get("texto_post") or "").strip()
-            texto = re.sub(r"\s+", " ", texto).lower()[:80]
-            if texto:
-                key = "txt:" + texto
+            texto = re.sub(r"\s+", " ", texto).lower()
+            if len(texto) >= 120:
+                # Solo deduplicar por texto cuando hay suficiente contenido
+                # para distinguir posts distintos. 80 chars es insuficiente
+                # para posts de plantilla institucional.
+                key = "txt:" + texto[:160]
+            elif texto:
+                # Texto corto: no deduplicar por contenido para evitar falsos positivos
+                key = None
             else:
                 key = None
 
@@ -850,8 +856,18 @@ def _fusionar_posts(posts: list) -> list:
         if e:
             enlaces.add(e)
 
-    # 0 o 1 URL distinta en todo el documento → un solo post
-    if len(enlaces) <= 1:
+    # 0 URLs distintas en todo el documento:
+    # Si hay exactamente 1 post extraído -> devolver tal cual (no hay ambigüedad).
+    # Si hay más de 1 post SIN ninguna URL -> NO fusionar automáticamente.
+    # La fusión automática sin URL es la causa raíz de pérdida de datos cuando
+    # el modelo segmenta correctamente N posts en N fragmentos pero ninguno
+    # incluye enlace. Solo fusionar si hay exactamente 1 URL distinta (caso
+    # claro: mismo post repartido en varias páginas con la misma URL).
+    if len(enlaces) == 0:
+        # Sin URLs: devolver los posts tal como llegaron del modelo.
+        # El modelo ya aplicó segmentación; respetarla.
+        return posts if posts else []
+    if len(enlaces) == 1:
         fusion = posts[0]
         for p in posts[1:]:
             fusion = _fusionar_dos(fusion, p)

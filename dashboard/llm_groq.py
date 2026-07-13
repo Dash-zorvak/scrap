@@ -138,6 +138,11 @@ def _es_modelo_deepseek(model: str) -> bool:
 
 # ── Cliente lazy ──
 
+# Clientes lazy: se inicializan en primera llamada y se reciclan si la key/url
+# no cambia. Asignación atómica en CPython (GIL) hace esto seguro para el
+# caso de uso actual (Streamlit mono-proceso o multi-thread con GIL activo).
+# Si se migra a Gunicorn multi-process o a async (asyncio), reemplazar con
+# contextvariables o un pool de clientes por proceso.
 _cliente: OpenAI | None = None
 _cliente_api_key: str | None = None
 _cliente_base_url: str | None = None

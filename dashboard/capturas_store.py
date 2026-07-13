@@ -10,6 +10,7 @@ PDF subidos se omiten para el embed (sus datos sí se extraen aparte).
 import os
 import sys
 
+# DEUDA TÉCNICA: path hack temporal. Migrar a pyproject.toml cuando se consolide el paquete.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:

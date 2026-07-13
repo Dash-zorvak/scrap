@@ -6,30 +6,119 @@ los cuatro bloques ejecutivos. Sin cálculo en runtime, sin ML, sin LLM.
 
 import hashlib
 import json
-import os
-import sys
+import os as _os
+import sys as _sys
 import pandas as pd
 import streamlit as st
 from datetime import datetime
 
+_DASHBOARD_DIR = _os.path.dirname(_os.path.abspath(__file__))
+if _DASHBOARD_DIR not in _sys.path:
+    _sys.path.insert(0, _DASHBOARD_DIR)
 from estilos import CSS
 from estilos_override import CSS_OVERRIDE
+from tema_taxonomia import EMOCIONES as _EMOCIONES_META
 
 # ── Ruta al JSON de análisis ──────────────────────────────────────────
-_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _BASE not in sys.path:
-    sys.path.insert(0, _BASE)
-from src.analyzer.iq_engine import DIMENSION_WEIGHTS, DIMENSION_LABELS
-ANALYSIS_PATH = os.path.join(_BASE, "data", "analysis.json")
+_BASE = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _BASE not in _sys.path:
+    _sys.path.insert(0, _BASE)
+from dimension_labels import DIMENSION_WEIGHTS, DIMENSION_LABELS
+ANALYSIS_PATH = _os.path.join(_BASE, "data", "analysis.json")
+
+
+def _validar_analysis(data: dict) -> list[str]:
+    """Valida consistencia matemática y estructural de analysis.json.
+
+    Retorna lista de strings con advertencias. Lista vacía = sin problemas.
+    No lanza excepciones — el dashboard siempre renderiza aunque haya advertencias.
+    """
+    advertencias = []
+
+    # V01: Voces de influencia — engagement vs submétricas
+    for voz in data.get("bloque2", {}).get("voces_influencia", []):
+        eng = voz.get("engagement", 0) or 0
+        sum_sub = (
+            (voz.get("reacciones_totales") or 0)
+            + (voz.get("comentarios_totales") or 0)
+            + (voz.get("compartidos_totales") or 0)
+        )
+        if eng > 0 and sum_sub == 0:
+            pagina = voz.get("pagina", "desconocida")
+            advertencias.append(
+                f"DATOS: '{pagina}' tiene engagement={eng} pero "
+                f"reacciones+comentarios+compartidos=0. Corregir en analysis.json."
+            )
+
+    # V02: Concentración temática — shares deben sumar 100
+    ramas = data.get("bloque1", {}).get("concentracion_tematica", {}).get("ramas", [])
+    if ramas and isinstance(ramas, list):
+        suma = sum(
+            r.get("share", 0) for r in ramas
+            if isinstance(r, dict) and isinstance(r.get("share"), (int, float))
+        )
+        if abs(suma - 100) > 1.5:
+            advertencias.append(
+                f"DATOS: shares de concentración temática suman {suma:.1f}% "
+                f"(esperado 100%). Corregir en analysis.json."
+            )
+
+    # V03: Puntos de fricción — emocion_dominante vacía con n_negativos > 0
+    for fr in data.get("bloque3", {}).get("puntos_friccion", []):
+        if isinstance(fr, dict):
+            n_neg = fr.get("n_negativos", 0) or 0
+            emo = (fr.get("emocion_dominante") or "").strip()
+            if n_neg > 0 and not emo:
+                tema = fr.get("tema", "desconocido")
+                advertencias.append(
+                    f"DATOS: Punto de fricción '{tema}' tiene n_negativos={n_neg} "
+                    f"pero emocion_dominante está vacía. Corregir en analysis.json."
+                )
+
+    # V04: alertas_cambridge — descripcion debe ser string, no dict
+    for alerta in data.get("bloque3", {}).get("nivel_alerta", {}).get("alertas_cambridge", []):
+        if isinstance(alerta, dict):
+            desc = alerta.get("descripcion")
+            if isinstance(desc, dict):
+                tipo = alerta.get("tipo", "desconocido")
+                advertencias.append(
+                    f"ESTRUCTURA: Alerta '{tipo}' tiene campo 'descripcion' como "
+                    f"dict (metadata del schema), no como string. Corregir en analysis.json."
+                )
+
+    # V05: Secciones de bloque4 deben ser dict con 'narrativa', no string plano
+    secciones_b4 = [
+        "eco_historico", "leccion_aprendida", "brecha_percepcion_realidad",
+        "contexto_no_visible", "correlacion_contenido_reaccion",
+        "comparativa_sectorial", "proyeccion_escenario", "recomendacion_estrategica",
+    ]
+    b4 = data.get("bloque4", {})
+    for sec in secciones_b4:
+        val = b4.get(sec)
+        if val is not None and not isinstance(val, dict):
+            advertencias.append(
+                f"ESTRUCTURA: bloque4.{sec} debe ser dict con campo 'narrativa', "
+                f"no {type(val).__name__}. Corregir en analysis.json."
+            )
+
+    return advertencias
 
 
 def _cargar_analysis():
-    """Carga analysis.json. Retorna None si no existe o está corrupto."""
+    """Carga analysis.json. Retorna (data, advertencias).
+
+    data es None si no existe o está corrupto.
+    advertencias es lista de strings con problemas de consistencia.
+    """
     try:
         with open(ANALYSIS_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return None
+            data = json.load(f)
+        advertencias = _validar_analysis(data)
+        return data, advertencias
+    except FileNotFoundError:
+        return None, []
+    except json.JSONDecodeError as e:
+        return None, [f"JSON inválido en analysis.json: {e}"]
 
 
 def _get(data, *keys, default="—"):
@@ -80,7 +169,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 st.markdown(CSS_OVERRIDE, unsafe_allow_html=True)
 
 # ── Cargar datos ──────────────────────────────────────────────────────
-data = _cargar_analysis()
+data, _advertencias_json = _cargar_analysis()
 
 # ── Fechas para topbar ────────────────────────────────────────────────
 if data:
@@ -114,6 +203,73 @@ st.markdown(f"""
     {fecha_str.upper()}</div>
 </div>
 """, unsafe_allow_html=True)
+
+# ── Banner ejecutivo (visible sin scroll, sin tabs) ───────────────────────
+if data:
+    _semaforo_b3 = data.get("bloque3", {}).get("nivel_alerta", {}).get("semaforo", "verde")
+    _riesgo_b3 = data.get("bloque3", {}).get("nivel_alerta", {}).get("indice_riesgo", 0)
+    _tema_top = ""
+    _ramas_b1 = data.get("bloque1", {}).get("concentracion_tematica", {}).get("ramas", [])
+    if _ramas_b1 and isinstance(_ramas_b1, list) and isinstance(_ramas_b1[0], dict):
+        _tema_top = _ramas_b1[0].get("tema", "")
+        _share_top = _ramas_b1[0].get("share", 0)
+    else:
+        _share_top = 0
+    _iq_val = data.get("bloque1", {}).get("pulso_iq", {}).get("valor", 0)
+    _n_total = data.get("bloque1", {}).get("clima_narrativo", {}).get("n_total_comentarios", 0)
+
+    _sem_config = {
+        "verde":    ("SITUACIÓN CONTROLADA", "var(--green)", "●"),
+        "amarillo": ("ATENCIÓN REQUERIDA",   "var(--amber)", "●"),
+        "rojo":     ("ALERTA ACTIVA",        "var(--red)",   "●"),
+    }
+    _sem_label, _sem_color, _sem_dot = _sem_config.get(_semaforo_b3, _sem_config["verde"])
+
+    _tema_str = f"{_tema_top} {_share_top:.0f}%" if _tema_top else "—"
+    _iq_str   = str(_iq_val) if _iq_val else "—"
+
+    st.markdown(f"""
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+    margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+        <div style="background:var(--bg-card);border:1px solid var(--border);
+        border-left:3px solid {_sem_color};border-radius:var(--r-sm);
+        padding:12px 16px">
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg-muted);
+            letter-spacing:1.4px;text-transform:uppercase;margin-bottom:4px">ESTADO</div>
+            <div style="font-size:13px;font-weight:700;color:{_sem_color}">
+            {_sem_dot} {_sem_label}</div>
+            <div style="font-family:var(--font-mono);font-size:10px;
+            color:var(--fg-muted);margin-top:2px">Riesgo {_riesgo_b3}/100</div>
+        </div>
+        <div style="background:var(--bg-card);border:1px solid var(--border);
+        border-radius:var(--r-sm);padding:12px 16px">
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg-muted);
+            letter-spacing:1.4px;text-transform:uppercase;margin-bottom:4px">TEMA DOMINANTE</div>
+            <div style="font-size:13px;font-weight:700;color:var(--fg-primary)">
+            {_tema_str}</div>
+            <div style="font-family:var(--font-mono);font-size:10px;
+            color:var(--fg-muted);margin-top:2px">{_n_total:,} comentarios</div>
+        </div>
+        <div style="background:var(--bg-card);border:1px solid var(--border);
+        border-radius:var(--r-sm);padding:12px 16px">
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg-muted);
+            letter-spacing:1.4px;text-transform:uppercase;margin-bottom:4px">PULSO IQ</div>
+            <div style="font-size:32px;font-weight:700;line-height:1;
+            color:var(--accent)">{_iq_str}</div>
+            <div style="font-family:var(--font-mono);font-size:10px;
+            color:var(--fg-muted);margin-top:2px">de 100</div>
+        </div>
+        <div style="background:var(--bg-card);border:1px solid var(--border);
+        border-radius:var(--r-sm);padding:12px 16px">
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg-muted);
+            letter-spacing:1.4px;text-transform:uppercase;margin-bottom:4px">PERÍODO</div>
+            <div style="font-size:13px;font-weight:600;color:var(--fg-primary)">
+            {periodo_label}</div>
+            <div style="font-family:var(--font-mono);font-size:10px;
+            color:var(--fg-muted);margin-top:2px">{plataforma_label}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ── Sidebar ───────────────────────────────────────────────────────────
 st.sidebar.markdown("""
@@ -165,6 +321,21 @@ font-family:var(--font-mono);color:var(--fg-muted);letter-spacing:0.4px;line-hei
 </div>
 """, unsafe_allow_html=True)
 
+if _advertencias_json:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(
+        '<div style="font-family:var(--font-mono);font-size:9px;'
+        'color:var(--amber);letter-spacing:1.2px;text-transform:uppercase;'
+        'font-weight:600;margin-bottom:6px">⚠ ALERTAS DE DATOS</div>',
+        unsafe_allow_html=True,
+    )
+    for _adv in _advertencias_json:
+        st.sidebar.markdown(
+            f'<div style="font-family:var(--font-mono);font-size:9px;'
+            f'color:var(--amber);line-height:1.6;margin-bottom:4px">{_adv}</div>',
+            unsafe_allow_html=True,
+        )
+
 # ════════════════════════════════════════════════════════════
 # PANTALLA DE ESPERA si no hay JSON
 # ════════════════════════════════════════════════════════════
@@ -203,55 +374,36 @@ tab_pulso, tab_audiencia, tab_riesgo, tab_intel = st.tabs([
 # UTILIDADES DE RENDERIZADO
 # ════════════════════════════════════════════════════════════
 
+_EMO_COLORES = {
+    # joy
+    "serenidad": "var(--green)", "alegria": "var(--green)", "euforia": "var(--green)",
+    # trust
+    "aceptacion": "var(--green)", "confianza": "var(--green)", "admiracion": "var(--green)",
+    # fear
+    "aprension": "var(--amber)", "preocupacion": "var(--amber)", "terror": "var(--red)",
+    # surprise
+    "distraccion": "var(--amber)", "sorpresa": "var(--amber)", "asombro": "var(--amber)",
+    # sadness
+    "melancolia": "var(--red)", "tristeza": "var(--red)", "dolor": "var(--red)",
+    # disgust
+    "aburrimiento": "var(--amber)", "desagrado": "var(--red)", "repulsion": "var(--red)",
+    # anger
+    "fastidio": "var(--amber)", "enojo": "var(--red)", "furia": "var(--red)",
+    # anticipation
+    "interes": "var(--amber)", "expectativa": "var(--amber)", "vigilancia": "var(--amber)",
+    # díadas
+    "optimismo": "var(--green)", "amor_civico": "var(--green)", "sumision": "var(--amber)",
+    "asombro_temeroso": "var(--red)", "desaprobacion": "var(--red)",
+    "remordimiento": "var(--red)", "desprecio": "var(--red)", "agresividad": "var(--red)",
+    # cívicas
+    "reclamo": "var(--red)", "objecion": "var(--amber)", "satisfaccion": "var(--green)",
+    "calma": "var(--green)", "reconocimiento": "var(--green)", "ironia": "var(--amber)",
+}
+
+# _EMO_DEFS construido desde tema_taxonomia — fuente única de verdad para etiquetas
 _EMO_DEFS = [
-    # Alegría (joy)
-    ("serenidad", "Serenidad", "var(--green)"),
-    ("alegria", "Alegría", "var(--green)"),
-    ("euforia", "Euforia", "var(--green)"),
-    # Confianza (trust)
-    ("aceptacion", "Aceptación", "var(--green)"),
-    ("confianza", "Confianza", "var(--green)"),
-    ("admiracion", "Admiración", "var(--green)"),
-    # Miedo (fear)
-    ("aprension", "Aprensión", "var(--amber)"),
-    ("preocupacion", "Preocupación", "var(--amber)"),
-    ("terror", "Terror / Pánico", "var(--red)"),
-    # Sorpresa (surprise)
-    ("distraccion", "Distracción", "var(--amber)"),
-    ("sorpresa", "Sorpresa", "var(--amber)"),
-    ("asombro", "Asombro", "var(--amber)"),
-    # Tristeza (sadness)
-    ("melancolia", "Melancolía", "var(--red)"),
-    ("tristeza", "Tristeza", "var(--red)"),
-    ("dolor", "Dolor / Pena", "var(--red)"),
-    # Desagrado (disgust)
-    ("aburrimiento", "Aburrimiento", "var(--amber)"),
-    ("desagrado", "Desagrado", "var(--red)"),
-    ("repulsion", "Repulsión", "var(--red)"),
-    # Enojo (anger)
-    ("fastidio", "Fastidio", "var(--amber)"),
-    ("enojo", "Enojo", "var(--red)"),
-    ("furia", "Furia / Ira", "var(--red)"),
-    # Anticipación (anticipation)
-    ("interes", "Interés", "var(--amber)"),
-    ("expectativa", "Expectativa", "var(--amber)"),
-    ("vigilancia", "Vigilancia", "var(--amber)"),
-    # Díadas
-    ("optimismo", "Optimismo", "var(--green)"),
-    ("amor_civico", "Cariño / Aprecio", "var(--green)"),
-    ("sumision", "Resignación", "var(--amber)"),
-    ("asombro_temeroso", "Sobrecogimiento", "var(--red)"),
-    ("desaprobacion", "Desaprobación", "var(--red)"),
-    ("remordimiento", "Remordimiento", "var(--red)"),
-    ("desprecio", "Desprecio", "var(--red)"),
-    ("agresividad", "Agresividad", "var(--red)"),
-    # Posturas cívicas
-    ("reclamo", "Reclamo", "var(--red)"),
-    ("objecion", "Objeción", "var(--amber)"),
-    ("satisfaccion", "Satisfacción", "var(--green)"),
-    ("calma", "Calma", "var(--green)"),
-    ("reconocimiento", "Reconocimiento", "var(--green)"),
-    ("ironia", "Ironía", "var(--amber)"),
+    (clave, meta["label"], _EMO_COLORES.get(clave, "var(--fg-muted)"))
+    for clave, meta in _EMOCIONES_META.items()
 ]
 
 
@@ -298,7 +450,8 @@ with tab_pulso:
     narrativa_cn = _get(cn, "narrativa", default="Sin datos de clima narrativo.")
 
     tend_color = "var(--green)" if tend > 0.1 else ("var(--red)" if tend < -0.1 else "var(--amber)")
-    tend_label = "↑ mejorando" if tend > 0.1 else ("↓ empeorando" if tend < -0.1 else "→ estable")
+    _tend_signo = f"+{tend:.1f}" if tend > 0 else f"{tend:.1f}"
+    tend_label = f"↑ {_tend_signo} pts" if tend > 0.1 else (f"↓ {_tend_signo} pts" if tend < -0.1 else "→ sin cambio")
 
     st.markdown(f"""
     <div class="panel">
@@ -599,7 +752,7 @@ with tab_pulso:
             <div style="position:relative;height:6px;border-radius:3px;
             background:linear-gradient(to right, var(--green), var(--amber), var(--red));
             margin:6px 0 2px 0">
-                <div style="position:absolute;top:-3px;left:{tension}%;
+                <div style="position:absolute;top:-3px;left:{min(tension, 97):.1f}%;
                 width:2px;height:12px;background:#fff;border-radius:1px;
                 box-shadow:0 0 3px rgba(0,0,0,0.4)"></div>
             </div>
@@ -695,9 +848,19 @@ with tab_pulso:
         iq_cuad = iq.get("cuadrante", "—")
         iq_narr = _get(iq, "narrativa", default="—")
         iq_comp = iq.get("componentes", {})
+        _IQ_LABELS = {
+            "aprobacion": "Aprobación",
+            "conexion": "Conexión",
+            "tranquilidad": "Tranquilidad",
+            "diversidad": "Diversidad",
+            "presencia": "Presencia",
+            "consistencia": "Consistencia",
+            "atencion": "Atención",
+        }
         chips_iq = "".join(
             f'<span style="font-size:11px;padding:2px 8px;background:var(--bg-elevated);'
-            f'border-radius:10px;color:var(--fg-secondary);margin:2px">{k.capitalize()} '
+            f'border-radius:10px;color:var(--fg-secondary);margin:2px">'
+            f'{_IQ_LABELS.get(k, k.capitalize())} '
             f'<strong>{v:.0f}</strong></span>'
             for k, v in iq_comp.items() if v
         )
@@ -872,8 +1035,6 @@ with tab_audiencia:
                     Tono: <strong>{v.get('tono_predominante','—')}</strong>
                 </div>
                 {cita_html}
-                <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg-dim);margin-top:6px">
-                n_enlaces: {v.get('n_enlaces',0)}</div>
             </div>
             """)
             _expander_enlaces(v.get("enlaces_referencia",[]), label="Ver enlaces de esta voz")
@@ -1046,13 +1207,17 @@ with tab_riesgo:
 
     if alertas_cb:
         for alerta in alertas_cb:
+            _desc_alerta = _get(alerta, "descripcion", default="—")
+            # Si descripcion es dict (metadata del schema), no renderizar
+            if isinstance(_desc_alerta, dict):
+                _desc_alerta = "— Descripción pendiente (structure error in analysis.json) —"
             st.markdown(f"""
             <div class="pattern-card pattern-card-critical">
                 <div style="font-family:var(--font-mono);font-size:9px;
                 color:var(--red);letter-spacing:1.4px;font-weight:600;
                 text-transform:uppercase">{alerta.get('tipo','—')}</div>
                 <div style="font-size:12px;color:var(--fg-secondary);
-                margin-top:4px">{_get(alerta, 'descripcion', default='—')}</div>
+                margin-top:4px">{_desc_alerta}</div>
             </div>
             """, unsafe_allow_html=True)
             _expander_enlaces(alerta.get("enlaces_referencia", []))

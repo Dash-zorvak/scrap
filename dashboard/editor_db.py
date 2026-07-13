@@ -11,6 +11,7 @@ import sys
 
 import streamlit as st
 
+# DEUDA TÉCNICA: path hack temporal. Migrar a pyproject.toml cuando se consolide el paquete.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

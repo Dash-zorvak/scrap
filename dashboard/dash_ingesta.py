@@ -446,7 +446,14 @@ def _confirmar_post(item: dict, texto_key: str, fecha_key: str, df_comentarios: 
 
 def seccion_cargar_contenido():
     """Sección para que el operador cargue capturas y arme lotes de posts en memoria."""
-    # TODO Fase 9: proteger esta sección con login
+    # SEGURIDAD PENDIENTE [PRIORIDAD ALTA]:
+    # Este panel permite insertar, modificar y eliminar datos en las bases de datos
+    # de producción (facebook.db, tiktok.db, externos.db) sin ninguna autenticación.
+    # Opciones de mitigación por orden de implementación:
+    # 1. [INMEDIATO] Ejecutar solo en localhost, nunca expuesto a red pública.
+    # 2. [CORTO PLAZO] Agregar st.secrets check: contraseña de operador en secrets.toml.
+    # 3. [MEDIANO PLAZO] Integrar con sistema de auth corporativo (OAuth2/LDAP).
+    # Ver: https://docs.streamlit.io/develop/concepts/connections/secrets-management
     FACEBOOK_DB_ACTIVA, TIKTOK_DB_ACTIVA, EXTERNOS_DB_ACTIVA = _activas()
 
     st.markdown("""

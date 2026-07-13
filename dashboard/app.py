@@ -12,6 +12,8 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 
+from dashboard.html_safety import safe_text
+
 _DASHBOARD_DIR = _os.path.dirname(_os.path.abspath(__file__))
 if _DASHBOARD_DIR not in _sys.path:
     _sys.path.insert(0, _DASHBOARD_DIR)
@@ -133,6 +135,25 @@ def _get(data, *keys, default="—"):
     return val
 
 
+def _n(v, default=0.0):
+    """Coerciona a número. Maneja None, dicts con 'valor', y no-numéricos."""
+    if isinstance(v, dict):
+        v = v.get("valor")
+    if v is None:
+        return default
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def _s(v, default="—"):
+    """Coerciona a string no vacío; None o vacío cae al default."""
+    if v is None or v == "":
+        return default
+    return str(v)
+
+
 def _render_card(html):
     """Renderiza HTML dinámico eliminando líneas vacías internas que
     Streamlit interpretaría como fin de bloque HTML (y el resto como
@@ -152,6 +173,7 @@ def _expander_enlaces(enlaces, label="Ver todos los enlaces de referencia"):
 def _card_explicacion_simple(texto):
     """Card de lenguaje llano, siempre visible ANTES de la fórmula técnica."""
     if texto:
+        texto = safe_text(texto)
         st.markdown(f"""
 <div style="background:var(--accent-soft);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:8px;font-size:13px;color:var(--fg-primary)">
 {texto}
@@ -167,6 +189,9 @@ st.set_page_config(
 )
 st.markdown(CSS, unsafe_allow_html=True)
 st.markdown(CSS_OVERRIDE, unsafe_allow_html=True)
+
+from src.config import ensure_dirs
+ensure_dirs()
 
 # ── Cargar datos ──────────────────────────────────────────────────────
 data, _advertencias_json = _cargar_analysis()
@@ -204,6 +229,15 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# ── Alerta de freshness ─────────────────────────────────────────────
+try:
+    from analytics.freshness import verificar_freshness
+    _fresh = verificar_freshness(ANALYSIS_PATH, max_dias=7)
+    if not _fresh["fresco"] and _fresh["dias_desde_generacion"] is not None:
+        st.warning(f"⚠️ {_fresh['mensaje']}")
+except Exception:
+    pass
+
 # ── Banner ejecutivo (visible sin scroll, sin tabs) ───────────────────────
 if data:
     _semaforo_b3 = data.get("bloque3", {}).get("nivel_alerta", {}).get("semaforo", "verde")
@@ -212,11 +246,11 @@ if data:
     _ramas_b1 = data.get("bloque1", {}).get("concentracion_tematica", {}).get("ramas", [])
     if _ramas_b1 and isinstance(_ramas_b1, list) and isinstance(_ramas_b1[0], dict):
         _tema_top = _ramas_b1[0].get("tema", "")
-        _share_top = _ramas_b1[0].get("share", 0)
+        _share_top = _n(_ramas_b1[0].get("share", 0))
     else:
         _share_top = 0
     _iq_val = data.get("bloque1", {}).get("pulso_iq", {}).get("valor", 0)
-    _n_total = data.get("bloque1", {}).get("clima_narrativo", {}).get("n_total_comentarios", 0)
+    _n_total = _n(data.get("bloque1", {}).get("clima_narrativo", {}).get("n_total_comentarios", 0))
 
     _sem_config = {
         "verde":    ("SITUACIÓN CONTROLADA", "var(--green)", "●"),
@@ -410,7 +444,7 @@ _EMO_DEFS = [
 def _render_emociones_barras(ie, show_caption=True):
     """Renderiza 10 barras horizontales de emociones."""
     for emo, label, color in _EMO_DEFS:
-        pct = ie.get(f"pct_{emo}", 0) if isinstance(ie, dict) else 0
+        pct = _n(ie.get(f"pct_{emo}", 0)) if isinstance(ie, dict) else 0.0
         n_abs = ie.get(emo, 0) if isinstance(ie, dict) else 0
         st.markdown(f"""
         <div class="bar-row">
@@ -441,13 +475,13 @@ with tab_pulso:
     # ── 01 · Clima Narrativo ──────────────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">01 · Clima Narrativo</div></div>', unsafe_allow_html=True)
     cn = b1.get("clima_narrativo", {})
-    fav = cn.get("pct_favorable", 0)
-    neu = cn.get("pct_neutral", 0)
-    adv = cn.get("pct_critico", 0)
-    dom = cn.get("tono_dominante", "—")
-    n_tot = cn.get("n_total_comentarios", 0)
-    tend = cn.get("tendencia", 0)
-    narrativa_cn = _get(cn, "narrativa", default="Sin datos de clima narrativo.")
+    fav = _n(cn.get("pct_favorable", 0))
+    neu = _n(cn.get("pct_neutral", 0))
+    adv = _n(cn.get("pct_critico", 0))
+    dom = _s(cn.get("tono_dominante", "—"))
+    n_tot = _n(cn.get("n_total_comentarios", 0))
+    tend = _n(cn.get("tendencia", 0))
+    narrativa_cn = safe_text(_get(cn, "narrativa", default="Sin datos de clima narrativo."))
 
     tend_color = "var(--green)" if tend > 0.1 else ("var(--red)" if tend < -0.1 else "var(--amber)")
     _tend_signo = f"+{tend:.1f}" if tend > 0 else f"{tend:.1f}"
@@ -457,7 +491,7 @@ with tab_pulso:
     <div class="panel">
         <div class="panel-head">
             <div class="panel-title">TONO DOMINANTE · {dom.upper()}</div>
-            <div class="panel-meta">{n_tot:,} COMENTARIOS · TENDENCIA
+            <div class="panel-meta">{n_tot:,.0f} COMENTARIOS · TENDENCIA
             <span style="color:{tend_color}">{tend_label}</span></div>
         </div>
         <div class="bar-tri" style="height:18px;border-radius:3px">
@@ -485,7 +519,7 @@ with tab_pulso:
     ie = b1.get("indice_emociones", {})
     has_data = ie and any(ie.get(f"pct_{e}", 0) for e, _, _ in _EMO_DEFS)
     if has_data:
-        emo_dom = ie.get("emocion_dominante", "—")
+        emo_dom = safe_text(ie.get("emocion_dominante", "—"))
         emos_ordenadas = sorted(_EMO_DEFS, key=lambda t: ie.get(f"pct_{t[0]}", 0), reverse=True)
 
         st.session_state.setdefault("b1_emo_activa", emos_ordenadas[0][0])
@@ -494,7 +528,7 @@ with tab_pulso:
         e, label, color = next(
             t for t in emos_ordenadas if t[0] == emo_activa
         )
-        pct = ie.get(f"pct_{e}", 0)
+        pct = _n(ie.get(f"pct_{e}", 0))
 
         st.markdown(f"""
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
@@ -509,7 +543,7 @@ with tab_pulso:
             <div class="bar-track">
                 <div class="bar-fill" style="width:{pct:.1f}%;background:{color}"></div>
             </div>
-            <div class="bar-row-val">{pct:.1f}% ({ie.get(e, 0)})</div>
+            <div class="bar-row-val">{pct:.1f}% ({_n(ie.get(e, 0)):.0f})</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -558,13 +592,13 @@ with tab_pulso:
         st.radio(
             "Seleccionar emoción",
             options=[e for e, _, _ in emos_ordenadas],
-            format_func=lambda e: f"{emo_labels[e]} {ie.get(f'pct_{e}',0):.1f}% ({ie.get(e,0)})",
+            format_func=lambda e: f"{emo_labels[e]} {_n(ie.get(f'pct_{e}',0)):.1f}% ({_n(ie.get(e,0)):.0f})",
             key="b1_emo_activa",
             horizontal=True,
             label_visibility="collapsed",
         )
 
-        narrativa_ie = _get(ie, "narrativa", default="—")
+        narrativa_ie = safe_text(_get(ie, "narrativa", default="—"))
         st.markdown(f"""
         <div class="interpretation">
             <div class="interpretation-label">LECTURA EJECUTIVA</div>
@@ -579,11 +613,11 @@ with tab_pulso:
     # ── 03 · Intensidad ───────────────────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">03 · Intensidad de la Conversación</div></div>', unsafe_allow_html=True)
     it = b1.get("intensidad", {})
-    vol_hoy = it.get("vol_hoy", 0)
-    prom = it.get("promedio_semanal", 0)
-    pct = it.get("pct_diferencia", 0)
+    vol_hoy = _n(it.get("vol_hoy", 0))
+    prom = _n(it.get("promedio_semanal", 0))
+    pct = _n(it.get("pct_diferencia", 0))
     etiq_int = it.get("etiqueta", "—")
-    narrativa_it = _get(it, "narrativa", default="Sin datos de intensidad.")
+    narrativa_it = safe_text(_get(it, "narrativa", default="Sin datos de intensidad."))
     maxv = max(vol_hoy, prom, 1)
 
     col_hoy = "var(--red)" if pct > 15 else ("var(--blue)" if pct < -15 else "var(--accent)")
@@ -608,13 +642,13 @@ with tab_pulso:
                 <div class="bar-row-label">ÚLTIMO DÍA</div>
                 <div class="bar-track"><div class="bar-fill"
                 style="width:{vol_hoy/maxv*100:.1f}%;background:{col_hoy}"></div></div>
-                <div class="bar-row-val">{vol_hoy:,}</div>
+                <div class="bar-row-val">{vol_hoy:,.0f}</div>
             </div>
             <div class="bar-row">
                 <div class="bar-row-label">PROMEDIO</div>
                 <div class="bar-track"><div class="bar-fill bar-fill-blu"
                 style="width:{prom/maxv*100:.1f}%"></div></div>
-                <div class="bar-row-val">{prom:,}</div>
+                <div class="bar-row-val">{prom:,.0f}</div>
             </div>
         </div>
     </div>
@@ -628,7 +662,7 @@ with tab_pulso:
     _suma_shares_ct = sum(_get(r, "share", default=0) for r in ramas)
     _shares_ct_invalidos = bool(ramas) and abs(_suma_shares_ct - 100) > 1.5
     nivel_ct = ct.get("nivel", "")
-    narrativa_ct = _get(ct, "narrativa", default="Sin datos de concentración temática.")
+    narrativa_ct = safe_text(_get(ct, "narrativa", default="Sin datos de concentración temática."))
     col_ct = {"dominado": "var(--red)", "liderado": "var(--amber)", "fragmentado": "var(--green)"}.get(nivel_ct, "var(--accent)")
     paleta = ["var(--accent)","#a78bfa","#f59e0b","#34d399","#f472b6","#60a5fa","#fbbf24","#4ade80","#fb7185","#818cf8"]
     def _color_por_tema(tema):
@@ -638,7 +672,7 @@ with tab_pulso:
     filas = "".join(
         f'<div style="display:flex;align-items:center;gap:6px;font-size:12px;flex:0 0 auto;white-space:nowrap;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px">'
         f'<span style="width:10px;height:10px;border-radius:2px;background:{_color_por_tema(r.get("tema",""))};display:inline-block;flex:none"></span>'
-        f'<span style="color:var(--fg-primary)">{r.get("tema","—")}</span>'
+        f'<span style="color:var(--fg-primary)">{safe_text(r.get("tema","—"))}</span>'
         f'<span style="color:var(--fg-secondary)">{r.get("n",0)} pubs · {_get(r, "share", default=0):.0f}%</span>'
         f'</div>'
         for r in ramas
@@ -661,7 +695,7 @@ with tab_pulso:
     st.markdown(f"""
     <div class="panel">
         <div class="panel-head">
-            <div class="panel-title" style="color:{col_ct}">{ct.get('estado','—').upper()}</div>
+            <div class="panel-title" style="color:{col_ct}">{_s(ct.get('estado','—')).upper()}</div>
             <div class="panel-meta">{ct.get('n_temas',0)} TEMAS</div>
         </div>
         <div class="bar-tri" style="height:18px;border-radius:3px">{segmentos}</div>
@@ -675,9 +709,9 @@ with tab_pulso:
         st.markdown(f"""
         <div style="display:flex;gap:20px;flex-wrap:wrap;margin:6px 0 10px;font-size:12px">
             <div><span style="color:var(--red)">🔺 TEMAS ACELERANDO:</span>
-            <span style="color:var(--fg-secondary)"> {', '.join(temas_acel) if temas_acel else '—'}</span></div>
+            <span style="color:var(--fg-secondary)"> {safe_text(', '.join(temas_acel) if temas_acel else '—')}</span></div>
             <div><span style="color:var(--green)">🔻 TEMAS DESACELERANDO:</span>
-            <span style="color:var(--fg-secondary)"> {', '.join(temas_desacel) if temas_desacel else '—'}</span></div>
+            <span style="color:var(--fg-secondary)"> {safe_text(', '.join(temas_desacel) if temas_desacel else '—')}</span></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -685,7 +719,7 @@ with tab_pulso:
     st.markdown('<div class="section-header"><div class="section-title">05 · Métricas de Rendimiento</div></div>', unsafe_allow_html=True)
     mr = b1.get("metricas_rendimiento", {})
     if mr and any(v for v in [mr.get("engagement_rate"), mr.get("ratio_amor_enojo"), mr.get("alcance_estimado")]):
-        narrativa_mr = _get(mr, "narrativa", default="")
+        narrativa_mr = safe_text(_get(mr, "narrativa", default=""))
         if narrativa_mr:
             st.markdown(f"""
             <div class="interpretation">
@@ -696,12 +730,12 @@ with tab_pulso:
         _expander_enlaces(mr.get("enlaces_referencia", []))
         st.markdown(f"""
         <p style="font-size:11px;color:var(--fg-muted);margin-top:4px;margin-bottom:10px">
-        Engagement: {mr.get("engagement_rate",0):.1f}% · Ratio amor/enojo:
-        {mr.get("ratio_amor_enojo",0):.1f} · Reacciones: {mr.get("reacciones_positivas",0):,}
-        / {mr.get("reacciones_negativas",0):,} · Alcance estimado:
-        {mr.get("alcance_estimado",0):,}</p>
+        Engagement: {_n(mr.get("engagement_rate",0)):.1f}% · Ratio amor/enojo:
+        {_n(mr.get("ratio_amor_enojo",0)):.1f} · Reacciones: {_n(mr.get("reacciones_positivas",0)):,.0f}
+        / {_n(mr.get("reacciones_negativas",0)):,.0f} · Alcance estimado:
+        {_n(mr.get("alcance_estimado",0)):,.0f}</p>
         """, unsafe_allow_html=True)
-        pfunciona = mr.get("porque_funciona", "")
+        pfunciona = safe_text(mr.get("porque_funciona", ""))
         if pfunciona:
             st.markdown(f"""
             <div style="background:var(--green-soft);border:1px solid var(--green-strong);border-radius:var(--r-sm);
@@ -723,7 +757,7 @@ with tab_pulso:
         st.markdown('<div class="status-info">Sin datos de lugares.</div>', unsafe_allow_html=True)
     else:
         # a) Sort by nivel_tension descending
-        sorted_lugares = sorted(termometro_lugares, key=lambda x: x.get("nivel_tension", 0), reverse=True)
+        sorted_lugares = sorted(termometro_lugares, key=lambda x: _n(x.get("nivel_tension", 0)), reverse=True)
 
         def tension_color(t):
             if t > 60: return "var(--red)"
@@ -743,7 +777,7 @@ with tab_pulso:
 
         cards_html = []
         for lugar in sorted_lugares:
-            tension = lugar.get("nivel_tension", 0)
+            tension = _n(lugar.get("nivel_tension", 0))
             border_color = tension_color(tension)
             emo_dom = lugar.get("emocion_dominante", "")
 
@@ -766,26 +800,26 @@ with tab_pulso:
             """
 
             citas_html = "".join(
-                f'<div style="font-style:italic;color:var(--fg-secondary);font-size:12px;margin-top:4px">"{c}"</div>'
+                f'<div style="font-style:italic;color:var(--fg-secondary);font-size:12px;margin-top:4px">"{safe_text(c)}"</div>'
                 for c in lugar.get("citas_ejemplo", [])[:1]
             )
 
             tema_str = ""
-            td = lugar.get("tema_dominante", "")
+            td = safe_text(lugar.get("tema_dominante", ""))
             if td:
                 tema_str = (
                     f'<div style="font-size:11px;color:var(--fg-muted);margin-top:4px">'
                     f'⚑ {td.replace("_"," ").title()} ({lugar.get("n_tema_dominante",0)} críticos)</div>'
                 )
 
-            narrativa_txt = lugar.get("narrativa", "")
+            narrativa_txt = safe_text(lugar.get("narrativa", ""))
             narrativa_html = (
                 f'<div style="font-size:12px;color:var(--fg-primary);margin-top:6px;line-height:1.6">{narrativa_txt}</div>'
                 if narrativa_txt else ""
             )
 
             top_emos = sorted(
-                ((f.replace("pct_", "").replace("_", " ").title(), lugar.get(f, 0)) for f in _emo_fields),
+                ((f.replace("pct_", "").replace("_", " ").title(), _n(lugar.get(f, 0))) for f in _emo_fields),
                 key=lambda t: t[1], reverse=True,
             )
             top_emos = [(name, val) for name, val in top_emos if val > 0][:3]
@@ -800,7 +834,7 @@ with tab_pulso:
             <div class="exec-card" style="flex:0 0 auto;width:340px;white-space:normal;
             border-left:3px solid {border_color}">
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                    <div class="exec-card-title">{lugar.get('lugar','—').upper()}</div>
+                    <div class="exec-card-title">{safe_text(_s(lugar.get('lugar','—'))).upper()}</div>
                     <div style="font-size:10px;color:{border_color};font-weight:600">
                     {lugar.get('n_comentarios',0)} coms · {emo_dom.upper() if emo_dom else '—'}</div>
                 </div>
@@ -825,7 +859,7 @@ with tab_pulso:
             _expander_enlaces(lugar.get("enlaces_referencia", []), label=f"Ver enlaces de {lugar.get('lugar','este lugar')}")
 
             all_emos = sorted(
-                ((f.replace("pct_", "").replace("_", " ").title(), lugar.get(f, 0)) for f in _emo_fields),
+                ((f.replace("pct_", "").replace("_", " ").title(), _n(lugar.get(f, 0))) for f in _emo_fields),
                 key=lambda t: t[1], reverse=True,
             )
             all_emos = [(name, val) for name, val in all_emos if val > 0]
@@ -844,9 +878,9 @@ with tab_pulso:
     # ── Pulso IQ ──────────────────────────────────────────────────────
     iq = b1.get("pulso_iq", {})
     if iq.get("valor") or iq.get("cuadrante"):
-        iq_val = iq.get("valor", 0)
-        iq_cuad = iq.get("cuadrante", "—")
-        iq_narr = _get(iq, "narrativa", default="—")
+        iq_val = _n(iq.get("valor", 0))
+        iq_cuad = safe_text(_s(iq.get("cuadrante", "—")))
+        iq_narr = safe_text(_get(iq, "narrativa", default="—"))
         iq_comp = iq.get("componentes", {})
         _IQ_LABELS = {
             "aprobacion": "Aprobación",
@@ -861,8 +895,9 @@ with tab_pulso:
             f'<span style="font-size:11px;padding:2px 8px;background:var(--bg-elevated);'
             f'border-radius:10px;color:var(--fg-secondary);margin:2px">'
             f'{_IQ_LABELS.get(k, k.capitalize())} '
-            f'<strong>{v:.0f}</strong></span>'
-            for k, v in iq_comp.items() if v
+            f'<strong>{_n(v):.0f}</strong></span>'
+            for k, v in iq_comp.items()
+            if _n(v, default=None) is not None
         )
         st.markdown(f"""
         <div style="margin-top:12px">
@@ -870,7 +905,7 @@ with tab_pulso:
             <div class="panel" style="text-align:center">
                 <div style="font-size:64px;font-weight:700;color:var(--accent);line-height:1">{iq_val}</div>
                 <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:1.5px;
-                text-transform:uppercase;color:var(--fg-muted);margin-top:8px">{iq_cuad.upper()}</div>
+                text-transform:uppercase;color:var(--fg-muted);margin-top:8px">{_s(iq_cuad).upper()}</div>
                 <div style="font-size:12px;color:var(--fg-secondary);margin-top:10px;line-height:1.6">{iq_narr}</div>
                 <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;justify-content:center">{chips_iq}</div>
             </div>
@@ -889,7 +924,7 @@ with tab_pulso:
             )
 
     # ── Cierre factual ────────────────────────────────────────────────
-    cierre = b1.get("cierre_factual", "")
+    cierre = safe_text(b1.get("cierre_factual", ""))
     if cierre:
         st.markdown(f"""
         <div class="interpretation" style="margin-top:16px">
@@ -917,13 +952,13 @@ with tab_audiencia:
     # ── 07 · Mapa de Públicos ─────────────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">07 · Mapa de Públicos</div></div>', unsafe_allow_html=True)
     mp = b2.get("mapa_publicos", {})
-    mp_sim = mp.get("pct_simpatizantes", 0)
-    mp_neu = mp.get("pct_neutrales", 0)
-    mp_crit = mp.get("pct_criticos", 0)
-    mp_n = mp.get("n_total", 0)
-    n_sim = mp.get("n_simpatizantes", 0)
-    n_neu = mp.get("n_neutrales", 0)
-    n_crit = mp.get("n_criticos", 0)
+    mp_sim = _n(mp.get("pct_simpatizantes", 0))
+    mp_neu = _n(mp.get("pct_neutrales", 0))
+    mp_crit = _n(mp.get("pct_criticos", 0))
+    mp_n = _n(mp.get("n_total", 0))
+    n_sim = _n(mp.get("n_simpatizantes", 0))
+    n_neu = _n(mp.get("n_neutrales", 0))
+    n_crit = _n(mp.get("n_criticos", 0))
     total_posts = mp.get("total_posts_analizados", 0)
 
     _card_explicacion_simple(mp.get("explicacion_simple",""))
@@ -932,7 +967,7 @@ with tab_audiencia:
     <div class="panel">
         <div class="panel-head">
             <div class="panel-title">DISTRIBUCIÓN DE COMENTARIOS</div>
-            <div class="panel-meta">{mp_n:,} COMENTARIOS ANALIZADOS</div>
+            <div class="panel-meta">{mp_n:,.0f} COMENTARIOS ANALIZADOS</div>
         </div>
         <div class="bar-tri" style="height:18px;border-radius:3px">
             <span class="bar-tri-pos" style="width:{mp_sim:.1f}%"></span>
@@ -951,15 +986,15 @@ with tab_audiencia:
         st.markdown(f"""
         <div class="stat-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px">
             <div class="stat-card">
-                <div class="stat-value" style="color:var(--green)">{n_sim:,}</div>
+                <div class="stat-value" style="color:var(--green)">{n_sim:,.0f}</div>
                 <div class="stat-label">SIMPATIZANTES</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" style="color:var(--amber)">{n_neu:,}</div>
+                <div class="stat-value" style="color:var(--amber)">{n_neu:,.0f}</div>
                 <div class="stat-label">NEUTRALES</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" style="color:var(--red)">{n_crit:,}</div>
+                <div class="stat-value" style="color:var(--red)">{n_crit:,.0f}</div>
                 <div class="stat-label">CRÍTICOS</div>
             </div>
         </div>
@@ -975,14 +1010,14 @@ with tab_audiencia:
     pol = b2.get("polarizacion", {})
     pol_idx = pol.get("indice", 0)
     pol_nivel = pol.get("nivel", "—")
-    pol_narr = _get(pol, "narrativa", default="—")
-    pol_nota = pol.get("nota_metodologica", "")
+    pol_narr = safe_text(_get(pol, "narrativa", default="—"))
+    pol_nota = safe_text(pol.get("nota_metodologica", ""))
     pol_color = {"confrontación": "var(--red)", "dividida": "var(--amber)", "consenso": "var(--green)"}.get(pol_nivel, "var(--accent)")
     st.markdown(f"""
     <div class="indicator indicator-{'critical' if pol_nivel=='confrontación' else ('warning' if pol_nivel=='dividida' else 'positive')}">
         <div class="indicator-dot"></div>
         <div>
-            <div class="indicator-text">{pol_nivel.upper()}</div>
+            <div class="indicator-text">{_s(pol_nivel).upper()}</div>
             <div style="font-size:12px;color:var(--fg-secondary);margin-top:4px">{pol_narr}</div>
         </div>
     </div>
@@ -1008,11 +1043,11 @@ with tab_audiencia:
                 pc = {"positiva": "var(--green)", "neutral": "var(--amber)", "negativa": "var(--red)"}.get(postura, "var(--fg-muted)")
                 postura_badge = f'<span style="font-family:var(--font-mono);font-size:9px;color:{pc};font-weight:600;text-transform:uppercase">· {postura}</span>'
 
-            cita_v = v.get("cita_destacada", "")
+            cita_v = safe_text(v.get("cita_destacada", ""))
             cita_html = f'<div style="font-size:11px;color:var(--fg-secondary);font-style:italic;margin-top:6px">"{cita_v}"</div>' if cita_v else ""
 
-            eng = v.get("engagement", 0)
-            sum_sub = v.get("reacciones_totales", 0) + v.get("comentarios_totales", 0) + v.get("compartidos_totales", 0)
+            eng = _n(v.get("engagement", 0))
+            sum_sub = _n(v.get("reacciones_totales", 0)) + _n(v.get("comentarios_totales", 0)) + _n(v.get("compartidos_totales", 0))
             inconsistente = eng > 0 and sum_sub == 0
             inc_badge = '<span style="font-family:var(--font-mono);font-size:9px;color:var(--amber);font-weight:600;text-transform:uppercase">⚠️ Dato inconsistente: engagement reportado sin submétricas</span>' if inconsistente else ""
 
@@ -1023,12 +1058,12 @@ with tab_audiencia:
                 </div>
                 {inc_badge}
                 <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-secondary);margin:6px 0">
-                    Publicaciones: <strong>{v.get('publicaciones',0):,}</strong> ·
-                    Alcance: <strong>{v.get('alcance_estimado',0):,}</strong> ·
-                    Engagement: <strong>{eng:,}</strong> ·
-                    Reacciones: <strong>{v.get('reacciones_totales',0):,}</strong> ·
-                    Comentarios: <strong>{v.get('comentarios_totales',0):,}</strong> ·
-                    Compartidos: <strong>{v.get('compartidos_totales',0):,}</strong>
+                    Publicaciones: <strong>{_n(v.get('publicaciones',0)):,.0f}</strong> ·
+                    Alcance: <strong>{_n(v.get('alcance_estimado',0)):,.0f}</strong> ·
+                    Engagement: <strong>{eng:,.0f}</strong> ·
+                    Reacciones: <strong>{_n(v.get('reacciones_totales',0)):,.0f}</strong> ·
+                    Comentarios: <strong>{_n(v.get('comentarios_totales',0)):,.0f}</strong> ·
+                    Compartidos: <strong>{_n(v.get('compartidos_totales',0)):,.0f}</strong>
                 </div>
                 <div style="font-size:11px;color:var(--fg-muted)">
                     Tema predominante: <strong>{v.get('tema_predominante','—')}</strong> ·
@@ -1053,9 +1088,14 @@ with tab_audiencia:
             elif tendencia_lda == "desacelerando":
                 tend_badge = '<span style="color:var(--green);font-size:10px">🔻 DESACELERANDO</span>'
 
-            pct_apoyo_t = t.get("pct_apoyo", 0)
-            pct_neu_t = t.get("pct_neutral", 0)
-            pct_crit_t = t.get("pct_critica", 0)
+            tema_t = safe_text(_s(t.get("tema")))
+            peso_t = _n(t.get("peso"))
+            n_coment_t = int(_n(t.get("n_comentarios")))
+            pct_total_t = _n(t.get("pct_del_total"))
+            pct_cambio_t = _n(t.get("pct_cambio_semana"))
+            pct_apoyo_t = _n(t.get("pct_apoyo"))
+            pct_neu_t = _n(t.get("pct_neutral"))
+            pct_crit_t = _n(t.get("pct_critica"))
 
             # Top 5 emociones del tema
             ie_tema = t.get("indice_emociones", {})
@@ -1075,24 +1115,24 @@ with tab_audiencia:
             # Palabras clave como chips
             palabras = t.get("palabras_clave", [])
             chips = "".join(
-                f'<span style="display:inline-block;font-family:var(--font-mono);font-size:9px;color:var(--accent);background:var(--accent-soft);padding:2px 8px;border-radius:2px;margin:2px 4px 2px 0">{p}</span>'
+                f'<span style="display:inline-block;font-family:var(--font-mono);font-size:9px;color:var(--accent);background:var(--accent-soft);padding:2px 8px;border-radius:2px;margin:2px 4px 2px 0">{safe_text(p)}</span>'
                 for p in palabras
             )
 
             ejemplos = "".join(
-                f'<div style="font-size:11px;color:var(--fg-secondary);font-style:italic;margin-top:3px">"{e}"</div>'
+                f'<div style="font-size:11px;color:var(--fg-secondary);font-style:italic;margin-top:3px">"{safe_text(e)}"</div>'
                 for e in t.get("comentarios_ejemplo", [])[:2]
             )
 
             _render_card(f"""
             <div class="exec-card">
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                    <div class="exec-card-title">{t.get('tema','—').upper()} · PESO {t.get('peso',0):.2f} ({t.get('n_comentarios',0)} coment)</div>
+                    <div class="exec-card-title">{tema_t.upper()} · PESO {peso_t:.2f} ({n_coment_t} coment)</div>
                     {tend_badge}
                 </div>
                 <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-muted);margin:6px 0">
-                {t.get('n_comentarios',0)} coment · {t.get('pct_del_total',0):.1f}% del total ·
-                Δ sem: {t.get('pct_cambio_semana',0):.1f}%</div>
+                {n_coment_t} coment · {pct_total_t:.1f}% del total ·
+                Δ sem: {pct_cambio_t:.1f}%</div>
                 {f'<div class="bar-tri" style="height:6px;width:120px;margin:6px 0"><span class="bar-tri-pos" style="width:{pct_apoyo_t:.0f}%"></span><span class="bar-tri-neu" style="width:{pct_neu_t:.0f}%"></span><span class="bar-tri-neg" style="width:{pct_crit_t:.0f}%"></span></div>' if pct_apoyo_t or pct_neu_t or pct_crit_t else ''}
                 {f'<div style="font-size:10px;color:var(--fg-secondary);margin:4px 0">{emos_tema}</div>' if emos_tema else ''}
                 {f'<div style="margin:4px 0">{chips}</div>' if chips else ''}
@@ -1121,10 +1161,10 @@ with tab_riesgo:
     # ── 11 · Autenticidad ─────────────────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">11 · Autenticidad</div></div>', unsafe_allow_html=True)
     aut = b3.get("autenticidad", {})
-    aut_org = aut.get("pct_organico", 0)
-    aut_coo = aut.get("pct_coordinado", 0)
+    aut_org = _n(aut.get("pct_organico", 0))
+    aut_coo = _n(aut.get("pct_coordinado", 0))
     aut_dup = aut.get("n_duplicados", 0)
-    aut_narr = _get(aut, "narrativa", default="—")
+    aut_narr = safe_text(_get(aut, "narrativa", default="—"))
     st.markdown(f"""
     <div class="panel">
         <div class="panel-head">
@@ -1155,8 +1195,8 @@ with tab_riesgo:
     na = b3.get("nivel_alerta", {})
     semaforo = na.get("semaforo", "verde")
     riesgo = na.get("indice_riesgo", 0)
-    tema_ppal = na.get("tema_principal", "")
-    emocion_ppal = na.get("emocion_principal", "")
+    tema_ppal = safe_text(na.get("tema_principal", ""))
+    emocion_ppal = safe_text(na.get("emocion_principal", ""))
     alertas_cb = na.get("alertas_cambridge", [])
     sem_map = {"verde": ("positive", "var(--green)", "SITUACIÓN CONTROLADA"),
                "amarillo": ("warning", "var(--amber)", "ATENCIÓN REQUERIDA"),
@@ -1179,10 +1219,10 @@ with tab_riesgo:
         </div>
     </div>
     """, unsafe_allow_html=True)
-    na_pct_neg = na.get("pct_negativos", 0)
-    na_idx_enojo = na.get("indice_enojo_reacciones", 0)
-    na_bal_conf = na.get("balance_confrontacion", 0)
-    na_n_fricc = na.get("n_temas_friccion", 0)
+    na_pct_neg = _n(na.get("pct_negativos", 0))
+    na_idx_enojo = _n(na.get("indice_enojo_reacciones", 0))
+    na_bal_conf = _n(na.get("balance_confrontacion", 0))
+    na_n_fricc = _n(na.get("n_temas_friccion", 0))
     st.markdown(f"""
     <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px">
         <div class="stat-card">
@@ -1207,7 +1247,7 @@ with tab_riesgo:
 
     if alertas_cb:
         for alerta in alertas_cb:
-            _desc_alerta = _get(alerta, "descripcion", default="—")
+            _desc_alerta = safe_text(_get(alerta, "descripcion", default="—"))
             # Si descripcion es dict (metadata del schema), no renderizar
             if isinstance(_desc_alerta, dict):
                 _desc_alerta = "— Descripción pendiente (structure error in analysis.json) —"
@@ -1226,12 +1266,12 @@ with tab_riesgo:
     st.markdown('<div class="section-header"><div class="section-title">13 · Velocidad de Propagación</div></div>', unsafe_allow_html=True)
     vp = b3.get("velocidad_propagacion", {})
     vp_proy = vp.get("proyeccion_24h", "—")
-    vp_narr = _get(vp, "narrativa", default="—")
+    vp_narr = safe_text(_get(vp, "narrativa", default="—"))
     vp_col = {"acelerando": "var(--red)", "estable": "var(--accent)", "desacelerando": "var(--green)"}.get(vp_proy, "var(--fg-muted)")
     st.markdown(f"""
     <div class="exec-card">
         <div class="exec-card-title">PROYECCIÓN 24-48H</div>
-        <div class="exec-card-value" style="color:{vp_col}">{vp_proy.upper()}</div>
+        <div class="exec-card-value" style="color:{vp_col}">{_s(vp_proy).upper()}</div>
         <div class="exec-card-sub">{vp_narr}</div>
     </div>
     """, unsafe_allow_html=True)
@@ -1254,9 +1294,9 @@ with tab_riesgo:
         st.markdown(f"""
         <div style="display:flex;gap:20px;flex-wrap:wrap;margin:6px 0 10px;font-size:12px">
             <div><span style="color:var(--red)">🔺 TEMAS ACELERANDO:</span>
-            <span style="color:var(--fg-secondary)"> {', '.join(temas_acel_vp) if temas_acel_vp else '—'}</span></div>
+            <span style="color:var(--fg-secondary)"> {safe_text(', '.join(temas_acel_vp) if temas_acel_vp else '—')}</span></div>
             <div><span style="color:var(--green)">🔻 TEMAS DESACELERANDO:</span>
-            <span style="color:var(--fg-secondary)"> {', '.join(temas_desacel_vp) if temas_desacel_vp else '—'}</span></div>
+            <span style="color:var(--fg-secondary)"> {safe_text(', '.join(temas_desacel_vp) if temas_desacel_vp else '—')}</span></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1266,12 +1306,12 @@ with tab_riesgo:
     if fricciones:
         for fr in fricciones:
             accel_badge = "🔺 ACELERANDO" if fr.get("acelerando") else ""
-            n_comp_total = fr.get("n_comentarios_total", 0)
-            n_neg = fr.get("n_negativos", 0)
+            n_comp_total = _n(fr.get("n_comentarios_total", 0))
+            n_neg = _n(fr.get("n_negativos", 0))
             if n_comp_total > 0:
-                fr_count_str = f"{n_neg} de {n_comp_total} comentarios ({fr.get('pct_del_total', 0):.1f}%)"
+                fr_count_str = f"{n_neg:,.0f} de {n_comp_total:,.0f} comentarios ({_n(fr.get('pct_del_total', 0)):.1f}%)"
             else:
-                fr_count_str = f"{n_neg} neg"
+                fr_count_str = f"{n_neg:,.0f} neg"
             _render_card(f"""
             <div class="pattern-card pattern-card-critical">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -1333,13 +1373,13 @@ with tab_intel:
             st.markdown(f"""
             <div class="exec-card" style="border-left:3px solid {prioridad_color}">
                 <div style="display:flex;justify-content:space-between">
-                    <div class="exec-card-title">REC #{r.get('numero',0)} · PRIORIDAD {r.get('prioridad','—').upper()}</div>
+                    <div class="exec-card-title">REC #{r.get('numero',0)} · PRIORIDAD {_s(r.get('prioridad','—')).upper()}</div>
                     <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-muted)">
                     {r.get('metrica_base','—')}: {r.get('valor_metrica',0)}</div>
                 </div>
-                <div style="font-size:13px;color:var(--fg-primary);margin-top:6px">{r.get('recomendacion','—')}</div>
+                <div style="font-size:13px;color:var(--fg-primary);margin-top:6px">{safe_text(r.get('recomendacion','—'))}</div>
                 <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-muted);margin-top:4px">
-                Umbral de acción: {r.get('umbral_accion','—')}</div>
+                Umbral de acción: {safe_text(r.get('umbral_accion','—'))}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1348,9 +1388,9 @@ with tab_intel:
     <div class="memo-container">
         <div class="memo-header">
             <div class="memo-title">MEMORÁNDUM DE INTELIGENCIA CIUDADANA</div>
-            <div class="memo-ref">PERÍODO: {meta.get('periodo','—').upper()} ·
-            DATOS HASTA: {meta.get('fecha_datos_hasta','—')} ·
-            PLATAFORMA: {meta.get('plataforma','—').upper()} ·
+            <div class="memo-ref">PERÍODO: {safe_text(_s(meta.get('periodo','—'))).upper()} ·
+            DATOS HASTA: {safe_text(meta.get('fecha_datos_hasta','—'))} ·
+            PLATAFORMA: {safe_text(_s(meta.get('plataforma','—'))).upper()} ·
             CLASIFICACIÓN: CONFIDENCIAL</div>
         </div>
     """, unsafe_allow_html=True)
@@ -1368,10 +1408,10 @@ with tab_intel:
     for num, titulo, key in _secciones:
         raw = b4.get(key, {})
         if isinstance(raw, dict):
-            texto = _get(raw, "narrativa", default="—")
+            texto = safe_text(_get(raw, "narrativa", default="—"))
             enlaces = raw.get("enlaces_referencia", [])
         else:
-            texto = raw if raw else "—"
+            texto = safe_text(raw) if raw else "—"
             enlaces = []
         if texto and texto != "—":
             st.markdown(f"""
@@ -1398,9 +1438,9 @@ with tab_intel:
             col = estado_col.get(t.get("estado",""), "var(--fg-muted)")
             st.markdown(f"""
             <div class="memo-item" style="border-left-color:{col};color:{col}">
-                {t.get('tema','—')} ·
-                <span style="color:var(--fg-secondary)">{t.get('estado','—').upper()}</span> ·
-                {t.get('variacion_semanal','—')}
+                {safe_text(t.get('tema','—'))} ·
+                <span style="color:var(--fg-secondary)">{safe_text(_s(t.get('estado','—'))).upper()}</span> ·
+                {safe_text(t.get('variacion_semanal','—'))}
             </div>
             """, unsafe_allow_html=True)
 
@@ -1413,7 +1453,7 @@ with tab_intel:
         for t in temas_ext:
             st.markdown(f"""
             <div class="memo-item memo-item-negativo">
-                {t.get('tema','—')} · {t.get('variacion_semanal','—')}
+                {safe_text(t.get('tema','—'))} · {safe_text(t.get('variacion_semanal','—'))}
             </div>
             """, unsafe_allow_html=True)
 
@@ -1427,7 +1467,7 @@ with tab_intel:
         <div class="panel">
             <div class="panel-head">
                 <div class="panel-title">FUENTES ANALIZADAS</div>
-                <div class="panel-meta">{ev.get('periodo_cobertura','—')}</div>
+                <div class="panel-meta">{safe_text(ev.get('periodo_cobertura','—'))}</div>
             </div>
             <div class="stat-row" style="grid-template-columns:repeat(4,1fr)">
                 <div class="stat-card">
@@ -1435,22 +1475,22 @@ with tab_intel:
                     <div class="stat-label">ENLACES</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">{ev.get('total_reacciones_sumadas',0):,}</div>
+                    <div class="stat-value">{_n(ev.get('total_reacciones_sumadas',0)):,.0f}</div>
                     <div class="stat-label">REACCIONES</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">{ev.get('total_impresiones',0):,}</div>
+                    <div class="stat-value">{_n(ev.get('total_impresiones',0)):,.0f}</div>
                     <div class="stat-label">IMPRESIONES</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">{ev.get('total_comentarios',0):,}</div>
+                    <div class="stat-value">{_n(ev.get('total_comentarios',0)):,.0f}</div>
                     <div class="stat-label">COMENTARIOS</div>
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        _ev_narr = _get(ev, "narrativa", default="")
+        _ev_narr = safe_text(_get(ev, "narrativa", default=""))
         if _ev_narr:
             st.markdown(f"""
             <div class="memo-section">
@@ -1464,9 +1504,10 @@ with tab_intel:
         if enlaces:
             st.markdown('<div class="exec-subheader">Lista de enlaces analizados</div>', unsafe_allow_html=True)
             for url in enlaces:
+                safe_url = safe_text(url)
                 st.markdown(
-                    f'<a href="{url}" target="_blank" rel="noopener" '
+                    f'<a href="{safe_url}" target="_blank" rel="noopener" '
                     f'style="display:block;font-family:var(--font-mono);font-size:10px;'
-                    f'color:var(--accent);margin:3px 0;text-decoration:none">🔗 {url}</a>',
+                    f'color:var(--accent);margin:3px 0;text-decoration:none">🔗 {safe_url}</a>',
                     unsafe_allow_html=True
                 )

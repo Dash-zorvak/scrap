@@ -165,21 +165,34 @@ def etiqueta_tema(cat):
 def normalizar_postura(postura):
     """Devuelve una postura canonica (apoyo/critica/neutral).
 
-    Acepta None, sinonimos comunes del modelo y mayusculas/espacios. Cualquier
-    valor desconocido cae a 'neutral' (POSTURA_DEFAULT), de modo que un dato mal
-    formado nunca se cuente como apoyo ni como critica por error.
+    Acepta None, sinonimos comunes del modelo y mayusculas/espacios.
+    Lanza ValueError si la postura no es reconocida (H-DS1: sin normalizacion
+    silenciosa).  None devuelve POSTURA_DEFAULT ("neutral").
     """
     if not postura:
         return POSTURA_DEFAULT
     p = str(postura).strip().lower()
     if p in POSTURAS_VALIDAS:
         return p
-    return _POSTURA_SINONIMOS.get(p, POSTURA_DEFAULT)
+    resultado = _POSTURA_SINONIMOS.get(p)
+    if resultado is not None:
+        return resultado
+    raise ValueError(
+        f"Postura '{postura}' no reconocida.  "
+        f"Valores validos: {sorted(POSTURAS_VALIDAS)}"
+    )
 
 
 def etiqueta_postura(postura):
-    """Etiqueta legible para una postura (acepta sinonimos / None)."""
-    return POSTURA_LABELS.get(normalizar_postura(postura), POSTURA_LABELS[POSTURA_DEFAULT])
+    """Etiqueta legible para una postura (acepta sinonimos / None).
+
+    Si la postura no es reconocida, devuelve la postura original sin formato.
+    """
+    try:
+        norm = normalizar_postura(postura)
+        return POSTURA_LABELS.get(norm, POSTURA_LABELS[POSTURA_DEFAULT])
+    except ValueError:
+        return str(postura).strip().capitalize() if postura else POSTURA_LABELS[POSTURA_DEFAULT]
 
 
 # ---------------------------------------------------------------------------
@@ -434,12 +447,19 @@ _EMOCION_SINONIMOS = {
 def normalizar_emocion(emocion):
     """Devuelve una emoción canónica (31 categorías).
 
-    Acepta None, sinónimos, mayúsculas/espacios. Valor desconocido cae a
-    EMOCION_DEFAULT ("calma").
+    Acepta None, sinónimos, mayúsculas/espacios.
+    Lanza ValueError si la emoción no es reconocida (H-DS1: sin normalización
+    silenciosa).  None devuelve EMOCION_DEFAULT ("calma").
     """
     if not emocion:
         return EMOCION_DEFAULT
     e = str(emocion).strip().lower()
     if e in EMOCIONES_VALIDAS:
         return e
-    return _EMOCION_SINONIMOS.get(e, EMOCION_DEFAULT)
+    resultado = _EMOCION_SINONIMOS.get(e)
+    if resultado is not None:
+        return resultado
+    raise ValueError(
+        f"Emoción '{emocion}' no reconocida.  "
+        f"Valores válidos: {sorted(EMOCIONES_VALIDAS)}"
+    )

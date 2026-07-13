@@ -12,6 +12,7 @@ Usage:
 """
 import argparse
 import os
+import re
 import shutil
 import sqlite3
 from datetime import datetime
@@ -21,6 +22,14 @@ from typing import Optional
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 CONFIG_PATH = ROOT / "src" / "config.py"
+
+_IDENT_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+
+
+def _validar_identificador(nombre: str) -> str:
+    if not _IDENT_RE.match(nombre):
+        raise ValueError(f"Identificador SQL invalido/no permitido: {nombre!r}")
+    return nombre
 
 
 def get_scratch_since() -> str:
@@ -77,6 +86,8 @@ def backup_db(path: Path) -> Path:
 
 def count_out_of_range(cur, table: str, date_col: str, since: str, purge_null: bool) -> dict:
     """Return dict with total, oor (before since), null-count."""
+    _validar_identificador(table)
+    _validar_identificador(date_col)
     total = cur.execute(f"SELECT COUNT(*) FROM \"{table}\"").fetchone()[0]
     oor = cur.execute(
         f"SELECT COUNT(*) FROM \"{table}\" WHERE {date_col} IS NOT NULL AND {date_col} < ?",
@@ -90,6 +101,8 @@ def count_out_of_range(cur, table: str, date_col: str, since: str, purge_null: b
 
 def delete_out_of_range(cur, table: str, date_col: str, since: str, purge_null: bool) -> int:
     """Delete out-of-range rows. Returns number deleted."""
+    _validar_identificador(table)
+    _validar_identificador(date_col)
     cond = f"{date_col} IS NOT NULL AND {date_col} < ?"
     params: list = [since]
     if purge_null:
@@ -127,6 +140,9 @@ def purge(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
         # Extra tables (only count rows referencing out-of-range posts)
         extra = {}
         for tbl in cfg.get("extra_tables", []):
+            _validar_identificador(tbl)
+            _validar_identificador(cfg["posts_table"])
+            _validar_identificador(cfg["date_col"])
             exists = cur.execute(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
                 (tbl,),
@@ -197,6 +213,11 @@ def purge(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
 
         conn = sqlite3.connect(str(cfg["path"]))
         cur = conn.cursor()
+
+        _validar_identificador(cfg["posts_table"])
+        _validar_identificador(cfg["comments_table"])
+        _validar_identificador(cfg["post_id_col"])
+        _validar_identificador(cfg["date_col"])
 
         # Delete comments referencing OOR posts
         if cfg["comments_table"]:

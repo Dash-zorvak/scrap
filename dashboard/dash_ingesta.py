@@ -11,10 +11,13 @@ import pandas as pd
 import uuid
 from datetime import datetime, date
 
-from dashboard.config import (
-    FB_PAGES_OFICIALES, TK_ACCOUNTS,
-    FACEBOOK_DB, TIKTOK_DB, EXTERNOS_DB,
-)
+from src.config import Config
+_cfg = Config()
+FB_PAGES_OFICIALES = _cfg.FB_PAGES_OFICIALES
+TK_ACCOUNTS = _cfg.TK_ACCOUNTS
+FACEBOOK_DB = _cfg.FACEBOOK_DB
+TIKTOK_DB = _cfg.TIKTOK_DB
+EXTERNOS_DB = _cfg.EXTERNOS_DB
 from dashboard.guardar_lote import guardar_lote
 from dashboard.externos_store import listar_paginas_externas, agregar_pagina_externa
 

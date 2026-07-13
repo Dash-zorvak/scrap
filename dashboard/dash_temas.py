@@ -71,7 +71,8 @@ def render_revisor_temas(db_path):
         )
 
         for cid, texto in pendientes:
-            texto_clean = (texto or "").replace('"', "'")
+            from dashboard.html_safety import safe_text
+            texto_clean = safe_text(texto)
             st.markdown(
                 f'<div style="font-size:13px;padding:8px 10px;margin:8px 0 4px 0;'
                 f'background:var(--bg-elevated);border-radius:6px;border-left:3px solid var(--accent)">'

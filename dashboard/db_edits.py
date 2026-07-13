@@ -1,63 +1,34 @@
-"""Edicion directa de registros (correcciones del analista), via sqlite3.
+"""Edicion directa de registros (correcciones del analista).
 
-Se mantiene aparte de src/storage/db.py (modelo SQLAlchemy usado en la ingesta)
-para no tocar el flujo de carga. Cubre:
-  - Facebook (tabla fb_posts):
-      update_fb_post / delete_fb_post / leer_post.
-  - TikTok (tabla videos en tiktok.db):
-      leer_videos_tiktok / update_video_tiktok / delete_video_tiktok.
-  leer_post lee la fila completa (incluye cares_count, que get_fb_post no
-  devuelve) para alimentar correctamente las metricas del informe.
+Facebook (fb_posts/fb_comments): ahora delega a LocalStorage (T3.1/T3.2),
+que es la unica puerta de escritura para estas tablas (C5).
+
+TikTok (tabla videos en tiktok.db): se mantiene con sqlite3 directo,
+fuera del alcance de C5 (ver T3.3).
 """
 
 import os
 import sqlite3
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from src.config import Config
+from src.storage.db import LocalStorage
 
-try:
-    from config import FACEBOOK_DB, TIKTOK_DB  # type: ignore
-except Exception:
-    FACEBOOK_DB = os.getenv("FACEBOOK_DB", "facebook.db")
-    TIKTOK_DB = os.getenv("TIKTOK_DB", "tiktok.db")
+_cfg = Config()
+FACEBOOK_DB = _cfg.FACEBOOK_DB
+TIKTOK_DB = _cfg.TIKTOK_DB
 
-COLUMNAS_EDITABLES = {
-    "page_name", "page_id", "message", "post_url", "sentiment",
-    "topic_category", "zona", "source", "likes_count", "loves_count",
-    "cares_count", "hahas_count", "wows_count", "sads_count", "angrys_count",
-    "comments_count", "shares_count", "views_count", "sentiment_score",
-    "created_time",
-}
+# Re-export desde LocalStorage (SSOT: src/storage/db.py)
+COLUMNAS_EDITABLES = LocalStorage.COLUMNAS_EDITABLES
 
-# Columnas editables de la tabla videos (TikTok).
+# Columnas editables de la tabla videos (TikTok) — fuera de alcance C5.
 COLUMNAS_TIKTOK_EDITABLES = {
     "account_id", "description", "created_at", "views", "likes",
     "shares", "favorites_count", "comments_count", "post_url",
 }
 
-# Columnas de fb_posts que, si se corrigen manualmente, invalidan el
-# engagement ya calculado de ese post (D24) y deben disparar un recalculo
-# en el próximo procesamiento del pipeline de engagement.
-COLUMNAS_ENGAGEMENT_FB = {
-    "likes_count", "loves_count", "cares_count", "hahas_count", "wows_count",
-    "sads_count", "angrys_count", "comments_count",
-}
-
-# Lo mismo para la tabla videos (TikTok).
-COLUMNAS_ENGAGEMENT_TIKTOK = {
-    "views", "likes", "shares", "favorites_count", "comments_count",
-}
-
-
-def _marcar_recalculo(conn, tabla, col_id, valor_id):
-    """Agrega needs_recalculo si falta y marca la fila para reproceso."""
-    cols = {row[1] for row in conn.execute(f"PRAGMA table_info({tabla})").fetchall()}
-    if "needs_recalculo" not in cols:
-        conn.execute(f"ALTER TABLE {tabla} ADD COLUMN needs_recalculo INTEGER DEFAULT 0")
-    conn.execute(
-        f"UPDATE {tabla} SET needs_recalculo = 1 WHERE {col_id} = ?", (str(valor_id),)
-    )
+# Nota: bases de datos antiguas pueden conservar una columna needs_recalculo
+# huérfana e inofensiva; no se elimina para evitar migraciones destructivas
+# (ver C6 en plan maestro).
 
 
 def _db(db_path=None):
@@ -84,49 +55,26 @@ def leer_post(post_id, db_path=None):
 
 
 def update_fb_post(post_id, fields, db_path=None):
-    """Actualiza columnas permitidas de un post. Devuelve True si cambio algo."""
-    campos = {k: v for k, v in (fields or {}).items() if k in COLUMNAS_EDITABLES}
-    if not campos:
-        return False
-    sets = ", ".join(f'"{k}" = ?' for k in campos)
-    valores = list(campos.values()) + [str(post_id)]
-    conn = sqlite3.connect(_db(db_path))
-    try:
-        cur = conn.execute(
-            f"UPDATE fb_posts SET {sets} WHERE post_id = ?", valores
-        )
-        cambio = cur.rowcount > 0
-        # D24: si la correccion toca algun campo que afecta el engagement ya
-        # calculado, marcar el post para que se recalcule en la siguiente
-        # corrida del pipeline de engagement en vez de quedar congelado con el
-        # valor anterior a la correccion.
-        if cambio and (set(campos.keys()) & COLUMNAS_ENGAGEMENT_FB):
-            _marcar_recalculo(conn, "fb_posts", "post_id", post_id)
-        conn.commit()
-        return cambio
-    except Exception:
-        return False
-    finally:
-        conn.close()
+    """Actualiza columnas permitidas via LocalStorage. Lanza ValueError ante datos invalidos."""
+    store = LocalStorage(db_path=_db(db_path))
+    return store.update_fb_post(post_id, fields)
 
 
 def delete_fb_post(post_id, db_path=None):
-    """Elimina un post y sus comentarios. Devuelve True si no hubo error."""
-    conn = sqlite3.connect(_db(db_path))
-    try:
-        conn.execute("DELETE FROM fb_comments WHERE post_id = ?", (str(post_id),))
-        conn.execute("DELETE FROM fb_posts WHERE post_id = ?", (str(post_id),))
-        conn.commit()
-        return True
-    except Exception:
-        return False
-    finally:
-        conn.close()
+    """Elimina un post y sus comentarios via LocalStorage."""
+    store = LocalStorage(db_path=_db(db_path))
+    return store.delete_fb_post(post_id)
 
 
 # ===========================================
-# TikTok (tabla videos en tiktok.db)
+# TikTok (tabla videos en tiktok.db) — fuera de alcance C5
 # ===========================================
+
+# NOTA DE ALCANCE (plan maestro, Fase 3 / C5): la unificacion de persistencia
+# (C5) cubre exclusivamente fb_posts/fb_comments. Este modulo (TikTok) queda
+# fuera de alcance en esta fase; se recomienda aplicar el mismo patron
+# (LocalStorage + validacion + audit_log) en un plan posterior, no incluido aqui.
+
 
 def leer_videos_tiktok(limit=500, offset=0, db_path=None):
     """Devuelve los videos de TikTok como lista de dicts (mas recientes primero)."""
@@ -157,8 +105,6 @@ def update_video_tiktok(video_id, fields, db_path=None):
             f"UPDATE videos SET {sets} WHERE id = ?", valores
         )
         cambio = cur.rowcount > 0
-        if cambio and (set(campos.keys()) & COLUMNAS_ENGAGEMENT_TIKTOK):
-            _marcar_recalculo(conn, "videos", "id", video_id)
         conn.commit()
         return cambio
     except Exception:

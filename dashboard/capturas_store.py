@@ -8,15 +8,10 @@ PDF subidos se omiten para el embed (sus datos sí se extraen aparte).
 """
 
 import os
-import sys
 
-# DEUDA TÉCNICA: path hack temporal. Migrar a pyproject.toml cuando se consolide el paquete.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-try:
-    from config import DATA_DIR  # type: ignore
-except Exception:  # respaldo defensivo
-    DATA_DIR = os.getenv("DATA_DIR", os.path.join(os.getcwd(), "data"))
+from src.config import Config
+_cfg = Config()
+DATA_DIR = _cfg.DATA_DIR
 
 _EXT_VALIDAS = (".png", ".jpg", ".jpeg", ".webp")
 

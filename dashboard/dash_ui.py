@@ -5,7 +5,11 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 
-from config import FACEBOOK_DB, TIKTOK_DB, TK_ACCOUNTS
+from src.config import Config
+_cfg = Config()
+FACEBOOK_DB = _cfg.FACEBOOK_DB
+TIKTOK_DB = _cfg.TIKTOK_DB
+TK_ACCOUNTS = _cfg.TK_ACCOUNTS
 
 
 def _safe_query(query, db_path, params=None):

@@ -31,6 +31,10 @@ outputs/*.csv
 # # Capturas subidas (temporales, se procesan en memoria y NO se versionan)
 data/uploads_tmp/
 
+# # Capturas subidas con datos personales de terceros (rostros, nombres,
+# # comentarios de ciudadanos) — NUNCA versionar (ver HA1 en plan maestro)
+data/capturas/
+
 # # Logs
 *.log
 
@@ -64,3 +68,10 @@ data/*.backup_*.db
 
 # # Analysis JSON (generado por analista externo, no se versiona)
 data/analysis.json
+
+# # Backups de analysis.json (generados por analytics/publish.py)
+data/analysis.backup_*.json
+data/_analysis_backups/
+
+# # Baseline backup de DBs (generado por plan maestro fase 0)
+data/_baseline_backup/

@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from datetime import datetime
@@ -47,6 +48,18 @@ class FBComment(Base):
     like_count = sa.Column(sa.Integer, default=0)
     parent_comment_id = sa.Column(sa.Text, nullable=True)
     scraped_at = sa.Column(sa.DateTime, server_default=sa.func.now())
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
+    tabla = sa.Column(sa.Text, nullable=False)
+    registro_id = sa.Column(sa.Text, nullable=False)
+    accion = sa.Column(sa.Text, nullable=False)  # 'insert' | 'update' | 'delete'
+    actor = sa.Column(sa.Text, nullable=False, default="analista")
+    campos_modificados = sa.Column(sa.Text, default="")  # JSON string
+    timestamp = sa.Column(sa.DateTime, server_default=sa.func.now())
 
 
 class LocalStorage:
@@ -338,3 +351,95 @@ class LocalStorage:
 
     def get_all_posts_paginated(self, fields: str = "post_id", limit: int = 5000) -> list:
         return self.get_fb_posts_all(fields=fields, limit=limit)
+
+    # ── validacion de tipos ───────────────────────────────────
+
+    @staticmethod
+    def _validar_fecha_iso(valor, campo: str) -> Optional[datetime]:
+        if valor is None or valor == "":
+            return None
+        if isinstance(valor, datetime):
+            return valor
+        if isinstance(valor, str):
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(valor.strip(), fmt)
+                except ValueError:
+                    continue
+            try:
+                return datetime.fromisoformat(valor.strip())
+            except ValueError:
+                pass
+        raise ValueError(
+            f"Campo '{campo}': fecha no valida: {valor!r}. "
+            "Formato esperado YYYY-MM-DD o YYYY-MM-DD HH:MM:SS."
+        )
+
+    @staticmethod
+    def _validar_entero_no_negativo(valor, campo: str) -> int:
+        if valor is None:
+            return 0
+        try:
+            v = int(valor)
+        except (ValueError, TypeError):
+            raise ValueError(f"Campo '{campo}': se esperaba entero, se recibio {valor!r}.")
+        if v < 0:
+            raise ValueError(f"Campo '{campo}': no puede ser negativo ({v}).")
+        return v
+
+    # ── update / delete (unica puerta de escritura C5) ────────
+
+    COLUMNAS_EDITABLES = frozenset({
+        "page_name", "page_id", "message", "post_url", "sentiment",
+        "topic_category", "zona", "source", "likes_count", "loves_count",
+        "cares_count", "hahas_count", "wows_count", "sads_count", "angrys_count",
+        "comments_count", "shares_count", "views_count", "sentiment_score",
+        "created_time",
+    })
+
+    _CAMPOS_ENTEROS = frozenset({
+        "likes_count", "loves_count", "cares_count", "hahas_count",
+        "wows_count", "sads_count", "angrys_count",
+        "comments_count", "shares_count", "views_count",
+    })
+
+    def update_fb_post(self, post_id: str, fields: dict, actor: str = "analista") -> bool:
+        campos = {k: v for k, v in (fields or {}).items() if k in self.COLUMNAS_EDITABLES}
+        if not campos:
+            return False
+        with self.Session.begin() as session:
+            post = session.query(FBPost).filter(FBPost.post_id == post_id).first()
+            if not post:
+                return False
+            for k, v in campos.items():
+                if k == "created_time":
+                    v = self._validar_fecha_iso(v, k)
+                elif k in self._CAMPOS_ENTEROS:
+                    v = self._validar_entero_no_negativo(v, k)
+                setattr(post, k, v)
+            session.add(AuditLog(
+                tabla="fb_posts",
+                registro_id=post_id,
+                accion="update",
+                actor=actor,
+                campos_modificados=json.dumps(campos, default=str),
+            ))
+        logger.info("update_fb_post %s by %s: %s", post_id, actor, list(campos.keys()))
+        return True
+
+    def delete_fb_post(self, post_id: str, actor: str = "analista") -> bool:
+        with self.Session.begin() as session:
+            post = session.query(FBPost).filter(FBPost.post_id == post_id).first()
+            if not post:
+                return False
+            n_comments = session.query(FBComment).filter(FBComment.post_id == post_id).delete()
+            session.delete(post)
+            session.add(AuditLog(
+                tabla="fb_posts",
+                registro_id=post_id,
+                accion="delete",
+                actor=actor,
+                campos_modificados=json.dumps({"deleted_comments": n_comments}),
+            ))
+        logger.info("delete_fb_post %s by %s (comments: %d)", post_id, actor, n_comments)
+        return True

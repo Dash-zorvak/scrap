@@ -2,7 +2,8 @@ import logging
 import sqlite3
 
 from src.storage.db import LocalStorage
-from dashboard import config as _cfg
+from src.config import Config
+_cfg = Config()
 from dashboard._generar_id import (
     generar_id_post,
     generar_id_comentario,

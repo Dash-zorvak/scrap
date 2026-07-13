@@ -12,16 +12,12 @@ persistente de paginas externas que el operador reutiliza al cargar contenido.
 
 import os
 import sqlite3
-import sys
 
-# DEUDA TÉCNICA: path hack temporal. Migrar a pyproject.toml cuando se consolide el paquete.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from dashboard.config import EXTERNOS_DB  # noqa: E402
+from src.config import Config
+_cfg = Config()
+EXTERNOS_DB = _cfg.EXTERNOS_DB
 
-try:
-    from _generar_id import generar_id_post  # noqa: E402
-except Exception:  # pragma: no cover - respaldo si se importa como paquete
-    from dashboard._generar_id import generar_id_post  # noqa: E402
+from dashboard._generar_id import generar_id_post
 
 
 def _resolver_db(db_path=None):

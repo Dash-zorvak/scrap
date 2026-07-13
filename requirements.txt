@@ -13,6 +13,12 @@ openai>=1.0.0
 # PDF rendering (extracción por páginas con Groq Vision)
 pymupdf>=1.24.0
 
+# HTML safety (Fase 2: saneamiento de contenido de terceros)
+markupsafe>=2.1.0
+
+# Auth (Fase 2: hash de contraseña del panel de carga)
+bcrypt>=4.0.0
+
 # Utils
 python-dotenv>=1.0.0
 

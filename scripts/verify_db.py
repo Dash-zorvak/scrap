@@ -7,6 +7,7 @@ Usage:
 """
 import argparse
 import os
+import re
 import sqlite3
 import sys
 from datetime import datetime
@@ -19,6 +20,14 @@ DB_PATHS = {
     "externos": Path(os.getenv("EXTERNAL_DB", str(DATA / "externos.db"))),
     "facebook": Path(os.getenv("FACEBOOK_DB", str(DATA / "facebook.db"))),
 }
+
+_IDENT_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+
+
+def _validar_identificador(nombre: str) -> str:
+    if not _IDENT_RE.match(nombre):
+        raise ValueError(f"Identificador SQL invalido/no permitido: {nombre!r}")
+    return nombre
 
 
 def fmt(val):
@@ -48,6 +57,7 @@ def verify_db(label: str, db_path: Path):
     print(f"  Tables: {', '.join(table_names) if table_names else 'NONE'}")
 
     for tbl in table_names:
+        _validar_identificador(tbl)
         print(f"\n  --- {tbl} ---")
 
         # Row count

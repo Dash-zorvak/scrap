@@ -11,24 +11,20 @@ import sys
 
 import streamlit as st
 
-# DEUDA TÉCNICA: path hack temporal. Migrar a pyproject.toml cuando se consolide el paquete.
+# path-hack requerido por imports相对 de capturas_store y db_edits, pendiente de empaquetado
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-try:
-    from config import FACEBOOK_DB, FB_PAGES_OFICIALES, TK_ACCOUNTS  # type: ignore
-except Exception:
-    FACEBOOK_DB = os.getenv("FACEBOOK_DB", "facebook.db")
-    FB_PAGES_OFICIALES = ["Alcaldía de Santa Ana", "Gustavo Acevedo"]
-    TK_ACCOUNTS = {1: "Alcaldía de Santa Ana", 3: "Gustavo Acevedo"}
+from src.config import Config
+_cfg = Config()
+FACEBOOK_DB = _cfg.FACEBOOK_DB
+FB_PAGES_OFICIALES = _cfg.FB_PAGES_OFICIALES
+TK_ACCOUNTS = _cfg.TK_ACCOUNTS
 
 from capturas_store import borrar_capturas  # noqa: E402
 import db_edits  # noqa: E402
 
-try:
-    from src.storage.db import LocalStorage  # type: ignore
-except Exception:
-    from storage.db import LocalStorage  # type: ignore
+from src.storage.db import LocalStorage
 
 
 # Campos de reacciones editables (clave en BD, etiqueta visible).
@@ -161,7 +157,11 @@ def _editor_posts_fb():
             "views_count": int(views),
         }
         campos.update({k: int(v) for k, v in valores_reac.items()})
-        ok = db_edits.update_fb_post(pid, campos)
+        try:
+            ok = db_edits.update_fb_post(pid, campos)
+        except ValueError as e:
+            st.error(f"No se pudo guardar: {e}")
+            ok = False
         if ok:
             st.success("Cambios guardados. Recarga para ver la lista actualizada.")
         else:
@@ -170,7 +170,12 @@ def _editor_posts_fb():
     with st.expander("Eliminar este registro"):
         st.warning("Esta acción borra el post y sus comentarios. No se puede deshacer.")
         if st.button("Eliminar definitivamente", key=f"del_{pid}"):
-            if db_edits.delete_fb_post(pid):
+            try:
+                deleted = db_edits.delete_fb_post(pid)
+            except ValueError as e:
+                st.error(f"No se pudo eliminar: {e}")
+                deleted = False
+            if deleted:
                 try:
                     borrar_capturas(pid)
                 except Exception:

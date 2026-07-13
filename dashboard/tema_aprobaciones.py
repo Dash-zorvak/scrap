@@ -20,6 +20,8 @@ from dashboard.tema_taxonomia import (
     CATEGORIAS_VALIDAS,
     REMAP_LEGACY,
     EMOCIONES_VALIDAS,
+    EMOCION_DEFAULT,
+    POSTURA_DEFAULT,
     etiqueta_tema,
     normalizar_emocion,
     normalizar_postura,
@@ -122,15 +124,18 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
     conocidas (que luego se remapean a su englobante). Cualquier otro tema
     inexistente -o falta comment_id/tema- no guarda y devuelve False.
 
-    `postura` (apoyo/critica/neutral) se normaliza; un valor desconocido cae a
-    'neutral' para no contar como apoyo ni critica por error.
+    `postura` (apoyo/critica/neutral) se normaliza; lanza ValueError si no es
+    reconocida (H-DS1: sin normalizacion silenciosa).
 
-    `emocion` se normaliza con normalizar_emocion(); valor desconocido cae a
-    'calma'.
+    `emocion` se normaliza con normalizar_emocion(); lanza ValueError si no es
+    reconocida.
 
     Nota: a diferencia de remapear() -que degrada lo desconocido a 'no_aplica'
     para tolerar ruido del modelo-, aqui un tema invalido se RECHAZA, porque es
     una decision explicita del usuario y no debe colarse como 'no_aplica'.
+
+    Raises:
+        ValueError: si postura o emocion no son reconocidas.
     """
     if not comment_id or not tema:
         return False
@@ -190,12 +195,20 @@ def obtener_aprobaciones(db_path):
         conn.close()
     salida = {}
     for cid, tema, sug, tono, postura, emocion, conf, texto, estado, fecha in rows:
+        try:
+            postura_norm = normalizar_postura(postura)
+        except ValueError:
+            postura_norm = POSTURA_DEFAULT
+        try:
+            emocion_norm = normalizar_emocion(emocion)
+        except ValueError:
+            emocion_norm = EMOCION_DEFAULT
         salida[cid] = {
             "tema": tema,
             "tema_sugerido": sug,
             "tono": tono,
-            "postura": normalizar_postura(postura),
-            "emocion": normalizar_emocion(emocion),
+            "postura": postura_norm,
+            "emocion": emocion_norm,
             "confianza": conf,
             "texto": texto,
             "estado": estado,
@@ -235,8 +248,14 @@ def agregar_por_tema(db_path):
     for tema, texto, postura, emocion in rows:
         if not tema or tema == "no_aplica":
             continue
-        post = normalizar_postura(postura)
-        emo = normalizar_emocion(emocion)
+        try:
+            post = normalizar_postura(postura)
+        except ValueError:
+            post = POSTURA_DEFAULT
+        try:
+            emo = normalizar_emocion(emocion)
+        except ValueError:
+            emo = EMOCION_DEFAULT
         conteo[tema] += 1
         posturas[tema][post] += 1
         emociones[tema][emo] += 1

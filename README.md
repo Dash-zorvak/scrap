@@ -1,13 +1,3 @@
----
-title: Panel Santa Ana
-emoji: 📊
-colorFrom: blue
-colorTo: gray
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # Panel Santa Ana · Inteligencia Ciudadana
 
 Dashboard ejecutivo de percepción pública para la Alcaldía de Santa Ana.

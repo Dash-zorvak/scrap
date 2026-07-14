@@ -54,6 +54,20 @@ El campo `enlaces_referencia` debe contener **la lista completa** de URLs de los
 
 ---
 
+### RG-6: Catálogo abierto de emociones y temas
+
+El catálogo de emociones (`EMOCIONES`) y temas (`TEMAS`) en `dashboard/tema_taxonomia.py` es un **punto de partida, no un techo**. Las familias (joy, trust, fear, surprise, sadness, disgust, anger, anticipation, diada, civica) y los temas englobantes están fijos — son la estructura. Las hojas dentro de cada familia dejan de estar cerradas.
+
+**Regla para el analista:** cuando el texto real no calce en ninguna emoción o tema existente, **debe proponer la hoja nueva** en vez de forzarlo a la más parecida. El sistema registra automáticamente la propuesta en `dashboard/taxonomias_pendientes.json` para revisión. No se descarta nada, no se fuerza a un valor por defecto.
+
+**Cómo proponer:**
+- Emociones: usar la clave descriptiva en minúsculas, sin espacios (ej. `indignacion_comunitaria`). El sistema asigna automáticamente la familia "civica" si no hay señal clara; el analista puede sugerir la familia más cercana.
+- Temas: usar la clave descriptiva (ej. `infraestructura_deportiva`). Se registra como propuesta pendiente.
+
+**Prohibido:** asignar una emoción o tema a `no_aplica` o `calma` solo porque no existe en el catálogo actual. Eso oculta información real.
+
+---
+
 ## Bloque I — Pulso General
 
 | Sección | Reglas |

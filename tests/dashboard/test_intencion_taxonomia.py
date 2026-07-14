@@ -34,10 +34,29 @@ def test_ic_mixto_case_normaliza():
     assert normalizar_intencion("iC-0810") == "ic-0810"
 
 
-def test_etiqueta_intencion_para_clave_valida():
-    """etiqueta_intencion() devuelve label legible para claves del catálogo."""
+def test_etiqueta_intencion_case_insensitive_por_prefijo():
+    """etiqueta_intencion() normaliza casing para todos los prefijos:
+    ic-, hum-, id-, int-, eng-."""
+    # ic-
+    assert etiqueta_intencion("IC-0101") == "Describir"
     assert etiqueta_intencion("ic-0101") == "Describir"
+    assert etiqueta_intencion("Ic-0101") == "Describir"
+    # hum-
+    assert etiqueta_intencion("HUM-03") == "Satirizar"
     assert etiqueta_intencion("hum-03") == "Satirizar"
+    assert etiqueta_intencion("Hum-03") == "Satirizar"
+    # id-
+    assert etiqueta_intencion("ID-01") == "Orgullo local"
+    assert etiqueta_intencion("id-01") == "Orgullo local"
+    assert etiqueta_intencion("Id-01") == "Orgullo local"
+    # int-
+    assert etiqueta_intencion("INT-04") == "Pedir aclaraciones"
+    assert etiqueta_intencion("int-04") == "Pedir aclaraciones"
+    assert etiqueta_intencion("Int-04") == "Pedir aclaraciones"
+    # eng-
+    assert etiqueta_intencion("ENG-06") == "Narrativa conspirativa"
+    assert etiqueta_intencion("eng-06") == "Narrativa conspirativa"
+    assert etiqueta_intencion("Eng-06") == "Narrativa conspirativa"
 
 
 def test_etiqueta_intencion_para_clave_desconocida():
@@ -80,7 +99,26 @@ def test_todas_las_familias_del_intencion_existen():
 
 
 def test_etiqueta_familia_intencion():
-    """etiqueta_familia_intencion() devuelve label legible para las 12 familias."""
+    """etiqueta_familia_intencion() normaliza casing correctamente."""
     assert etiqueta_familia_intencion("informacion") == "Información y Descripción"
+    assert etiqueta_familia_intencion("INFORMACION") == "Información y Descripción"
+    assert etiqueta_familia_intencion("Informacion") == "Información y Descripción"
     assert etiqueta_familia_intencion("enganoso") == "Contenido Potencialmente Engañoso"
+    assert etiqueta_familia_intencion("ENGANOSO") == "Contenido Potencialmente Engañoso"
     assert etiqueta_familia_intencion("no_existe") == "No_existe"
+
+
+def test_etiqueta_intencion_todas_las_claves_audit():
+    """Auditoría completa: etiqueta_intencion() debe devolver un label real
+    (no fallback capitalizado) para cada una de las 108 claves del catálogo,
+    sin importar el casing de entrada."""
+    for clave in INTENCIONES_VALIDAS:
+        expected = INTENCIONES[clave]["label"]
+        # lowercase (ya canónico)
+        assert etiqueta_intencion(clave) == expected, (
+            f"etiqueta_intencion({clave!r}) falló"
+        )
+        # uppercase
+        assert etiqueta_intencion(clave.upper()) == expected, (
+            f"etiqueta_intencion({clave.upper()!r}) falló"
+        )

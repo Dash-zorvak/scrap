@@ -189,24 +189,25 @@ def validar(data: dict) -> ValidationResult:
 
 
 def _validar_categorias_json(data: dict, result: ValidationResult):
-    """V07: cualquier campo de emocion/postura/tema en analysis.json que no
-    pertenezca al catalogo canonico es bloqueante."""
+    """V07: valida posturas (deben ser canónicas). Emociones y temas aceptan
+    claves no-canónicas (catálogo abierto) — se registran en
+    taxonomias_pendientes.json en vez de ser rechazadas."""
     try:
-        from dashboard.tema_taxonomia import EMOCIONES_VALIDAS, POSTURAS_VALIDAS, CATEGORIAS_VALIDAS
+        from dashboard.tema_taxonomia import EMOCIONES_VALIDAS, POSTURAS_VALIDAS
     except ImportError:
-        return  # si la taxonomia no esta disponible, skip V07
+        return
 
-    # Verificar emociones en indice_emociones
+    # Verificar emocion_dominante en indice_emociones (acepta no-canónicas)
     ie = _get(data, "bloque1", "indice_emociones", default={})
     if isinstance(ie, dict):
         emocion_dom = (ie.get("emocion_dominante") or "").strip()
         if emocion_dom and emocion_dom not in EMOCIONES_VALIDAS:
             result.errores.append(ValidationError(
-                codigo="V07_CATEGORIA_DESCONOCIDA",
+                codigo="V07_EMOCION_NO_CANONICA",
                 seccion="bloque1.indice_emociones.emocion_dominante",
-                severidad="bloqueante",
-                mensaje_tecnico=f"emocion_dominante '{emocion_dom}' no esta en el catalogo",
-                mensaje_humano=f"La emocion '{emocion_dom}' no es reconocida.",
+                severidad="advertencia",
+                mensaje_tecnico=f"emocion_dominante '{emocion_dom}' no esta en el catalogo semilla",
+                mensaje_humano=f"La emocion '{emocion_dom}' es no-canónica (pendiente de revisión).",
             ))
 
     # Verificar emociones en concentracion_tematica.ramas
@@ -215,26 +216,17 @@ def _validar_categorias_json(data: dict, result: ValidationResult):
         for i, r in enumerate(ramas):
             if not isinstance(r, dict):
                 continue
-            tema = (r.get("tema") or "").strip()
-            if tema and tema not in CATEGORIAS_VALIDAS:
-                result.errores.append(ValidationError(
-                    codigo="V07_CATEGORIA_DESCONOCIDA",
-                    seccion=f"bloque1.concentracion_tematica.ramas[{i}].tema",
-                    severidad="bloqueante",
-                    mensaje_tecnico=f"tema '{tema}' no esta en el catalogo de categorias",
-                    mensaje_humano=f"El tema '{tema}' no es reconocido.",
-                ))
             emo = (r.get("emocion_dominante") or "").strip()
             if emo and emo not in EMOCIONES_VALIDAS:
                 result.errores.append(ValidationError(
-                    codigo="V07_CATEGORIA_DESCONOCIDA",
+                    codigo="V07_EMOCION_NO_CANONICA",
                     seccion=f"bloque1.concentracion_tematica.ramas[{i}].emocion_dominante",
-                    severidad="bloqueante",
-                    mensaje_tecnico=f"emocion '{emo}' no esta en el catalogo",
-                    mensaje_humano=f"La emocion '{emo}' no es reconocida.",
+                    severidad="advertencia",
+                    mensaje_tecnico=f"emocion '{emo}' no esta en el catalogo semilla",
+                    mensaje_humano=f"La emocion '{emo}' es no-canónica (pendiente de revisión).",
                 ))
 
-    # Verificar posturas en voces_influencia
+    # Verificar posturas en voces_influencia (deben ser canónicas)
     for i, v in enumerate(_get(data, "bloque2", "voces_influencia", default=[])):
         if not isinstance(v, dict):
             continue
@@ -248,18 +240,18 @@ def _validar_categorias_json(data: dict, result: ValidationResult):
                 mensaje_humano=f"La postura '{postura}' no es reconocida.",
             ))
 
-    # Verificar emociones en puntos_friccion
+    # Verificar emociones en puntos_friccion (acepta no-canónicas)
     for i, fr in enumerate(_get(data, "bloque3", "puntos_friccion", default=[])):
         if not isinstance(fr, dict):
             continue
         emo = (fr.get("emocion_dominante") or "").strip()
         if emo and emo not in EMOCIONES_VALIDAS:
             result.errores.append(ValidationError(
-                codigo="V07_CATEGORIA_DESCONOCIDA",
+                codigo="V07_EMOCION_NO_CANONICA",
                 seccion=f"bloque3.puntos_friccion[{i}].emocion_dominante",
-                severidad="bloqueante",
-                mensaje_tecnico=f"emocion '{emo}' no esta en el catalogo",
-                mensaje_humano=f"La emocion '{emo}' no es reconocida.",
+                severidad="advertencia",
+                mensaje_tecnico=f"emocion '{emo}' no esta en el catalogo semilla",
+                mensaje_humano=f"La emocion '{emo}' es no-canónica (pendiente de revisión).",
             ))
 
 
@@ -398,11 +390,8 @@ def _validar_coherencia_totales(data: dict, result: ValidationResult):
 
 
 def _validar_temas_en_aprobaciones(data: dict, result: ValidationResult):
-    """V11: Verifica que los temas mencionados en analysis.json sean validos.
-
-    Los temas en concentracion_tematica.ramas y puntos_friccion deben
-    pertenecer al catalogo de categorias validas.
-    """
+    """V11: Verifica temas en analysis.json. Con catálogo abierto, temas
+    no-canónicos son advertencia (pendiente de revisión), no bloqueante."""
     try:
         from dashboard.tema_taxonomia import CATEGORIAS_VALIDAS, REMAP_LEGACY
     except ImportError:
@@ -421,8 +410,8 @@ def _validar_temas_en_aprobaciones(data: dict, result: ValidationResult):
                 codigo="V11_TEMA_NO_VALIDO",
                 seccion=f"bloque1.concentracion_tematica.ramas[{i}]",
                 severidad="advertencia",
-                mensaje_tecnico=f"tema '{tema}' no esta en el catalogo de aprobaciones",
-                mensaje_humano=f"El tema '{tema}' no esta en el catalogo oficial.",
+                mensaje_tecnico=f"tema '{tema}' no esta en el catalogo semilla",
+                mensaje_humano=f"El tema '{tema}' es no-canónico (pendiente de revisión).",
             ))
 
     # Temas en puntos_friccion
@@ -436,8 +425,8 @@ def _validar_temas_en_aprobaciones(data: dict, result: ValidationResult):
                 codigo="V11_TEMA_NO_VALIDO",
                 seccion=f"bloque3.puntos_friccion[{i}]",
                 severidad="advertencia",
-                mensaje_tecnico=f"tema '{tema}' no esta en el catalogo de aprobaciones",
-                mensaje_humano=f"El tema '{tema}' en friccion no esta en el catalogo oficial.",
+                mensaje_tecnico=f"tema '{tema}' en friccion no esta en el catalogo semilla",
+                mensaje_humano=f"El tema '{tema}' es no-canónico (pendiente de revisión).",
             ))
 
 

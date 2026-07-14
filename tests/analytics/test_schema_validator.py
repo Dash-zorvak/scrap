@@ -178,8 +178,8 @@ def test_v07_emocion_desconocida():
     d = _base_valid()
     d["bloque1"]["indice_emociones"]["emocion_dominante"] = "super_feliz"
     r = validar(d)
-    assert not r.es_publicable
-    assert any(e.codigo == "V07_CATEGORIA_DESCONOCIDA" for e in r.errores)
+    assert r.es_publicable  # advertencia, no bloqueante (catálogo abierto)
+    assert any(e.codigo == "V07_EMOCION_NO_CANONICA" for e in r.errores)
 
 
 def test_v07_postura_desconocida():
@@ -194,7 +194,7 @@ def test_v07_tema_desconocido():
     d = _base_valid()
     d["bloque1"]["concentracion_tematica"]["ramas"][0]["tema"] = "tema_fantasma"
     r = validar(d)
-    assert not r.es_publicable
+    assert r.es_publicable  # tema no-canónico es advertencia (V11), no bloqueante
 
 
 # ── V08 ──

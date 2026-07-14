@@ -200,18 +200,25 @@ def format_date_es(iso_date):
 
 
 def emotion_pcts_for_theme(emo_counts):
-    """Given {emotion: count}, return {emotion: pct} for all valid emotions."""
-    from dashboard.tema_taxonomia import EMOCIONES_VALIDAS
+    """Given {emotion: count}, return {emotion: pct} for ALL emotions present.
+
+    Includes both canonical (EMOCIONES_VALIDAS) and non-canonical keys that
+    appear in emo_counts, so newly proposed emotions are not silently dropped
+    from the report.
+    """
     total = sum(emo_counts.values()) or 1
     return {
         e: round(emo_counts.get(e, 0) / total * 100, 1)
-        for e in EMOCIONES_VALIDAS
+        for e in emo_counts
     }
 
 
 def dominant_emotion(emo_counts):
-    """Return the emotion with the highest count, or 'calma' if empty."""
-    from dashboard.tema_taxonomia import EMOCIONES_VALIDAS
+    """Return the emotion with the highest count, or 'calma' if empty.
+
+    Includes non-canonical keys present in emo_counts so newly proposed
+    emotions can surface as dominant when they truly are.
+    """
     if not emo_counts:
         return "calma"
-    return max(EMOCIONES_VALIDAS, key=lambda e: emo_counts.get(e, 0))
+    return max(emo_counts, key=lambda e: emo_counts.get(e, 0))

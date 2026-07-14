@@ -327,11 +327,15 @@ def normalizar_intencion(intencion, *, estricto=False, familia_sugerida=None):
 def etiqueta_intencion(codigo):
     """Etiqueta legible para un código de intención.
 
+    Normaliza el casing antes de buscar (igual que normalizar_intencion).
     Si el código no está en el catálogo, devuelve el código tal cual.
     """
-    if codigo in INTENCIONES:
-        return INTENCIONES[codigo]["label"]
-    return str(codigo).strip().capitalize() if codigo else ""
+    if not codigo:
+        return ""
+    clave = str(codigo).strip().lower()
+    if clave in INTENCIONES:
+        return INTENCIONES[clave]["label"]
+    return str(codigo).strip().capitalize()
 
 
 def etiqueta_familia_intencion(codigo_familia):

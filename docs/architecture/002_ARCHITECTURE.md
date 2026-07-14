@@ -55,25 +55,9 @@ MIPA se implementa mediante una arquitectura por capas.
                             │
                             ▼
 
-                   Pipeline Analítico
-
-                            │
-                            ▼
-
-                 ┌──────────────────────┐
-                 │    analytics.db       │
-                 └──────────┬───────────┘
-
-                            │
-                            ▼
-
-                  Motor Analítico
-                  (compute.py)
-
-                            │
-                            ▼
-
-                 report.py::construir_analysis()
+            Pipeline Analítico + Motor Analítico
+            (analytics/compute.py, analytics/queries.py,
+             analytics/report.py::construir_analysis())
 
                             │
                             ▼
@@ -87,6 +71,11 @@ MIPA se implementa mediante una arquitectura por capas.
 
                      Dashboard Ejecutivo
                      (app.py, solo lee)
+
+  ┌─────────────────────────────────────────────────────────┐
+  │  DIFERIDO (diseño futuro): analytics.db como base       │
+  │  analítica separada. Ver §9, §10. Hoy no existe.        │
+  └─────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -261,19 +250,8 @@ Persistencia
 
 ↓
 
-Pipeline
-
-↓
-
-analytics.db
-
-↓
-
-Motor Analítico (compute.py)
-
-↓
-
-report.py::construir_analysis()
+Pipeline Analítico + Motor Analítico
+(compute.py, queries.py, report.py::construir_analysis())
 
 ↓
 
@@ -282,6 +260,8 @@ data/analysis.json
 ↓
 
 Dashboard (app.py, solo lee)
+
+── DIFERIDO (diseño futuro): analytics.db — ver §9, §10 ──
 ```
 
 Ningún componente podrá alterar este flujo.
@@ -623,4 +603,4 @@ Toda implementación futura deberá respetar las responsabilidades, dependencias
 | Tipo | Normativo |
 | Depende de | 000_PROJECT_CHARTER.md, 001_FOUNDATION.md |
 | Referenciado por | 003_DATA_MODEL.md, 004_PIPELINE.md |
-| Última actualización | Bloque 3 — flujo real, estructura repo, contrato analysis.json |
+| Última actualización | Bloque 3.1 — analytics.db fuera del flujo activo en §3/§6 |

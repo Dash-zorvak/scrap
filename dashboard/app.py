@@ -92,6 +92,25 @@ def _s(v, default="—"):
     return str(v)
 
 
+def _render_estado_vacio(motivo="Dato pendiente de generación por pipeline MIPA."):
+    """Renderiza estado vacío ejecutivo con ESTADO / MOTIVO."""
+    st.markdown(
+        f'<div style="background:var(--bg-card);border:1px solid var(--border);'
+        f'border-radius:var(--r-sm);padding:14px 18px;margin:8px 0">'
+        f'<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.6px;'
+        f'color:var(--fg-muted);font-weight:600;text-transform:uppercase;margin-bottom:4px">'
+        f'ESTADO</div>'
+        f'<div style="font-size:12px;color:var(--fg-secondary);margin-bottom:10px">'
+        f'No calculado</div>'
+        f'<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.6px;'
+        f'color:var(--fg-muted);font-weight:600;text-transform:uppercase;margin-bottom:4px">'
+        f'MOTIVO</div>'
+        f'<div style="font-size:12px;color:var(--fg-secondary)">'
+        f'{motivo}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def _render_card(html):
     """Renderiza HTML dinámico eliminando líneas vacías internas que
     Streamlit interpretaría como fin de bloque HTML (y el resto como
@@ -106,6 +125,69 @@ def _expander_enlaces(enlaces, label="Ver todos los enlaces de referencia"):
         with st.expander(f"{label} ({len(enlaces)})"):
             for url in enlaces:
                 st.markdown(f"- {url}")
+
+
+_TECNICO_KEYWORDS = [
+    "inconsistente", "no suma", "necesita", "formato incorrecto",
+    "no tiene el formato", "falta el", "falta la", "no es reconocid",
+    "no esta en el catalogo", "sin fuentes", "sin completar",
+    "incompletos", "es negativo", "estructura correcta",
+    "placeholder", "sin resolver", "estructura",
+]
+
+
+def _filtrar_observaciones(alertas):
+    """Oculta mensajes técnicos del validador. Solo conserva observaciones ejecutivas."""
+    visibles = []
+    for a in alertas:
+        a_lower = a.lower()
+        if not any(kw in a_lower for kw in _TECNICO_KEYWORDS):
+            visibles.append(a)
+    return visibles
+
+
+def _render_hallazgo_evidencia(hallazgo, evidencia_items=None, interpretacion=""):
+    """Renderiza bloque ejecutivo: HALLAZGO / EVIDENCIA / INTERPRETACIÓN."""
+    piezas = []
+    if hallazgo:
+        piezas.append(
+            '<div style="margin-bottom:14px">'
+            '<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.6px;'
+            'color:var(--accent);font-weight:600;text-transform:uppercase;margin-bottom:4px">'
+            'HALLAZGO</div>'
+            f'<div style="font-size:13px;color:var(--fg-primary);line-height:1.7">{hallazgo}</div>'
+            '</div>'
+        )
+    if evidencia_items:
+        items = "".join(
+            f'<div style="font-family:var(--font-mono);font-size:11px;color:var(--fg-secondary);'
+            f'margin-bottom:2px">{it}</div>'
+            for it in evidencia_items
+        )
+        piezas.append(
+            '<div style="margin-bottom:14px">'
+            '<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.6px;'
+            'color:var(--fg-muted);font-weight:600;text-transform:uppercase;margin-bottom:4px">'
+            'EVIDENCIA</div>'
+            f'{items}</div>'
+        )
+    if interpretacion:
+        piezas.append(
+            '<div>'
+            '<div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.6px;'
+            'color:var(--fg-muted);font-weight:600;text-transform:uppercase;margin-bottom:4px">'
+            'INTERPRETACIÓN</div>'
+            f'<div style="font-size:13px;color:var(--fg-secondary);line-height:1.7">{interpretacion}</div>'
+            '</div>'
+        )
+    if piezas:
+        st.markdown(
+            f'<div class="interpretation">'
+            f'<div class="interpretation-label">LECTURA EJECUTIVA</div>'
+            f'<div style="padding:0 2px">{"".join(piezas)}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
 
 def _card_explicacion_simple(texto):
@@ -136,6 +218,7 @@ configurar_logging()
 
 # ── Cargar datos ──────────────────────────────────────────────────────
 data, _advertencias_json = _cargar_analysis()
+_observaciones_visibles = _filtrar_observaciones(_advertencias_json) if _advertencias_json else []
 
 # ── Fechas para topbar ────────────────────────────────────────────────
 if data:
@@ -296,19 +379,19 @@ font-family:var(--font-mono);color:var(--fg-muted);letter-spacing:0.4px;line-hei
 </div>
 """, unsafe_allow_html=True)
 
-if _advertencias_json:
+if _observaciones_visibles:
     st.sidebar.markdown("---")
     st.sidebar.markdown(
         '<div style="font-family:var(--font-mono);font-size:9px;'
         'color:var(--amber);letter-spacing:1.2px;text-transform:uppercase;'
-        'font-weight:600;margin-bottom:6px">⚠ ALERTAS DE DATOS</div>',
+        'font-weight:600;margin-bottom:6px">OBSERVACIONES DEL ANÁLISIS</div>',
         unsafe_allow_html=True,
     )
-    for _adv in _advertencias_json:
+    for _obs in _observaciones_visibles:
         st.sidebar.markdown(
             f'<div style="font-family:var(--font-mono);font-size:9px;'
             f'color:var(--amber);line-height:1.6;margin-bottom:4px">'
-            f'{safe_text(_adv)}</div>',
+            f'⚠ {safe_text(_obs)}</div>',
             unsafe_allow_html=True,
         )
 
@@ -329,9 +412,6 @@ if not data:
             El análisis del día aún no está disponible.<br>
             Contacte al equipo técnico para actualizar el sistema.
         </div>
-        <div style="font-family:var(--font-mono);font-size:10px;
-        color:var(--fg-dim);letter-spacing:1px">
-        data/analysis.json · NO ENCONTRADO</div>
     </div>
     """, unsafe_allow_html=True)
     st.stop()
@@ -448,12 +528,14 @@ with tab_pulso:
         </div>
     </div>
     """, unsafe_allow_html=True)
-    st.markdown(f"""
-    <div class="interpretation">
-        <div class="interpretation-label">LECTURA EJECUTIVA</div>
-        <div class="interpretation-texto">{narrativa_cn}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    _render_hallazgo_evidencia(
+        hallazgo=narrativa_cn,
+        evidencia_items=[
+            f"{n_tot:,.0f} comentarios analizados",
+            f"{fav:.0f}% favorable · {neu:.0f}% neutral · {adv:.0f}% crítico",
+        ],
+        interpretacion=safe_text(_get(cn, "explicacion_simple", default="")),
+    )
     _expander_enlaces(cn.get("enlaces_referencia", []))
 
     # ── 02 · Índice de Emociones ───────────────────────────────────────
@@ -541,16 +623,22 @@ with tab_pulso:
         )
 
         narrativa_ie = safe_text(_get(ie, "narrativa", default="—"))
-        st.markdown(f"""
-        <div class="interpretation">
-            <div class="interpretation-label">LECTURA EJECUTIVA</div>
-            <div class="interpretation-texto">{narrativa_ie}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        _card_explicacion_simple(ie.get("explicacion_simple", ""))
+        _emo_top3 = sorted(
+            [(l, _n(ie.get(f"pct_{c}", 0))) for c, l, _ in _EMO_DEFS],
+            key=lambda x: x[1], reverse=True,
+        )[:3]
+        _evidencia_ie = [f"Emoción dominante: {emo_dom}"]
+        for _el, _ep in _emo_top3:
+            if _ep > 0:
+                _evidencia_ie.append(f"{_el}: {_ep:.1f}%")
+        _render_hallazgo_evidencia(
+            hallazgo=narrativa_ie,
+            evidencia_items=_evidencia_ie,
+            interpretacion=safe_text(_get(ie, "explicacion_simple", default="")),
+        )
         _expander_enlaces(ie.get("enlaces_referencia", []))
     else:
-        st.markdown('<div class="status-info">Índice de emociones no disponible.</div>', unsafe_allow_html=True)
+        _render_estado_vacio("Modelo emocional pendiente de ejecución.")
 
     # ── 03 · Intensidad ───────────────────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">03 · Intensidad de la Conversación</div></div>', unsafe_allow_html=True)
@@ -565,21 +653,18 @@ with tab_pulso:
     col_hoy = "var(--red)" if pct > 15 else ("var(--blue)" if pct < -15 else "var(--accent)")
     signo = f"+{pct:.0f}%" if pct > 0 else f"{pct:.0f}%"
 
+    _render_hallazgo_evidencia(
+        hallazgo=narrativa_it,
+        evidencia_items=[
+            f"{signo} vs promedio · {etiq_int}",
+            f"Último día: {vol_hoy:,.0f} · Promedio: {prom:,.0f}",
+            f"Referencia: {it.get('n_dias_referencia',0)} días ({it.get('fecha_hoy','—')})",
+        ],
+        interpretacion=safe_text(_get(it, "explicacion_simple", default="")),
+    )
     st.markdown(f"""
     <div class="exec-card">
-        <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:1.6px;color:var(--accent);font-weight:600;text-transform:uppercase;margin-bottom:4px">LECTURA EJECUTIVA</div>
-        <div style="margin-bottom:12px;font-size:13px;color:var(--fg-primary);line-height:1.7">{narrativa_it}</div>
         <div style="border-top:1px solid var(--border);padding-top:12px">
-            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">
-                <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-muted);letter-spacing:0.6px">INTENSIDAD DEL ÚLTIMO DÍA</div>
-                <div style="font-family:var(--font-mono);font-size:9px;color:var(--fg-dim)">
-                {it.get('fecha_hoy','—')} · {it.get('n_dias_referencia',0)} DÍAS DE REFERENCIA</div>
-            </div>
-            <div style="display:flex;align-items:baseline;gap:14px;margin:4px 0 12px">
-                <span style="font-size:44px;font-weight:700;line-height:1;
-                color:{col_hoy}">{signo}</span>
-                <span style="font-size:15px;color:var(--fg-secondary)">{etiq_int}</span>
-            </div>
             <div class="bar-row">
                 <div class="bar-row-label">ÚLTIMO DÍA</div>
                 <div class="bar-track"><div class="bar-fill"
@@ -620,12 +705,13 @@ with tab_pulso:
         for r in ramas
     )
 
-    st.markdown(f"""
-    <div class="interpretation">
-        <div class="interpretation-label">LECTURA EJECUTIVA</div>
-        <div class="interpretation-texto">{narrativa_ct}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    _render_hallazgo_evidencia(
+        hallazgo=narrativa_ct,
+        evidencia_items=[
+            f"{ct.get('n_temas',0)} temas detectados · Estado: {_s(ct.get('estado','—')).upper()}",
+        ] + [f"{safe_text(r.get('tema','—'))}: {_get(r, 'share', default=0):.0f}%" for r in ramas[:5]],
+        interpretacion=safe_text(_get(ct, "explicacion_simple", default="")),
+    )
     _expander_enlaces(ct.get("enlaces_referencia", []))
     if _shares_ct_invalidos:
         st.markdown(
@@ -662,13 +748,21 @@ with tab_pulso:
     mr = b1.get("metricas_rendimiento", {})
     if mr and any(v for v in [mr.get("engagement_rate"), mr.get("ratio_amor_enojo"), mr.get("alcance_estimado")]):
         narrativa_mr = safe_text(_get(mr, "narrativa", default=""))
+        _evidencia_mr = []
+        if mr.get("engagement_rate"):
+            _evidencia_mr.append(f"Engagement: {_n(mr.get('engagement_rate',0)):.1f}%")
+        if mr.get("ratio_amor_enojo"):
+            _evidencia_mr.append(f"Ratio amor/enojo: {_n(mr.get('ratio_amor_enojo',0)):.1f}")
+        if mr.get("reacciones_positivas") or mr.get("reacciones_negativas"):
+            _evidencia_mr.append(f"Reacciones: {_n(mr.get('reacciones_positivas',0)):,.0f} positivas / {_n(mr.get('reacciones_negativas',0)):,.0f} negativas")
+        if mr.get("alcance_estimado"):
+            _evidencia_mr.append(f"Alcance estimado: {_n(mr.get('alcance_estimado',0)):,.0f}")
         if narrativa_mr:
-            st.markdown(f"""
-            <div class="interpretation">
-                <div class="interpretation-label">LECTURA EJECUTIVA</div>
-                <div class="interpretation-texto">{narrativa_mr}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            _render_hallazgo_evidencia(
+                hallazgo=narrativa_mr,
+                evidencia_items=_evidencia_mr or None,
+                interpretacion=safe_text(mr.get("explicacion_simple", "")),
+            )
         _expander_enlaces(mr.get("enlaces_referencia", []))
         st.markdown(f"""
         <p style="font-size:11px;color:var(--fg-muted);margin-top:4px;margin-bottom:10px">
@@ -688,15 +782,14 @@ with tab_pulso:
                 <div style="font-size:13px;color:var(--fg-primary);line-height:1.7">{pfunciona}</div>
             </div>
             """, unsafe_allow_html=True)
-        _card_explicacion_simple(mr.get("explicacion_simple", ""))
     else:
-        st.markdown('<div class="status-info">Métricas de rendimiento no disponibles.</div>', unsafe_allow_html=True)
+        _render_estado_vacio("Métricas de engagement pendientes de generación por pipeline MIPA.")
 
     # ── 06 · Termómetro de Lugares ─────────────────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">06 · Termómetro de Lugares</div></div>', unsafe_allow_html=True)
     termometro_lugares = b1.get("termometro_lugares", [])
     if not termometro_lugares:
-        st.markdown('<div class="status-info">Sin datos de lugares.</div>', unsafe_allow_html=True)
+        _render_estado_vacio("Dato de geolocalización pendiente de generación por pipeline MIPA.")
     else:
         # a) Sort by nivel_tension descending
         sorted_lugares = sorted(termometro_lugares, key=lambda x: _n(x.get("nivel_tension", 0)), reverse=True)
@@ -1016,7 +1109,7 @@ with tab_audiencia:
             """)
             _expander_enlaces(v.get("enlaces_referencia",[]), label="Ver enlaces de esta voz")
     else:
-        st.markdown('<div class="status-info">Sin datos de voces de influencia.</div>', unsafe_allow_html=True)
+        _render_estado_vacio("Análisis de voces de influencia pendiente de generación por pipeline MIPA.")
 
     # ── 10 · Temas Emergentes LDA (EXPANDIDA) ─────────────────────────
     st.markdown('<div class="section-header"><div class="section-title">10 · Temas Emergentes</div></div>', unsafe_allow_html=True)
@@ -1082,7 +1175,7 @@ with tab_audiencia:
             </div>
             """)
     else:
-        st.markdown('<div class="status-info">Mínimo 10 comentarios requeridos para detectar temas emergentes.</div>', unsafe_allow_html=True)
+        _render_estado_vacio("Volumen de comentarios insuficiente para detectar temas emergentes.")
 
 
 # ════════════════════════════════════════════════════════════

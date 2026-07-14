@@ -68,6 +68,22 @@ El catálogo de emociones (`EMOCIONES`) y temas (`TEMAS`) en `dashboard/tema_tax
 
 ---
 
+### RG-7: Catálogo abierto de intención comunicativa
+
+El catálogo de intención comunicativa (`INTENCIONES`) en `dashboard/intencion_taxonomia.py` es un **punto de partida, no un techo**. Las 12 familias (informacion, evaluacion, solicitud, fiscalizacion, participacion, deliberacion, expresion_social, movilizacion, humor, identidad, interaccion, enganoso) están fijas — son la estructura. Las hojas (intenciones específicas) dentro de cada familia son abiertas.
+
+**Regla para el analista:** cuando el texto real no calce en ninguna intención existente, **debe proponer la hoja nueva** en vez de forzarlo a la más parecida. El sistema registra automáticamente la propuesta en `dashboard/taxonomias_pendientes.json` para revisión. No se descarta nada, no se fuerza a un valor por defecto.
+
+**Clasificación dual (A01 §11):** cada comentario puede tener una `intencion_principal` (una sola) y `intenciones_secundarias` (lista de atéste 3). La intención principal es la que define el propósito comunicativo dominante; las secundarias capturan matices (ej. un comentario que critica Y propone solución tiene intención principal "evaluacion" y secundaria "solicitud").
+
+**Cómo proponer:**
+- Intenciones: usar la clave descriptiva en minúsculas, sin espacios (ej. `exigir_transparencia`). Se registra como propuesta pendiente con su familia asociada.
+- Si la familia no es obvia, usar `informacion` como familia por defecto (la más genérica del catálogo).
+
+**Prohibido:** asignar una intención a `no_aplica` solo porque no existe en el catálogo actual. Eso oculta información real sobre qué está haciendo el ciudadano con su comunicación.
+
+---
+
 ## Bloque I — Pulso General
 
 | Sección | Reglas |

@@ -444,6 +444,77 @@ FAMILIAS_LABELS = {
     "diada": "Emociones combinadas", "civica": "Posturas cívicas",
 }
 
+# ---------------------------------------------------------------------------
+# Heurística de familia Plutchik para emociones nuevas.
+#
+# Diccionario de arranque derivado de EMOCIONES (descripciones) y
+# _EMOCION_SINONIMOS. Solo cubre las 8 familias primarias de Plutchik;
+# diada y civica se usan como fallback cuando la heurística no tiene
+# señal suficiente.
+# ---------------------------------------------------------------------------
+_FAMILIA_KEYWORDS = {
+    "joy": [
+        "alegria", "felicidad", "feliz", "contento", "satisfecho", "euforia",
+        "serenidad", "tranquilo", "calma", " paz ", "celebrar", "celebración",
+        "gozo", "regocijo", "bienestar", "placidez",
+    ],
+    "trust": [
+        "confianza", "confío", "respaldo", "apoyo", "aceptación", "acepto",
+        "admiración", "admiro", "elogio", "credibilidad", "fiabilidad",
+        "honestidad", "transparencia",
+    ],
+    "fear": [
+        "miedo", "preocupación", "preocupado", "inquietud", "aprensión",
+        "pánico", "terror", "alarma", "temor", "angustia", "nerviosismo",
+        "incertidumbre",
+    ],
+    "surprise": [
+        "sorpresa", "sorprendido", "asombro", "asombrado", "impacto",
+        "inesperado", "increíble", "imprevisto", "novedad", "descubrimiento",
+    ],
+    "sadness": [
+        "tristeza", "triste", "pena", "dolor", "luto", "duelo", "melancolía",
+        "melancólico", "decepción", "decepcionado", "desilusión", "pesar",
+        "llanto",
+    ],
+    "disgust": [
+        "asco", "repulsión", "desagrado", "rechazo", "indignación",
+        "indignado", "indigna", "vergüenza", "fastidio", "hartazgo",
+        "aburrimiento", "indiferente", "desprecio",
+    ],
+    "anger": [
+        "enojo", "enojado", "rabia", "furioso", "furia", "ira", "iracundo",
+        "molestia", "molesto", "irritación", "irritado", "hostilidad",
+        "agresividad",
+    ],
+    "anticipation": [
+        "interés", "interesado", "curiosidad", "curioso", "expectativa",
+        "espera", "ansiedad", "ansioso", "anticipación", "vigilancia",
+        "atento", "seguimiento",
+    ],
+}
+
+
+def _detectar_familia_emocion(clave, ejemplo=""):
+    """Detecta la familia Plutchik más probable para una emoción nueva.
+
+    Usa coincidencia de palabras clave contra las 8 familias primarias.
+    Solo diada y civica se usan como fallback (no tienen keywords propios
+    porque son categorías compuestas/institucionales, no emociones puras).
+
+    Devuelve el código de familia (joy, trust, ..., anger, anticipation)
+    o "civica" si no hay coincidencia real.
+    """
+    texto = (clave + " " + ejemplo).lower()
+    mejor_familia = None
+    mejor_puntaje = 0
+    for familia, palabras in _FAMILIA_KEYWORDS.items():
+        puntaje = sum(1 for p in palabras if p in texto)
+        if puntaje > mejor_puntaje:
+            mejor_puntaje = puntaje
+            mejor_familia = familia
+    return mejor_familia or "civica"
+
 
 def familia_de(clave_emocion: str) -> str:
     """Devuelve la familia de una emoción (joy, trust, …, civica)."""
@@ -504,7 +575,7 @@ _EMOCION_SINONIMOS = {
 }
 
 
-def normalizar_emocion(emocion, *, estricto=False):
+def normalizar_emocion(emocion, *, estricto=False, familia_sugerida=None):
     """Devuelve una emoción canónica o la clave propuesta (no-canónica).
 
     Acepta None, sinónimos, mayúsculas/espacios.
@@ -517,6 +588,10 @@ def normalizar_emocion(emocion, *, estricto=False):
       EMOCION_DEFAULT.
     - Si estricto es True: lanza ValueError (útil para depuración manual).
     - None devuelve EMOCION_DEFAULT ("calma") siempre.
+
+    ``familia_sugerida`` permite al llamador indicar la familia Plutchik
+    conocida (joy, trust, ..., anger, anticipation) para una emoción nueva.
+    Si no se da, se usa heurística de palabras clave contra las 8 familias.
     """
     if not emocion:
         return EMOCION_DEFAULT
@@ -531,5 +606,6 @@ def normalizar_emocion(emocion, *, estricto=False):
             f"Emoción '{emocion}' no reconocida.  "
             f"Valores válidos: {sorted(EMOCIONES_VALIDAS)}"
         )
-    _registrar_propuesta("emocion", e, "civica", ejemplo=str(emocion))
+    familia = familia_sugerida or _detectar_familia_emocion(e, str(emocion))
+    _registrar_propuesta("emocion", e, familia, ejemplo=str(emocion))
     return e

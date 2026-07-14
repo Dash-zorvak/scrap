@@ -11,6 +11,7 @@ Modulo puro de datos (sqlite + stdlib), sin Streamlit, para que sea verificable
 en CI.
 """
 
+import json
 import sqlite3
 import pandas as pd
 from collections import defaultdict
@@ -26,6 +27,10 @@ from dashboard.tema_taxonomia import (
     normalizar_emocion,
     normalizar_postura,
     remapear,
+)
+from dashboard.intencion_taxonomia import (
+    INTENCIONES_VALIDAS,
+    normalizar_intencion,
 )
 
 TABLA = "tema_aprobaciones"
@@ -81,7 +86,7 @@ def _ids_comentarios_en_periodo(db_path, ini, fin):
 
 def asegurar_tabla(db_path):
     """Crea la tabla de aprobaciones si no existe y la migra si es de una
-    version anterior (agrega la columna 'postura')."""
+    version anterior (agrega columnas postura, emocion, intencion)."""
     conn = _conectar(db_path)
     try:
         conn.execute(
@@ -95,7 +100,10 @@ def asegurar_tabla(db_path):
                 confianza REAL,
                 texto TEXT,
                 estado TEXT DEFAULT 'aprobado',
-                fecha TEXT
+                fecha TEXT,
+                emocion TEXT DEFAULT 'calma',
+                intencion_principal TEXT,
+                intenciones_secundarias TEXT
             )
             """
         )
@@ -109,6 +117,14 @@ def asegurar_tabla(db_path):
             conn.execute(
                 f"ALTER TABLE {TABLA} ADD COLUMN emocion TEXT DEFAULT 'calma'"
             )
+        if "intencion_principal" not in cols:
+            conn.execute(
+                f"ALTER TABLE {TABLA} ADD COLUMN intencion_principal TEXT"
+            )
+        if "intenciones_secundarias" not in cols:
+            conn.execute(
+                f"ALTER TABLE {TABLA} ADD COLUMN intenciones_secundarias TEXT"
+            )
         conn.commit()
     finally:
         conn.close()
@@ -116,7 +132,8 @@ def asegurar_tabla(db_path):
 
 def guardar_aprobacion(db_path, comment_id, tema, texto="",
                        tema_sugerido=None, tono="literal", confianza=None,
-                       postura="neutral", emocion=None):
+                       postura="neutral", emocion=None,
+                       intencion_principal=None, intenciones_secundarias=None):
     """Guarda (o actualiza) la aprobacion de un comentario.
 
     Devuelve True si se guardo. En la aprobacion MANUAL validamos de forma
@@ -129,6 +146,12 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
 
     `emocion` se normaliza con normalizar_emocion(); lanza ValueError si no es
     reconocida.
+
+    `intencion_principal` se normaliza con normalizar_intencion(); lanza
+    ValueError si estricto y no es reconocida.
+
+    `intenciones_secundarias` es una lista de claves de intención secundaria
+    (o None). Se serializa como JSON en la columna intenciones_secundarias.
 
     Nota: a diferencia de remapear() -que degrada lo desconocido a 'no_aplica'
     para tolerar ruido del modelo-, aqui un tema invalido se RECHAZA, porque es
@@ -144,14 +167,22 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
     tema = remapear(tema)
     postura = normalizar_postura(postura)
     emocion = normalizar_emocion(emocion)
+    intencion_p = normalizar_intencion(intencion_principal)
+    intenciones_s = None
+    if intenciones_secundarias:
+        intenciones_s = json.dumps(
+            [normalizar_intencion(i) for i in intenciones_secundarias if i],
+            ensure_ascii=False,
+        )
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:
         conn.execute(
             f"""
             INSERT OR REPLACE INTO {TABLA}
-            (comment_id, tema, tema_sugerido, tono, postura, confianza, texto, estado, fecha, emocion)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado', ?, ?)
+            (comment_id, tema, tema_sugerido, tono, postura, confianza, texto,
+             estado, fecha, emocion, intencion_principal, intenciones_secundarias)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado', ?, ?, ?, ?)
             """,
             (
                 comment_id,
@@ -163,6 +194,8 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
                 (texto or "")[:500],
                 datetime.now(timezone.utc).isoformat(),
                 emocion,
+                intencion_p,
+                intenciones_s,
             ),
         )
         conn.commit()
@@ -183,18 +216,20 @@ def ids_aprobados(db_path):
 
 
 def obtener_aprobaciones(db_path):
-    """Devuelve {comment_id: {tema, tema_sugerido, tono, postura, emocion, confianza, texto, ...}}."""
+    """Devuelve {comment_id: {tema, tema_sugerido, tono, postura, emocion, intencion_principal, ...}}."""
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:
         rows = conn.execute(
             f"SELECT comment_id, tema, tema_sugerido, tono, postura, emocion, confianza, "
-            f"texto, estado, fecha FROM {TABLA}"
+            f"texto, estado, fecha, intencion_principal, intenciones_secundarias "
+            f"FROM {TABLA}"
         ).fetchall()
     finally:
         conn.close()
     salida = {}
-    for cid, tema, sug, tono, postura, emocion, conf, texto, estado, fecha in rows:
+    for (cid, tema, sug, tono, postura, emocion, conf, texto, estado, fecha,
+         intencion_p, intenciones_s) in rows:
         try:
             postura_norm = normalizar_postura(postura)
         except ValueError:
@@ -203,12 +238,20 @@ def obtener_aprobaciones(db_path):
             emocion_norm = normalizar_emocion(emocion)
         except ValueError:
             emocion_norm = EMOCION_DEFAULT
+        intenciones_s_list = []
+        if intenciones_s:
+            try:
+                intenciones_s_list = json.loads(intenciones_s)
+            except (json.JSONDecodeError, TypeError):
+                intenciones_s_list = []
         salida[cid] = {
             "tema": tema,
             "tema_sugerido": sug,
             "tono": tono,
             "postura": postura_norm,
             "emocion": emocion_norm,
+            "intencion_principal": intencion_p,
+            "intenciones_secundarias": intenciones_s_list,
             "confianza": conf,
             "texto": texto,
             "estado": estado,
@@ -223,29 +266,34 @@ def agregar_por_tema(db_path):
     Excluye 'no_aplica'. El porcentaje es sobre el total de comentarios con un
     tema aprobado (no sobre el total analizado). Cada tema se divide ademas por
     POSTURA (apoyo/critica/neutral) para que una critica no se lea como impulso
-    positivo. Se incluye ademas desglose por EMOCION (10 emociones del catalogo).
+    positivo. Se incluye ademas desglose por EMOCION (catálogo Plutchik) y
+    INTENCIÓN (12 familias del modelo A01).
 
     Devuelve una lista de dicts ordenada de mayor a menor doc_count:
     {id, categoria, label, pct, doc_count, ejemplo, apoyo, critica, neutral,
      pct_apoyo, pct_critica, pct_neutral, saldo, ejemplo_critica, emociones,
-     emocion_dominante}.
+     emocion_dominante, intenciones, intencion_dominante}.
     """
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:
         rows = conn.execute(
-            f"SELECT tema, texto, postura, emocion FROM {TABLA} WHERE estado='aprobado'"
+            f"SELECT tema, texto, postura, emocion, intencion_principal "
+            f"FROM {TABLA} WHERE estado='aprobado'"
         ).fetchall()
     finally:
         conn.close()
 
+    from dashboard.intencion_taxonomia import INTENCIONES_VALIDAS
+
     conteo = defaultdict(int)
     posturas = defaultdict(lambda: {"apoyo": 0, "critica": 0, "neutral": 0})
     emociones = defaultdict(lambda: defaultdict(int))
+    intenciones = defaultdict(lambda: defaultdict(int))
     ejemplos = {}
     ejemplos_critica = {}
     total_con_tema = 0
-    for tema, texto, postura, emocion in rows:
+    for tema, texto, postura, emocion, intencion_p in rows:
         if not tema or tema == "no_aplica":
             continue
         try:
@@ -256,9 +304,12 @@ def agregar_por_tema(db_path):
             emo = normalizar_emocion(emocion)
         except ValueError:
             emo = EMOCION_DEFAULT
+        intencion = intencion_p if intencion_p else None
         conteo[tema] += 1
         posturas[tema][post] += 1
         emociones[tema][emo] += 1
+        if intencion:
+            intenciones[tema][intencion] += 1
         total_con_tema += 1
         limpio = " ".join((texto or "").split())
         prev = ejemplos.get(tema)
@@ -290,6 +341,16 @@ def agregar_por_tema(db_path):
             for e in EMOCIONES_VALIDAS
         }
         emo_dominante = max(EMOCIONES_VALIDAS, key=lambda e: emo_counts.get(e, 0)) if emo_counts else "calma"
+        int_counts = intenciones.get(tema, {})
+        int_total = sum(int_counts.values()) or 1
+        int_detalle = {
+            ic: {
+                "count": int_counts.get(ic, 0),
+                "pct": round(int_counts.get(ic, 0) / int_total * 100, 1),
+            }
+            for ic in INTENCIONES_VALIDAS if int_counts.get(ic, 0) > 0
+        }
+        int_dominante = max(int_counts, key=int_counts.get) if int_counts else None
         temas.append({
             "id": i + 1,
             "categoria": tema,
@@ -307,6 +368,8 @@ def agregar_por_tema(db_path):
             "ejemplo_critica": ej_c,
             "emociones": emo_detalle,
             "emocion_dominante": emo_dominante,
+            "intenciones": int_detalle,
+            "intencion_dominante": int_dominante,
         })
     temas.sort(key=lambda x: -x["doc_count"])
     return temas

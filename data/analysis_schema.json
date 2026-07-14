@@ -30,6 +30,7 @@
     },
     "indice_emociones": {
       "_doc": "CATÁLOGO ABIERTO: las claves de emociones son strings libres. Las que aparecen aquí son la semilla (ver dashboard/tema_taxonomia.py EMOCIONES_VALIDAS). Se permiten claves no-canónicas nuevas — cada emoción debe tener un campo 'familia' válido (joy|trust|fear|surprise|sadness|disgust|anger|anticipation|diada|civica). Las claves pct_* usan el mismo patrón: pct_{clave_emocion}. Las propuestas nuevas se registran en dashboard/taxonomias_pendientes.json.",
+      "_doc_intencion": "CATÁLOGO ABIERTO DE INTENCIÓN COMUNICATIVA: 12 familias fijas (informacion, evaluacion, solicitud, fiscalizacion, participacion, deliberacion, expresion_social, movilizacion, humor, identidad, interaccion, enganoso) con semillas de intención (ver dashboard/intencion_taxonomia.py INTENCIONES_VALIDAS). Cada comentario puede tener intencion_principal (una) + intenciones_secundarias (lista). Nuevas intenciones se registran en taxonomias_pendientes.json. Las familias son estructura fija; las hojas dentro de cada familia son abiertas.",
       "reclamo": 0,
       "objecion": 0,
       "satisfaccion": 0,

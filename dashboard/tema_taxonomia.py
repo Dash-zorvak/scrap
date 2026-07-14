@@ -21,7 +21,62 @@ que NO hace falta tocar src/analyzer/topic_detection.py (cuyos tests dependen de
 las claves viejas): el remapeo se aplica en la capa nueva.
 
 Modulo puro (sin dependencias externas), facil de probar.
+
+---
+
+CATALOGO ABIERTO (desde esta enmienda):
+
+EMOCIONES y TEMAS son el punto de partida, no el techo. Cuando el texto real no
+calza en ninguna clave existente, el sistema NO fuerza un valor por defecto ni
+lanza error. En su lugar, registra la propuesta nueva en
+``dashboard/taxonomias_pendientes.json`` con la familia o categoría más cercana
+y devuelve la clave propuesta tal cual (marcada como no-canónica). Las claves
+semilla se mantienen por compatibilidad con datos históricos.
+
+Las familias de emociones (joy, trust, fear, surprise, sadness, disgust, anger,
+anticipation, diada, civica) y los temas englobantes sí quedan fijos — son la
+estructura. Las hojas dentro de cada familia dejan de estar cerradas.
 """
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+_PENDIENTES_PATH = Path(__file__).resolve().parent / "taxonomias_pendientes.json"
+
+
+def _cargar_pendientes():
+    if _PENDIENTES_PATH.exists():
+        with open(_PENDIENTES_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+
+def _guardar_pendientes(lista):
+    with open(_PENDIENTES_PATH, "w", encoding="utf-8") as f:
+        json.dump(lista, f, ensure_ascii=False, indent=2)
+
+
+def _registrar_propuesta(tipo, clave, familia, ejemplo=""):
+    """Registra una propuesta nueva en taxonomias_pendientes.json.
+
+    Evita duplicados: si la misma clave_propuesta + tipo ya está pendiente,
+    no la vuelve a registrar.
+    """
+    pendientes = _cargar_pendientes()
+    for p in pendientes:
+        if p["tipo"] == tipo and p["clave_propuesta"] == clave and p["estado"] == "pendiente":
+            return
+    pendientes.append({
+        "tipo": tipo,
+        "clave_propuesta": clave,
+        "familia_mas_cercana": familia,
+        "ejemplo_texto": ejemplo,
+        "fecha": datetime.now(timezone.utc).isoformat(),
+        "estado": "pendiente",
+    })
+    _guardar_pendientes(pendientes)
+
 
 # clave englobante -> {label legible, desc para el prompt de la IA}
 TEMAS = {
@@ -143,13 +198,18 @@ def remapear(cat):
     - Cadena vacia / None -> "" (sin tema detectado).
     - Clave ya englobante -> se devuelve igual.
     - Clave historica conocida -> su englobante.
-    - Cualquier otra cosa -> "no_aplica".
+    - Cualquier otra cosa -> se propone como clave nueva y se registra en
+      taxonomias_pendientes.json para revision. No se fuerza a 'no_aplica'.
     """
     if not cat:
         return ""
     if cat in CATEGORIAS_VALIDAS:
         return cat
-    return REMAP_LEGACY.get(cat, "no_aplica")
+    remapeada = REMAP_LEGACY.get(cat)
+    if remapeada is not None:
+        return remapeada
+    _registrar_propuesta("tema", cat, "sin_familia", ejemplo=cat)
+    return cat
 
 
 def etiqueta_tema(cat):
@@ -444,12 +504,19 @@ _EMOCION_SINONIMOS = {
 }
 
 
-def normalizar_emocion(emocion):
-    """Devuelve una emoción canónica (31 categorías).
+def normalizar_emocion(emocion, *, estricto=False):
+    """Devuelve una emoción canónica o la clave propuesta (no-canónica).
 
     Acepta None, sinónimos, mayúsculas/espacios.
-    Lanza ValueError si la emoción no es reconocida (H-DS1: sin normalización
-    silenciosa).  None devuelve EMOCION_DEFAULT ("calma").
+
+    - Si la emoción está en EMOCIONES_VALIDAS o en _EMOCION_SINONIMOS, devuelve
+      la clave canónica correspondiente.
+    - Si no está reconocida y estricto es False (por defecto): registra la
+      propuesta en taxonomias_pendientes.json con la familia más cercana y
+      devuelve la clave propuesta tal cual (no-canónica). Nunca fuerza a
+      EMOCION_DEFAULT.
+    - Si estricto es True: lanza ValueError (útil para depuración manual).
+    - None devuelve EMOCION_DEFAULT ("calma") siempre.
     """
     if not emocion:
         return EMOCION_DEFAULT
@@ -459,7 +526,10 @@ def normalizar_emocion(emocion):
     resultado = _EMOCION_SINONIMOS.get(e)
     if resultado is not None:
         return resultado
-    raise ValueError(
-        f"Emoción '{emocion}' no reconocida.  "
-        f"Valores válidos: {sorted(EMOCIONES_VALIDAS)}"
-    )
+    if estricto:
+        raise ValueError(
+            f"Emoción '{emocion}' no reconocida.  "
+            f"Valores válidos: {sorted(EMOCIONES_VALIDAS)}"
+        )
+    _registrar_propuesta("emocion", e, "civica", ejemplo=str(emocion))
+    return e

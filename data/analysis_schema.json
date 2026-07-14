@@ -29,6 +29,7 @@
       "formula_usada": "NSI = (positivos - negativos) / total * 100"
     },
     "indice_emociones": {
+      "_doc": "CATÁLOGO ABIERTO: las claves de emociones son strings libres. Las que aparecen aquí son la semilla (ver dashboard/tema_taxonomia.py EMOCIONES_VALIDAS). Se permiten claves no-canónicas nuevas — cada emoción debe tener un campo 'familia' válido (joy|trust|fear|surprise|sadness|disgust|anger|anticipation|diada|civica). Las claves pct_* usan el mismo patrón: pct_{clave_emocion}. Las propuestas nuevas se registran en dashboard/taxonomias_pendientes.json.",
       "reclamo": 0,
       "objecion": 0,
       "satisfaccion": 0,
@@ -167,6 +168,7 @@
     },
         "termometro_lugares": [
       {
+        "_doc": "CATÁLOGO ABIERTO: las claves pct_* de emociones son strings libres con familia fija. Se permiten claves no-canónicas nuevas además de las semilla (ver dashboard/tema_taxonomia.py). Cada emoción nueva debe tener su campo 'familia' válido.",
         "lugar": "",
         "n_comentarios": 0,
         "tema_dominante": "",
@@ -324,6 +326,7 @@
         "acelerando": false,
         "pct_cambio_semana": 0,
         "indice_emociones": {
+          "_doc": "Catálogo abierto: las claves emocionales son strings libres con familia fija (ver tema_taxonomia.py).",
           "reclamo": 0,
           "objecion": 0,
           "satisfaccion": 0,

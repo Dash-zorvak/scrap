@@ -261,6 +261,11 @@ class LocalStorage:
             logger.error(f"Error reading fb_post {post_id}: {e}")
             return None
 
+    # Campos validos para get_fb_posts_all (excluye post_id que siempre se incluye)
+    _FB_POST_VALID_FIELDS = {
+        c.name for c in FBPost.__table__.columns
+    } - {"post_id"}
+
     def get_fb_posts_all(self, fields: str = None, limit: int = 5000) -> list:
         try:
             s = self._session()
@@ -274,12 +279,18 @@ class LocalStorage:
                 d = {"post_id": r.post_id}
                 if fields:
                     flds = [f.strip() for f in fields.split(",")]
-                    if "views_count" in flds:
-                        d["views_count"] = r.views_count
-                    if "comments_count" in flds:
-                        d["comments_count"] = r.comments_count
+                    invalidos = set(flds) - self._FB_POST_VALID_FIELDS
+                    if invalidos:
+                        raise ValueError(
+                            f"Campos no validos en get_fb_posts_all: {sorted(invalidos)}. "
+                            f"Campos validos: {sorted(self._FB_POST_VALID_FIELDS)}"
+                        )
+                    for fld in flds:
+                        d[fld] = getattr(r, fld, None)
                 result.append(d)
             return result
+        except ValueError:
+            raise
         except Exception as e:
             logger.error(f"Error reading all fb_posts: {e}")
             return []

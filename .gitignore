@@ -75,3 +75,4 @@ data/_analysis_backups/
 
 # # Baseline backup de DBs (generado por plan maestro fase 0)
 data/_baseline_backup/
+*.egg-info/

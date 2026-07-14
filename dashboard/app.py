@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 
-from dashboard.html_safety import safe_text
+from html_safety import safe_text
 
 _DASHBOARD_DIR = _os.path.dirname(_os.path.abspath(__file__))
 if _DASHBOARD_DIR not in _sys.path:
@@ -30,80 +30,18 @@ ANALYSIS_PATH = _os.path.join(_BASE, "data", "analysis.json")
 
 
 def _validar_analysis(data: dict) -> list[str]:
-    """Valida consistencia matemática y estructural de analysis.json.
+    """Valida analysis.json usando analytics/schema_validator.
 
-    Retorna lista de strings con advertencias. Lista vacía = sin problemas.
-    No lanza excepciones — el dashboard siempre renderiza aunque haya advertencias.
+    Retorna lista de strings con advertencias legibles para el usuario final.
+    NO expone nombres de campo, códigos V0X ni tecnicismos.
     """
-    advertencias = []
-
-    # V01: Voces de influencia — engagement vs submétricas
-    for voz in data.get("bloque2", {}).get("voces_influencia", []):
-        eng = voz.get("engagement", 0) or 0
-        sum_sub = (
-            (voz.get("reacciones_totales") or 0)
-            + (voz.get("comentarios_totales") or 0)
-            + (voz.get("compartidos_totales") or 0)
-        )
-        if eng > 0 and sum_sub == 0:
-            pagina = voz.get("pagina", "desconocida")
-            advertencias.append(
-                f"DATOS: '{pagina}' tiene engagement={eng} pero "
-                f"reacciones+comentarios+compartidos=0. Corregir en analysis.json."
-            )
-
-    # V02: Concentración temática — shares deben sumar 100
-    ramas = data.get("bloque1", {}).get("concentracion_tematica", {}).get("ramas", [])
-    if ramas and isinstance(ramas, list):
-        suma = sum(
-            r.get("share", 0) for r in ramas
-            if isinstance(r, dict) and isinstance(r.get("share"), (int, float))
-        )
-        if abs(suma - 100) > 1.5:
-            advertencias.append(
-                f"DATOS: shares de concentración temática suman {suma:.1f}% "
-                f"(esperado 100%). Corregir en analysis.json."
-            )
-
-    # V03: Puntos de fricción — emocion_dominante vacía con n_negativos > 0
-    for fr in data.get("bloque3", {}).get("puntos_friccion", []):
-        if isinstance(fr, dict):
-            n_neg = fr.get("n_negativos", 0) or 0
-            emo = (fr.get("emocion_dominante") or "").strip()
-            if n_neg > 0 and not emo:
-                tema = fr.get("tema", "desconocido")
-                advertencias.append(
-                    f"DATOS: Punto de fricción '{tema}' tiene n_negativos={n_neg} "
-                    f"pero emocion_dominante está vacía. Corregir en analysis.json."
-                )
-
-    # V04: alertas_cambridge — descripcion debe ser string, no dict
-    for alerta in data.get("bloque3", {}).get("nivel_alerta", {}).get("alertas_cambridge", []):
-        if isinstance(alerta, dict):
-            desc = alerta.get("descripcion")
-            if isinstance(desc, dict):
-                tipo = alerta.get("tipo", "desconocido")
-                advertencias.append(
-                    f"ESTRUCTURA: Alerta '{tipo}' tiene campo 'descripcion' como "
-                    f"dict (metadata del schema), no como string. Corregir en analysis.json."
-                )
-
-    # V05: Secciones de bloque4 deben ser dict con 'narrativa', no string plano
-    secciones_b4 = [
-        "eco_historico", "leccion_aprendida", "brecha_percepcion_realidad",
-        "contexto_no_visible", "correlacion_contenido_reaccion",
-        "comparativa_sectorial", "proyeccion_escenario", "recomendacion_estrategica",
-    ]
-    b4 = data.get("bloque4", {})
-    for sec in secciones_b4:
-        val = b4.get(sec)
-        if val is not None and not isinstance(val, dict):
-            advertencias.append(
-                f"ESTRUCTURA: bloque4.{sec} debe ser dict con campo 'narrativa', "
-                f"no {type(val).__name__}. Corregir en analysis.json."
-            )
-
-    return advertencias
+    try:
+        from analytics.schema_validator import validar
+        resultado = validar(data)
+        return [e.mensaje_humano for e in resultado.errores
+                if e.severidad == "advertencia"]
+    except ImportError:
+        return []
 
 
 def _cargar_analysis():
@@ -192,6 +130,9 @@ st.markdown(CSS_OVERRIDE, unsafe_allow_html=True)
 
 from src.config import ensure_dirs
 ensure_dirs()
+
+from config.logging_config import configurar_logging
+configurar_logging()
 
 # ── Cargar datos ──────────────────────────────────────────────────────
 data, _advertencias_json = _cargar_analysis()
@@ -366,7 +307,8 @@ if _advertencias_json:
     for _adv in _advertencias_json:
         st.sidebar.markdown(
             f'<div style="font-family:var(--font-mono);font-size:9px;'
-            f'color:var(--amber);line-height:1.6;margin-bottom:4px">{_adv}</div>',
+            f'color:var(--amber);line-height:1.6;margin-bottom:4px">'
+            f'{safe_text(_adv)}</div>',
             unsafe_allow_html=True,
         )
 

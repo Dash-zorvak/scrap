@@ -56,6 +56,10 @@ tests/                    # Suite de tests
 Ver `data/analysis_schema.json` para la estructura completa con todas las
 claves requeridas por el dashboard.
 
+**Nota sobre `idioms_sv_global.json`:** este archivo es material de referencia
+para el proceso externo de análisis con Claude (fuera de este repositorio);
+no es consumido por ningún módulo Python del repo.
+
 Los 4 bloques corresponden a:
 - **bloque1**: Pulso General (clima narrativo, intensidad, concentración temática)
 - **bloque2**: Segmentación de Audiencia (mapa de públicos, polarización, voces, temas LDA)

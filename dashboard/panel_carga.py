@@ -30,6 +30,9 @@ _cfg = Config()
 FACEBOOK_DB = _cfg.FACEBOOK_DB
 ensure_dirs(_cfg)
 
+from config.logging_config import configurar_logging
+configurar_logging()
+
 # ─── Estado de sesión ────────────────
 if "lote_ingreso" not in st.session_state:
     st.session_state["lote_ingreso"] = []

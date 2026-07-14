@@ -197,11 +197,12 @@ def guardar_lote(lote: list, progreso_cb=None) -> dict:
 
                     # Persistir las capturas subidas para poder incrustar la
                     # publicacion en el informe PDF de la medalla mas adelante.
-                    # TODO: al hacer upsert (post ya existe), limpiar capturas
-                    # anteriores antes de guardar las nuevas para evitar acumulación.
-                    # Ver: dashboard/capturas_store.borrar_capturas()
+                    # Al hacer upsert (post ya existe), limpiar capturas
+                    # anteriores antes de guardar las nuevas.
                     try:
-                        from dashboard.capturas_store import guardar_capturas
+                        from dashboard.capturas_store import guardar_capturas, borrar_capturas
+                        if store.post_exists(post_id):
+                            borrar_capturas(post_id)
                         guardar_capturas(post_id, item.get("imagenes"))
                     except Exception:
                         pass

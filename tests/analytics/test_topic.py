@@ -269,3 +269,21 @@ def test_deduplicacion_propuesta_tema():
     cielo_entries = [e for e in data if e["clave_propuesta"] == "tema_nuevo_cielo"]
     assert len(cielo_entries) == 1
     assert cielo_entries[0]["n_ocurrencias"] == 2
+
+
+# ── 20.1: Clave propuesta determinista (mismo texto → misma clave) ──
+
+def test_propuesta_tema_determinista():
+    """classify_topic() con el mismo texto sin match siempre devuelve la misma clave."""
+    textos = [
+        "El cielo está hermoso hoy en la mañana",
+        "Las estrellas brillan muchísimo esta noche",
+        "Mi gato duerme todo el día en el sofá",
+    ]
+    for texto in textos:
+        r1 = classify_topic(texto)
+        r2 = classify_topic(texto)
+        assert r1.tema == r2.tema, (
+            f"Clave no determinista para '{texto}': '{r1.tema}' vs '{r2.tema}'"
+        )
+        assert "tema_nuevo_" in r1.tema

@@ -178,9 +178,10 @@ def es_propuesta_zona(text: str) -> str | None:
     }
 
     # Buscar patrones "en <zona>", "de <zona>", "por <zona>"
+    # \b antes y después de la preposición evita matchear "de" dentro de "puede", etc.
     import re
     patrones = re.findall(
-        r"(?:en|de|por|desde|hasta|hacia) ([a-záéíóúñ]{3,}(?:\s+[a-záéíóúñ]{3,}){0,2})",
+        r"\b(?:en|de|por|desde|hasta|hacia)\b ([a-záéíóúñ]{3,}(?:\s+[a-záéíóúñ]{3,}){0,2})",
         (text or "").lower().strip(),
     )
 

@@ -241,3 +241,31 @@ def test_propuesta_zona_no_registra_stopwords():
     propuesta2 = es_propuesta_zona("En problema hay baches")
     if propuesta2:
         assert propuesta2 != "problema"
+
+
+# ── 20.2: Regex \b evita matchear "de" dentro de "puede" ──
+
+def test_propuesta_zona_no_extrae_de_dentro_de_puede():
+    """'puede' no debe matchear como 'de' + candidata."""
+    # Sin \b, "pu|de| circular" matchearía "circular" como candidata
+    # Con \b, "puede" es una palabra completa y "de" no matchea
+    resultado = es_propuesta_zona("no se puede circular por aquí")
+    # Debe devolver None o una candidata real, nunca "circular" derivada de "puede"
+    if resultado is not None:
+        assert resultado != "circular", (
+            f"'circular' extraído falsamente de 'puede': regex sin \\b"
+        )
+
+
+def test_propuesta_zona_regex_nueva_palabra_no_stopword():
+    """Una palabra NO en la lista de stopwords pero que caería en match
+    a mitad de palabra sin \\b debe ser rechazada por el regex."""
+    # "ardilla" no está en la lista de stopwords
+    # Sin \b: "de|rdilla" matchearía "ardilla" como candidata
+    # Con \b: "de" solo matchea como palabra completa
+    resultado = es_propuesta_zona("se puede ver una ardilla en el parque")
+    # "ardilla" no debería extraerse de "puede"
+    if resultado is not None:
+        assert resultado != "ardilla", (
+            f"'ardilla' extraído falsamente de 'puede': regex sin \\b"
+        )

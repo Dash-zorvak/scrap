@@ -231,8 +231,10 @@ def classify_topic(text: str) -> TopicResult:
 
         # Texto con contenido real pero sin match → propuesta abierta.
         # La propuesta se devuelve como clave, no se fuerza a 'no_aplica'.
+        # Clave determinista: sorted(tokens)[0] no depende del orden de iteración del set.
         from analytics._propuestas import _registrar_propuesta
-        propuesta_key = f"tema_nuevo_{tokens.pop() if tokens else 'desconocido'}"
+        palabra_rep = sorted(tokens)[0] if tokens else "desconocido"
+        propuesta_key = f"tema_nuevo_{palabra_rep}"
         _registrar_propuesta(
             clave_propuesta=propuesta_key,
             ejemplo_texto=text[:200],

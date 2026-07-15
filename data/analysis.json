@@ -1,0 +1,354 @@
+{
+  "meta": {
+    "periodo": "2026-07",
+    "fecha_datos_hasta": "2026-07-14",
+    "generado_en": "2026-07-15T07:28:13.442443+00:00",
+    "plataforma": "multicanal",
+    "total_posts_analizados": 11.0,
+    "total_comentarios_analizados": 69,
+    "total_reacciones_sumadas": 1457.0,
+    "total_impresiones_vistas": 57589.0,
+    "enlaces_analizados": []
+  },
+  "bloque1": {
+    "clima_narrativo": {
+      "tono_dominante": "neutral",
+      "pct_favorable": 1.4,
+      "pct_neutral": 79.7,
+      "pct_critico": 18.8,
+      "n_total_comentarios": 69,
+      "tono_score_hoy": -17.4,
+      "tono_score_ayer": 0.0,
+      "tendencia": -17.4,
+      "etiqueta_tendencia": "empeorando",
+      "narrativa": "De 69 comentarios del período, 1.4% son favorables, 79.7% neutros y 18.8% críticos — saldo neto de −17.4 puntos sobre 100 (−17.4 pts respecto al período anterior, que registraba 0). Obras y servicios públicos concentra el 100% de los comentarios críticos (28 comentarios negativos de 69 totales). Conclusión: el período abre con saldo fuertemente negativo y sin contrapeso favorable — un solo punto de malla en obras arrastra todo el balance hacia la crítica.\n= OBRAS HUNDE EL SALDO",
+      "enlaces_referencia": [],
+      "formula_usada": "NSI = (positivos - negativos) / total * 100"
+    },
+    "indice_emociones": {
+      "emocion_dominante": "furia",
+      "narrativa": "La emoción dominante del período es furia, empatada con repulsión (ambas en 5.8% de los comentarios), seguida de preocupación y expectativa (4.3% cada una). La furia y la repulsión juntas superan en peso a cualquier señal positiva: confianza alcanza solo 1.4% y amor cívico 2.9%. El patrón de palabras cívicas emergentes confirma el registro: los ciudadanos hablan de baches reportados desde enero, de gasto sin rendición de cuentas y de robos, lo que explica la concentración emocional en el extremo negativo del espectro. Conclusión: el estado emocional de la audiencia es de rechazo activo, no de simple indiferencia — la furia está articulada en reclamos concretos.\n= FURIA CON NOMBRE Y APELLIDO",
+      "enlaces_referencia": [],
+      "preocupacion": 4.3,
+      "desagrado": 0.0,
+      "amor_civico": 2.9,
+      "melancolia": 0.0,
+      "alegria": 0.0,
+      "sorpresa": 0.0,
+      "furia": 5.8,
+      "expectativa": 4.3,
+      "objecion": 0.0,
+      "calma": 0.0,
+      "ironia": 0.0,
+      "remordimiento": 0.0,
+      "optimismo": 0.0,
+      "aburrimiento": 0.0,
+      "dolor": 0.0,
+      "reclamo": 0.0,
+      "desprecio": 0.0,
+      "sumision": 0.0,
+      "aceptacion": 2.9,
+      "satisfaccion": 0.0,
+      "serenidad": 0.0,
+      "admiracion": 0.0,
+      "euforia": 0.0,
+      "tristeza": 0.0,
+      "fastidio": 0.0,
+      "repulsion": 5.8,
+      "terror": 2.9,
+      "enojo": 0.0,
+      "distraccion": 0.0,
+      "asombro_temeroso": 0.0,
+      "asombro": 0.0,
+      "agresividad": 0.0,
+      "aprension": 0.0,
+      "reconocimiento": 0.0,
+      "interes": 0.0,
+      "vigilancia": 0.0,
+      "confianza": 1.4,
+      "desaprobacion": 0.0,
+      "civica_nueva_cada": 2.9,
+      "civica_nueva_varios": 1.4,
+      "civica_nueva_llevo": 4.3,
+      "civica_nueva_otra": 4.3,
+      "civica_nueva_pago": 1.4,
+      "civica_nueva_hijos": 2.9,
+      "civica_nueva_llevamos": 1.4,
+      "civica_nueva_restablecieron": 1.4,
+      "civica_nueva_tenemos": 2.9,
+      "civica_nueva_gastan": 2.9,
+      "civica_nueva_cuanto": 4.3,
+      "civica_nueva_encima": 2.9,
+      "civica_nueva_desorden": 1.4,
+      "civica_nueva_hora": 1.4,
+      "civica_nueva_perdimos": 2.9,
+      "civica_nueva_pagamos": 1.4,
+      "civica_nueva_paso": 1.4,
+      "civica_nueva_inseguridad": 1.4,
+      "civica_nueva_meten": 4.3,
+      "civica_nueva_reportamos": 2.9,
+      "civica_nueva_tres": 4.3,
+      "civica_nueva_puro": 4.3,
+      "civica_nueva_visto": 1.4,
+      "civica_nueva_operativos": 2.9,
+      "civica_nueva_solo": 2.9,
+      "civica_nueva_robaron": 2.9
+    },
+    "intensidad": {
+      "vol_hoy": 69,
+      "promedio_semanal": 69,
+      "pct_diferencia": 0.0,
+      "narrativa": "El volumen del período es de 69 comentarios, idéntico al promedio semanal (diferencia: 0.0%). No hay pico ni caída atípica — la conversación corre a ritmo estable. Con un solo canal activo (Obras y servicios públicos) y 11 publicaciones analizadas, la ausencia de variación impide identificar un detonador específico de actividad. Conclusión: volumen estable no significa ausencia de riesgo — la negatividad de este período proviene de una base sostenida, no de un pico puntual.\n= NEGATIVIDAD CONSTANTE SIN PICO",
+      "enlaces_referencia": []
+    },
+    "concentracion_tematica": {
+      "ramas": [
+        {
+          "tema": "obras_servicios",
+          "share": 100.0,
+          "emocion_dominante": "serenidad"
+        }
+      ],
+      "hhi": 1.0,
+      "nivel": "dominado",
+      "top_tema": "obras_servicios",
+      "n_temas": 1,
+      "narrativa": "La conversación del período está completamente dominada por un único tema: obras y servicios públicos (100% del total, índice de concentración máximo de 1.0 sobre 1). No existe dispersión temática — todos los 69 comentarios analizados apuntan al mismo foco. Esta concentración extrema es una señal de alerta operativa: cualquier crisis o escalada en este tema no tiene competencia narrativa que la amortigüe. Conclusión: el monocultivo temático en obras expone al municipio — si la percepción en este tema se deteriora, no hay otro eje de conversación que estabilice el balance.\n= UN TEMA, CERO AMORTIGUADORES",
+      "enlaces_referencia": [],
+      "formula_usada": "HHI = Σ(share_i²) donde share_i = n_tema_i / total_temas"
+    },
+    "pulso_iq": {
+      "valor": 50.83,
+      "cuadrante": "LIDERAZGO",
+      "componentes": {
+        "fb_aprobacion": 50.0,
+        "fb_conexion": 96.51,
+        "fb_tranquilidad": 56.62,
+        "fb_diversidad_temas": 0.0,
+        "fb_presencia_zonas": 0.0,
+        "fb_consistencia": 50.0,
+        "fb_atencion": 100.0,
+        "tk_aprobacion": 50.0,
+        "tk_conexion": 49.77,
+        "tk_tranquilidad": 100.0,
+        "tk_diversidad_temas": 0.0,
+        "tk_presencia_zonas": 0.0,
+        "tk_consistencia": 50.0,
+        "tk_atencion": 94.0
+      },
+      "narrativa": "El índice de pulso del período alcanza 50.83 sobre 100, posicionado en el cuadrante de Liderazgo. El componente más sólido es la atención en Facebook (100.0) y la conexión en Facebook (96.51), lo que indica que el contenido llega y genera respuesta. Sin embargo, la diversidad de temas es 0.0 en ambas plataformas y la presencia por zonas también es 0.0 — dos vectores completamente apagados. En TikTok la tranquilidad es perfecta (100.0) pero la conexión es apenas 49.77. Conclusión: el municipio mantiene atención alta pero opera con alcance temático y territorial mínimo — está conectado con quienes ya lo siguen, pero no está expandiendo conversación hacia nuevas zonas ni temas.\n= CONECTADO PERO SIN EXPANSIÓN",
+      "enlaces_referencia": []
+    },
+    "metricas_rendimiento": {
+      "engagement_rate": 3.48,
+      "engagement_rate_formula": "ER = (reacciones + comentarios + compartidos) / vistas * 100",
+      "engagementBasis": "ponderado_volumen",
+      "alcance_estimado": 57589.0,
+      "reacciones_positivas": 352.0,
+      "reacciones_negativas": 282.0,
+      "reacciones_positivas_pct": 55.5,
+      "reacciones_negativas_pct": 44.5,
+      "ratio_amor_enojo": 1.25,
+      "ratio_amor_enojo_formula": "R = (likes + loves + cares) / (angrys + sads + hahas)",
+      "net_sentiment_reacciones": 0.1104,
+      "controversy_reacciones": 0.4448,
+      "effectiveness_reacciones": 0.5552,
+      "aprobacion_pct_reacciones": 55.5,
+      "rechazo_pct_reacciones": 44.5,
+      "porque_funciona": "El contenido de obras y servicios genera participación precisamente porque toca un dolor cotidiano de la ciudadanía — los baches y el mantenimiento vial son experiencias diarias verificables. La audiencia reacciona porque puede constatar con sus propios ojos si lo que se publica corresponde a su realidad. Esa misma cercanía con lo cotidiano es lo que convierte cada publicación en un punto de fiscalización, no solo de información.",
+      "narrativa": "Con 57,589 impresiones y una tasa de participación de 3.48%, el contenido genera reacción activa. De 1,457 reacciones totales, 352 son positivas (55.5%) y 282 negativas (44.5%), con una relación positivo-negativo de 1.25 — estrecha. El nivel de controversia en reacciones es 0.4448, lo que indica que casi la mitad de las reacciones expresan desacuerdo o malestar. Conclusión: el contenido tiene alcance real pero la audiencia está dividida casi al medio en reacciones — una publicación de obras que acumula más del 44% de reacciones negativas no puede considerarse exitosa.\n= ALCANCE REAL, APROBACIÓN FRÁGIL",
+      "enlaces_referencia": []
+    }
+  },
+  "bloque2": {
+    "voces_influencia": [
+      {
+        "pagina": "Obras y servicios públicos",
+        "postura": "neutral",
+        "engagement": 690,
+        "reacciones_totales": 185,
+        "comentarios_totales": 69,
+        "compartidos_totales": 56,
+        "narrativa": "La única fuente activa del período es la página Obras y servicios públicos, con postura neutral y 690 unidades de participación totales (185 reacciones + 69 comentarios + 56 compartidos). Esta página concentra el 100% de la conversación analizada — no existe voz alternativa que module o equilibre el relato. Con 11 publicaciones en el período, el promedio de participación por publicación es 62.7 unidades. Conclusión: la ausencia de otras voces institucionales deja el campo narrativo completamente expuesto — si la página de Obras falla en gestionar la crítica, no hay respaldo comunicacional.\n= UNA VOZ, NINGÚN RESPALDO",
+        "enlaces_referencia": []
+      }
+    ],
+    "polarizacion": {
+      "indice": 0.138,
+      "nivel": "confrontacion",
+      "narrativa": "El índice de confrontación del período es 0.138, clasificado en nivel confrontación. La brecha entre simpatizantes (1.4%) y críticos (18.8%) es de 17.4 puntos porcentuales — la audiencia no está polarizada entre dos bandos iguales sino claramente inclinada hacia la crítica. La masa neutral (79.7%) actúa como colchón que atenúa la confrontación directa, pero no resuelve el desequilibrio de fondo. Una limitación metodológica de medir solo texto público es que parte de la crítica real puede expresarse más en reacciones (44.5% negativas) que en comentarios de texto. Conclusión: la confrontación es asimétrica — casi todo el peso está del lado crítico, con apoyo explícito casi inexistente.\n= CRÍTICA SIN CONTRAPESO",
+      "enlaces_referencia": [],
+      "formula_usada": "PI = |pct_simpatizantes - pct_criticos| / 100"
+    },
+    "temas_emergentes_lda": [
+      {
+        "tema": "sigue igual",
+        "n_comentarios": 4,
+        "tendencia": "nuevo",
+        "acelerando": false,
+        "pct_cambio_semana": 4.0,
+        "narrativa": "Los bigramas y trigramas más frecuentes del período dibujan un patrón narrativo claro y consistente: 'sigue igual' (4 comentarios), 'llevo reportando', 'reportando bache', 'bache enero', 'enero siguen' (3 cada uno) señalan una queja crónica — baches reportados desde enero que no han sido atendidos. El segundo clúster — 'cuanto costo', 'costo gasto', 'gasto nadie', 'nadie rinde', 'rinde cuentas' (3 cada uno) — articula una demanda de transparencia sobre el gasto en obras. Todos los temas emergen por primera vez en el registro (tendencia 'nuevo'), lo que indica que el sistema no tiene historial previo con qué comparar, pero la cadena narrativa es coherente y no aislada. Conclusión: los ciudadanos conectan dos agravios en un solo relato — 'reporté el bache desde enero y sigue ahí, ¿en qué gastaron el presupuesto?'\n= BACHE VIEJO, CUENTA NUEVA"
+      },
+      {
+        "tema": "llevo reportando",
+        "n_comentarios": 3,
+        "tendencia": "nuevo",
+        "acelerando": false,
+        "pct_cambio_semana": 3.0,
+        "narrativa": "Tres comentarios contienen 'llevo reportando', que conecta la frustración con un reporte previo no atendido. El ciudadano no solo señala el problema — indica que ya lo señaló antes. Conclusión: hay deuda de atención pendiente con al menos 3 usuarios activos.\n= REPORTE IGNORADO"
+      },
+      {
+        "tema": "reportando bache",
+        "n_comentarios": 3,
+        "tendencia": "nuevo",
+        "acelerando": false,
+        "pct_cambio_semana": 3.0,
+        "narrativa": "Tres comentarios vinculan el acto de reportar con el objeto del reclamo (bache). El bigrama confirma que el canal de reportes existe en la percepción ciudadana pero no cierra el ciclo. Conclusión: la audiencia usa el canal de reporte — el problema es la respuesta.\n= CANAL USADO, CICLO ABIERTO"
+      },
+      {
+        "tema": "bache enero",
+        "n_comentarios": 3,
+        "tendencia": "nuevo",
+        "acelerando": false,
+        "pct_cambio_semana": 3.0,
+        "narrativa": "Tres comentarios anclan el daño vial a enero como fecha de origen. En julio, el reclamo lleva al menos 6 meses activo sin resolución visible. Conclusión: el bache de enero es el símbolo concreto del incumplimiento del período.\n= SEIS MESES SIN PARCHAR"
+      },
+      {
+        "tema": "enero siguen",
+        "n_comentarios": 3,
+        "tendencia": "nuevo",
+        "acelerando": false,
+        "pct_cambio_semana": 3.0,
+        "narrativa": "Tres comentarios articulan la continuidad del problema desde enero hasta la fecha del análisis (julio). El bigrama es la confirmación temporal más directa del rezago en atención. Conclusión: el 'siguen' en julio apunta directamente al 'enero' — el rezago es datable.\n= REZAGO DATABLE"
+      },
+      {
+        "tema": "cuanto costo",
+        "n_comentarios": 3,
+        "tendencia": "nuevo",
+        "acelerando": false,
+        "pct_cambio_semana": 3.0,
+        "narrativa": "Tres comentarios preguntan por el costo de las obras, abriendo el segundo eje narrativo del período: la fiscalización del gasto. Conclusión: la ciudadanía conecta la inversión anunciada con los resultados no visibles.\n= GASTO SIN EVIDENCIA"
+      },
+      {
+        "tema": "costo gasto",
+        "n_comentarios": 3,
+        "tendencia": "nuevo",
+        "acelerando": false,
+        "pct_cambio_semana": 3.0,
+        "narrativa": "Tres comentarios articulan 'costo' y 'gasto' en continuidad, reforzando la demanda de transparencia financiera sobre las obras. Conclusión: la pregunta no es solo '¿cuánto costó?' sino '¿en qué se gastó lo que costó?'\n= TRANSPARENCIA EXIGIDA"
+      },
+      {
+        "tema": "gasto nadie",
+        "n_comentarios": 3,
+        "tendencia": "nuevo",
+        "acelerando": false,
+        "pct_cambio_semana": 3.0,
+        "narrativa": "Tres comentarios vinculan el gasto con la ausencia de responsabilidad — 'nadie' es el sujeto implícito que debería rendir cuentas. Conclusión: la percepción de impunidad en el gasto es tan fuerte como la queja sobre el bache mismo.\n= NADIE RESPONDE"
+      },
+      {
+        "tema": "nadie rinde",
+        "n_comentarios": 3,
+        "tendencia": "nuevo",
+        "acelerando": false,
+        "pct_cambio_semana": 3.0,
+        "narrativa": "Tres comentarios forman parte de la cadena narrativa que culmina en 'rinde cuentas'. El bigrama 'nadie rinde' es el penúltimo eslabón de un relato articulado de fiscalización ciudadana. Conclusión: la demanda de rendición de cuentas está estructurada, no es un comentario aislado.\n= ESTRUCTURA DE RECLAMO"
+      },
+      {
+        "tema": "rinde cuentas",
+        "n_comentarios": 3,
+        "tendencia": "nuevo",
+        "acelerando": false,
+        "pct_cambio_semana": 3.0,
+        "narrativa": "Tres comentarios culminan la cadena narrativa del período con la frase más explícita de exigencia institucional. 'Rinde cuentas' es la demanda articulada que resume el estado emocional del período. Conclusión: el reclamo de rendición de cuentas es el mensaje más organizado que la audiencia envía en este ciclo.\n= RENDICIÓN DE CUENTAS EXIGIDA"
+      }
+    ]
+  },
+  "bloque3": {
+    "puntos_friccion": [
+      {
+        "tema": "obras_servicios",
+        "zona": "",
+        "n_negativos": 28,
+        "n_comentarios_total": 69,
+        "pct_del_total": 40.6,
+        "emocion_dominante": "serenidad",
+        "citas_moderadas": [],
+        "narrativa": "El único punto de fricción activo del período es obras y servicios públicos, con 28 comentarios negativos de 69 totales (40.6% del total de la conversación). No se detectó zona geográfica específica en los textos analizados. La emoción dominante registrada por el sistema es serenidad, lo que contrasta con los datos cuantitativos (28 negativos, furia como emoción dominante en el índice emocional global); esta discrepancia sugiere que la clasificación de emoción por punto de fricción puede requerir revisión en el siguiente ciclo. Conclusión: cuatro de cada diez comentarios del período expresan malestar en el único tema activo — la fricción no es marginal sino estructural en este período.\n= FRICCIÓN EN EL NÚCLEO",
+        "enlaces_relacionados": []
+      }
+    ],
+    "autenticidad": {
+      "pct_organico": 100.0,
+      "pct_coordinado": 0.0,
+      "n_duplicados": 0,
+      "narrativa": "El 100% de los 69 comentarios analizados son orgánicos — no se detectaron mensajes duplicados ni patrones de coordinación (0 duplicados, 0% coordinado). La conversación crítica sobre baches y rendición de cuentas nace de ciudadanos individuales expresando experiencias propias, no de campaña organizada. Conclusión: la negatividad de este período no es artificial ni amplificada — es demanda ciudadana genuina, lo que le da mayor peso político y mayor persistencia potencial.\n= CRÍTICA ORGÁNICA, PESO REAL",
+      "enlaces_referencia": [],
+      "formula_usada": "% coordinado = n_mensajes_duplicados_o_similares / total_comentarios * 100"
+    },
+    "velocidad_propagacion": {
+      "proyeccion_24h": "",
+      "tendencia_dias": [],
+      "narrativa": "No hay datos de tendencia temporal por días en este período (tendencia_dias vacía) y sin período previo no es posible calcular aceleración o desaceleración por tema. El único tema activo es obras y servicios públicos; los bigramas 'sigue igual' y 'llevo reportando' sugieren que esta conversación lleva semanas activa, aunque el sistema solo captura el período actual. Sin proyección de 24 horas calculable desde los datos disponibles, el riesgo de escalada no puede cuantificarse con la información del período. Conclusión: la ausencia de datos históricos limita el pronóstico, pero el patrón de queja crónica ('desde enero') indica que el tema tiene permanencia, no es un pico puntual.\n= QUEJA CRÓNICA SIN HISTORIAL",
+      "enlaces_referencia": [],
+      "temas_acelerando": [],
+      "temas_desacelerando": [],
+      "formula_usada": "Velocidad = Δcomentarios / Δtiempo; proyección = tendencia_lineal últimas 72h"
+    },
+    "nivel_alerta": {
+      "semaforo": "rojo",
+      "indice_riesgo": 100,
+      "pct_negativos": 18.8,
+      "indice_enojo_reacciones": 28.3,
+      "balance_confrontacion": 0.4448,
+      "n_temas_friccion": 1,
+      "tema_principal": "obras_servicios",
+      "emocion_principal": "serenidad",
+      "alertas_cambridge": [
+        {
+          "tipo": "ZDI",
+          "descripcion": "Zona con alta negatividad: 4700.0% negativos (umbral: 25%, posts zona: 6)",
+          "enlaces_referencia": []
+        }
+      ],
+      "narrativa": "El semáforo del período es rojo con índice de riesgo en su valor máximo (100). Los tres factores que lo determinan son: 18.8% de comentarios críticos (sobre umbral de 25% en la alerta ZDI detectada en zona con 6 posts), 28.3% de índice de enojo en reacciones y un balance de controversia de 0.4448 — casi la mitad del total de reacciones expresando rechazo. La alerta ZDI señala concentración de negatividad extrema (4,700% sobre umbral base) en un subconjunto de 6 publicaciones del tema obras. Conclusión: el máximo riesgo no viene de un incidente aislado sino de la acumulación de negatividad en el único tema activo — sin dispersión temática, la contención es imposible sin acción directa sobre obras.\n= RIESGO MÁXIMO EN OBRAS",
+      "enlaces_referencia": [],
+      "formula_riesgo": "RR = clamp((max_topic_controversy * 10 * 0.50 + nsi_deviation * 0.50) * vol_factor, 0, 1)"
+    }
+  },
+  "bloque4": {
+    "eco_historico": {
+      "narrativa": "No existe registro histórico previo en el sistema con el cual comparar el período 2026-07 (datos hasta 2026-07-14). Es el primer período ingresado en el ciclo de análisis. Lo que sí puede extraerse del período actual como antecedente es la mención explícita de 'bache enero' y 'enero siguen' en los bigramas emergentes — los ciudadanos referencian un problema que, según sus propias palabras, lleva al menos seis meses sin resolverse. Ese eco interno al período es el único historial disponible. Conclusión: el período inaugura el registro del sistema en un estado de déficit acumulado, no en una crisis nueva.\n= HERENCIA DE SEIS MESES",
+      "enlaces_referencia": []
+    },
+    "leccion_aprendida": {
+      "narrativa": "El patrón del período enseña que publicar sobre obras sin cerrar el ciclo de atención a reportes previos activa un doble reproche: el ciudadano ve la publicación de nueva obra mientras recuerda la solicitud que lleva meses sin respuesta. Los bigramas 'llevo reportando' → 'reportando bache' → 'bache enero' → 'enero siguen' → 'sigue igual' forman una cadena causal que el algoritmo detectó en 3–4 comentarios independientes. La lección operativa es que la comunicación de avances en obras requiere ser emparejada con evidencia de cierre de tickets previos — de lo contrario, cada nueva publicación reaviva la queja acumulada. Conclusión: comunicar sin rendir cuentas de lo pendiente multiplica la fricción en lugar de reducirla.\n= PUBLICAR SIN CERRAR REACTIVA LA QUEJA",
+      "enlaces_referencia": []
+    },
+    "brecha_percepcion_realidad": {
+      "narrativa": "La brecha del período es entre la postura neutral de la página (clasificada así por el sistema al no detectar sesgo léxico en el texto de las publicaciones) y la recepción crítica de la audiencia (18.8% de comentarios negativos, 44.5% de reacciones negativas, furia como emoción dominante). La institución publica información de obras en tono neutral-informativo; la audiencia responde con reclamos de rendición de cuentas y evidencias de fallas no atendidas. La brecha no es de percepción sino de experiencia: 55.5% de reacciones positivas versus 79.7% de comentarios neutros sugiere que los likes reflejan exposición al contenido, no aprobación de la gestión. Conclusión: el 55.5% de reacciones positivas no representa aprobación — representa que el contenido fue visto, no que fue creído.\n= LIKES NO SON VOTOS DE CONFIANZA",
+      "enlaces_referencia": []
+    },
+    "contexto_no_visible": {
+      "narrativa": "Los datos del período no incluyen contexto externo verificable (sin enlaces analizados, sin menciones a eventos externos en los comentarios capturados). Sin embargo, la referencia interna a 'enero' sugiere que el período lluvioso de inicio de año generó daño vial no reparado que sigue siendo visible en julio. El clúster 'inseguridad' y 'robaron' aparece en los tokens cívicos emergentes (1.4% y 2.9% respectivamente), lo que indica que hay comentarios que mezclan queja de obras con percepción de inseguridad, aunque el sistema los clasifica todos bajo obras_servicios por peso léxico. Sin fuentes externas vinculadas, estas inferencias deben tratarse como hipótesis para validar en el próximo período. Conclusión: el contexto no visible más probable es daño vial acumulado desde temporada lluviosa anterior — hipótesis que los propios comentarios sugieren pero que requiere enlace externo para confirmar.\n= HIPÓTESIS DE ENERO SIN CONFIRMAR",
+      "enlaces_referencia": []
+    },
+    "correlacion_contenido_reaccion": {
+      "narrativa": "Con 11 publicaciones analizadas de una sola página (Obras y servicios públicos) y 69 comentarios totales, el promedio es 6.3 comentarios por publicación. Sin desglose por publicación individual en los datos disponibles, no es posible identificar qué publicaciones específicas concentran más comentarios negativos versus positivos. Lo que sí puede inferirse es que las 6 publicaciones señaladas en la alerta ZDI son las que concentran la negatividad extrema — representando el 54.5% de las publicaciones del período con la mayor densidad de crítica. Conclusión: más de la mitad de las publicaciones del período están en zona de alta negatividad — el problema no está en una publicación atípica sino en el patrón general del contenido publicado.\n= MAYORÍA DE POSTS EN ZONA ROJA",
+      "enlaces_referencia": []
+    },
+    "comparativa_sectorial": {
+      "narrativa": "No hay datos de períodos anteriores ni de otras cuentas o municipios con los cuales comparar en el sistema actual. La única referencia sectorial disponible es la estructura del índice de pulso (50.83/100 en cuadrante Liderazgo), que coloca al municipio en la mitad superior del rango posible — lo que sugiere que el desempeño comunicacional no es catastrófico en términos de alcance y atención, pero el contenido de esa atención (furia, reclamos de cuentas, baches) la convierte en pasivo político. Conclusión: sin benchmark externo, el único referente es el propio período — y ese referente arranca en rojo.\n= SIN BENCHMARK, BASELINE EN ROJO",
+      "enlaces_referencia": []
+    },
+    "proyeccion_escenario": {
+      "narrativa": "Con tendencia empeorando (−17.4 puntos respecto a período anterior), semáforo rojo, índice de riesgo máximo y 100% de conversación concentrada en obras y servicios, el escenario más probable a 30 días sin intervención es la profundización de la queja crónica: más comentarios del tipo 'sigue igual', mayor presión en rendición de cuentas y posible escalada en la cadena 'cuanto costo' → 'nadie rinde cuentas'. El escenario alternativo positivo requiere dos condiciones simultáneas: cierre documentado de reportes pendientes (especialmente los de enero) y publicación activa de evidencia de ese cierre. Si solo se comunica sin cerrar reportes, la nueva publicación activa el ciclo de reproche descrito en los bigramas. Conclusión: el período 2026-07 está en trayectoria de deterioro — detenerla requiere acción operativa en obras, no solo comunicacional.\n= DETERIORO EVITABLE CON CIERRE DE REPORTES",
+      "enlaces_referencia": []
+    },
+    "recomendacion_estrategica": {
+      "narrativa": "Primera prioridad: levantar el inventario de reportes de baches recibidos desde enero 2026 y publicar un reporte de avance con cierre documentado de al menos los 5 casos más antiguos. Esto ataca directamente la cadena narrativa 'llevo reportando → bache enero → sigue igual'. Segunda prioridad: vincular cada publicación de obra nueva a un número de reporte atendido — el ciudadano necesita ver que la inversión cierra tickets, no que inaugura obra mientras los suyos permanecen abiertos. Tercera prioridad: diversificar la presencia temática; con concentración temática máxima en obras, cualquier crisis en ese tema no tiene alivio narrativo. Incorporar al menos un tema adicional (movilidad, gobernanza, medio ambiente) en las siguientes 2 semanas reduce la exposición. Cuarta prioridad: activar al menos una voz institucional adicional que module el relato desde otro ángulo, dado que la página de Obras opera sola sin ningún respaldo comunicacional. Conclusión: la recomendación central es operativa antes que comunicacional — cerrar baches reales antes de publicar nuevas obras.\n= CERRAR PRIMERO, PUBLICAR DESPUÉS",
+      "enlaces_referencia": []
+    },
+    "temas_emergentes_evolucion": [],
+    "temas_extinction": []
+  }
+}

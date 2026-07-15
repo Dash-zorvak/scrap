@@ -406,8 +406,10 @@ def get_fb_references_for_alerts(post_ids=None, limit=20, db_path=None):
 def get_fb_controversial_posts(db_path=None):
     """§F — Posts FB con mayor proporción de reacciones negativas.
 
-    Retorna lista de dicts [{post_id, post_url, negativos, total_reacciones, ratio}].
-    Úsase para populate enlaces_referencia en alertas ICI/TAI.
+    Retorna lista de dicts [{post_id, post_url, negativos, total_reacciones,
+        ratio, topic_category, zona}].
+    Úsase para populate enlaces_referencia en alertas ICI/SDI/EFI/TAI.
+    topic_category y zona permiten filtrar por tema o zona en TAI/ZDI.
     """
     db_path = db_path or Config.FACEBOOK_DB
     conn = _conn(db_path)
@@ -415,6 +417,8 @@ def get_fb_controversial_posts(db_path=None):
         rows = conn.execute(
             "SELECT "
             "  post_id, post_url, page_name, created_time, "
+            "  COALESCE(NULLIF(topic_category,''), '') as topic_category, "
+            "  COALESCE(zona, '') as zona, "
             "  (COALESCE(angrys_count,0) + COALESCE(sads_count,0) + COALESCE(hahas_count,0)) as negativos, "
             "  (COALESCE(likes_count,0) + COALESCE(loves_count,0) + COALESCE(cares_count,0) "
             "    + COALESCE(hahas_count,0) + COALESCE(wows_count,0) "
@@ -434,6 +438,8 @@ def get_fb_controversial_posts(db_path=None):
                 "post_url": r["post_url"] or "",
                 "page_name": r["page_name"] or "",
                 "created_time": r["created_time"] or "",
+                "topic_category": r["topic_category"] or "",
+                "zona": r["zona"] or "",
                 "negativos": neg,
                 "total_reacciones": total_r,
                 "ratio": round(ratio, 4),
@@ -457,6 +463,126 @@ def get_fb_posts_with_sentiment(db_path=None):
             "  COALESCE(NULLIF(topic_category,''), '') as topic_category, "
             "  COALESCE(zona, '') as zona "
             "FROM fb_posts ORDER BY created_time"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_fb_monthly_controversy(db_path=None):
+    """§F — Controversia mensual de FB posts para historial ICI.
+
+    Calcula, por mes (strftime('%Y-%m', created_time)):
+        controversia = negativos / total_reacciones
+    donde negativos = angrys + sads + hahas.
+
+    Retorna lista de (mes_YYYY-MM, controversia, n_posts).
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT strftime('%Y-%m', created_time) as mes, "
+            "SUM(COALESCE(angrys_count,0) + COALESCE(sads_count,0) "
+            "  + COALESCE(hahas_count,0)) as negativos, "
+            "SUM(COALESCE(likes_count,0) + COALESCE(loves_count,0) "
+            "  + COALESCE(cares_count,0) + COALESCE(hahas_count,0) "
+            "  + COALESCE(wows_count,0) + COALESCE(sads_count,0) "
+            "  + COALESCE(angrys_count,0)) as total_reacciones, "
+            "COUNT(*) as n "
+            "FROM fb_posts GROUP BY mes ORDER BY mes"
+        ).fetchall()
+        result = []
+        for r in rows:
+            total_r = r["total_reacciones"] or 0
+            neg = r["negativos"] or 0
+            controversy = neg / total_r if total_r > 0 else 0.0
+            result.append((r["mes"], round(controversy, 4), r["n"] or 0))
+        return result
+    finally:
+        conn.close()
+
+
+def get_fb_period_controversy(fecha_desde, fecha_hasta, db_path=None):
+    """§F — Controversia de un período específico para ICI actual.
+
+    Retorna (controversia, n_posts) para posts cuyo created_time
+    está entre fecha_desde (inclusivo) y fecha_hasta (exclusivo).
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT "
+            "SUM(COALESCE(angrys_count,0) + COALESCE(sads_count,0) "
+            "  + COALESCE(hahas_count,0)) as negativos, "
+            "SUM(COALESCE(likes_count,0) + COALESCE(loves_count,0) "
+            "  + COALESCE(cares_count,0) + COALESCE(hahas_count,0) "
+            "  + COALESCE(wows_count,0) + COALESCE(sads_count,0) "
+            "  + COALESCE(angrys_count,0)) as total_reacciones, "
+            "COUNT(*) as n "
+            "FROM fb_posts WHERE created_time >= ? AND created_time < ?",
+            (fecha_desde, fecha_hasta),
+        ).fetchone()
+        total_r = row["total_reacciones"] or 0
+        neg = row["negativos"] or 0
+        controversy = neg / total_r if total_r > 0 else 0.0
+        return (round(controversy, 4), row["n"] or 0)
+    finally:
+        conn.close()
+
+
+def get_fb_monthly_theme_controversy(db_path=None):
+    """§F — Controversia mensual por tema para cv_28d y velocidad.
+
+    Retorna lista de dicts [{mes, tema, controversy, n_posts}].
+    Úsase para calcular la sensibilidad temática ajustada en TAI e ICI.
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT strftime('%Y-%m', created_time) as mes, "
+            "COALESCE(NULLIF(topic_category,''), 'sin_tema') as tema, "
+            "SUM(COALESCE(angrys_count,0) + COALESCE(sads_count,0) "
+            "  + COALESCE(hahas_count,0)) as negativos, "
+            "SUM(COALESCE(likes_count,0) + COALESCE(loves_count,0) "
+            "  + COALESCE(cares_count,0) + COALESCE(hahas_count,0) "
+            "  + COALESCE(wows_count,0) + COALESCE(sads_count,0) "
+            "  + COALESCE(angrys_count,0)) as total_reacciones, "
+            "COUNT(*) as n "
+            "FROM fb_posts GROUP BY mes, tema ORDER BY mes, tema"
+        ).fetchall()
+        result = []
+        for r in rows:
+            total_r = r["total_reacciones"] or 0
+            neg = r["negativos"] or 0
+            controversy = neg / total_r if total_r > 0 else 0.0
+            result.append({
+                "mes": r["mes"],
+                "tema": r["tema"],
+                "controversy": round(controversy, 4),
+                "n_posts": r["n"] or 0,
+            })
+        return result
+    finally:
+        conn.close()
+
+
+def get_fb_posts_by_zone(zona, db_path=None):
+    """§F — Posts FB de una zona específica para enlaces_referencia de ZDI.
+
+    Retorna lista de dicts [{post_id, post_url, topic_category, created_time}].
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT post_id, post_url, topic_category, created_time "
+            "FROM fb_posts WHERE zona = ? "
+            "AND post_url IS NOT NULL AND TRIM(post_url) != '' "
+            "ORDER BY created_time DESC LIMIT 10",
+            (zona,),
         ).fetchall()
         return [dict(r) for r in rows]
     finally:

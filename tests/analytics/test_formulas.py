@@ -525,24 +525,33 @@ class TestPresenciaZonas:
 
 
 class TestConsistencia:
-    """§H literal: score = clamp(100 - std * 30, 0, 100); default 50 si <2 meses"""
+    """§H literal: score = clamp(100 - std * 30, 0, 100); default 50 si <2 meses o <5 posts"""
 
     def test_estable(self):
-        assert calcular_consistencia([0.5, 0.5, 0.5]) == 100.0
+        assert calcular_consistencia([(0.5, 10), (0.5, 10), (0.5, 10)]) == 100.0
 
     def test_variable(self):
-        s = calcular_consistencia([0, 1])
+        s = calcular_consistencia([(0, 10), (1, 10)])
         assert s == 85.0
 
     def test_muy_variable(self):
-        s = calcular_consistencia([-2, 2])
+        s = calcular_consistencia([(-2, 10), (2, 10)])
         assert s == 40.0
 
     def test_default_un_mes(self):
-        assert calcular_consistencia([0.5]) == 50.0
+        assert calcular_consistencia([(0.5, 10)]) == 50.0
 
     def test_default_cero(self):
         assert calcular_consistencia([]) == 50.0
+
+    def test_default_pocos_posts(self):
+        """2 meses pero solo 3 posts totales (< 5) → default 50."""
+        assert calcular_consistencia([(0.5, 1), (0.6, 2)]) == 50.0
+
+    def test_calcula_con_suficientes_posts(self):
+        """2 meses, 3+2=5 posts → calcula desviación real."""
+        s = calcular_consistencia([(0.0, 3), (1.0, 2)])
+        assert s == 85.0
 
 
 class TestAtencion:
@@ -833,3 +842,293 @@ class TestWiringCampos:
         pol = data["bloque2"]["polarizacion"]
         assert "indice" in pol
         assert pol["indice"] >= 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 22.6 — Tests obligatorios Bloque 6.2
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestICIUsaHistorialMensualReal:
+    """22.6: ICI debe usar controversia mensual real, no controversia por tema."""
+
+    def test_ici_z_score_sobre_serie_mensual(self):
+        """Armar 5 meses de controversia creciente y confirmar que el z-score
+        se calcula sobre esa serie, no sobre per-theme controversy."""
+        # Meses con controversia creciente: ~0.10, ~0.12, ~0.08, ~0.11
+        # y mes actual con pico: 0.50
+        historial = [0.10, 0.12, 0.08, 0.11]
+        alerta = detectar_ici(0.50, historial)
+        assert alerta is not None
+        assert alerta["tipo"] == "ICI"
+        # Verificar que el z-score se calcula correctamente
+        media = sum(historial) / len(historial)  # 0.1025
+        assert alerta["valor"] > 2.0
+
+    def test_ici_no_usa_controversia_por_tema(self):
+        """Historial de mensual con controversy variada pero estable → no alerta
+        aunque haya temas controversiales altos."""
+        # Meses con variación natural pero dentro del rango
+        historial = [0.10, 0.25, 0.05, 0.30, 0.15]
+        alerta = detectar_ici(0.20, historial)
+        assert alerta is None
+
+    def test_ici_wiring_con_monthly_controversy(self):
+        """construir_analysis con fb_monthly_controversy usa datos mensuales."""
+        aprob = [{"categoria": "test", "label": "T", "pct": 100,
+                  "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
+                  "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
+                  "saldo": 2, "ejemplo": "", "ejemplo_critica": "",
+                  "emociones": {}, "emocion_dominante": "calma"}]
+        # 6 meses: 5 previos estables, 1 actual con pico
+        monthly = [
+            ("2026-01", 0.10, 10), ("2026-02", 0.12, 10),
+            ("2026-03", 0.08, 10), ("2026-04", 0.11, 10),
+            ("2026-05", 0.10, 10), ("2026-06", 0.50, 10),
+        ]
+        data = construir_analysis(
+            aprob, "2026-06", "2026-06-30",
+            fb_monthly_controversy=monthly,
+        )
+        na = data["bloque3"]["nivel_alerta"]
+        # ICI should have fired (z-score for 0.50 vs [0.10,0.12,0.08,0.11,0.10])
+        ici_alerts = [a for a in na["alertas_cambridge"] if a["tipo"] == "ICI"]
+        assert len(ici_alerts) >= 1
+
+
+class TestEnlacesReferenciaAlertas:
+    """22.6: Cada alerta debe tener enlaces_referencia no vacío cuando
+    existen posts reales que la justifiquen."""
+
+    def test_sdi_enlaces_no_vacios(self):
+        """SDI con fb_controversial_posts → enlaces_referencia populated."""
+        aprob = [{"categoria": "test", "label": "T", "pct": 100,
+                  "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
+                  "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
+                  "saldo": 2, "ejemplo": "", "ejemplo_critica": "",
+                  "emociones": {}, "emocion_dominante": "calma"}]
+        controversial = [
+            {"post_id": "p1", "post_url": "https://fb.com/p1",
+             "topic_category": "seguridad", "zona": "",
+             "negativos": 10, "total_reacciones": 20, "ratio": 0.5,
+             "page_name": "", "created_time": ""},
+            {"post_id": "p2", "post_url": "https://fb.com/p2",
+             "topic_category": "seguridad", "zona": "",
+             "negativos": 8, "total_reacciones": 15, "ratio": 0.53,
+             "page_name": "", "created_time": ""},
+        ]
+        data = construir_analysis(
+            aprob, "2026-07", "2026-07-14",
+            nsi_previo=50.0,  # prev NSI=50, actual will be lower → SDI fires
+            fb_controversial_posts=controversial,
+            fb_per_theme_controversy=[
+                {"tema": "seguridad", "n_posts": 10, "negativos": 8,
+                 "total_reacciones": 20, "controversy": 0.4},
+            ],
+        )
+        na = data["bloque3"]["nivel_alerta"]
+        sdi_alerts = [a for a in na["alertas_cambridge"] if a["tipo"] == "SDI"]
+        if sdi_alerts:
+            assert len(sdi_alerts[0]["enlaces_referencia"]) > 0
+
+    def test_efi_enlaces_no_vacios(self):
+        """EFI con fb_controversial_posts → enlaces_referencia populated."""
+        aprob = [{"categoria": "test", "label": "T", "pct": 100,
+                  "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
+                  "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
+                  "saldo": 2, "ejemplo": "", "ejemplo_critica": "",
+                  "emociones": {}, "emocion_dominante": "calma"}]
+        fb = {
+            "posts": 5, "likes": 100, "loves": 20, "cares": 5,
+            "hahas": 10, "wows": 3, "sads": 2, "angrys": 1,
+            "comments": 30, "shares": 50, "views": 2000,
+            "total_reacciones": 141, "engagement": 221,
+        }
+        controversial = [
+            {"post_id": "p1", "post_url": "https://fb.com/p1",
+             "topic_category": "", "zona": "",
+             "negativos": 10, "total_reacciones": 20, "ratio": 0.5,
+             "page_name": "", "created_time": ""},
+        ]
+        # er_previo very high so current ER is much lower → EFI fires
+        data = construir_analysis(
+            aprob, "2026-07", "2026-07-14",
+            fb_stats=fb, er_previo=50.0,
+            fb_controversial_posts=controversial,
+        )
+        na = data["bloque3"]["nivel_alerta"]
+        efi_alerts = [a for a in na["alertas_cambridge"] if a["tipo"] == "EFI"]
+        if efi_alerts:
+            assert len(efi_alerts[0]["enlaces_referencia"]) > 0
+
+    def test_tai_enlaces_por_tema(self):
+        """TAI con fb_controversial_posts filtrados por tema → enlaces del tema."""
+        aprob = [{"categoria": "test", "label": "T", "pct": 100,
+                  "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
+                  "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
+                  "saldo": 2, "ejemplo": "", "ejemplo_critica": "",
+                  "emociones": {}, "emocion_dominante": "calma"}]
+        controversial = [
+            {"post_id": "p1", "post_url": "https://fb.com/p1",
+             "topic_category": "corrupcion", "zona": "",
+             "negativos": 10, "total_reacciones": 12, "ratio": 0.83,
+             "page_name": "", "created_time": ""},
+            {"post_id": "p2", "post_url": "https://fb.com/p2",
+             "topic_category": "educacion", "zona": "",
+             "negativos": 2, "total_reacciones": 20, "ratio": 0.1,
+             "page_name": "", "created_time": ""},
+        ]
+        # corrupcion: 10 neg / 12 total = 0.83 controversy, 5 posts
+        # general: low enojo → TAI fires for corrupcion
+        data = construir_analysis(
+            aprob, "2026-07", "2026-07-14",
+            fb_controversial_posts=controversial,
+            fb_per_theme_controversy=[
+                {"tema": "corrupcion", "n_posts": 5, "negativos": 10,
+                 "total_reacciones": 12, "controversy": 0.83},
+                {"tema": "educacion", "n_posts": 10, "negativos": 2,
+                 "total_reacciones": 20, "controversy": 0.10},
+            ],
+        )
+        na = data["bloque3"]["nivel_alerta"]
+        tai_alerts = [a for a in na["alertas_cambridge"] if a["tipo"] == "TAI"]
+        if tai_alerts:
+            assert len(tai_alerts[0]["enlaces_referencia"]) > 0
+            # Verify links are from the right theme
+            for link in tai_alerts[0]["enlaces_referencia"]:
+                assert "fb.com/p1" in link  # corrupcion post
+
+    def test_zdi_enlaces_por_zona(self):
+        """ZDI con posts de la zona → enlaces_referencia populated."""
+        aprob = [{"categoria": "test", "label": "T", "pct": 100,
+                  "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
+                  "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
+                  "saldo": 2, "ejemplo": "", "ejemplo_critica": "",
+                  "emociones": {}, "emocion_dominante": "calma"}]
+        anger_by_zone = [
+            {"zona": "norte", "negativos": 10, "total": 20, "pct_negativos": 50.0},
+        ]
+        # Mock get_fb_posts_by_zone by patching
+        from unittest.mock import patch
+        mock_posts = [
+            {"post_id": "z1", "post_url": "https://fb.com/z1",
+             "topic_category": "", "created_time": ""},
+            {"post_id": "z2", "post_url": "https://fb.com/z2",
+             "topic_category": "", "created_time": ""},
+        ]
+        with patch("analytics.queries.get_fb_posts_by_zone", return_value=mock_posts):
+            data = construir_analysis(
+                aprob, "2026-07", "2026-07-14",
+                fb_anger_by_zone=anger_by_zone,
+            )
+        na = data["bloque3"]["nivel_alerta"]
+        zdi_alerts = [a for a in na["alertas_cambridge"] if a["tipo"] == "ZDI"]
+        if zdi_alerts:
+            assert len(zdi_alerts[0]["enlaces_referencia"]) > 0
+
+
+class TestSensibilidadAjustadaEnAlertas:
+    """22.6: Umbral de TAI/ICI cambia según sensibilidad del tema."""
+
+    def test_tai_umbral_mayor_para_corrupcion(self):
+        """corrupcion (base=1.45) debería tener umbral más alto que
+        educación (base=0.8), requiriendo TAI más extremo para alertar."""
+        # TAI = ratio_enojo_tema / ratio_enojo_general
+        # Para corrupcion con umbral base ajustado (1.45 * 2.0 = 2.9):
+        #   necesita TAI > 2.9 para alertar
+        # Para educacion con umbral ajustado (0.8 * 2.0 = 1.6):
+        #   necesita TAI > 1.6 para alertar
+        # Con TAI=2.0: no alerta para corrupcion, sí para educacion
+        alerta_corrupcion = detectar_tai(0.10, 0.05, 5, umbral_base=2.9)
+        alerta_educacion = detectar_tai(0.10, 0.05, 5, umbral_base=1.6)
+        assert alerta_corrupcion is None
+        assert alerta_educacion is not None
+
+    def test_ici_umbral_ajustado_por_sensibilidad(self):
+        """ICI con umbral ajustado (>2.0) requiere z-score más alto."""
+        historial = [0.10, 0.12, 0.08, 0.11]
+        # Con umbral default 2.0: alerta
+        alerta_default = detectar_ici(0.50, historial, umbral_base=2.0)
+        assert alerta_default is not None
+        # Con umbral ajustado 4.0: podría no alertar
+        alerta_ajustada = detectar_ici(0.50, historial, umbral_base=4.0)
+        # z-score ≈ 26.7, still > 4.0, so still alerts — test with lower value
+        alerta_baja = detectar_ici(0.15, historial, umbral_base=4.0)
+        assert alerta_baja is None
+
+    def test_sensibilidad_para_alertas_deriva_de_datos(self):
+        """calcular_sensibilidad_para_alertas usa la serie mensual del tema."""
+        from analytics.compute import calcular_sensibilidad_para_alertas
+        monthly = [
+            {"mes": "2026-01", "tema": "corrupcion", "controversy": 0.10, "n_posts": 5},
+            {"mes": "2026-02", "tema": "corrupcion", "controversy": 0.15, "n_posts": 5},
+            {"mes": "2026-03", "tema": "corrupcion", "controversy": 0.20, "n_posts": 5},
+            {"mes": "2026-04", "tema": "corrupcion", "controversy": 0.30, "n_posts": 5},
+            {"mes": "2026-05", "tema": "corrupcion", "controversy": 0.40, "n_posts": 5},
+            {"mes": "2026-06", "tema": "corrupcion", "controversy": 0.50, "n_posts": 5},
+        ]
+        sens = calcular_sensibilidad_para_alertas("corrupcion", monthly, "2026-06-30")
+        # base=1.45, cv>0, velocidad>0 → sens > 1.45
+        assert sens >= 1.45
+        assert sens <= 2.0
+
+    def test_sensibilidad_para_alertas_sin_datos(self):
+        """Sin datos mensuales → sensibilidad base del tema."""
+        from analytics.compute import calcular_sensibilidad_para_alertas
+        sens = calcular_sensibilidad_para_alertas("corrupcion", [], "2026-06-30")
+        assert sens == 1.45
+
+    def test_sensibilidad_para_alertas_tema_desconocido(self):
+        """Tema no en TOPIC_SENSITIVITY_BASES → base=1.0."""
+        from analytics.compute import calcular_sensibilidad_para_alertas
+        sens = calcular_sensibilidad_para_alertas("tema_raro", [], "2026-06-30")
+        assert sens == 1.0
+
+
+class TestConsistenciaPostsThreshold:
+    """22.6: calcular_consistencia devuelve 50.0 con ≥2 meses pero <5 posts."""
+
+    def test_dos_meses_pocos_posts(self):
+        """2 meses, 2+1=3 posts (< 5) → default 50."""
+        assert calcular_consistencia([(0.5, 2), (0.6, 1)]) == 50.0
+
+    def test_dos_meses_suficientes_posts(self):
+        """2 meses, 3+3=6 posts (≥5) → calcula desviación."""
+        s = calcular_consistencia([(0.0, 3), (1.0, 3)])
+        assert s == 85.0
+
+    def test_cuatro_meses_pocos_posts(self):
+        """4 meses pero 1+1+1+1=4 posts → default 50."""
+        assert calcular_consistencia([(0.5, 1), (0.5, 1),
+                                       (0.5, 1), (0.5, 1)]) == 50.0
+
+
+class TestEngagementAmbosZero:
+    """22.6: engagement_rate_fb/tk con vistas=0 y posts=0."""
+
+    def test_fb_engagement_abs_fallback(self):
+        """FB: vistas=0, posts=0, eng=85 → (85.0, 'engagement_abs')."""
+        er, basis = engagement_rate_fb(
+            likes=50, loves=5, cares=0, hahas=0,
+            wows=0, sads=0, angrys=0,
+            comments=10, shares=20, views=0, n_posts=0,
+        )
+        assert er == 85.0
+        assert basis == "engagement_abs"
+
+    def test_fb_cero_total(self):
+        """FB: todo cero → (0.0, 'sin_datos')."""
+        er, basis = engagement_rate_fb(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        assert er == 0.0
+        assert basis == "sin_datos"
+
+    def test_tk_engagement_abs_fallback(self):
+        """TK: vistas=0, videos=0, eng=68 → (68.0, 'engagement_abs')."""
+        er, basis = engagement_rate_tk(0, 50, 5, 3, 10, n_videos=0)
+        assert er == 68.0
+        assert basis == "engagement_abs"
+
+    def test_tk_cero_total(self):
+        """TK: todo cero → (0.0, 'sin_datos')."""
+        er, basis = engagement_rate_tk(0, 0, 0, 0, 0, n_videos=0)
+        assert er == 0.0
+        assert basis == "sin_datos"

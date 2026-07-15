@@ -240,7 +240,9 @@ def engagement_rate_fb(likes, loves, cares, hahas, wows, sads, angrys,
 
     Si vistas > 0 → ER = interacciones / vistas * 100, basis = "views".
     Si vistas == 0 y n_posts > 0 → proxy = interacciones / n_posts, basis = "per_post".
-    Si ambos 0 → 0.0, basis = "sin_datos".
+    Si vistas == 0 y n_posts == 0 y eng > 0 → fallback: eng como valor absoluto,
+        basis = "engagement_abs" (no es una tasa pero preserva la información).
+    Si eng == 0 → 0.0, basis = "sin_datos".
 
     Retorna (er, basis_label).
     """
@@ -268,7 +270,9 @@ def engagement_rate_tk(views, likes, shares, favorites, comments, n_videos=0):
 
     Si views > 0 → ER = interacciones / views * 100, basis = "views".
     Si views == 0 y n_videos > 0 → proxy = interacciones / n_videos, basis = "per_post".
-    Si ambos 0 → 0.0, basis = "sin_datos".
+    Si views == 0 y n_videos == 0 y eng > 0 → fallback: eng como valor absoluto,
+        basis = "engagement_abs" (no es una tasa pero preserva la información).
+    Si eng == 0 → 0.0, basis = "sin_datos".
 
     Retorna (er, basis_label).
     """
@@ -509,6 +513,48 @@ def calcular_sensibilidad_tema(tema, base_sensibilidad, cv_28d=0, velocidad=0):
     return clamp(ajustada, 0.5, 2.0)
 
 
+def calcular_sensibilidad_para_alertas(tema, monthly_theme_controversy, fecha_hasta):
+    """§F — Calcula sensibilidad ajustada para un tema específico.
+
+    Deriva cv_28d y velocidad de la serie histórica mensual de controversia
+    por tema (monthly_theme_controversy de get_fb_monthly_theme_controversy).
+
+    cv_28d = desviación estándar / media de los valores de controversia
+             del tema en los últimos 6 meses (aproximación a 28 días * 6).
+    velocidad = (mes_actual - mes_anterior) / max(|mes_anterior|, 0.01).
+        Si solo hay 1 mes de datos para el tema, velocidad = 0.
+
+    Args:
+        tema: nombre del tema a buscar.
+        monthly_theme_controversy: lista de dicts [{mes, tema, controversy, n_posts}].
+        fecha_hasta: ISO date del fin del período (para filtrar meses anteriores).
+
+    Returns:
+        float: sensibilidad ajustada entre 0.5 y 2.0.
+    """
+    meses_tema = [
+        r["controversy"] for r in monthly_theme_controversy
+        if r["tema"] == tema and r["n_posts"] >= 2
+    ]
+    if not meses_tema:
+        return calcular_sensibilidad_tema(tema, 1.0, cv_28d=0, velocidad=0)
+
+    cv_28d = 0.0
+    if len(meses_tema) >= 2:
+        media_c = sum(meses_tema) / len(meses_tema)
+        if media_c > 0:
+            var_c = sum((v - media_c) ** 2 for v in meses_tema) / len(meses_tema)
+            cv_28d = math.sqrt(var_c) / media_c
+
+    velocidad = 0.0
+    if len(meses_tema) >= 2:
+        actual = meses_tema[-1]
+        previo = meses_tema[-2]
+        velocidad = (actual - previo) / max(abs(previo), 0.01)
+
+    return calcular_sensibilidad_tema(tema, 1.0, cv_28d=cv_28d, velocidad=velocidad)
+
+
 def _zscore(valor, media, desviacion):
     """Calcula z-score. Retorna 0 si desviación es 0."""
     if desviacion == 0:
@@ -516,18 +562,20 @@ def _zscore(valor, media, desviacion):
     return (valor - media) / desviacion
 
 
-def detectar_ici(controversia_actual, historial_controversia):
+def detectar_ici(controversia_actual, historial_controversia, umbral_base=2.0):
     """§F — ICI: Intensidad Conversacional basada en series de tiempo.
 
     Fórmula literal:
-        z-score de la controversia de los últimos 7 días contra media/desviación
+        z-score de la controversia del período actual contra media/desviación
         de períodos mensuales previos (mínimo 4 meses de historia).
-        Alerta si z > 2.0σ.
-        Severidad: z > 3.0 → 4, z > 2.5 → 3, otro → 2.
+        Alerta si z > umbral_base (por defecto 2.0σ, ajustable por
+        sensibilidad temática: umbral_base = 2.0 * sensibilidad_ajustada).
+        Severidad: z > umbral_base+1 → 4, z > umbral_base+0.5 → 3, otro → 2.
 
     Args:
         controversia_actual: controversia del período actual (0-1).
         historial_controversia: lista de controversias mensuales previos.
+        umbral_base: umbral de z-score ajustado por sensibilidad (default 2.0).
 
     Returns:
         dict con {tipo, severidad, valor, umbral, descripcion, enlaces_referencia}
@@ -539,11 +587,11 @@ def detectar_ici(controversia_actual, historial_controversia):
     varianza = sum((v - media) ** 2 for v in historial_controversia) / len(historial_controversia)
     desviacion = math.sqrt(varianza)
     z = _zscore(controversia_actual, media, desviacion)
-    if z <= 2.0:
+    if z <= umbral_base:
         return None
-    if z > 3.0:
+    if z > umbral_base + 1.0:
         severidad = 4
-    elif z > 2.5:
+    elif z > umbral_base + 0.5:
         severidad = 3
     else:
         severidad = 2
@@ -551,11 +599,11 @@ def detectar_ici(controversia_actual, historial_controversia):
         "tipo": "ICI",
         "severidad": severidad,
         "valor": round(z, 3),
-        "umbral": 2.0,
+        "umbral": round(umbral_base, 3),
         "descripcion": (
             f"Intensidad conversacional alta: z-score={z:.2f}σ "
             f"(controversia actual={controversia_actual:.3f}, "
-            f"media histórica={media:.3f})"
+            f"media histórica={media:.3f}, umbral={umbral_base:.2f}σ)"
         ),
         "enlaces_referencia": [],
     }
@@ -630,17 +678,20 @@ def detectar_efi(er_actual, er_previo, total_reacciones):
     }
 
 
-def detectar_tai(ratio_enojo_tema, ratio_enojo_general, n_posts_tema):
+def detectar_tai(ratio_enojo_tema, ratio_enojo_general, n_posts_tema, umbral_base=2.0):
     """§F — TAI: Tema Aislado de Interés.
 
     Fórmula literal:
         TAI = ratio_enojo_del_tema / ratio_enojo_general
-        Alerta si TAI > 2.0, ratio_enojo_del_tema > 3%, y tema tiene ≥3 posts.
+        Alerta si TAI > umbral_base (por defecto 2.0, ajustable por
+        sensibilidad temática: umbral_base = 2.0 * sensibilidad_ajustada),
+        ratio_enojo_del_tema > 3%, y tema tiene ≥3 posts.
 
     Args:
         ratio_enojo_tema: proporción de enojo en posts de este tema (0-1).
         ratio_enojo_general: proporción de enojo general (0-1).
         n_posts_tema: número de posts de este tema.
+        umbral_base: umbral ajustado por sensibilidad del tema (default 2.0).
 
     Returns:
         dict o None.
@@ -649,19 +700,19 @@ def detectar_tai(ratio_enojo_tema, ratio_enojo_general, n_posts_tema):
         return None
     denom = max(n(ratio_enojo_general), 0.001)
     tai = n(ratio_enojo_tema) / denom
-    if tai <= 2.0:
+    if tai <= umbral_base:
         return None
-    severidad = 3 if tai > 4.0 else 2
+    severidad = 3 if tai > umbral_base * 2 else 2
     return {
         "tipo": "TAI",
         "severidad": severidad,
         "valor": round(tai, 3),
-        "umbral": 2.0,
+        "umbral": round(umbral_base, 3),
         "descripcion": (
             f"Tema con enojo desproporcionado: TAI={tai:.2f} "
             f"(enojo tema={ratio_enojo_tema*100:.1f}%, "
             f"enojo general={ratio_enojo_general*100:.1f}%, "
-            f"posts tema={n_posts_tema})"
+            f"posts tema={n_posts_tema}, umbral={umbral_base:.2f})"
         ),
         "enlaces_referencia": [],
     }
@@ -860,12 +911,20 @@ def calcular_consistencia(promedios_mensuales):
         Agrupar sentimiento promedio por mes; calcular desviación estándar
         entre promedios mensuales; score = clamp(100 - desviacion_estandar * 30, 0, 100).
 
-    Default 50 SOLO si hay <2 meses de historia.
+    Default 50 SOLO si hay <2 meses de historia O si el total de posts
+    válidos (sumando todos los meses) es menor a 5.
+
+    Args:
+        promedios_mensuales: lista de tuplas (avg_sentiment, n_posts_por_mes).
     """
     if len(promedios_mensuales) < 2:
         return CONSISTENCIA_DEFAULT
-    media = sum(promedios_mensuales) / len(promedios_mensuales)
-    varianza = sum((v - media) ** 2 for v in promedios_mensuales) / len(promedios_mensuales)
+    total_posts = sum(n_posts for _, n_posts in promedios_mensuales)
+    if total_posts < 5:
+        return CONSISTENCIA_DEFAULT
+    avgs = [avg for avg, _ in promedios_mensuales]
+    media = sum(avgs) / len(avgs)
+    varianza = sum((v - media) ** 2 for v in avgs) / len(avgs)
     desviacion = math.sqrt(varianza)
     return _clamp0100(100 - desviacion * 30)
 

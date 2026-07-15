@@ -20,7 +20,7 @@ from analytics.compute import (
     effectiveness_reacciones, approval_pct_reacciones, rejection_pct_reacciones,
     net_sentiment_index, nsi_deviation, vol_factor, risk_reputacional,
     detectar_ici, detectar_sdi, detectar_efi, detectar_tai, detectar_zdi,
-    verificar_cooldown, calcular_sensibilidad_tema,
+    verificar_cooldown, calcular_sensibilidad_tema, calcular_sensibilidad_para_alertas,
     calcular_hhi,
     calcular_pulso_iq_fb, calcular_pulso_iq_tk,
     pulso_iq_score, pulso_iq_cuadrante,
@@ -53,6 +53,9 @@ def construir_analysis(aprobaciones_agrupadas: list,
                        alertas_cooldown_state: dict | None = None,
                        nsi_previo: float | None = None,
                        er_previo: float | None = None,
+                       # Bloque 6.2: ICI monthly controversy + sensitivity
+                       fb_monthly_controversy: list | None = None,
+                       fb_monthly_theme_controversy: list | None = None,
                        ) -> dict:
     """Construye el dict de analysis.json desde datos pre-procesados.
 
@@ -75,6 +78,9 @@ def construir_analysis(aprobaciones_agrupadas: list,
         alertas_cooldown_state: {tipo: last_alert_timestamp_iso} para cooldown §F.
         nsi_previo: NSI del período anterior para SDI.
         er_previo: ER del período anterior para EFI.
+        fb_monthly_controversy: [(mes, controversia, n)] para historial ICI.
+        fb_monthly_theme_controversy: [{mes, tema, controversy, n_posts}]
+            para cv_28d/velocidad en sensibilidad temática de TAI e ICI.
 
     Returns:
         dict con la estructura completa de analysis.json.
@@ -305,7 +311,7 @@ def construir_analysis(aprobaciones_agrupadas: list,
 
     promedios_mensuales_fb = []
     if fb_monthly_sentiment:
-        promedios_mensuales_fb = [avg for _, avg, _ in fb_monthly_sentiment]
+        promedios_mensuales_fb = [(avg, n_posts) for _, avg, n_posts in fb_monthly_sentiment]
 
     dims_fb = None
     dims_tk = None
@@ -510,20 +516,45 @@ def construir_analysis(aprobaciones_agrupadas: list,
                 "enlaces_relacionados": [],
             })
 
-    # ── §F: Alertas con series de tiempo y cooldown ──
+    # ── §F: Alertas con series de tiempo, cooldown, sensibilidad y enlaces ──
     cooldown = alertas_cooldown_state or {}
     alertas = []
     alertas_links = []
 
-    if fb_per_theme_controversy:
-        total_neg_r = sum(t.get("negativos", 0) for t in fb_per_theme_controversy)
-        total_reac_r = sum(t.get("total_reacciones", 0) for t in fb_per_theme_controversy)
-        controversia_actual = total_neg_r / total_reac_r if total_reac_r > 0 else 0.0
-        historial_controversia = [t["controversy"] for t in fb_per_theme_controversy
-                                   if t.get("n_posts", 0) >= 3]
+    # Pre-compute monthly theme controversy for sensitivity calculations
+    monthly_theme_controversy = fb_monthly_theme_controversy or []
 
-        if len(historial_controversia) >= 4:
-            alerta_ici = detectar_ici(controversia_actual, historial_controversia)
+    # ── ICI: usar controversia mensual real, no controversia por tema ──
+    if fb_monthly_controversy and len(fb_monthly_controversy) >= 5:
+        # Separar mes actual vs histórico
+        # El mes más reciente en monthly_controversy es el actual;
+        # los previos son historial
+        mes_actual = fb_monthly_controversy[-1]
+        historial_mensual = fb_monthly_controversy[:-1]
+
+        # Para historial, tomar los 4+ meses previos al actual
+        hist_controversias = [c for _, c, n in historial_mensual if n >= 3]
+
+        if len(hist_controversias) >= 4:
+            # Sensibilidad del tema dominante del período
+            tema_dominante = ""
+            max_n_posts = 0
+            if fb_per_theme_controversy:
+                for td in fb_per_theme_controversy:
+                    if td.get("n_posts", 0) > max_n_posts:
+                        max_n_posts = td["n_posts"]
+                        tema_dominante = td.get("tema", "")
+
+            sens_ici = 1.0
+            if tema_dominante and monthly_theme_controversy:
+                sens_ici = calcular_sensibilidad_para_alertas(
+                    tema_dominante, monthly_theme_controversy, fecha_hasta
+                )
+            umbral_ici = 2.0 * sens_ici
+
+            alerta_ici = detectar_ici(
+                mes_actual[1], hist_controversias, umbral_base=umbral_ici
+            )
             if alerta_ici:
                 if verificar_cooldown(cooldown.get("ICI"), ahora, "ICI"):
                     if fb_controversial_posts:
@@ -539,27 +570,63 @@ def construir_analysis(aprobaciones_agrupadas: list,
     alerta_sdi = detectar_sdi(nsi_actual, nsi_prev)
     if alerta_sdi:
         if verificar_cooldown(cooldown.get("SDI"), ahora, "SDI"):
+            # enlaces_referencia: posts más controversiales del período
+            if fb_controversial_posts:
+                alerta_sdi["enlaces_referencia"] = [
+                    p["post_url"] for p in fb_controversial_posts[:5]
+                    if p.get("post_url")
+                ]
             alertas.append(alerta_sdi)
+            alertas_links.extend(alerta_sdi.get("enlaces_referencia", []))
 
     total_reacciones_fb = n(fb_stats.get("total_reacciones", 0)) if fb_stats else 0
     er_prev = n(er_previo) if er_previo is not None else 0.0
     alerta_efi = detectar_efi(er_display, er_prev, total_reacciones_fb)
     if alerta_efi:
         if verificar_cooldown(cooldown.get("EFI"), ahora, "EFI"):
+            # enlaces_referencia: posts con mayor caída de engagement
+            if fb_controversial_posts:
+                alerta_efi["enlaces_referencia"] = [
+                    p["post_url"] for p in fb_controversial_posts[:5]
+                    if p.get("post_url")
+                ]
             alertas.append(alerta_efi)
+            alertas_links.extend(alerta_efi.get("enlaces_referencia", []))
 
     if fb_per_theme_controversy:
+        total_neg_r = sum(t.get("negativos", 0) for t in fb_per_theme_controversy)
+        total_reac_r = sum(t.get("total_reacciones", 0) for t in fb_per_theme_controversy)
         ratio_enojo_general = total_neg_r / total_reac_r if total_reac_r > 0 else 0.0
         for tema_data in fb_per_theme_controversy:
             if tema_data.get("n_posts", 0) < 3:
                 continue
             ratio_enojo_tema = tema_data["controversy"]
-            alerta_tai = detectar_tai(ratio_enojo_tema, ratio_enojo_general,
-                                       tema_data["n_posts"])
+
+            # Sensibilidad temática ajustada para TAI
+            tema_nombre = tema_data.get("tema", "")
+            sens_tai = 1.0
+            if tema_nombre and monthly_theme_controversy:
+                sens_tai = calcular_sensibilidad_para_alertas(
+                    tema_nombre, monthly_theme_controversy, fecha_hasta
+                )
+            umbral_tai = 2.0 * sens_tai
+
+            alerta_tai = detectar_tai(
+                ratio_enojo_tema, ratio_enojo_general,
+                tema_data["n_posts"], umbral_base=umbral_tai
+            )
             if alerta_tai:
                 if verificar_cooldown(cooldown.get(f"TAI_{tema_data['tema']}"),
                                        ahora, "TAI"):
+                    # enlaces_referencia: posts del tema que disparó la alerta
+                    if fb_controversial_posts:
+                        alerta_tai["enlaces_referencia"] = [
+                            p["post_url"] for p in fb_controversial_posts
+                            if p.get("topic_category") == tema_nombre
+                            and p.get("post_url")
+                        ][:5]
                     alertas.append(alerta_tai)
+                    alertas_links.extend(alerta_tai.get("enlaces_referencia", []))
 
     if fb_anger_by_zone:
         for zona_data in fb_anger_by_zone:
@@ -567,7 +634,17 @@ def construir_analysis(aprobaciones_agrupadas: list,
             if alerta_zdi:
                 if verificar_cooldown(cooldown.get(f"ZDI_{zona_data['zona']}"),
                                        ahora, "ZDI"):
+                    # enlaces_referencia: posts de la zona que disparó la alerta
+                    zona_nombre = zona_data.get("zona", "")
+                    if zona_nombre and zona_nombre != "sin_zona":
+                        from analytics.queries import get_fb_posts_by_zone
+                        posts_zona = get_fb_posts_by_zone(zona_nombre)
+                        alerta_zdi["enlaces_referencia"] = [
+                            p["post_url"] for p in posts_zona
+                            if p.get("post_url")
+                        ][:5]
                     alertas.append(alerta_zdi)
+                    alertas_links.extend(alerta_zdi.get("enlaces_referencia", []))
 
     # ── §I: Autenticidad ──
     daily_vols_fb = []

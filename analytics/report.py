@@ -10,8 +10,9 @@ from datetime import datetime, timezone
 
 from analytics.compute import (
     n, s, get, top_emotions, engagement_inconsistency_badge,
-    emotion_pcts_for_theme, dominant_emotion,
+    emotion_pcts_for_theme, dominant_emotion, tendency_style,
 )
+from analytics.sentiment import aggregate_sentiment, SENTIMENT_ORDER
 from analytics.schema_validator import validar, ValidationResult
 
 
@@ -21,6 +22,7 @@ def construir_analysis(aprobaciones_agrupadas: list,
                        fb_stats: dict | None = None,
                        tk_stats: dict | None = None,
                        tema_aprobaciones_db: str | None = None,
+                       comentarios_texts: list[str] | None = None,
                        ) -> dict:
     """Construye el dict de analysis.json desde datos pre-procesados.
 
@@ -30,6 +32,9 @@ def construir_analysis(aprobaciones_agrupadas: list,
         fecha_hasta: ISO date, ej. "2026-04-30".
         fb_stats: estadisticas de Facebook (posts, comments, engagement).
         tk_stats: estadisticas de TikTok (videos, comments, engagement).
+        comentarios_texts: textos crudos de comentarios para clasificar
+            sentimiento con reglas léxicas. Si es None, se usa el fallback
+            de conteos apoyo/critica/neutral de aprobaciones_agrupadas.
 
     Returns:
         dict con la estructura completa de analysis.json.
@@ -47,6 +52,46 @@ def construir_analysis(aprobaciones_agrupadas: list,
     total_aprobados = sum(t.get("doc_count", 0) for t in aprobaciones_agrupadas)
     total_apoyo = sum(t.get("apoyo", 0) for t in aprobaciones_agrupadas)
     total_critica = sum(t.get("critica", 0) for t in aprobaciones_agrupadas)
+
+    # ── Sentimiento por reglas léxicas ──
+    if comentarios_texts:
+        agg = aggregate_sentiment(comentarios_texts)
+        n_total = agg["total"]
+        pct_favorable = agg["pct"].get("muy_positivo", 0) + agg["pct"].get("positivo", 0)
+        pct_critico = agg["pct"].get("muy_negativo", 0) + agg["pct"].get("negativo", 0)
+        pct_neutral_s = agg["pct"].get("neutral", 0)
+        tono_dominante = agg["dominante"]
+        tono_score_hoy = agg["score_promedio"]
+    else:
+        # Fallback: derivar desde conteos de aprobaciones
+        n_total = total_aprobados
+        if n_total > 0:
+            pct_favorable = round(total_apoyo / n_total * 100, 1)
+            pct_critico = round(total_critica / n_total * 100, 1)
+            pct_neutral_s = round(100 - pct_favorable - pct_critico, 1)
+        else:
+            pct_favorable = pct_critico = pct_neutral_s = 0.0
+        # Derivar tono_score_hoy desde saldo
+        saldo = total_apoyo - total_critica
+        if n_total > 0:
+            tono_score_hoy = round(saldo / n_total * 2, 2)
+        else:
+            tono_score_hoy = 0.0
+        if pct_favorable > pct_critico:
+            tono_dominante = "positivo"
+        elif pct_critico > pct_favorable:
+            tono_dominante = "negativo"
+        else:
+            tono_dominante = "neutral"
+
+    tono_score_ayer = 0.0
+    tendencia = round(tono_score_hoy - tono_score_ayer, 2)
+    if tendencia > 0.1:
+        etiqueta_tendencia = "mejorando"
+    elif tendencia < -0.1:
+        etiqueta_tendencia = "empeorando"
+    else:
+        etiqueta_tendencia = "estable"
 
     # Indice de emociones global
     emo_global = {}
@@ -74,8 +119,18 @@ def construir_analysis(aprobaciones_agrupadas: list,
 
     bloque1 = {
         "clima_narrativo": {
+            "tono_dominante": tono_dominante,
+            "pct_favorable": pct_favorable,
+            "pct_neutral": pct_neutral_s,
+            "pct_critico": pct_critico,
+            "n_total_comentarios": n_total,
+            "tono_score_hoy": tono_score_hoy,
+            "tono_score_ayer": tono_score_ayer,
+            "tendencia": tendencia,
+            "etiqueta_tendencia": etiqueta_tendencia,
             "narrativa": "",
             "enlaces_referencia": [],
+            "formula_usada": "NSI = (positivos - negativos) / total * 100",
         },
         "indice_emociones": indice_emociones,
         "intensidad": {
@@ -186,6 +241,9 @@ def _clasificar_polarizacion(apoyo, critica):
 
 def generar_reporte_completo(aprobaciones_agrupadas, periodo, fecha_hasta, **kwargs):
     """Genera y valida el analysis.json completo.
+
+    Accepts any extra keyword arguments (e.g. comentarios_texts) and
+    passes them through to construir_analysis().
 
     Returns:
         tuple: (analysis_dict, ValidationResult)

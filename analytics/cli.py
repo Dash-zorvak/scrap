@@ -21,13 +21,62 @@ from analytics.report import construir_analysis, generar_reporte_completo
 from analytics.publish import publicar_analysis
 from analytics.schema_validator import validar
 
+_cfg = Config()
+
+
+def _periodo_anterior(periodo: str) -> str:
+    """Dado 'YYYY-MM', retorna el mes anterior 'YYYY-MM'."""
+    y, m = map(int, periodo.split("-"))
+    m -= 1
+    if m == 0:
+        m = 12
+        y -= 1
+    return f"{y:04d}-{m:02d}"
+
+
+def _calcular_er_previo(
+    periodo_prev: str,
+    fb_monthly: list[tuple],
+    tk_monthly: list[tuple],
+) -> float | None:
+    """Calcula er_previo con la misma metodología ponderado_volumen.
+
+    Retorna None si no hay datos de ambas plataformas para el período
+    previo (para no comparar bases distintas).
+    """
+    fb_prev = next((row for row in fb_monthly if row[0] == periodo_prev), None)
+    tk_prev = next((row for row in tk_monthly if row[0] == periodo_prev), None)
+
+    if fb_prev is None or tk_prev is None:
+        return None
+
+    er_fb_prev, vol_fb_prev = fb_prev[1], fb_prev[2]
+    er_tk_prev, vol_tk_prev = tk_prev[1], tk_prev[2]
+
+    vol_total = vol_fb_prev + vol_tk_prev
+    if vol_total <= 0:
+        return None
+
+    return round(
+        er_fb_prev * (vol_fb_prev / vol_total) + er_tk_prev * (vol_tk_prev / vol_total),
+        2,
+    )
+
 
 def cmd_generar(args):
     """Genera y publica analysis.json."""
     from dashboard.tema_aprobaciones import agregar_por_tema
-    from analytics.queries import get_fb_comments_with_messages
+    from analytics.queries import (
+        get_fb_comments_with_messages, get_fb_stats, get_tk_stats,
+        get_fb_daily_volumes, get_tk_daily_volumes,
+        get_fb_monthly_sentiment, get_fb_per_theme_controversy,
+        get_fb_posts_with_sentiment, get_fb_controversial_posts,
+        get_fb_anger_by_zone, get_fb_monthly_controversy,
+        get_fb_monthly_theme_controversy,
+        get_fb_monthly_er, get_tk_monthly_er,
+    )
 
-    db_path = args.db or Config.EXTERNOS_DB
+    db_path = args.db or _cfg.EXTERNOS_DB
     aprobaciones = agregar_por_tema(db_path)
 
     if not aprobaciones:
@@ -41,9 +90,84 @@ def cmd_generar(args):
     except Exception:
         texts = []
 
+    # Obtener stats de plataformas desde las DBs
+    fb_stats = None
+    tk_stats = None
+    try:
+        fb = get_fb_stats()
+        if fb and fb.get("posts", 0) > 0:
+            fb_stats = fb
+            fb_stats["daily_volumes"] = get_fb_daily_volumes()
+    except Exception:
+        pass
+    try:
+        tk = get_tk_stats()
+        if tk and tk.get("videos", 0) > 0:
+            tk_stats = tk
+            tk_stats["daily_volumes"] = get_tk_daily_volumes()
+    except Exception:
+        pass
+
+    # Datos históricos para §F/§H
+    fb_monthly_sentiment = None
+    fb_per_theme_controversy = None
+    fb_posts_with_sentiment = None
+    fb_controversial_posts = None
+    fb_anger_by_zone = None
+    fb_monthly_controversy = None
+    fb_monthly_theme_controversy = None
+    try:
+        fb_monthly_sentiment = get_fb_monthly_sentiment()
+    except Exception:
+        pass
+    try:
+        fb_per_theme_controversy = get_fb_per_theme_controversy()
+    except Exception:
+        pass
+    try:
+        fb_posts_with_sentiment = get_fb_posts_with_sentiment()
+    except Exception:
+        pass
+    try:
+        fb_controversial_posts = get_fb_controversial_posts()
+    except Exception:
+        pass
+    try:
+        fb_anger_by_zone = get_fb_anger_by_zone()
+    except Exception:
+        pass
+    try:
+        fb_monthly_controversy = get_fb_monthly_controversy()
+    except Exception:
+        pass
+    try:
+        fb_monthly_theme_controversy = get_fb_monthly_theme_controversy()
+    except Exception:
+        pass
+
+    # §F EFI: Compute er_previo from previous month, same methodology as er_display
+    er_previo = None
+    try:
+        periodo_prev = _periodo_anterior(args.periodo)
+        fb_monthly = get_fb_monthly_er()
+        tk_monthly = get_tk_monthly_er()
+        er_previo = _calcular_er_previo(periodo_prev, fb_monthly, tk_monthly)
+    except Exception:
+        pass
+
     data, resultado = generar_reporte_completo(
         aprobaciones, args.periodo, args.fecha_hasta,
         comentarios_texts=texts if texts else None,
+        fb_stats=fb_stats,
+        tk_stats=tk_stats,
+        er_previo=er_previo,
+        fb_monthly_sentiment=fb_monthly_sentiment,
+        fb_per_theme_controversy=fb_per_theme_controversy,
+        fb_posts_with_sentiment=fb_posts_with_sentiment,
+        fb_controversial_posts=fb_controversial_posts,
+        fb_anger_by_zone=fb_anger_by_zone,
+        fb_monthly_controversy=fb_monthly_controversy,
+        fb_monthly_theme_controversy=fb_monthly_theme_controversy,
     )
 
     if not resultado.es_publicable:
@@ -81,7 +205,7 @@ def cmd_resumen(args):
     """Muestra estadisticas basicas."""
     from dashboard.tema_aprobaciones import agregar_por_tema, resumen_revision
 
-    db_path = args.db or Config.EXTERNOS_DB
+    db_path = args.db or _cfg.EXTERNOS_DB
     aprob = agregar_por_tema(db_path)
     resumen = resumen_revision(db_path)
 

@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -38,6 +39,7 @@ _temp_db_dir: str | None = None
 
 def pytest_configure(config):
     """Run BEFORE any test module is imported — sets env vars to temp paths."""
+    config.addinivalue_line("markers", "no_taxonomia_mock: skip the _patch_taxonomias_path fixture")
     global _temp_db_dir
     _temp_db_dir = tempfile.mkdtemp(prefix="pytest_db_")
     for env_var, filename in _DB_ENV_VARS.items():
@@ -74,3 +76,17 @@ def _guard_real_db(monkeypatch):
         return original_connect(database, *args, **kwargs)
 
     monkeypatch.setattr("sqlite3.connect", guarded_connect)
+
+
+@pytest.fixture(autouse=True)
+def _patch_taxonomias_path(tmp_path, request):
+    """Patch _TAXONOMIAS_PATH para que ningún test escriba al JSON real.
+
+    Tests marcados con @pytest.mark.no_taxonomia_mock leen el archivo real.
+    """
+    if request.node.get_closest_marker("no_taxonomia_mock"):
+        yield
+        return
+    fake_path = str(tmp_path / "taxonomias_pendientes.json")
+    with patch("analytics._propuestas._TAXONOMIAS_PATH", fake_path):
+        yield

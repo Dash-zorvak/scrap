@@ -590,8 +590,16 @@ def construir_analysis(aprobaciones_agrupadas: list,
             alertas_links.extend(alerta_sdi.get("enlaces_referencia", []))
 
     total_reacciones_fb = n(fb_stats.get("total_reacciones", 0)) if fb_stats else 0
-    er_prev = n(er_previo) if er_previo is not None else 0.0
-    alerta_efi = detectar_efi(er_display, er_prev, total_reacciones_fb)
+    total_reacciones_tk = 0
+    if tk_stats:
+        total_reacciones_tk = (
+            n(tk_stats.get("likes", 0)) + n(tk_stats.get("shares", 0))
+            + n(tk_stats.get("favorites", 0)) + n(tk_stats.get("comments", 0))
+        )
+    total_reacciones_all = total_reacciones_fb + total_reacciones_tk
+    alerta_efi = None
+    if er_previo is not None:
+        alerta_efi = detectar_efi(er_display, er_previo, total_reacciones_all)
     if alerta_efi:
         if verificar_cooldown(cooldown.get("EFI"), ahora, "EFI"):
             # enlaces_referencia: posts con mayor caída de engagement
@@ -663,8 +671,15 @@ def construir_analysis(aprobaciones_agrupadas: list,
         daily_vols_fb = [v for _, v in fb_stats["daily_volumes"]]
     if tk_stats and tk_stats.get("daily_volumes"):
         daily_vols_tk = [v for _, v in tk_stats["daily_volumes"]]
-    daily_vols_all = daily_vols_fb + daily_vols_tk
-    pct_organico, pct_coordinado = autenticidad_pct(daily_vols_all) if daily_vols_all else (100.0, 0.0)
+    org_fb, coord_fb = autenticidad_pct(daily_vols_fb) if daily_vols_fb else (100.0, 0.0)
+    org_tk, coord_tk = autenticidad_pct(daily_vols_tk) if daily_vols_tk else (100.0, 0.0)
+    n_fb, n_tk = len(daily_vols_fb), len(daily_vols_tk)
+    n_dias = n_fb + n_tk
+    if n_dias > 0:
+        pct_organico = round(org_fb * n_fb / n_dias + org_tk * n_tk / n_dias, 1)
+        pct_coordinado = round(coord_fb * n_fb / n_dias + coord_tk * n_tk / n_dias, 1)
+    else:
+        pct_organico, pct_coordinado = 100.0, 0.0
 
     # ── §E: Risk Reputacional ──
     max_topic_controversy = 0.0

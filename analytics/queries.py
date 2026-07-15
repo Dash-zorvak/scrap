@@ -8,6 +8,8 @@ import sqlite3
 
 from src.config import Config
 
+_cfg = Config()
+
 
 def _conn(db_path):
     conn = sqlite3.connect(db_path)
@@ -17,7 +19,7 @@ def _conn(db_path):
 
 def get_fb_comments_with_messages(db_path=None):
     """Fetch all non-empty FB comments for theme review."""
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -32,7 +34,7 @@ def get_fb_comments_with_messages(db_path=None):
 def get_fb_post_signatures(db_path=None):
     """Load FB post signatures for dedup (post_id, firma)."""
     from dashboard._generar_id import firma_contenido
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -47,7 +49,7 @@ def get_fb_post_signatures(db_path=None):
 def get_tk_video_signatures(db_path=None):
     """Load TikTok video signatures for dedup (video_id, firma)."""
     from dashboard._generar_id import firma_contenido
-    db_path = db_path or Config.TIKTOK_DB
+    db_path = db_path or _cfg.TIKTOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -61,7 +63,7 @@ def get_tk_video_signatures(db_path=None):
 
 def get_tk_videos_paginated(db_path=None, limit=50, offset=0):
     """Read TikTok videos with pagination."""
-    db_path = db_path or Config.TIKTOK_DB
+    db_path = db_path or _cfg.TIKTOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -75,7 +77,7 @@ def get_tk_videos_paginated(db_path=None, limit=50, offset=0):
 
 def get_fb_post_by_id(post_id, db_path=None):
     """Read a single FB post by post_id."""
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         row = conn.execute(
@@ -90,7 +92,7 @@ def get_fb_references_by_ids(post_ids, db_path=None):
     """Get FB post references (url, etc.) by post_id list."""
     if not post_ids:
         return []
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         placeholders = ",".join("?" for _ in post_ids)
@@ -107,7 +109,7 @@ def get_fb_references_by_ids(post_ids, db_path=None):
 
 def get_fb_recent_references(limit=10, db_path=None):
     """Get recent FB post references with URLs."""
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -125,7 +127,7 @@ def get_tk_references_by_ids(video_ids, db_path=None):
     """Get TikTok video references by video id list."""
     if not video_ids:
         return []
-    db_path = db_path or Config.TIKTOK_DB
+    db_path = db_path or _cfg.TIKTOK_DB
     conn = _conn(db_path)
     try:
         placeholders = ",".join("?" for _ in video_ids)
@@ -142,7 +144,7 @@ def get_tk_references_by_ids(video_ids, db_path=None):
 
 def get_tk_recent_references(limit=10, db_path=None):
     """Get recent TikTok video references with URLs."""
-    db_path = db_path or Config.TIKTOK_DB
+    db_path = db_path or _cfg.TIKTOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -158,7 +160,7 @@ def get_tk_recent_references(limit=10, db_path=None):
 
 def get_external_pages(db_path=None):
     """List external pages."""
-    db_path = db_path or Config.EXTERNOS_DB
+    db_path = db_path or _cfg.EXTERNOS_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -171,7 +173,7 @@ def get_external_pages(db_path=None):
 
 def get_external_post_ids(db_path=None):
     """Get all external post IDs for dedup."""
-    db_path = db_path or Config.EXTERNOS_DB
+    db_path = db_path or _cfg.EXTERNOS_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute("SELECT post_id FROM external_posts").fetchall()
@@ -182,7 +184,7 @@ def get_external_post_ids(db_path=None):
 
 def get_tk_video_ids(db_path=None):
     """Get all TikTok video IDs for dedup."""
-    db_path = db_path or Config.TIKTOK_DB
+    db_path = db_path or _cfg.TIKTOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute("SELECT id FROM videos").fetchall()
@@ -203,7 +205,7 @@ def get_fb_stats(db_path=None):
       - total_reacciones: suma de todas las reacciones
       - engagement: reacciones + comments + shares
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         row = conn.execute(
@@ -253,7 +255,7 @@ def get_tk_stats(db_path=None):
       - views, likes, shares, favorites: sumatorias
       - engagement: likes + shares + favorites + comments
     """
-    db_path = db_path or Config.TIKTOK_DB
+    db_path = db_path or _cfg.TIKTOK_DB
     conn = _conn(db_path)
     try:
         row = conn.execute(
@@ -287,7 +289,7 @@ def get_fb_daily_volumes(db_path=None):
 
     Retorna lista de (fecha_str, conteo_posts).
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -301,7 +303,7 @@ def get_fb_daily_volumes(db_path=None):
 
 def get_tk_daily_volumes(db_path=None):
     """§I — Volumen diario de videos de TikTok para CV de autenticidad."""
-    db_path = db_path or Config.TIKTOK_DB
+    db_path = db_path or _cfg.TIKTOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -322,7 +324,7 @@ def get_fb_monthly_sentiment(db_path=None):
     Retorna lista de (mes_YYYY-MM, avg_sentiment_score, n_posts).
     Úsase para la dimensión 'consistencia' del Pulso IQ.
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -336,6 +338,59 @@ def get_fb_monthly_sentiment(db_path=None):
         conn.close()
 
 
+def get_fb_monthly_er(db_path=None):
+    """ER mensual de FB: retorna lista de (mes, er, total_engagement, n_posts).
+
+    ER = total_engagement / n_posts * 100, donde engagement incluye
+    reacciones + comments + shares.
+    """
+    db_path = db_path or _cfg.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT strftime('%Y-%m', created_time) as mes, "
+            "COUNT(*) as n_posts, "
+            "SUM(COALESCE(likes_count,0) + COALESCE(loves_count,0) "
+            "  + COALESCE(cares_count,0) + COALESCE(hahas_count,0) "
+            "  + COALESCE(wows_count,0) + COALESCE(sads_count,0) "
+            "  + COALESCE(angrys_count,0) + COALESCE(comments_count,0) "
+            "  + COALESCE(shares_count,0)) as total_eng "
+            "FROM fb_posts GROUP BY mes ORDER BY mes"
+        ).fetchall()
+        result = []
+        for r in rows:
+            er = round(r["total_eng"] / r["n_posts"] * 100, 2) if r["n_posts"] else 0
+            result.append((r["mes"], er, r["total_eng"], r["n_posts"]))
+        return result
+    finally:
+        conn.close()
+
+
+def get_tk_monthly_er(db_path=None):
+    """ER mensual de TikTok: retorna lista de (mes, er, total_engagement, n_videos).
+
+    ER = total_engagement / n_videos * 100, donde engagement incluye
+    likes + comments + shares + favorites.
+    """
+    db_path = db_path or _cfg.TIKTOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT strftime('%Y-%m', created_at) as mes, "
+            "COUNT(*) as n_videos, "
+            "SUM(COALESCE(likes,0) + COALESCE(comments_count,0) "
+            "  + COALESCE(shares,0) + COALESCE(favorites_count,0)) as total_eng "
+            "FROM videos GROUP BY mes ORDER BY mes"
+        ).fetchall()
+        result = []
+        for r in rows:
+            er = round(r["total_eng"] / r["n_videos"] * 100, 2) if r["n_videos"] else 0
+            result.append((r["mes"], er, r["total_eng"], r["n_videos"]))
+        return result
+    finally:
+        conn.close()
+
+
 def get_fb_per_theme_controversy(db_path=None):
     """§E — Controversia por tema (topic_category) de FB posts.
 
@@ -343,7 +398,7 @@ def get_fb_per_theme_controversy(db_path=None):
     negativos = angrys + sads + hahas (por post, acumulado).
     Retorna lista de dicts [{tema, n_posts, negativos, total_reacciones, controversy}].
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -380,7 +435,7 @@ def get_fb_references_for_alerts(post_ids=None, limit=20, db_path=None):
     Si post_ids se provee, filtra por esos IDs.
     Si no, retorna los posts más recientes con URL.
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         if post_ids:
@@ -411,7 +466,7 @@ def get_fb_controversial_posts(db_path=None):
     Úsase para populate enlaces_referencia en alertas ICI/SDI/EFI/TAI.
     topic_category y zona permiten filtrar por tema o zona en TAI/ZDI.
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -454,7 +509,7 @@ def get_fb_posts_with_sentiment(db_path=None):
 
     Retorna lista de dicts [{created_time, sentiment_score, topic_category, zona}].
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -478,7 +533,7 @@ def get_fb_monthly_controversy(db_path=None):
 
     Retorna lista de (mes_YYYY-MM, controversia, n_posts).
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -509,7 +564,7 @@ def get_fb_period_controversy(fecha_desde, fecha_hasta, db_path=None):
     Retorna (controversia, n_posts) para posts cuyo created_time
     está entre fecha_desde (inclusivo) y fecha_hasta (exclusivo).
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         row = conn.execute(
@@ -538,7 +593,7 @@ def get_fb_monthly_theme_controversy(db_path=None):
     Retorna lista de dicts [{mes, tema, controversy, n_posts}].
     Úsase para calcular la sensibilidad temática ajustada en TAI e ICI.
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -574,7 +629,7 @@ def get_fb_posts_by_zone(zona, db_path=None):
 
     Retorna lista de dicts [{post_id, post_url, topic_category, created_time}].
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(
@@ -594,7 +649,7 @@ def get_fb_anger_by_zone(db_path=None):
 
     Retorna lista de dicts [{zona, negativos, total, pct_negativos}].
     """
-    db_path = db_path or Config.FACEBOOK_DB
+    db_path = db_path or _cfg.FACEBOOK_DB
     conn = _conn(db_path)
     try:
         rows = conn.execute(

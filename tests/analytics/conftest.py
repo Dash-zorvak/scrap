@@ -1,14 +1,6 @@
-"""Fixtures compartidos para tests de analytics.
+"""Fixtures compartidos para tests de analytics (actualmente vacío).
 
-Aísla TODOS los tests de escribir en data/taxonomias_pendientes.json real.
+El fixture _patch_taxonomias_path se movio a tests/conftest.py (raiz)
+para cubrir todos los tests, no solo los de tests/analytics/.
+Usa @pytest.mark.no_taxonomia_mock si un test necesita la ruta real.
 """
-import pytest
-from unittest.mock import patch
-
-
-@pytest.fixture(autouse=True)
-def _patch_taxonomias_path(tmp_path):
-    """Patch _TAXONOMIAS_PATH para que ningún test escriba al JSON real."""
-    fake_path = str(tmp_path / "taxonomias_pendientes.json")
-    with patch("analytics._propuestas._TAXONOMIAS_PATH", fake_path):
-        yield

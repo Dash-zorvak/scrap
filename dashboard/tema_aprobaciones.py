@@ -115,7 +115,7 @@ def asegurar_tabla(db_path):
 
 
 def guardar_aprobacion(db_path, comment_id, tema, texto="",
-                       tema_sugerido=None, tono="literal", confianza=None,
+                       tema_sugerido=None, tono=None, confianza=None,
                        postura="neutral", emocion=None):
     """Guarda (o actualiza) la aprobacion de un comentario.
 
@@ -128,7 +128,8 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
     reconocida (H-DS1: sin normalizacion silenciosa).
 
     `emocion` se normaliza con normalizar_emocion(); lanza ValueError si no es
-    reconocida.
+    reconocida. Si no se provee `emocion` o `tono`, se auto-detectan desde el
+    texto usando classify_emotion().
 
     Nota: a diferencia de remapear() -que degrada lo desconocido a 'no_aplica'
     para tolerar ruido del modelo-, aqui un tema invalido se RECHAZA, porque es
@@ -143,7 +144,23 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
         return False
     tema = remapear(tema)
     postura = normalizar_postura(postura)
-    emocion = normalizar_emocion(emocion)
+    # Auto-detectar emocion/tono desde el texto si no se proveyeron explicitamente
+    if emocion is None or tono is None:
+        from analytics.emotion import classify_emotion
+        er = classify_emotion(texto or "")
+        if emocion is None:
+            emocion = er.emocion
+        if tono is None:
+            tono = er.familia
+    try:
+        emocion = normalizar_emocion(emocion)
+    except ValueError:
+        # El clasificador devolvio una clave propuesta (ej. "civica_nueva_calle")
+        # que aun no esta en el catalogo canonico. Conservarla como emocion real
+        # (ya se registro en taxonomias_pendientes dentro de classify_emotion).
+        # Solo degradar a "calma" si el valor no es una propuesta reconocible.
+        if "_nueva_" not in emocion and not emocion.startswith("nueva_"):
+            emocion = "calma"
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:
@@ -342,4 +359,47 @@ def resumen_revision(db_path, total_comentarios=None, ini=None, fin=None):
     return out
 
 
+# ── Migraciones estructurales (8.3) ──────────────────────────
+
+
+def asegurar_tabla_en_tiktok(tiktok_db_path):
+    """Crea tema_aprobaciones en tiktok.db (mismo esquema que facebook.db)."""
+    asegurar_tabla(tiktok_db_path)
+
+
+def _asegurar_columnas_computed(conn, tabla):
+    """Agrega columnas computed (sentiment, sentiment_score, topic_category, zona)
+    a una tabla de comentarios si no existen. Idempotente."""
+    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({tabla})").fetchall()}
+    migraciones = [
+        ("sentiment", "TEXT"),
+        ("sentiment_score", "FLOAT"),
+        ("topic_category", "TEXT"),
+        ("zona", "TEXT"),
+    ]
+    for col, tipo in migraciones:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {tipo}")
+
+
+def asegurar_computed_tiktok(tiktok_db_path):
+    """Agrega columnas sentiment/sentiment_score/topic_category/zona a
+    tiktok.db::comments (misma estructura que fb_comments)."""
+    conn = _conectar(tiktok_db_path)
+    try:
+        _asegurar_columnas_computed(conn, "comments")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def asegurar_computed_externos(externos_db_path):
+    """Agrega columnas sentiment/sentiment_score/topic_category/zona a
+    externos.db::external_comments."""
+    conn = _conectar(externos_db_path)
+    try:
+        _asegurar_columnas_computed(conn, "external_comments")
+        conn.commit()
+    finally:
+        conn.close()
 

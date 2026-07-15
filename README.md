@@ -4,19 +4,20 @@ Dashboard ejecutivo de percepción pública para la Alcaldía de Santa Ana.
 
 ## Arquitectura
 
-El sistema opera en tres pasos separados:
+El sistema opera en tres pasos:
 
 1. **Ingesta (local, panel del analista):** `dashboard/panel_carga.py` — el analista
    sube capturas de pantalla o PDFs de publicaciones; Groq Vision extrae los datos,
    el analista revisa/corrige y confirma. Solo escribe datos crudos en `facebook.db`,
    `tiktok.db` y `externos.db`. No calcula métricas, sentimiento ni narrativas.
-2. **Análisis (externo):** un analista, con Claude, procesa esas bases de datos y
-   genera `data/analysis.json`.
+2. **Análisis (pipeline automatizado):** `python -m analytics.cli generar` procesa
+   las bases de datos, calcula métricas §D-I, valida contra el esquema y genera
+   `data/analysis.json`. **Único punto de escritura.** No existe ruta paralela.
 3. **Visualización (dashboard):** `app.py` lee el JSON y renderiza los 4 bloques
    ejecutivos sin cálculo en runtime.
 
 ​
-Panel de carga (local) → DBs crudas → Analista + Claude → analysis.json → app.py → Dashboard
+Panel de carga (local) → DBs crudas → CLI (`analytics.cli`) → analysis.json → app.py → Dashboard
 
 ## Estructura del proyecto
 
@@ -45,7 +46,7 @@ data/
 facebook.db             # Base de datos Facebook (no versionada)
 tiktok.db               # Base de datos TikTok (no versionada)
 externos.db             # Base de datos externos (no versionada)
-analysis.json            # JSON generado por el analista (no versionado)
+analysis.json            # JSON generado por el CLI (no versionado)
 analysis_schema.json      # Esquema de referencia (versionado)
 src/                      # Módulos heredados de almacenamiento/analizador
 scripts/                  # Scripts utilitarios (dedupe, mantenimiento, etc.)
@@ -57,8 +58,8 @@ Ver `data/analysis_schema.json` para la estructura completa con todas las
 claves requeridas por el dashboard.
 
 **Nota sobre `idioms_sv_global.json`:** este archivo es material de referencia
-para el proceso externo de análisis con Claude (fuera de este repositorio);
-no es consumido por ningún módulo Python del repo.
+histórico del proceso manual original; no es consumido por ningún módulo Python
+del repo.
 
 Los 4 bloques corresponden a:
 - **bloque1**: Pulso General (clima narrativo, intensidad, concentración temática)
@@ -72,6 +73,20 @@ Los 4 bloques corresponden a:
 streamlit run dashboard/app.py
 
 El dashboard muestra "Análisis pendiente" si `data/analysis.json` no existe.
+
+## Generar el análisis (pipeline automatizado)
+
+​
+python -m analytics.cli generar --periodo "YYYY-MM" --fecha-hasta "YYYY-MM-DD" --db data/facebook.db
+
+Este es el **único camino de escritura** a `data/analysis.json`. El pipeline:
+1. Consulta las DBs (Facebook + TikTok) vía `analytics/queries.py`
+2. Calcula métricas §D-I vía `analytics/compute.py`
+3. Construye el dict vía `analytics/report.py::construir_analysis()`
+4. Valida contra `data/analysis_schema.json` (V01-V11)
+5. Publica el JSON vía `analytics/publish.py`
+
+No existe ni se soporta ningún generador paralelo o manual para este archivo.
 
 ## Ejecutar el panel de carga (analista, solo local)
 
@@ -93,6 +108,6 @@ definidas en `config.py`. Tiene tres secciones:
 ## Ingesta de datos
 
 La ingesta es **100% manual**, a través de `dashboard/panel_carga.py`. El panel
-no calcula métricas, sentimiento ni narrativas — todo el análisis lo hace un
-analista externo (con Claude) directamente sobre las bases de datos crudas,
-generando `data/analysis.json`, que es lo único que lee `dashboard/app.py`.
+no calcula métricas, sentimiento ni narrativas — el análisis y generación de
+`data/analysis.json` lo ejecuta el pipeline automatizado (`analytics.cli`).
+`dashboard/app.py` lee directamente el JSON resultante.

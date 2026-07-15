@@ -25,6 +25,7 @@ from analytics.schema_validator import validar
 def cmd_generar(args):
     """Genera y publica analysis.json."""
     from dashboard.tema_aprobaciones import agregar_por_tema
+    from analytics.queries import get_fb_comments_with_messages
 
     db_path = args.db or Config.EXTERNOS_DB
     aprobaciones = agregar_por_tema(db_path)
@@ -33,8 +34,16 @@ def cmd_generar(args):
         print("No hay aprobaciones para generar el reporte.")
         return 1
 
+    # Obtener textos crudos de comentarios para sentimiento léxico
+    try:
+        comments = get_fb_comments_with_messages()
+        texts = [msg for _, msg in comments if msg]
+    except Exception:
+        texts = []
+
     data, resultado = generar_reporte_completo(
-        aprobaciones, args.periodo, args.fecha_hasta
+        aprobaciones, args.periodo, args.fecha_hasta,
+        comentarios_texts=texts if texts else None,
     )
 
     if not resultado.es_publicable:

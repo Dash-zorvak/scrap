@@ -21,6 +21,9 @@ def _registrar_propuesta(
 ) -> None:
     """Append una propuesta a taxonomias_pendientes.json.
 
+    Si ya existe una entrada pendiente con la misma clave+tipo, incrementa
+    n_ocurrencias y actualiza fecha en vez de crear entrada duplicada.
+
     Args:
         clave_propuesta: nombre propuesto (ej. "nueva_emocion" o "zona_xyz")
         ejemplo_texto: fragmento del texto que motivó la propuesta
@@ -28,14 +31,6 @@ def _registrar_propuesta(
         familia_mas_cercana: familia o categoría más cercana (vacío si no aplica)
     """
     path = os.path.normpath(_TAXONOMIAS_PATH)
-    entry = {
-        "clave_propuesta": clave_propuesta,
-        "ejemplo_texto": ejemplo_texto[:200],
-        "tipo": tipo,
-        "familia_mas_cercana": familia_mas_cercana,
-        "fecha": datetime.now(timezone.utc).isoformat(),
-        "estado": "pendiente",
-    }
 
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -43,7 +38,24 @@ def _registrar_propuesta(
     except (FileNotFoundError, json.JSONDecodeError):
         data = []
 
-    data.append(entry)
+    # Deduplicar: buscar entrada pendiente con misma clave+tipo
+    for entry in data:
+        if (entry.get("clave_propuesta") == clave_propuesta
+                and entry.get("tipo") == tipo
+                and entry.get("estado") == "pendiente"):
+            entry["n_ocurrencias"] = entry.get("n_ocurrencias", 1) + 1
+            entry["fecha"] = datetime.now(timezone.utc).isoformat()
+            break
+    else:
+        data.append({
+            "clave_propuesta": clave_propuesta,
+            "ejemplo_texto": ejemplo_texto[:200],
+            "tipo": tipo,
+            "familia_mas_cercana": familia_mas_cercana,
+            "fecha": datetime.now(timezone.utc).isoformat(),
+            "estado": "pendiente",
+            "n_ocurrencias": 1,
+        })
 
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:

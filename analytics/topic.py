@@ -224,22 +224,22 @@ def classify_topic(text: str) -> TopicResult:
             evidence_map[tema] = evi
 
     if not scores:
-        # Texto vacío o muy corto → no_aplica
-        stripped_tokens = [t for t in tokens if len(t) > 1]
-        if len(stripped_tokens) <= 1:
+        # Texto vacío, saludo o muy corto (≤5 tokens) → no_aplica (sin propuesta).
+        # Texto con contenido real pero sin match → propuesta abierta.
+        if len(tokens) <= 5:
             return TopicResult(tema="no_aplica", scores=scores)
 
-        # Texto con contenido real pero sin match → propuesta abierta
-        from dashboard.tema_taxonomia import remapear
-        propuesta_key = remapear("no_aplica")  # returns "no_aplica"
-        # Registrar como propuesta
+        # Texto con contenido real pero sin match → propuesta abierta.
+        # La propuesta se devuelve como clave, no se fuerza a 'no_aplica'.
+        from analytics._propuestas import _registrar_propuesta
+        propuesta_key = f"tema_nuevo_{tokens.pop() if tokens else 'desconocido'}"
         _registrar_propuesta(
-            clave_propuesta=f"tema_nuevo_{tokens.pop() if tokens else 'desconocido'}",
+            clave_propuesta=propuesta_key,
             ejemplo_texto=text[:200],
             tipo="tema",
             familia_mas_cercana="",
         )
-        return TopicResult(tema="no_aplica", scores=scores)
+        return TopicResult(tema=propuesta_key, scores=scores)
 
     best_tema = max(scores, key=lambda k: scores[k])
 
@@ -274,10 +274,10 @@ def aggregate_topics(texts: list[str]) -> dict:
 
     for text in texts:
         result = classify_topic(text)
-        if result.tema in conteo:
-            conteo[result.tema] += 1
-        else:
-            conteo[result.tema] = 1
+        # Contar también claves no-canónicas (propuestas)
+        if result.tema not in conteo:
+            conteo[result.tema] = 0
+        conteo[result.tema] += 1
 
     total = len(texts)
     pct = {

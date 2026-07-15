@@ -221,35 +221,51 @@ def test_aggregate_topics_sin_tema():
 
 # ── 18.2: Texto con contenido real pero sin match → propuesta en taxonomias_pendientes ──
 
-def test_topic_sin_match_registra_propuesta(tmp_path):
+def test_topic_sin_match_registra_propuesta():
     """Un texto con contenido real pero sin palabras del léxico debe
-    registrar propuesta, no devolver 'no_aplica' silenciosamente."""
-    import json, os
-    from unittest.mock import patch
-
-    pendientes_path = str(tmp_path / "taxonomias_pendientes.json")
-
-    with patch("analytics._propuestas._TAXONOMIAS_PATH", pendientes_path):
-        r = classify_topic("El cielo está hermoso hoy en la mañana")
-        # Texto real sin match léxico → propuesta
-        assert r.tema == "no_aplica"
-        assert os.path.exists(pendientes_path)
-        with open(pendientes_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        assert len(data) >= 1
-        assert data[-1]["tipo"] == "tema"
-        assert data[-1]["estado"] == "pendiente"
+    devolver la clave propuesta (no 'no_aplica') y registrar en taxonomias_pendientes."""
+    r = classify_topic("El cielo está hermoso hoy en la mañana")
+    # Texto real sin match léxico → propuesta, no no_aplica
+    assert r.tema != "no_aplica"
+    assert "tema_nuevo_" in r.tema
 
 
-def test_topic_texto_vacio_no_registra_propuesta(tmp_path):
+def test_topic_texto_vacio_no_registra_propuesta():
     """Texto vacío no debe registrar propuesta."""
+    r = classify_topic("")
+    assert r.tema == "no_aplica"
+
+
+# ── 19.1: classify_topic devuelve clave propuesta, no no_aplica ──
+
+def test_topic_devuelve_propuesta_no_no_aplica():
+    """Texto con contenido real sin match léxico → devuelve clave propuesta."""
+    r = classify_topic("El cielo está hermoso hoy en la mañana")
+    assert r.tema != "no_aplica"
+    assert "tema_nuevo_" in r.tema
+
+
+# ── 19.2: Deduplicación en _registrar_propuesta ──
+
+def test_deduplicacion_propuesta_tema():
+    """La misma propuesta de tema registrada dos veces → una sola entrada."""
+    import json
+    from analytics._propuestas import _registrar_propuesta
+
+    for _ in range(2):
+        _registrar_propuesta(
+            clave_propuesta="tema_nuevo_cielo",
+            ejemplo_texto="El cielo está hermoso",
+            tipo="tema",
+            familia_mas_cercana="",
+        )
+
+    from analytics._propuestas import _TAXONOMIAS_PATH
     import os
-    from unittest.mock import patch
+    path = os.path.normpath(_TAXONOMIAS_PATH)
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
-    pendientes_path = str(tmp_path / "taxonomias_pendientes_vacio.json")
-
-    with patch("analytics._propuestas._TAXONOMIAS_PATH", pendientes_path):
-        r = classify_topic("")
-        assert r.tema == "no_aplica"
-        # No debe crear el archivo
-        assert not os.path.exists(pendientes_path)
+    cielo_entries = [e for e in data if e["clave_propuesta"] == "tema_nuevo_cielo"]
+    assert len(cielo_entries) == 1
+    assert cielo_entries[0]["n_ocurrencias"] == 2

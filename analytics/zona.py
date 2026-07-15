@@ -151,11 +151,31 @@ def es_propuesta_zona(text: str) -> str | None:
     está en el gazetteer, retorna la palabra candidata para registrar como propuesta.
 
     Registra automáticamente en taxonomias_pendientes.json con tipo="zona".
+    Descarta palabras comunes/stopwords.
 
     Heurística: contenido después de "en ", "de ", "por ", "desde ".
     """
     if not text or not text.strip():
         return None
+
+    _STOPWORDS_ZONA: set[str] = {
+        "el", "la", "los", "las", "un", "una", "de", "del", "al", "a",
+        "en", "con", "por", "para", "sin", "que", "se", "es", "lo", "su",
+        "sus", "este", "esta", "ese", "esa", "esto", "eso", "como", "mas",
+        "pero", "si", "no", "ya", "ni", "o", "y", "e", "muy", "hay",
+        "fue", "ser", "estar", "haber", "hacer", "tener", "ir", "poder",
+        "decir", "ver", "dar", "saber", "querer", "llegar", "poner",
+        "creer", "todo", "toda", "todos", "todas", "otro", "otra",
+        "otros", "otras", "cada", "algo", "nada", "siempre", "nunca",
+        "aquí", "ahí", "allí", "donde", "cuando", "buen", "bueno",
+        "buena", "mal", "malo", "mala", "gran", "grande", "pequeño",
+        "pequeña", "todo", "toda", "mismo", "misma", "tan", "tanto",
+        "poco", "mucho", "nada", "nadie", "toda", "tienen", "tiene",
+        "circular", "toda", "hay", "ella", "ellos", "nosotros", "ustedes",
+        "problema", "problemas", "situacion", "cosas", "gente", "forma",
+        "manera", "parte", "lado", "tipo", "momento", "tiempo", "vida",
+        "año", "anos", "dia", "dias", "vez", "veces", "caso", "casos",
+    }
 
     # Buscar patrones "en <zona>", "de <zona>", "por <zona>"
     import re
@@ -166,17 +186,24 @@ def es_propuesta_zona(text: str) -> str | None:
 
     for candidata in patrones:
         candidata_limpia = candidata.strip()
-        if len(candidata_limpia) >= 3:
-            # Verificar que no esté ya en el gazetteer
-            zona = detectar_zona(candidata_limpia)
-            if not zona.zona:
-                _registrar_propuesta(
-                    clave_propuesta=candidata_limpia,
-                    ejemplo_texto=text[:200],
-                    tipo="zona",
-                    familia_mas_cercana="",
-                )
-                return candidata_limpia
+        if len(candidata_limpia) < 3:
+            continue
+
+        # Descargar stopwords: si la candidata es solo una palabra común
+        palabras = candidata_limpia.split()
+        if len(palabras) == 1 and palabras[0] in _STOPWORDS_ZONA:
+            continue
+
+        # Verificar que no esté ya en el gazetteer
+        zona = detectar_zona(candidata_limpia)
+        if not zona.zona:
+            _registrar_propuesta(
+                clave_propuesta=candidata_limpia,
+                ejemplo_texto=text[:200],
+                tipo="zona",
+                familia_mas_cercana="",
+            )
+            return candidata_limpia
 
     return None
 

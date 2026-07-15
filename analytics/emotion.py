@@ -382,36 +382,18 @@ def classify_emotion(text: str, es_oficial: bool = False) -> EmotionResult:
         )
 
     if not scores:
-        # Sin match en léxico: detectar familia y proponer hoja nueva
+        # Sin match en léxico: detectar familia y proponer hoja nueva.
+        # La propuesta se devuelve como clave, no se fuerza a 'calma'.
         familia = _detectar_familia_emocion(text)
-        from dashboard.tema_taxonomia import normalizar_emocion
-        try:
-            emocion_norm = normalizar_emocion(familia)
-        except (ValueError, KeyError):
-            # La familia no es una emoción válida directamente; proponer
-            propuesta = f"{familia}_nueva"
-            _registrar_propuesta(
-                clave_propuesta=propuesta,
-                ejemplo_texto=text[:200],
-                tipo="emocion",
-                familia_mas_cercana=familia,
-            )
-            emocion_norm = "calma"
-            familia = "civica"
-        else:
-            # La normalización funcionó; si la emoción no estaba en el lexicon,
-            # registrar como propuesta
-            if emocion_norm not in EMOTION_LEXICON:
-                _registrar_propuesta(
-                    clave_propuesta=emocion_norm,
-                    ejemplo_texto=text[:200],
-                    tipo="emocion",
-                    familia_mas_cercana=familia,
-                )
-            familia = familia_de(emocion_norm)
-
+        propuesta = f"{familia}_nueva"
+        _registrar_propuesta(
+            clave_propuesta=propuesta,
+            ejemplo_texto=text[:200],
+            tipo="emocion",
+            familia_mas_cercana=familia,
+        )
         return EmotionResult(
-            emocion=emocion_norm,
+            emocion=propuesta,
             familia=familia,
             intensidad="media",
             evidence=[],
@@ -451,6 +433,7 @@ def classify_emotion(text: str, es_oficial: bool = False) -> EmotionResult:
     try:
         best_emo = normalizar_emocion(best_emo)
     except (ValueError, KeyError):
+        # Clave no reconocida: registrar como propuesta y devolver tal cual
         _registrar_propuesta(
             clave_propuesta=best_emo,
             ejemplo_texto=text[:200],
@@ -485,14 +468,16 @@ def aggregate_emotions(texts: list[str], es_oficial: bool = False) -> dict:
     if not texts:
         return _empty_emotion_aggregate()
 
-    conteo = {e: 0 for e in EMOCIONES_VALIDAS}
+    conteo: dict[str, int] = {e: 0 for e in EMOCIONES_VALIDAS}
     familias: dict[str, int] = {}
     evidencias: dict[str, list[str]] = {}
 
     for text in texts:
         result = classify_emotion(text, es_oficial=es_oficial)
-        if result.emocion in conteo:
-            conteo[result.emocion] += 1
+        # Contar también claves no-canónicas (propuestas)
+        if result.emocion not in conteo:
+            conteo[result.emocion] = 0
+        conteo[result.emocion] += 1
         fam = result.familia
         familias[fam] = familias.get(fam, 0) + 1
         # Guardar evidencia
@@ -500,12 +485,13 @@ def aggregate_emotions(texts: list[str], es_oficial: bool = False) -> dict:
             evidencias[fam] = result.evidence[:3]
 
     total = len(texts)
+    all_keys = list(conteo.keys())
     pct = {
         e: round(conteo.get(e, 0) / total * 100, 1)
-        for e in EMOCIONES_VALIDAS
+        for e in all_keys
     }
 
-    dominante = max(EMOCIONES_VALIDAS, key=lambda e: conteo.get(e, 0))
+    dominante = max(all_keys, key=lambda e: conteo.get(e, 0))
     if conteo.get(dominante, 0) == 0:
         dominante = "calma"
 

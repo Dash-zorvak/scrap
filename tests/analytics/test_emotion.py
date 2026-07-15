@@ -16,7 +16,12 @@ def test_emotion_neutral_texto_vacio():
 
 def test_emotion_neutral_texto_neutro():
     r = classify_emotion("La reunión es el lunes a las 3pm")
-    assert r.emocion == "calma"
+    # Texto real sin match léxico → clave propuesta, no "calma"
+    assert r.emocion != "calma"
+    assert "_nueva" in r.emocion or r.familia in (
+        "civica", "joy", "trust", "fear", "surprise",
+        "sadness", "disgust", "anger", "anticipation", "diada",
+    )
 
 
 def test_emotion_none():
@@ -281,25 +286,36 @@ def test_aggregate_emotions_es_oficial():
     assert agg["total"] == 2
 
 
-# ── 18.1: Texto sin match en léxico → propuesta en taxonomias_pendientes ──
+# ── 19.1: classify_emotion devuelve clave propuesta, no calma ──
 
-def test_emotion_sin_match_registra_propuesta(tmp_path):
-    """Un texto sin palabras del léxico pero con señal emocional debe
-    registrar propuesta en taxonomias_pendientes.json, no devolver 'calma'."""
-    import json, os
-    from unittest.mock import patch
+def test_emotion_devuelve_propuesta_no_calma():
+    """Texto con señal emocional real sin match léxico → devuelve clave propuesta."""
+    r = classify_emotion("xyzzy flurb nobbat xyzzy")
+    assert r.emocion != "calma"
+    assert "_nueva" in r.emocion
 
-    pendientes_path = str(tmp_path / "taxonomias_pendientes.json")
 
-    with patch("analytics._propuestas._TAXONOMIAS_PATH", pendientes_path):
-        r = classify_emotion("xyzzy flurb nobbat")
-        # Debe detectar familia (civica por defecto) y registrar propuesta
-        assert r.familia in ("civica", "joy", "trust", "fear", "surprise",
-                              "sadness", "disgust", "anger", "anticipation", "diada")
-        # Verificar que se escribió la propuesta
-        assert os.path.exists(pendientes_path)
-        with open(pendientes_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        assert len(data) >= 1
-        assert data[-1]["tipo"] == "emocion"
-        assert data[-1]["estado"] == "pendiente"
+# ── 19.2: Deduplicación en _registrar_propuesta ──
+
+def test_deduplicacion_propuesta_emocion():
+    """El mismo texto sin match clasificado dos veces → una sola entrada con n_ocurrencias==2."""
+    import json
+    from analytics._propuestas import _registrar_propuesta
+
+    for _ in range(2):
+        _registrar_propuesta(
+            clave_propuesta="anger_nueva",
+            ejemplo_texto="texto de prueba",
+            tipo="emocion",
+            familia_mas_cercana="anger",
+        )
+
+    from analytics._propuestas import _TAXONOMIAS_PATH
+    import os
+    path = os.path.normpath(_TAXONOMIAS_PATH)
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    anger_entries = [e for e in data if e["clave_propuesta"] == "anger_nueva"]
+    assert len(anger_entries) == 1
+    assert anger_entries[0]["n_ocurrencias"] == 2

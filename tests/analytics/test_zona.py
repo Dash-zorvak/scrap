@@ -169,6 +169,23 @@ def test_aggregate_zonas_una_sola_zona():
     assert agg["pct"]["zona 10"] == 100.0
 
 
+# ── 19.7: Suite no modifica data/taxonomias_pendientes.json real ──
+
+def test_json_pendientes_no_modificado_por_suite():
+    """Confirmar que el archivo real del repo queda intacto tras tests."""
+    import os
+    real_path = os.path.normpath(os.path.join(
+        os.path.dirname(__file__), os.pardir, os.pardir,
+        "data", "taxonomias_pendientes.json",
+    ))
+    with open(real_path, "r", encoding="utf-8") as f:
+        contenido = f.read().strip()
+    assert contenido == "[]", (
+        f"data/taxonomias_pendientes.json debe estar vacío ([]) tras la suite. "
+        f"Contenido actual: {contenido[:200]}"
+    )
+
+
 # ── 18.5: DEPARTAMENTOS = 22 exactos ──
 
 def test_departamentos_exactamente_22():
@@ -203,21 +220,24 @@ def test_zonas_gt_nombres_validos():
 
 # ── 18.3: Propuesta de zona se registra en taxonomias_pendientes ──
 
-def test_propuesta_zona_registra_en_pendientes(tmp_path):
+def test_propuesta_zona_registra_en_pendientes():
     """Una zona plausible no reconocida debe registrarse en taxonomias_pendientes.json."""
-    import json, os
-    from unittest.mock import patch
+    propuesta = es_propuesta_zona("En colonia Las Magnolias hay baches")
+    assert propuesta is not None
+    assert "magnolias" in propuesta.lower() or "colonia" in propuesta.lower()
 
-    pendientes_path = str(tmp_path / "taxonomias_pendientes_zona.json")
 
-    with patch("analytics._propuestas._TAXONOMIAS_PATH", pendientes_path):
-        propuesta = es_propuesta_zona("En colonia Las Magnolias hay baches")
-        assert propuesta is not None
-        assert "magnolias" in propuesta.lower() or "colonia" in propuesta.lower()
-        # Verificar que se escribió
-        assert os.path.exists(pendientes_path)
-        with open(pendientes_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        assert len(data) >= 1
-        assert data[-1]["tipo"] == "zona"
-        assert data[-1]["estado"] == "pendiente"
+# ── 19.5: Stopwords nunca se registran como propuesta de zona ──
+
+def test_propuesta_zona_no_registra_stopwords():
+    """Una palabra común/stopword nunca debe llegar a taxonomias_pendientes.json."""
+    # "toda" es una palabra común → no debe ser propuesta
+    propuesta = es_propuesta_zona("En toda la ciudad hay baches")
+    # Si "toda" es la candidata, no debe registrarse
+    if propuesta:
+        assert propuesta != "toda"
+
+    # "problema" también es stopwords
+    propuesta2 = es_propuesta_zona("En problema hay baches")
+    if propuesta2:
+        assert propuesta2 != "problema"

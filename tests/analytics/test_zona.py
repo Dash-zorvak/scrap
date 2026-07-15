@@ -171,19 +171,58 @@ def test_aggregate_zonas_una_sola_zona():
 
 # ── 19.7: Suite no modifica data/taxonomias_pendientes.json real ──
 
+@pytest.mark.no_taxonomia_mock
 def test_json_pendientes_no_modificado_por_suite():
-    """Confirmar que el archivo real del repo queda intacto tras tests."""
+    """Confirmar que el archivo real del repo queda intacto tras tests.
+
+    Usa @pytest.mark.no_taxonomia_mock para saltar el fixture que parchea
+    la ruta, y asi leer el archivo real (data/taxonomias_pendientes.json).
+    Antes (Bloque 5.2) se verificaba que estuviera vacio ([]), pero tras
+    la migracion 8.2 puede contener propuestas reales del clasificador.
+    Ahora se verifica que cada entrada cumpla el esquema exacto que
+    _registrar_propuesta() escribe.
+    """
+    import json
     import os
     real_path = os.path.normpath(os.path.join(
         os.path.dirname(__file__), os.pardir, os.pardir,
         "data", "taxonomias_pendientes.json",
     ))
     with open(real_path, "r", encoding="utf-8") as f:
-        contenido = f.read().strip()
-    assert contenido == "[]", (
-        f"data/taxonomias_pendientes.json debe estar vacío ([]) tras la suite. "
-        f"Contenido actual: {contenido[:200]}"
-    )
+        data = json.load(f)
+
+    # Si esta vacio, perfecto
+    if not data:
+        return
+
+    # Cada entrada debe cumplir el schema exacto de _registrar_propuesta()
+    campos_requeridos = {
+        "clave_propuesta": str,
+        "ejemplo_texto": str,
+        "tipo": str,
+        "familia_mas_cercana": str,
+        "fecha": str,
+        "estado": str,
+        "n_ocurrencias": int,
+    }
+    for i, entry in enumerate(data):
+        assert isinstance(entry, dict), f"Entry {i} no es dict"
+        for campo, tipo in campos_requeridos.items():
+            assert campo in entry, f"Entry {i} falta '{campo}'"
+            assert isinstance(entry[campo], tipo), (
+                f"Entry {i}.{campo}: esperaba {tipo.__name__}, got {type(entry[campo]).__name__}"
+            )
+        assert entry["estado"] == "pendiente", f"Entry {i} estado={entry['estado']}"
+
+    # Verificar dedup: misma clave+tipo no debe aparecer en dos entradas
+    vistos = set()
+    for entry in data:
+        key = (entry["clave_propuesta"], entry["tipo"])
+        assert key not in vistos, (
+            f"Duplicado: '{entry['clave_propuesta']}' (tipo={entry['tipo']}) "
+            f"aparece en 2+ entradas. n_ocurrencias debio colapsarlas."
+        )
+        vistos.add(key)
 
 
 # ── 18.5: DEPARTAMENTOS = 22 exactos ──

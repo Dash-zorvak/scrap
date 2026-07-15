@@ -4,6 +4,7 @@ Sin modelos entrenados, sin llamadas a APIs. Léxico semilla por categoría
 con detección de intensificadores y regla "me divierte" para publicaciones
 oficiales.
 """
+import hashlib
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -384,8 +385,19 @@ def classify_emotion(text: str, es_oficial: bool = False) -> EmotionResult:
     if not scores:
         # Sin match en léxico: detectar familia y proponer hoja nueva.
         # La propuesta se devuelve como clave, no se fuerza a 'calma'.
+        # Clave determinista: primera palabra >=4 letras, o hash sha256.
         familia = _detectar_familia_emocion(text)
-        propuesta = f"{familia}_nueva"
+        tokens = _tokenize(text) if text else []
+        palabra_rep = "desconocido"
+        for t in tokens:
+            if len(t) >= 4:
+                palabra_rep = t
+                break
+        else:
+            # Sin palabra >=4 letras (emoji-only, muy corto): hash determinista
+            raw = text.strip().lower().encode("utf-8") if text else b""
+            palabra_rep = hashlib.sha256(raw).hexdigest()[:8]
+        propuesta = f"{familia}_nueva_{palabra_rep}"
         _registrar_propuesta(
             clave_propuesta=propuesta,
             ejemplo_texto=text[:200],

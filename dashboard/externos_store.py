@@ -26,7 +26,12 @@ def _resolver_db(db_path=None):
 
 
 def asegurar_tablas_externas(db_path=None):
-    """Crea las tablas externas si no existen (idempotente)."""
+    """Crea las tablas externas si no existen (idempotente).
+
+    Tambien migra external_comments con columnas computed
+    (sentiment, sentiment_score, topic_category, zona) para cerrar
+    la brecha estructural con fb_comments (Bloque 8.3).
+    """
     db = _resolver_db(db_path)
     conn = sqlite3.connect(db)
     try:
@@ -69,6 +74,9 @@ def asegurar_tablas_externas(db_path=None):
                 added_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        # Migrar columnas computed en external_comments
+        from dashboard.tema_aprobaciones import _asegurar_columnas_computed
+        _asegurar_columnas_computed(conn, "external_comments")
         conn.commit()
     finally:
         conn.close()

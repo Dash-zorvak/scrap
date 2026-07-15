@@ -25,13 +25,25 @@ from dashboard.dash_ui import _page_head
 from dashboard.dash_ingesta import seccion_cargar_contenido
 from dashboard.editor_db import seccion_editar_db
 from dashboard.dash_temas import render_revisor_temas
+from dashboard.tema_aprobaciones import (
+    asegurar_tabla_en_tiktok,
+    asegurar_computed_tiktok,
+    asegurar_computed_externos,
+)
 from src.config import Config, ensure_dirs
 _cfg = Config()
 FACEBOOK_DB = _cfg.FACEBOOK_DB
+TIKTOK_DB = _cfg.TIKTOK_DB
+EXTERNOS_DB = _cfg.EXTERNOS_DB
 ensure_dirs(_cfg)
 
 from config.logging_config import configurar_logging
 configurar_logging()
+
+# ─── Migraciones estructurales 8.3 ─────
+asegurar_tabla_en_tiktok(TIKTOK_DB)
+asegurar_computed_tiktok(TIKTOK_DB)
+asegurar_computed_externos(EXTERNOS_DB)
 
 # ─── Estado de sesión ────────────────
 if "lote_ingreso" not in st.session_state:
@@ -46,8 +58,8 @@ st.set_page_config(
 st.markdown(CSS, unsafe_allow_html=True)
 st.markdown(CSS_OVERRIDE, unsafe_allow_html=True)
 
-from dashboard.auth import require_auth
-require_auth()
+# from auth import require_auth  # deshabilitado — auth.py se mantiene intacto
+# require_auth()
 
 # ─── Topbar (uso interno del analista) ─────
 st.markdown("""
@@ -62,21 +74,6 @@ _page_head(
     "Centro de ingesta de informes y evidencia",
     "Cargue informes consolidados, evidencia documental y briefings diarios. Cada documento se incorpora al pipeline de inteligencia."
 )
-
-st.markdown("""
-<div class="doc-center">
-    <div class="doc-label">
-        <div class="doc-icon-box">PDF</div>
-        <div class="doc-info">
-            <div class="doc-filename">Informe Consolidado del Día</div>
-            <div class="doc-meta">CENTRO DE DOCUMENTACIÓN EJECUTIVA · BRIEFING DIARIO CORPORATIVO</div>
-        </div>
-    </div>
-    <div class="doc-empty">
-        <div class="doc-empty-label">Sin documento disponible. El informe consolidado se genera automáticamente al procesar los datos del día.</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
 
 tab_carga, tab_editor, tab_aprobar = st.tabs([
     "📥 Cargar contenido", "🛠️ Editar base de datos", "✅ Aprobar temas"

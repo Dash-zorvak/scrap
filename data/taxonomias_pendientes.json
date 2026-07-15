@@ -1,1 +1,416 @@
-[]
+[
+  {
+    "clave_propuesta": "trust_nueva",
+    "ejemplo_texto": "Felicidades al que fue director de la mayen torres santa ana un gran maestro saluda familia trujillo dios lo bendiga maestro aunque no este en la escuela pero si en nuestros corazones no habra otro",
+    "tipo": "emocion",
+    "familia_mas_cercana": "trust",
+    "fecha": "2026-07-15T05:31:47.711321+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 5
+  },
+  {
+    "clave_propuesta": "civica_nueva",
+    "ejemplo_texto": "👏",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T05:31:47.718029+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 41
+  },
+  {
+    "clave_propuesta": "joy_nueva",
+    "ejemplo_texto": "Pinten las llantas de seleste tambien",
+    "tipo": "emocion",
+    "familia_mas_cercana": "joy",
+    "fecha": "2026-07-15T05:28:08.597459+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "trust_nueva_felicidades",
+    "ejemplo_texto": "Felicidades al que fue director de la mayen torres santa ana un gran maestro saluda familia trujillo dios lo bendiga maestro aunque no este en la escuela pero si en nuestros corazones no habra otro",
+    "tipo": "emocion",
+    "familia_mas_cercana": "trust",
+    "fecha": "2026-07-15T06:02:41.161149+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_6340eb6d",
+    "ejemplo_texto": "👏",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.492466+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 4
+  },
+  {
+    "clave_propuesta": "civica_nueva_paciencia",
+    "ejemplo_texto": "paciencia no puede todo de un solo arreglar la. Miseria en q dejaron a santa Ana anteriormente es mucho el trabajo",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.240773+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_cuesta",
+    "ejemplo_texto": "Y la cuesta de natividad hacia los guirola abandona",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.265220+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_todo",
+    "ejemplo_texto": "Todo solo yo solo y mas solo yo Ya parece mago el señor",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.281185+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_0b3e8ae2",
+    "ejemplo_texto": "👏👍",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.292076+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_gran",
+    "ejemplo_texto": "Gran migajero este 0te",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.313861+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_pinten",
+    "ejemplo_texto": "Pinten las llantas de seleste también",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.324572+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_mire",
+    "ejemplo_texto": "Mire por aquí en la. Col jarnes de santa Lucía y col santa eduvigues a eso y mucho más nos enfrentamos todos los. Días y le. Hemos suplicando ayuda en estos dos periodos que usted a estado en la. Alca",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.332072+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_solo",
+    "ejemplo_texto": "Solo para la foto ratas 🐀",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.340108+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_ladrones",
+    "ejemplo_texto": "Ladrones",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.348892+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_colonia",
+    "ejemplo_texto": "La colonia río Zarco de Santa Ana lotificación la Floresta calle El tamarindo se necesita reparación de calles están en muy mal estado en ese lugar no hay ni cunetas deberían de ir a ver esos lugares ",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.353033+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_pacencia",
+    "ejemplo_texto": "pacencia no puede todo de un solo arreglar la. Miseria en q dejaron a santa Ana anteriormente es mucho el trabajo",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.365117+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "joy_nueva_pinten",
+    "ejemplo_texto": "Pinten las llantas de seleste tambien",
+    "tipo": "emocion",
+    "familia_mas_cercana": "joy",
+    "fecha": "2026-07-15T06:02:41.372268+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_donde",
+    "ejemplo_texto": "Donde es esa casa el manantial",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.379763+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_camones",
+    "ejemplo_texto": "En camones ahy lo dice arriba",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.386576+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_adonde",
+    "ejemplo_texto": "Adonde es casa comunal manantial",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.398034+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_ubicacion",
+    "ejemplo_texto": "Ubicacion por favor",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.403443+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_dice",
+    "ejemplo_texto": "ahi dice que en camones",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.408196+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_alguien",
+    "ejemplo_texto": "Si alguien sabe donde es casa comunal manantial por favor",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.412785+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_ubicasion",
+    "ejemplo_texto": "ubicasion",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.417174+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_justo",
+    "ejemplo_texto": "Justo en el clavo 🤠☝️🙌🫶",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.434482+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_bendicion",
+    "ejemplo_texto": "que bendición 💪",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.448392+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_amado",
+    "ejemplo_texto": "Te amo mi amado alcalde sos el mejor",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.466112+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_vendisiones",
+    "ejemplo_texto": "VENDISIONES. TESEO UNA BUENA COSECHA CUIDENSE ABRASOS",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.473979+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_exactamente",
+    "ejemplo_texto": "Exactamente señor alcalde",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.484666+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_aqui",
+    "ejemplo_texto": "Aquí por la teosintopueden ayudarnos con la riega de veneno pare el gusano",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.488462+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_874f0536",
+    "ejemplo_texto": "🫶🏻",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.503601+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_woooow",
+    "ejemplo_texto": "Woooow exelente trabajo señor alcalde 👏🏻",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.508241+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_paso",
+    "ejemplo_texto": "Que pasó, con los jornaleros que se contrataban, para realizar esta labor? Van hacer una actividad para llevarles, lo necesario para que no les falte el alimento? Los DRONES, VAN A USAR PARA RECOGER L",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.516788+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "trust_nueva_dentro",
+    "ejemplo_texto": "Dentro de poco, veremos familias padeciendo de enfermedades, respiratorias, en la piel, etc, ya que el viento se llevará los pesticidas que se van a regar con los drones.",
+    "tipo": "emocion",
+    "familia_mas_cercana": "trust",
+    "fecha": "2026-07-15T06:02:41.524254+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_realizar",
+    "ejemplo_texto": "Realizar esta actividad a baja altura, para mejor aprovechamiento del químico, llámese herbicida, fungicida, abono, etc.",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.530716+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_tiene",
+    "ejemplo_texto": "Tiene razón pero eso depende de cuanto es de grande el terreno y cercanía de las casas",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.535085+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_realizamos",
+    "ejemplo_texto": "Que realizamos .... suena manada",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.560967+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "joy_nueva_hubiesen",
+    "ejemplo_texto": "Le hubiesen dejado parqueo, ya que el centro de Santa Ana carece de buenos parqueos y las calles son demasiadas estrechas como para transitar y parquearse tambien.",
+    "tipo": "emocion",
+    "familia_mas_cercana": "joy",
+    "fecha": "2026-07-15T06:02:41.569362+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_cada",
+    "ejemplo_texto": "cada 3 años dundo",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.586586+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_agradece",
+    "ejemplo_texto": "Se le agradece señor alcalde que apoye al sector agrícola... así se gana la gente 👍",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.599408+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_canton",
+    "ejemplo_texto": "Cantón loma alta caserío los morales debería venir abonar la gente aquí sol eso mantiene",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.607261+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_5d57d39e",
+    "ejemplo_texto": "👍",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.611023+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_necesito",
+    "ejemplo_texto": "Necesito proveedor de frutas y verduras. Por mayorero. Alguien q me ayude?",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.622410+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_equipo",
+    "ejemplo_texto": "Si ese equipo es publico, pagó por los impuestos de Los Salvadoreños ¿Porque lleva su nombre?",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.643358+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_complejo",
+    "ejemplo_texto": "En complejo AVITACIONAl el trébol santa ana ya tenemos días sin agua y nadie nos ayuda",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:02:41.647722+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 2
+  },
+  {
+    "clave_propuesta": "civica_nueva_baches",
+    "ejemplo_texto": "Los baches en la calle estan terrible",
+    "tipo": "emocion",
+    "familia_mas_cercana": "civica",
+    "fecha": "2026-07-15T06:03:00.641018+00:00",
+    "estado": "pendiente",
+    "n_ocurrencias": 1
+  }
+]

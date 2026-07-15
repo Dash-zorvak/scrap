@@ -99,7 +99,7 @@ def render_revisor_temas(db_path):
                 if st.button("Aprobar", key=f"ap_{cid}"):
                     guardar_aprobacion(
                         db_path, cid, sel, texto=texto,
-                        tema_sugerido=None, tono="literal",
+                        tema_sugerido=None, tono=None,
                         confianza=None, postura=sel_postura,
                         emocion=sel_emocion,
                     )

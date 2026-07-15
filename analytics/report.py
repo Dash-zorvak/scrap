@@ -61,7 +61,7 @@ def construir_analysis(aprobaciones_agrupadas: list,
         pct_critico = agg["pct"].get("muy_negativo", 0) + agg["pct"].get("negativo", 0)
         pct_neutral_s = agg["pct"].get("neutral", 0)
         tono_dominante = agg["dominante"]
-        tono_score_hoy = agg["score_promedio"]
+        tono_score_hoy = round(pct_favorable - pct_critico, 1)
     else:
         # Fallback: derivar desde conteos de aprobaciones
         n_total = total_aprobados
@@ -71,12 +71,7 @@ def construir_analysis(aprobaciones_agrupadas: list,
             pct_neutral_s = round(100 - pct_favorable - pct_critico, 1)
         else:
             pct_favorable = pct_critico = pct_neutral_s = 0.0
-        # Derivar tono_score_hoy desde saldo
-        saldo = total_apoyo - total_critica
-        if n_total > 0:
-            tono_score_hoy = round(saldo / n_total * 2, 2)
-        else:
-            tono_score_hoy = 0.0
+        tono_score_hoy = round(pct_favorable - pct_critico, 1)
         if pct_favorable > pct_critico:
             tono_dominante = "positivo"
         elif pct_critico > pct_favorable:
@@ -86,9 +81,9 @@ def construir_analysis(aprobaciones_agrupadas: list,
 
     tono_score_ayer = 0.0
     tendencia = round(tono_score_hoy - tono_score_ayer, 2)
-    if tendencia > 0.1:
+    if tendencia > 1.0:
         etiqueta_tendencia = "mejorando"
-    elif tendencia < -0.1:
+    elif tendencia < -1.0:
         etiqueta_tendencia = "empeorando"
     else:
         etiqueta_tendencia = "estable"

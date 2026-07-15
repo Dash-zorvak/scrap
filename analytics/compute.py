@@ -56,9 +56,9 @@ def theme_color_hash(tema):
 
 def tendency_style(tend):
     """Tendency value -> (color, label)."""
-    if tend > 0.1:
+    if tend > 1.0:
         return "var(--green)", f"↑ +{tend:.1f} pts"
-    elif tend < -0.1:
+    elif tend < -1.0:
         return "var(--red)", f"↓ {tend:.1f} pts"
     else:
         return "var(--amber)", "→ sin cambio"

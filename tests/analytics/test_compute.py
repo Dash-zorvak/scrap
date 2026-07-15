@@ -64,7 +64,7 @@ def test_tendency_style_positive():
     assert "2.5" in lbl
 
 def test_tendency_style_negative():
-    col, lbl = tendency_style(-1.0)
+    col, lbl = tendency_style(-2.5)
     assert "red" in col
     assert "↓" in lbl
 

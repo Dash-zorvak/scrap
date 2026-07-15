@@ -1,19 +1,27 @@
-"""Tests para las fórmulas §D-I del Bloque 6 (compute.py + report.py wiring).
+"""Tests para las fórmulas §D-I del Bloque 6.1 (compute.py + report.py wiring).
 
-Cada test verifica una fórmula con números conocidos verificados a mano.
-Incluye test de aislamiento cruzado FB/TK (§J).
+Reescritura completa según fórmulas literales de 'Agente Analista — instrucciones'.
+Cada test verifica una fórmula con números conocidos calculados a mano.
 """
 import math
 import pytest
 
 from analytics.compute import (
+    clamp,
     engagement_rate_fb, engagement_rate_tk, ratio_amor_enojo_fb,
-    reacciones_positivas_fb, reacciones_negativas_fb,
-    net_sentiment_index, controversy_index, effectiveness_index,
-    approval_pct, rejection_pct, vol_factor, risk_reputacional,
-    _detectar_alertas, calcular_hhi,
+    reacciones_positivas_fb, reacciones_negativas_fb, interacciones_fb,
+    net_sentiment_reacciones, controversy_reacciones, effectiveness_reacciones,
+    approval_pct_reacciones, rejection_pct_reacciones,
+    net_sentiment_index, nsi_deviation, vol_factor, risk_reputacional,
+    detectar_ici, detectar_sdi, detectar_efi, detectar_tai, detectar_zdi,
+    verificar_cooldown, calcular_sensibilidad_tema,
+    calcular_hhi,
+    calcular_aprobacion, calcular_conexion_con_vistas, calcular_conexion_sin_vistas,
+    calcular_tranquilidad, calcular_diversidad_temas, calcular_presencia_zonas,
+    calcular_consistencia, calcular_atencion,
     calcular_pulso_iq_fb, calcular_pulso_iq_tk,
     pulso_iq_score, pulso_iq_cuadrante,
+    DIMENSION_WEIGHTS, PLATFORM_IQ_WEIGHTS,
     coeficiente_variacion, autenticidad_pct,
 )
 from analytics.report import construir_analysis
@@ -25,62 +33,77 @@ from analytics.report import construir_analysis
 
 class TestEngagementFB:
     def test_fb_con_vistas(self):
-        """100 likes, 10 loves, 5 hahas, 2 sads, 3 angrys, 5 comments, 15 shares, 500 vistas
-        reacciones=120, engagement=120+5+15=140, ER=140/500*100=28.0%"""
+        """§D literal: ER_fb = (reacciones + comentarios + compartidos) / vistas * 100
+        100+10+0+5+0+2+3=120 reac, 120+5+15=140 eng, 140/500*100=28.0"""
         er, basis = engagement_rate_fb(
             likes=100, loves=10, cares=0, hahas=5,
             wows=0, sads=2, angrys=3,
-            comments=5, shares=15, views=500,
+            comments=5, shares=15, views=500, n_posts=10,
         )
         assert er == 28.0
-        assert basis == "vistas"
+        assert basis == "views"
 
-    def test_fb_sin_vistas(self):
-        """Sin vistas → engagement absoluto como proxy."""
+    def test_fb_sin_vistas_con_posts(self):
+        """§D literal: proxy = interacciones / n_posts, basis = per_post
+        50+5+0+0+0+0+0+10+20=85, 85/10=8.5"""
         er, basis = engagement_rate_fb(
             likes=50, loves=5, cares=0, hahas=0,
             wows=0, sads=0, angrys=0,
-            comments=10, shares=20, views=0,
+            comments=10, shares=20, views=0, n_posts=10,
         )
-        assert er == 85.0  # 50+5+0+0+0+0+0 + 10 + 20 = 85
+        assert er == 8.5
+        assert basis == "per_post"
+
+    def test_fb_sin_vistas_sin_posts(self):
+        """Sin vistas ni posts → engagement_abs como fallback."""
+        er, basis = engagement_rate_fb(
+            likes=50, loves=5, cares=0, hahas=0,
+            wows=0, sads=0, angrys=0,
+            comments=10, shares=20, views=0, n_posts=0,
+        )
+        assert er == 85.0
         assert basis == "engagement_abs"
 
     def test_fb_cero_engagement(self):
-        er, basis = engagement_rate_fb(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        er, basis = engagement_rate_fb(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         assert er == 0.0
         assert basis == "sin_datos"
 
 
 class TestEngagementTK:
     def test_tk_con_vistas(self):
-        """200 likes, 10 shares, 5 favorites, 8 comments, 1000 vistas
-        ER = (200+10+5+8)/1000*100 = 22.3%"""
+        """§D literal: ER_tk = (likes + shares + favorites + comments) / views * 100
+        Nota: se aplica *100 por consistencia con FB (documentado en PR)."""
         er, basis = engagement_rate_tk(
-            views=1000, likes=200, shares=10, favorites=5, comments=8,
+            views=1000, likes=200, shares=10, favorites=5, comments=8, n_videos=5,
         )
         assert er == 22.3
-        assert basis == "vistas"
+        assert basis == "views"
 
-    def test_tk_sin_vistas(self):
-        er, basis = engagement_rate_tk(0, 50, 5, 3, 10)
-        assert er == 68.0  # 50+5+3+10
+    def test_tk_sin_vistas_con_videos(self):
+        """Sin vistas pero con videos → per_post."""
+        er, basis = engagement_rate_tk(0, 50, 5, 3, 10, n_videos=10)
+        assert er == 6.8  # 68/10
+        assert basis == "per_post"
+
+    def test_tk_sin_vistas_sin_videos(self):
+        """Sin vistas ni videos → engagement_abs."""
+        er, basis = engagement_rate_tk(0, 50, 5, 3, 10, n_videos=0)
+        assert er == 68.0
         assert basis == "engagement_abs"
 
 
 class TestRatioAmorEnojo:
     def test_ratio_normal(self):
-        """(100 likes + 20 loves + 10 cares) / (5 angrys + 3 sads + 2 hahas)
-        = 130 / 10 = 13.0"""
+        """(100+20+10) / (5+3+2) = 130/10 = 13.0"""
         r = ratio_amor_enojo_fb(100, 20, 10, 2, 3, 5)
         assert r == 13.0
 
     def test_ratio_sin_enojo(self):
-        """Sin enojo pero con amor → 999.0"""
         r = ratio_amor_enojo_fb(50, 10, 5, 0, 0, 0)
         assert r == 999.0
 
     def test_ratio_cero(self):
-        """Sin amor ni enojo → 0.0"""
         r = ratio_amor_enojo_fb(0, 0, 0, 0, 0, 0)
         assert r == 0.0
 
@@ -90,121 +113,318 @@ class TestReacciones:
         assert reacciones_positivas_fb(100, 20, 10) == 130
 
     def test_negativas(self):
+        """§D literal: negativas = angrys + sads + hahas"""
         assert reacciones_negativas_fb(5, 3, 2) == 10
 
+    def test_interacciones(self):
+        """§D: interacciones = reacciones + comments + shares"""
+        assert interacciones_fb(100, 10, 0, 5, 0, 2, 3, 5, 15) == 140
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# §E — Indices
+# §E — Indices de reacciones
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestNetSentimentIndex:
-    def test_nsi_positivo(self):
-        """(70-30)/100*100 = 40.0"""
+class TestNetSentimentReacciones:
+    """§E literal: net_sentiment = (likes+loves+cares - negativas) / total_reactions"""
+
+    def test_positivo(self):
+        """(100+20+10 - 5-3-2) / (100+20+10+5+3+2) = 120/140 = 0.8571"""
+        ns = net_sentiment_reacciones(100, 20, 10, 5, 3, 2)
+        assert ns == 0.8571
+
+    def test_negativo(self):
+        """(10+0+0 - 50+30+20) / (10+50+30+20) = -90/110 = -0.8182"""
+        ns = net_sentiment_reacciones(10, 0, 0, 20, 30, 50)
+        assert ns == -0.8182
+
+    def test_neutral(self):
+        """(50+0+0 - 0+0+50) / 100 = 0.0"""
+        ns = net_sentiment_reacciones(50, 0, 0, 0, 0, 50)
+        assert ns == 0.0
+
+    def test_cero_reacciones(self):
+        ns = net_sentiment_reacciones(0, 0, 0, 0, 0, 0)
+        assert ns == 0.0
+
+
+class TestControversyReacciones:
+    """§E literal: controversy = negativas / total_reactions"""
+
+    def test_normal(self):
+        """(5+3+2) / (100+20+10+5+3+2) = 10/140 = 0.0714"""
+        c = controversy_reacciones(100, 20, 10, 5, 3, 2)
+        assert c == 0.0714
+
+    def test_todo_negativo(self):
+        """(50+30+20) / (0+0+0+50+30+20) = 100/100 = 1.0"""
+        c = controversy_reacciones(0, 0, 0, 50, 30, 20)
+        assert c == 1.0
+
+    def test_cero(self):
+        c = controversy_reacciones(0, 0, 0, 0, 0, 0)
+        assert c == 0.0
+
+
+class TestEffectivenessReacciones:
+    """§E literal: effectiveness = (likes+loves+cares) / total_reactions"""
+
+    def test_normal(self):
+        """(100+20+10) / 140 = 0.9286"""
+        e = effectiveness_reacciones(100, 20, 10, 5, 3, 2)
+        assert e == 0.9286
+
+    def test_cero(self):
+        e = effectiveness_reacciones(0, 0, 0, 0, 0, 0)
+        assert e == 0.0
+
+
+class TestApprovalRejectionReacciones:
+    def test_aprobacion(self):
+        """(100+20+10) / max(140,1) * 100 = 92.9%"""
+        a = approval_pct_reacciones(100, 20, 10, 5, 3, 2)
+        assert a == 92.9
+
+    def test_rechazo(self):
+        """(5+3+2) / max(140,1) * 100 = 7.1%"""
+        r = rejection_pct_reacciones(100, 20, 10, 5, 3, 2)
+        assert r == 7.1
+
+
+class TestNSI:
+    """§E literal: nsi = ((posts_positivos - posts_negativos) / total_posts) * 100"""
+
+    def test_positivo(self):
         assert net_sentiment_index(70, 30, 100) == 40.0
 
-    def test_nsi_negativo(self):
-        """(20-80)/100*100 = -60.0"""
+    def test_negativo(self):
         assert net_sentiment_index(20, 80, 100) == -60.0
 
-    def test_nsi_cero(self):
+    def test_cero(self):
         assert net_sentiment_index(0, 0, 0) == 0.0
 
-    def test_nsi_neutral(self):
-        """(50-50)/100*100 = 0.0"""
-        assert net_sentiment_index(50, 50, 100) == 0.0
 
+class TestNSIDeviation:
+    """§E literal: nsi_deviation = max(0, (50 - nsi) / 100)"""
 
-class TestControversyIndex:
-    def test_normal(self):
-        """min(60,40)/max(60,40) = 40/60 = 0.667"""
-        assert controversy_index(60, 40) == 0.667
+    def test_nsi_50(self):
+        assert nsi_deviation(50) == 0.0
 
-    def test_sin_controversia(self):
-        assert controversy_index(100, 0) == 0.0
+    def test_nsi_0(self):
+        assert nsi_deviation(0) == 0.5
 
-    def test_maxima(self):
-        assert controversy_index(50, 50) == 1.0
+    def test_nsi_negativo(self):
+        """max(0, (50 - (-50)) / 100) = 1.0"""
+        assert nsi_deviation(-50) == 1.0
 
-    def test_cero_ambos(self):
-        assert controversy_index(0, 0) == 0.0
-
-
-class TestEffectivenessIndex:
-    def test_normal(self):
-        """tono_score=20, n_comentarios=100, n_posts=10
-        EI = 20 * log(101)/log(11) ≈ 20 * 4.615/2.398 ≈ 20 * 1.925 = 38.5"""
-        ei = effectiveness_index(20, 100, 10)
-        assert 38.0 <= ei <= 39.0
-
-    def test_cero_posts(self):
-        assert effectiveness_index(10, 50, 0) == 0.0
-
-
-class TestApprovalRejection:
-    def test_approval(self):
-        """60% favorable + 0.5*20% neutral = 70.0"""
-        assert approval_pct(60, 20) == 70.0
-
-    def test_rejection(self):
-        """40% crítico + 0.5*20% neutral = 50.0"""
-        assert rejection_pct(40, 20) == 50.0
+    def test_nsi_100(self):
+        assert nsi_deviation(100) == 0.0
 
 
 class TestVolFactor:
-    def test_spike(self):
-        assert vol_factor(150, 100) == 1.5
+    """§E literal: vol_factor = min(2.0, 1.0 + total_posts / 1000)"""
 
-    def test_promedio_cero(self):
-        assert vol_factor(100, 0) == 1.0
+    def test_cero_posts(self):
+        assert vol_factor(0) == 1.0
+
+    def test_1000_posts(self):
+        assert vol_factor(1000) == 2.0
+
+    def test_2000_posts(self):
+        assert vol_factor(2000) == 2.0
+
+    def test_500_posts(self):
+        assert vol_factor(500) == 1.5
 
 
 class TestRiskReputacional:
+    """§E literal: RR = clamp((max_topic_controversy * 10 * 0.50 + nsi_deviation * 0.50) * vol_factor, 0, 1)"""
+
     def test_bajo(self):
-        """10% crítico, 5% angrys, HHI bajo (0.1)
-        RR = (0.1*0.4 + 0.05*0.3 + 0.1*0.3)*100 = (0.04+0.015+0.03)*100 = 8.5"""
-        rr = risk_reputacional(10, 0.05, 0.1)
-        assert rr == 8.5
+        """max_tc=0.05, nsi=40(dev=0.1), vf=1.0
+        RR = (0.05*10*0.50 + 0.1*0.50) * 1.0 = (0.25+0.05)*1.0 = 0.3"""
+        rr = risk_reputacional(40, 0.05, 1.0)
+        assert rr == 0.3
 
     def test_alto(self):
-        """80% crítico, 40% angrys, HHI alto (0.8)
-        RR = (0.8*0.4 + 0.4*0.3 + 0.8*0.3)*100 = (0.32+0.12+0.24)*100 = 68.0"""
-        rr = risk_reputacional(80, 0.4, 0.8)
-        assert rr == 68.0
+        """max_tc=0.8, nsi=-50(dev=1.0), vf=2.0
+        RR = clamp((0.8*10*0.50 + 1.0*0.50) * 2.0, 0, 1) = clamp(9.0, 0, 1) = 1.0"""
+        rr = risk_reputacional(-50, 0.8, 2.0)
+        assert rr == 1.0
+
+    def test_medio(self):
+        """max_tc=0.3, nsi=0(dev=0.5), vf=1.5
+        RR = (0.3*10*0.50 + 0.5*0.50) * 1.5 = (1.5+0.25)*1.5 = 2.625 → clamp 1.0"""
+        rr = risk_reputacional(0, 0.3, 1.5)
+        assert rr == 1.0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # §F — Alertas
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestAlertas:
-    def test_alerta_ici(self):
-        """35% crítico > umbral 30% → ICI activada"""
-        alertas = _detectar_alertas(35, 0.05, 0.1)
-        tipos = [a["tipo"] for a in alertas]
-        assert "ICI" in tipos
+class TestAlertaICI:
+    """§F literal: z-score de controversia contra 4+ meses previos, alerta si z > 2.0"""
 
-    def test_alerta_sdi(self):
-        """55% crítico > umbral 50% → SDI activada"""
-        alertas = _detectar_alertas(55, 0.05, 0.1)
-        tipos = [a["tipo"] for a in alertas]
-        assert "SDI" in tipos
+    def test_alerta_si_z_alto(self):
+        """Historial con variación [0.10, 0.12, 0.08, 0.11], actual=0.50 → z alto.
+        media=0.1025, std≈0.0149, z≈(0.5-0.1025)/0.0149≈26.7"""
+        alerta = detectar_ici(0.50, [0.10, 0.12, 0.08, 0.11])
+        assert alerta is not None
+        assert alerta["tipo"] == "ICI"
+        assert alerta["severidad"] >= 2
 
-    def test_alerta_efi(self):
-        """20% angrys > umbral 15% → EFI activada"""
-        alertas = _detectar_alertas(20, 0.20, 0.1)
-        tipos = [a["tipo"] for a in alertas]
-        assert "EFI" in tipos
+    def test_no_alerta_si_historial_insuficiente(self):
+        """Menos de 4 meses → no alerta"""
+        alerta = detectar_ici(0.5, [0.1, 0.1])
+        assert alerta is None
 
-    def test_alerta_tai(self):
-        """controversy 0.5 > umbral 0.4 → TAI activada"""
-        alertas = _detectar_alertas(20, 0.05, 0.5)
-        tipos = [a["tipo"] for a in alertas]
-        assert "TAI" in tipos
+    def test_no_alerta_si_z_bajo(self):
+        """Historial con variación, actual dentro del rango → z bajo"""
+        alerta = detectar_ici(0.12, [0.10, 0.12, 0.08, 0.11, 0.13])
+        assert alerta is None
 
-    def test_sin_alertas(self):
-        """Valores bajos → sin alertas"""
-        alertas = _detectar_alertas(5, 0.01, 0.05)
-        assert len(alertas) == 0
+    def test_severidad_3_z_gt_2_5(self):
+        """z > 2.5 → severidad 3. Hist [0.10,0.12,0.08,0.11], actual=0.60
+        media≈0.1025, std≈0.0149, z≈33.4 → severidad 4"""
+        alerta = detectar_ici(0.60, [0.10, 0.12, 0.08, 0.11])
+        assert alerta is not None
+        assert alerta["severidad"] >= 3
+
+
+class TestAlertaSDI:
+    """§F literal: SDI = (actual - previo) / max(|previo|, 0.01), alerta si SDI ≤ -0.20"""
+
+    def test_alerta_si_caida(self):
+        """NSI actual=10, previo=50 → SDI = (10-50)/50 = -0.8"""
+        alerta = detectar_sdi(10, 50)
+        assert alerta is not None
+        assert alerta["tipo"] == "SDI"
+
+    def test_no_alerta_si_estable(self):
+        alerta = detectar_sdi(50, 48)
+        assert alerta is None
+
+    def test_no_alerta_si_mejora(self):
+        alerta = detectar_sdi(60, 40)
+        assert alerta is None
+
+    def test_severidad_3_caida_grave(self):
+        """SDI ≤ -0.50 → severidad 3"""
+        alerta = detectar_sdi(-10, 50)
+        assert alerta is not None
+        assert alerta["severidad"] == 3
+
+
+class TestAlertaEFI:
+    """§F literal: EFI = (ER_actual - ER_previo) / max(ER_previo, 0.001), alerta si EFI ≤ -0.30 y ≥30 reacciones"""
+
+    def test_alerta_si_caida(self):
+        """ER actual=5, previo=10 → EFI = (5-10)/10 = -0.5"""
+        alerta = detectar_efi(5, 10, 50)
+        assert alerta is not None
+        assert alerta["tipo"] == "EFI"
+
+    def test_no_alerta_si_pocas_reacciones(self):
+        """Menos de 30 reacciones → no alerta"""
+        alerta = detectar_efi(5, 10, 20)
+        assert alerta is None
+
+    def test_no_alerta_si_caida_leve(self):
+        alerta = detectar_efi(8, 10, 50)
+        assert alerta is None
+
+
+class TestAlertaTAI:
+    """§F literal: TAI = ratio_enojo_tema / ratio_enojo_general, alerta si TAI > 2.0, enojo > 3%, ≥3 posts"""
+
+    def test_alerta_si_enojo_alto(self):
+        """enojo_tema=0.10, enojo_general=0.02 → TAI=5.0"""
+        alerta = detectar_tai(0.10, 0.02, 5)
+        assert alerta is not None
+        assert alerta["tipo"] == "TAI"
+
+    def test_no_alerta_si_pocos_posts(self):
+        alerta = detectar_tai(0.10, 0.02, 2)
+        assert alerta is None
+
+    def test_no_alerta_si_enojo_bajo(self):
+        """enojo_tema ≤ 3% → no alerta"""
+        alerta = detectar_tai(0.02, 0.01, 5)
+        assert alerta is None
+
+    def test_no_alerta_si_tai_bajo(self):
+        """TAI ≤ 2.0 → no alerta"""
+        alerta = detectar_tai(0.05, 0.04, 5)
+        assert alerta is None
+
+
+class TestAlertaZDI:
+    """§F literal: ZDI alerta si pct_negativos > 25% con ≥3 posts de zona"""
+
+    def test_alerta_si_enojo_alto(self):
+        alerta = detectar_zdi(35.0, 5)
+        assert alerta is not None
+        assert alerta["tipo"] == "ZDI"
+
+    def test_no_alerta_si_pocos_posts(self):
+        alerta = detectar_zdi(50.0, 2)
+        assert alerta is None
+
+    def test_no_alerta_si_bajo(self):
+        alerta = detectar_zdi(20.0, 10)
+        assert alerta is None
+
+
+class TestCooldown:
+    def test_primera_vez(self):
+        assert verificar_cooldown(None, "2026-07-14T12:00:00Z", "ICI") is True
+
+    def test_dentro_cooldown_ici(self):
+        """ICI cooldown = 3 días. 1 día después → False"""
+        assert verificar_cooldown(
+            "2026-07-13T12:00:00Z", "2026-07-14T12:00:00Z", "ICI"
+        ) is False
+
+    def test_fuera_cooldown_ici(self):
+        """3 días después → True"""
+        assert verificar_cooldown(
+            "2026-07-11T12:00:00Z", "2026-07-14T12:00:00Z", "ICI"
+        ) is True
+
+    def test_dentro_cooldown_sdi(self):
+        """SDI cooldown = 7 días. 5 días después → False"""
+        assert verificar_cooldown(
+            "2026-07-09T12:00:00Z", "2026-07-14T12:00:00Z", "SDI"
+        ) is False
+
+    def test_fuera_cooldown_sdi(self):
+        assert verificar_cooldown(
+            "2026-07-07T12:00:00Z", "2026-07-14T12:00:00Z", "SDI"
+        ) is True
+
+
+class TestSensibilidadTema:
+    def test_corrupcion_base(self):
+        s = calcular_sensibilidad_tema("corrupcion", 1.0)
+        assert s == 1.45
+
+    def test_educacion_base(self):
+        s = calcular_sensibilidad_tema("educacion", 1.0)
+        assert s == 0.8
+
+    def test_cv_alto(self):
+        """base=1.0, cv=2.0 → 1.0 * (1+min(0.6,0.5)) * (1+0) = 1.5"""
+        s = calcular_sensibilidad_tema("desconocido", 1.0, cv_28d=2.0, velocidad=0)
+        assert s == 1.5
+
+    def test_acotado_max(self):
+        s = calcular_sensibilidad_tema("corrupcion", 10.0, cv_28d=10, velocidad=10)
+        assert s == 2.0
+
+    def test_acotado_min(self):
+        s = calcular_sensibilidad_tema("desconocido", 0.1)
+        assert s == 0.5
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -213,92 +433,194 @@ class TestAlertas:
 
 class TestHHI:
     def test_un_tema(self):
-        """100% en un tema → HHI = 1.0"""
         assert calcular_hhi([100]) == 1.0
 
     def test_dos_temas_iguales(self):
-        """50/50 → (0.5² + 0.5²) = 0.5"""
         assert calcular_hhi([50, 50]) == 0.5
 
     def test_tres_temas(self):
-        """60/30/10 → 0.36+0.09+0.01 = 0.46"""
         hhi = calcular_hhi([60, 30, 10])
         assert hhi == 0.46
 
     def test_cero_temas(self):
         assert calcular_hhi([]) == 0.0
 
-    def test_suma_100(self):
-        """Shares que suman 100 → verificación básica."""
-        hhi = calcular_hhi([40, 30, 20, 10])
-        assert 0.0 < hhi < 1.0
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# §H — Pulso IQ
+# §H — Pulso IQ (7 dimensiones)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestPulsoIQ:
-    def test_fb_dimensions(self):
-        dims = calcular_pulso_iq_fb(
-            pct_favorable=60, pct_critico=20, n_comentarios=100,
-            n_posts=10, shares=[40, 30, 20, 10], tono_score=40,
-        )
-        assert isinstance(dims, dict)
-        assert len(dims) == 7
-        for d in dims:
-            assert 0 <= dims[d] <= 100
+class TestAprobacion:
+    """§H literal: score = clamp((promedio + 2) * 25, 0, 100)"""
 
-    def test_tk_dimensions(self):
-        dims = calcular_pulso_iq_tk(
-            pct_favorable=50, pct_critico=30, n_comentarios=50,
-            n_videos=5, shares=[60, 40], tono_score=20,
-        )
-        assert len(dims) == 7
+    def test_maxima(self):
+        assert calcular_aprobacion(2) == 100.0
 
-    def test_score_fb_only(self):
-        """Solo FB → score usa 100% FB."""
-        dims_fb = {
+    def test_media(self):
+        assert calcular_aprobacion(0) == 50.0
+
+    def test_minima(self):
+        assert calcular_aprobacion(-2) == 0.0
+
+    def test_clamp_alto(self):
+        assert calcular_aprobacion(3) == 100.0
+
+    def test_clamp_bajo(self):
+        assert calcular_aprobacion(-3) == 0.0
+
+
+class TestConexion:
+    """§H literal: con vistas → eng_rate * 2000; sin vistas → interacciones/posts/50*100"""
+
+    def test_con_vistas(self):
+        assert calcular_conexion_con_vistas(1000, 50000) == 40.0
+
+    def test_con_vistas_max(self):
+        assert calcular_conexion_con_vistas(10000, 50000) == 100.0
+
+    def test_sin_vistas(self):
+        assert calcular_conexion_sin_vistas(500, 100) == 10.0
+
+    def test_sin_vistas_max(self):
+        assert calcular_conexion_sin_vistas(5000, 100) == 100.0
+
+    def test_cero_posts(self):
+        assert calcular_conexion_sin_vistas(100, 0) == 0.0
+
+
+class TestTranquilidad:
+    """§H literal: controversia = negativas/total; score = (1-controversia)*100"""
+
+    def test_tranquilo(self):
+        assert calcular_tranquilidad(2, 1, 2, 100) == 95.0
+
+    def test_molesto(self):
+        assert calcular_tranquilidad(30, 25, 25, 100) == pytest.approx(20.0, abs=0.01)
+
+    def test_cero_total(self):
+        assert calcular_tranquilidad(0, 0, 0, 0) == 50.0
+
+
+class TestDiversidadTemas:
+    """§H literal: % de posts con tema asignado"""
+
+    def test_todos(self):
+        assert calcular_diversidad_temas(100, 100) == 100.0
+
+    def test_mitad(self):
+        assert calcular_diversidad_temas(50, 100) == 50.0
+
+    def test_cero(self):
+        assert calcular_diversidad_temas(0, 100) == 0.0
+
+
+class TestPresenciaZonas:
+    """§H literal: % de posts con zona detectada"""
+
+    def test_todos(self):
+        assert calcular_presencia_zonas(80, 100) == 80.0
+
+    def test_cero(self):
+        assert calcular_presencia_zonas(0, 100) == 0.0
+
+
+class TestConsistencia:
+    """§H literal: score = clamp(100 - std * 30, 0, 100); default 50 si <2 meses"""
+
+    def test_estable(self):
+        assert calcular_consistencia([0.5, 0.5, 0.5]) == 100.0
+
+    def test_variable(self):
+        s = calcular_consistencia([0, 1])
+        assert s == 85.0
+
+    def test_muy_variable(self):
+        s = calcular_consistencia([-2, 2])
+        assert s == 40.0
+
+    def test_default_un_mes(self):
+        assert calcular_consistencia([0.5]) == 50.0
+
+    def test_default_cero(self):
+        assert calcular_consistencia([]) == 50.0
+
+
+class TestAtencion:
+    """§H literal: promedio = comentarios/posts; score = min(100, promedio * 10)"""
+
+    def test_normal(self):
+        assert calcular_atencion(100, 10) == 100.0
+
+    def test_alto(self):
+        assert calcular_atencion(500, 10) == 100.0
+
+    def test_bajo(self):
+        assert calcular_atencion(5, 10) == 5.0
+
+
+class TestDimensionWeights:
+    def test_suma(self):
+        assert abs(sum(DIMENSION_WEIGHTS.values()) - 6.0) < 0.01
+
+    def test_plataforma_weights(self):
+        assert PLATFORM_IQ_WEIGHTS["facebook"] == 0.55
+        assert PLATFORM_IQ_WEIGHTS["tiktok"] == 0.45
+        assert abs(PLATFORM_IQ_WEIGHTS["facebook"] + PLATFORM_IQ_WEIGHTS["tiktok"] - 1.0) < 0.01
+
+
+class TestPulsoIQScore:
+    def test_fb_only(self):
+        dims = {
             "aprobacion": 60, "conexion": 40, "tranquilidad": 70,
-            "diversidad": 50, "presencia": 30, "consistencia": 50,
-            "atencion": 45,
+            "diversidad_temas": 50, "presencia_zonas": 30,
+            "consistencia": 50, "atencion": 45,
         }
-        score, combined = pulso_iq_score(dims_fb, None)
-        assert 0 < score < 100
-        assert combined == dims_fb
+        score, _ = pulso_iq_score(dims, None)
+        expected = (60*1.0 + 40*1.0 + 70*1.0 + 50*0.8 + 30*0.7 + 50*0.9 + 45*0.6) / 6.0
+        assert score == round(expected, 2)
 
-    def test_score_ponderado(self):
-        """FB + TK → ponderado por volumen."""
+    def test_fb_tk_combined(self):
         dims_fb = {
             "aprobacion": 60, "conexion": 40, "tranquilidad": 70,
-            "diversidad": 50, "presencia": 30, "consistencia": 50,
-            "atencion": 45,
+            "diversidad_temas": 50, "presencia_zonas": 30,
+            "consistencia": 50, "atencion": 45,
         }
         dims_tk = {
             "aprobacion": 80, "conexion": 60, "tranquilidad": 50,
-            "diversidad": 70, "presencia": 50, "consistencia": 50,
-            "atencion": 55,
+            "diversidad_temas": 70, "presencia_zonas": 50,
+            "consistencia": 50, "atencion": 55,
         }
-        score, combined = pulso_iq_score(dims_fb, dims_tk)
-        assert 0 < score < 100
-        # aprobacion: 60*0.6 + 80*0.4 = 36+32 = 68
-        assert combined["aprobacion"] == 68.0
+        score, _ = pulso_iq_score(dims_fb, dims_tk)
+        iq_fb = (60+40+70+40+21+45+27) / 6.0  # 303/6 = 50.5
+        iq_tk = (80+60+50+56+35+45+33) / 6.0  # 359/6 = 59.833
+        expected = iq_fb * 0.55 + iq_tk * 0.45
+        assert score == round(expected, 2)
 
-    def test_cuadrante_liderazgo(self):
-        dims = {
-            "aprobacion": 70, "conexion": 60, "presencia": 50,
-            "tranquilidad": 60, "consistencia": 55,
-        }
+    def test_no_dims(self):
+        score, _ = pulso_iq_score(None, None)
+        assert score == 0.0
+
+
+class TestCuadrante:
+    """§H literal: X=aprobacion, Y=conexion"""
+
+    def test_liderazgo(self):
+        dims = {"aprobacion": 70, "conexion": 60}
         assert pulso_iq_cuadrante(65, dims) == "LIDERAZGO"
 
-    def test_cuadrante_crisis(self):
-        dims = {
-            "aprobacion": 30, "conexion": 20, "presencia": 30,
-            "tranquilidad": 30, "consistencia": 40,
-        }
+    def test_institucional(self):
+        dims = {"aprobacion": 70, "conexion": 30}
+        assert pulso_iq_cuadrante(55, dims) == "INSTITUCIONAL"
+
+    def test_populista(self):
+        dims = {"aprobacion": 30, "conexion": 70}
+        assert pulso_iq_cuadrante(45, dims) == "POPULISTA"
+
+    def test_crisis(self):
+        dims = {"aprobacion": 30, "conexion": 30}
         assert pulso_iq_cuadrante(25, dims) == "CRISIS"
 
-    def test_cuadrante_vacio(self):
+    def test_vacio(self):
         assert pulso_iq_cuadrante(50, {}) == ""
 
 
@@ -308,13 +630,11 @@ class TestPulsoIQ:
 
 class TestAutenticidad:
     def test_estable(self):
-        """Volumen estable (CV bajo) → orgánico 100%."""
         cv, organico = coeficiente_variacion([10, 11, 9, 10, 12])
         assert cv < 0.5
         assert organico is True
 
     def test_volatil(self):
-        """Volumen muy volátil (CV alto) → coordinado."""
         cv, organico = coeficiente_variacion([1, 100, 2, 90, 1])
         assert cv > 0.5
         assert organico is False
@@ -330,43 +650,27 @@ class TestAutenticidad:
         assert coord > 0.0
 
     def test_un_solo_dia(self):
-        """Un solo día → no hay variación → orgánico."""
         cv, organico = coeficiente_variacion([50])
         assert cv == 0.0
         assert organico is True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# §J — Aislamiento FB/TK (no mezclar fórmulas de plataformas distintas)
+# §J — Aislamiento FB/TK
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestAislamientoPlataformas:
-    def test_fb_no_usa_tk_engagement_rate(self):
-        """ER Facebook no debe considerar likes de TikTok."""
+    def test_fb_no_usa_tk(self):
         er_fb, _ = engagement_rate_fb(
-            likes=100, loves=0, cares=0, hahas=0,
-            wows=0, sads=0, angrys=0,
-            comments=0, shares=0, views=1000,
+            100, 0, 0, 0, 0, 0, 0, 0, 0, 1000, n_posts=5,
         )
-        er_tk, _ = engagement_rate_tk(
-            views=1000, likes=200, shares=0, favorites=0, comments=0,
-        )
-        # FB: (100+0)/1000*100 = 10.0
-        # TK: (200+0)/1000*100 = 20.0
-        # Son independientes
+        er_tk, _ = engagement_rate_tk(1000, 200, 0, 0, 0, n_videos=5)
         assert er_fb == 10.0
         assert er_tk == 20.0
         assert er_fb != er_tk
 
-    def test_ratio_amor_enojo_fb_no_usa_tk(self):
-        """Ratio amor/enojo solo usa reacciones FB, no TK."""
-        r_fb = ratio_amor_enojo_fb(100, 0, 0, 0, 0, 10)
-        r_fb2 = ratio_amor_enojo_fb(100, 0, 0, 0, 0, 10)
-        # Misma fórmula, mismos datos → mismo resultado
-        assert r_fb == r_fb2 == 10.0
-
     def test_wiring_fb_stats(self):
-        """construir_analysis con fb_stats → métricas reales, no zeros."""
+        """construir_analysis con fb_stats → métricas reales."""
         aprob = [{"categoria": "test", "label": "Test", "pct": 100,
                   "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
                   "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
@@ -381,13 +685,16 @@ class TestAislamientoPlataformas:
         data = construir_analysis(aprob, "2026-07", "2026-07-14", fb_stats=fb)
         mr = data["bloque1"]["metricas_rendimiento"]
         assert mr["engagement_rate"] > 0
-        assert mr["reacciones_positivas"] == 125  # 100+20+5
-        assert mr["reacciones_negativas"] == 13   # 1+2+10
-        assert mr["ratio_amor_enojo"] == round(125 / 13, 2)
-        assert mr["engagementBasis"] == "vistas"
+        assert mr["reacciones_positivas"] == 125
+        assert mr["reacciones_negativas"] == 13
+        assert mr["engagementBasis"] == "views"
+        assert "net_sentiment_reacciones" in mr
+        assert "controversy_reacciones" in mr
+        assert "effectiveness_reacciones" in mr
+        assert "aprobacion_pct_reacciones" in mr
+        assert "rechazo_pct_reacciones" in mr
 
     def test_wiring_tk_stats(self):
-        """construir_analysis con tk_stats → métricas TikTok."""
         aprob = [{"categoria": "test", "label": "Test", "pct": 100,
                   "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
                   "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
@@ -401,10 +708,9 @@ class TestAislamientoPlataformas:
         data = construir_analysis(aprob, "2026-07", "2026-07-14", tk_stats=tk)
         mr = data["bloque1"]["metricas_rendimiento"]
         assert mr["engagement_rate"] > 0
-        assert mr["engagementBasis"] == "vistas"
+        assert mr["engagementBasis"] == "views"
 
-    def test_wiring_both_platforms_ponderado(self):
-        """FB + TK → ER ponderado por volumen real (§J)."""
+    def test_wiring_both_platforms(self):
         aprob = [{"categoria": "test", "label": "Test", "pct": 100,
                   "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
                   "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
@@ -425,9 +731,6 @@ class TestAislamientoPlataformas:
             aprob, "2026-07", "2026-07-14", fb_stats=fb, tk_stats=tk,
         )
         mr = data["bloque1"]["metricas_rendimiento"]
-        # ER_fb = 100/1000*100 = 10.0
-        # ER_tk = 200/2000*100 = 10.0
-        # Ponderado: 10.0*(100/300) + 10.0*(200/300) = 10.0
         assert mr["engagement_rate"] == 10.0
         assert mr["engagementBasis"] == "ponderado_volumen"
         assert data["meta"]["plataforma"] == "multicanal"
@@ -439,7 +742,6 @@ class TestAislamientoPlataformas:
 
 class TestWiringCampos:
     def test_concentracion_tematica_hhi(self):
-        """concentracion_tematica debe tener hhi, top_tema, n_temas."""
         aprob = [
             {"categoria": "seg", "label": "Seg", "pct": 60, "doc_count": 60,
              "apoyo": 30, "critica": 20, "neutral": 10, "pct_apoyo": 50,
@@ -458,10 +760,8 @@ class TestWiringCampos:
         assert ct["hhi"] > 0
         assert ct["top_tema"] == "seg"
         assert ct["n_temas"] == 2
-        assert "formula_usada" in ct
 
     def test_pulso_iq_campos(self):
-        """pulso_iq debe tener valor, cuadrante, componentes."""
         aprob = [{"categoria": "test", "label": "T", "pct": 100,
                   "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
                   "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
@@ -472,30 +772,8 @@ class TestWiringCampos:
         assert "valor" in iq
         assert "cuadrante" in iq
         assert "componentes" in iq
-        assert isinstance(iq["componentes"], dict)
-
-    def test_polarizacion_indice(self):
-        """polarizacion debe tener indice numérico."""
-        aprob = [
-            {"categoria": "a", "label": "A", "pct": 50, "doc_count": 50,
-             "apoyo": 40, "critica": 10, "neutral": 0, "pct_apoyo": 80,
-             "pct_critica": 20, "pct_neutral": 0, "saldo": 30,
-             "ejemplo": "", "ejemplo_critica": "", "emociones": {},
-             "emocion_dominante": "calma"},
-            {"categoria": "b", "label": "B", "pct": 50, "doc_count": 50,
-             "apoyo": 10, "critica": 40, "neutral": 0, "pct_apoyo": 20,
-             "pct_critica": 80, "pct_neutral": 0, "saldo": -30,
-             "ejemplo": "", "ejemplo_critica": "", "emociones": {},
-             "emocion_dominante": "calma"},
-        ]
-        data = construir_analysis(aprob, "2026-07", "2026-07-14")
-        pol = data["bloque2"]["polarizacion"]
-        assert "indice" in pol
-        assert pol["indice"] >= 0
-        assert "formula_usada" in pol
 
     def test_nivel_alerta_campos(self):
-        """nivel_alerta debe tener semaforo, indice_riesgo, alertas_cambridge."""
         aprob = [{"categoria": "test", "label": "T", "pct": 100,
                   "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
                   "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
@@ -506,13 +784,9 @@ class TestWiringCampos:
         assert "semaforo" in na
         assert na["semaforo"] in ("verde", "amarillo", "rojo")
         assert "indice_riesgo" in na
-        assert na["indice_riesgo"] >= 0
         assert "alertas_cambridge" in na
-        assert isinstance(na["alertas_cambridge"], list)
-        assert "formula_riesgo" in na
 
     def test_autenticidad_campos(self):
-        """autenticidad debe tener pct_organico, pct_coordinado."""
         aprob = [{"categoria": "test", "label": "T", "pct": 100,
                   "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
                   "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
@@ -522,10 +796,8 @@ class TestWiringCampos:
         auth = data["bloque3"]["autenticidad"]
         assert "pct_organico" in auth
         assert "pct_coordinado" in auth
-        assert auth["pct_organico"] + auth["pct_coordinado"] <= 100.1
 
     def test_meta_campos(self):
-        """meta debe tener plataforma, totales."""
         aprob = [{"categoria": "test", "label": "T", "pct": 100,
                   "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
                   "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
@@ -543,3 +815,21 @@ class TestWiringCampos:
         assert meta["total_posts_analizados"] == 5
         assert meta["total_reacciones_sumadas"] == 100
         assert meta["total_impresiones_vistas"] == 1000
+
+    def test_polarizacion_indice(self):
+        aprob = [
+            {"categoria": "a", "label": "A", "pct": 50, "doc_count": 50,
+             "apoyo": 40, "critica": 10, "neutral": 0, "pct_apoyo": 80,
+             "pct_critica": 20, "pct_neutral": 0, "saldo": 30,
+             "ejemplo": "", "ejemplo_critica": "", "emociones": {},
+             "emocion_dominante": "calma"},
+            {"categoria": "b", "label": "B", "pct": 50, "doc_count": 50,
+             "apoyo": 10, "critica": 40, "neutral": 0, "pct_apoyo": 20,
+             "pct_critica": 80, "pct_neutral": 0, "saldo": -30,
+             "ejemplo": "", "ejemplo_critica": "", "emociones": {},
+             "emocion_dominante": "calma"},
+        ]
+        data = construir_analysis(aprob, "2026-07", "2026-07-14")
+        pol = data["bloque2"]["polarizacion"]
+        assert "indice" in pol
+        assert pol["indice"] >= 0

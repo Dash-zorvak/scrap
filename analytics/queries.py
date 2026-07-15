@@ -311,3 +311,186 @@ def get_tk_daily_volumes(db_path=None):
         return [(r["dia"], r["n"]) for r in rows]
     finally:
         conn.close()
+
+
+# ── §E/F/H: Historical data for formulas (Bloque 6.1) ──
+
+
+def get_fb_monthly_sentiment(db_path=None):
+    """§H — Promedio mensual de sentimiento (sentiment_score) de FB posts.
+
+    Retorna lista de (mes_YYYY-MM, avg_sentiment_score, n_posts).
+    Úsase para la dimensión 'consistencia' del Pulso IQ.
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT strftime('%Y-%m', created_time) as mes, "
+            "AVG(COALESCE(sentiment_score, 0)) as avg_score, "
+            "COUNT(*) as n "
+            "FROM fb_posts GROUP BY mes ORDER BY mes"
+        ).fetchall()
+        return [(r["mes"], r["avg_score"], r["n"]) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_fb_per_theme_controversy(db_path=None):
+    """§E — Controversia por tema (topic_category) de FB posts.
+
+    Calcula: negativos / total por tema.
+    negativos = angrys + sads + hahas (por post, acumulado).
+    Retorna lista de dicts [{tema, n_posts, negativos, total_reacciones, controversy}].
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT "
+            "  COALESCE(NULLIF(topic_category,''), 'sin_tema') as tema, "
+            "  COUNT(*) as n_posts, "
+            "  SUM(COALESCE(angrys_count,0) + COALESCE(sads_count,0) + COALESCE(hahas_count,0)) as negativos, "
+            "  SUM(COALESCE(likes_count,0) + COALESCE(loves_count,0) + COALESCE(cares_count,0) "
+            "    + COALESCE(hahas_count,0) + COALESCE(wows_count,0) "
+            "    + COALESCE(sads_count,0) + COALESCE(angrys_count,0)) as total_reacciones "
+            "FROM fb_posts "
+            "GROUP BY tema"
+        ).fetchall()
+        result = []
+        for r in rows:
+            total_r = r["total_reacciones"] or 0
+            neg = r["negativos"] or 0
+            controversy = neg / total_r if total_r > 0 else 0.0
+            result.append({
+                "tema": r["tema"],
+                "n_posts": r["n_posts"] or 0,
+                "negativos": neg,
+                "total_reacciones": total_r,
+                "controversy": round(controversy, 4),
+            })
+        return result
+    finally:
+        conn.close()
+
+
+def get_fb_references_for_alerts(post_ids=None, limit=20, db_path=None):
+    """§F — Referencias (URLs) de posts FB para enlaces_referencia de alertas.
+
+    Si post_ids se provee, filtra por esos IDs.
+    Si no, retorna los posts más recientes con URL.
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        if post_ids:
+            placeholders = ",".join("?" for _ in post_ids)
+            rows = conn.execute(
+                f"SELECT post_id, post_url, page_name, created_time "
+                f"FROM fb_posts WHERE post_id IN ({placeholders}) "
+                f"AND post_url IS NOT NULL AND TRIM(post_url) != ''",
+                post_ids,
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT post_id, post_url, page_name, created_time "
+                "FROM fb_posts WHERE post_url IS NOT NULL AND TRIM(post_url) != '' "
+                "ORDER BY created_time DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [r["post_url"] for r in rows if r["post_url"]]
+    finally:
+        conn.close()
+
+
+def get_fb_controversial_posts(db_path=None):
+    """§F — Posts FB con mayor proporción de reacciones negativas.
+
+    Retorna lista de dicts [{post_id, post_url, negativos, total_reacciones, ratio}].
+    Úsase para populate enlaces_referencia en alertas ICI/TAI.
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT "
+            "  post_id, post_url, page_name, created_time, "
+            "  (COALESCE(angrys_count,0) + COALESCE(sads_count,0) + COALESCE(hahas_count,0)) as negativos, "
+            "  (COALESCE(likes_count,0) + COALESCE(loves_count,0) + COALESCE(cares_count,0) "
+            "    + COALESCE(hahas_count,0) + COALESCE(wows_count,0) "
+            "    + COALESCE(sads_count,0) + COALESCE(angrys_count,0)) as total_reacciones "
+            "FROM fb_posts "
+            "HAVING total_reacciones > 0 "
+            "ORDER BY CAST(negativos AS FLOAT) / total_reacciones DESC "
+            "LIMIT 20"
+        ).fetchall()
+        result = []
+        for r in rows:
+            total_r = r["total_reacciones"] or 0
+            neg = r["negativos"] or 0
+            ratio = neg / total_r if total_r > 0 else 0.0
+            result.append({
+                "post_id": r["post_id"],
+                "post_url": r["post_url"] or "",
+                "page_name": r["page_name"] or "",
+                "created_time": r["created_time"] or "",
+                "negativos": neg,
+                "total_reacciones": total_r,
+                "ratio": round(ratio, 4),
+            })
+        return result
+    finally:
+        conn.close()
+
+
+def get_fb_posts_with_sentiment(db_path=None):
+    """§H — Posts FB con sentiment_score para promedios mensuales.
+
+    Retorna lista de dicts [{created_time, sentiment_score, topic_category, zona}].
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT created_time, "
+            "  COALESCE(sentiment_score, 0) as sentiment_score, "
+            "  COALESCE(NULLIF(topic_category,''), '') as topic_category, "
+            "  COALESCE(zona, '') as zona "
+            "FROM fb_posts ORDER BY created_time"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_fb_anger_by_zone(db_path=None):
+    """§F — Ratio de enojo por zona para ZDI.
+
+    Retorna lista de dicts [{zona, negativos, total, pct_negativos}].
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT "
+            "  COALESCE(NULLIF(zona,''), 'sin_zona') as zona, "
+            "  SUM(COALESCE(angrys_count,0) + COALESCE(sads_count,0) + COALESCE(hahas_count,0)) as negativos, "
+            "  COUNT(*) as total "
+            "FROM fb_posts "
+            "GROUP BY zona "
+            "HAVING total >= 3"
+        ).fetchall()
+        result = []
+        for r in rows:
+            total = r["total"] or 0
+            neg = r["negativos"] or 0
+            pct = neg / total * 100 if total > 0 else 0.0
+            result.append({
+                "zona": r["zona"],
+                "negativos": neg,
+                "total": total,
+                "pct_negativos": round(pct, 1),
+            })
+        return result
+    finally:
+        conn.close()

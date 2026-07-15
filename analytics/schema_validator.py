@@ -189,24 +189,46 @@ def validar(data: dict) -> ValidationResult:
 
 
 def _validar_categorias_json(data: dict, result: ValidationResult):
-    """V07: cualquier campo de emocion/postura/tema en analysis.json que no
-    pertenezca al catalogo canonico es bloqueante."""
+    """V07: categorías no canónicas.
+
+    - Emoción/postura/tema en catálogo → OK.
+    - Emoción/postura/tema registrado como propuesta en taxonomias_pendientes → advertencia.
+    - Emoción/postura/tema no registrado en ningún lado → bloqueante.
+    """
     try:
         from dashboard.tema_taxonomia import EMOCIONES_VALIDAS, POSTURAS_VALIDAS, CATEGORIAS_VALIDAS
     except ImportError:
         return  # si la taxonomia no esta disponible, skip V07
+
+    # Cargar propuestas pendientes para distinguir advertencia vs bloqueante
+    import json as _json
+    import os as _os
+    _pendientes_path = _os.path.join(
+        _os.path.dirname(__file__), _os.pardir, "data", "taxonomias_pendientes.json"
+    )
+    pendientes_keys: set[str] = set()
+    try:
+        with open(_pendientes_path, "r", encoding="utf-8") as _f:
+            for _entry in _json.load(_f):
+                if _entry.get("estado") == "pendiente":
+                    pendientes_keys.add(_entry.get("clave_propuesta", ""))
+    except (FileNotFoundError, _json.JSONDecodeError, OSError):
+        pass
 
     # Verificar emociones en indice_emociones
     ie = _get(data, "bloque1", "indice_emociones", default={})
     if isinstance(ie, dict):
         emocion_dom = (ie.get("emocion_dominante") or "").strip()
         if emocion_dom and emocion_dom not in EMOCIONES_VALIDAS:
+            es_propuesta = emocion_dom in pendientes_keys
             result.errores.append(ValidationError(
                 codigo="V07_CATEGORIA_DESCONOCIDA",
                 seccion="bloque1.indice_emociones.emocion_dominante",
-                severidad="bloqueante",
-                mensaje_tecnico=f"emocion_dominante '{emocion_dom}' no esta en el catalogo",
-                mensaje_humano=f"La emocion '{emocion_dom}' no es reconocida.",
+                severidad="advertencia" if es_propuesta else "bloqueante",
+                mensaje_tecnico=f"emocion_dominante '{emocion_dom}' no esta en el catalogo"
+                + (" (propuesta pendiente)" if es_propuesta else ""),
+                mensaje_humano=f"La emocion '{emocion_dom}' no es reconocida."
+                + (" Está registrada como propuesta pendiente." if es_propuesta else ""),
             ))
 
     # Verificar emociones en concentracion_tematica.ramas
@@ -226,12 +248,15 @@ def _validar_categorias_json(data: dict, result: ValidationResult):
                 ))
             emo = (r.get("emocion_dominante") or "").strip()
             if emo and emo not in EMOCIONES_VALIDAS:
+                es_propuesta = emo in pendientes_keys
                 result.errores.append(ValidationError(
                     codigo="V07_CATEGORIA_DESCONOCIDA",
                     seccion=f"bloque1.concentracion_tematica.ramas[{i}].emocion_dominante",
-                    severidad="bloqueante",
-                    mensaje_tecnico=f"emocion '{emo}' no esta en el catalogo",
-                    mensaje_humano=f"La emocion '{emo}' no es reconocida.",
+                    severidad="advertencia" if es_propuesta else "bloqueante",
+                    mensaje_tecnico=f"emocion '{emo}' no esta en el catalogo"
+                    + (" (propuesta pendiente)" if es_propuesta else ""),
+                    mensaje_humano=f"La emocion '{emo}' no es reconocida."
+                    + (" Está registrada como propuesta pendiente." if es_propuesta else ""),
                 ))
 
     # Verificar posturas en voces_influencia
@@ -254,12 +279,15 @@ def _validar_categorias_json(data: dict, result: ValidationResult):
             continue
         emo = (fr.get("emocion_dominante") or "").strip()
         if emo and emo not in EMOCIONES_VALIDAS:
+            es_propuesta = emo in pendientes_keys
             result.errores.append(ValidationError(
                 codigo="V07_CATEGORIA_DESCONOCIDA",
                 seccion=f"bloque3.puntos_friccion[{i}].emocion_dominante",
-                severidad="bloqueante",
-                mensaje_tecnico=f"emocion '{emo}' no esta en el catalogo",
-                mensaje_humano=f"La emocion '{emo}' no es reconocida.",
+                severidad="advertencia" if es_propuesta else "bloqueante",
+                mensaje_tecnico=f"emocion '{emo}' no esta en el catalogo"
+                + (" (propuesta pendiente)" if es_propuesta else ""),
+                mensaje_humano=f"La emocion '{emo}' no es reconocida."
+                + (" Está registrada como propuesta pendiente." if es_propuesta else ""),
             ))
 
 

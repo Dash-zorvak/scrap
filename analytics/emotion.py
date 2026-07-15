@@ -474,7 +474,7 @@ def aggregate_emotions(texts: list[str], es_oficial: bool = False) -> dict:
 
     for text in texts:
         result = classify_emotion(text, es_oficial=es_oficial)
-        # Contar también claves no-canónicas (propuestas)
+        # Contar claves no-canónicas (propuestas) como categoría propia
         if result.emocion not in conteo:
             conteo[result.emocion] = 0
         conteo[result.emocion] += 1

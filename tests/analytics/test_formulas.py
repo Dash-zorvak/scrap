@@ -1195,20 +1195,29 @@ class TestICIPeriodControversy:
 class TestICISeveridadAbsoluta:
     """23.3: Severidad ICI fija en z absolutos, independiente del umbral."""
 
-    def test_z_2_6_con_umbral_2_9_severidad_3(self):
-        """z=2.6, umbral_base=2.9 → alerta se dispara (2.6 > 2.9? No!)
-        Espera: z=2.6 < umbral=2.9 → NO alerta."""
+    def test_z_muy_alto_severidad_4_independiente_de_umbral(self):
+        """controversia_actual=0.50 contra historial estable → z≈26.7.
+        Severidad 4 (z>3.0) se aplica independientemente del umbral_base."""
         historial = [0.10, 0.12, 0.08, 0.11]
         alerta = detectar_ici(0.50, historial, umbral_base=2.9)
-        # z ≈ 26.7 which is > 2.9, so alert fires with severity 4 (z>3.0)
         assert alerta is not None
-        assert alerta["severidad"] == 4  # z>3.0 → severity 4, NOT umbral-based
+        assert alerta["severidad"] == 4
+
+    def test_z_entre_2_5_y_3_0_con_umbral_2_9_severidad_3(self):
+        """z≈2.95 (entre 2.5 y 3.0), umbral_base=2.9 (tema corrupción).
+        Alerta se dispara (z>2.9) y severidad=3 (z>2.5 pero z≤3.0),
+        confirmando que la severidad depende del z absoluto, no del umbral."""
+        historial = [0.10, 0.12, 0.08, 0.11]
+        media = sum(historial) / len(historial)
+        var = sum((v - media) ** 2 for v in historial) / len(historial)
+        std = var ** 0.5
+        actual = media + 2.95 * std
+        alerta = detectar_ici(actual, historial, umbral_base=2.9)
+        assert alerta is not None
+        assert alerta["severidad"] == 3
 
     def test_z_2_6_con_umbral_2_0_severidad_3(self):
-        """z=2.6, umbral_base=2.0 → alerta dispara, severidad 3 (z>2.5)."""
-        # Craft data where z ≈ 2.6
-        # hist: [0.10, 0.12, 0.08, 0.11] → media=0.1025, std≈0.0149
-        # Need z ≈ 2.6: actual = media + 2.6*std = 0.1025 + 2.6*0.0149 ≈ 0.1412
+        """z≈2.6, umbral_base=2.0 → alerta dispara, severidad 3 (z>2.5)."""
         historial = [0.10, 0.12, 0.08, 0.11]
         media = sum(historial) / len(historial)
         var = sum((v - media) ** 2 for v in historial) / len(historial)
@@ -1216,10 +1225,10 @@ class TestICISeveridadAbsoluta:
         actual = media + 2.6 * std
         alerta = detectar_ici(actual, historial, umbral_base=2.0)
         assert alerta is not None
-        assert alerta["severidad"] == 3  # z ≈ 2.6 > 2.5 → severity 3
+        assert alerta["severidad"] == 3
 
     def test_z_bajo_umbral_alto_no_alerta(self):
-        """z=2.1, umbral_base=3.0 → no alerta (z < umbral)."""
+        """z≈2.1, umbral_base=3.0 → no alerta (z < umbral)."""
         historial = [0.10, 0.12, 0.08, 0.11]
         media = sum(historial) / len(historial)
         var = sum((v - media) ** 2 for v in historial) / len(historial)

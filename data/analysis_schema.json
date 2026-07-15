@@ -112,7 +112,7 @@
         "type": "string",
         "description": "Sin relleno ni adjetivos sueltos («moderado», «cierto margen para la crítica», «señales mixtas») que no estén anclados a una cifra o a un tema concreto. Estructura fija, en este orden:\n\n1. Cifras crudas: total de comentarios analizados, la emoción dominante (emocion_dominante) y su %, y las dos emociones siguientes en peso con su % (nombra la emoción exacta, nunca «sentimiento» genérico).\n2. El dato que más importa: la comparación exacta del % de la emoción dominante contra el período anterior, en puntos (ej. «+3.2 pts»). Si no hay período previo, decirlo explícitamente («no hay período anterior para comparar»).\n3. El ancla concreta: el tema real (no genérico) que concentra esa emoción dominante, con su peso numérico (conteo o %). Si no hay dato de tema, decir «no hay datos suficientes para atribuir un tema concreto» — nunca inventarlo.\n4. Conclusión: una frase final que empiece con «Conclusión:» y diga qué significa ese predominio emocional para la gestión — un veredicto, no una repetición de las cifras ya dichas."
       },
-      "formula_usada": "% emocion = (n_emocion / total_comentarios) * 100"
+      "formula_usada": "% emocion = (n_emocion / total_comentarios) * 100 (método: reglas léxicas, sin IA)"
     },
     "intensidad": {
       "vol_hoy": 0,

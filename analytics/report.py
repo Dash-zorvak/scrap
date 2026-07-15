@@ -13,6 +13,10 @@ from analytics.compute import (
     emotion_pcts_for_theme, dominant_emotion, tendency_style,
 )
 from analytics.sentiment import aggregate_sentiment, SENTIMENT_ORDER
+from analytics.emotion import aggregate_emotions
+from analytics.topic import classify_topic, TopicResult
+from analytics.emergent import analizar_emergentes
+from analytics.zona import detectar_zona, es_propuesta_zona
 from analytics.schema_validator import validar, ValidationResult
 
 
@@ -23,6 +27,8 @@ def construir_analysis(aprobaciones_agrupadas: list,
                        tk_stats: dict | None = None,
                        tema_aprobaciones_db: str | None = None,
                        comentarios_texts: list[str] | None = None,
+                       textos_previos: list[str] | None = None,
+                       es_oficial: bool = False,
                        ) -> dict:
     """Construye el dict de analysis.json desde datos pre-procesados.
 
@@ -33,8 +39,10 @@ def construir_analysis(aprobaciones_agrupadas: list,
         fb_stats: estadisticas de Facebook (posts, comments, engagement).
         tk_stats: estadisticas de TikTok (videos, comments, engagement).
         comentarios_texts: textos crudos de comentarios para clasificar
-            sentimiento con reglas léxicas. Si es None, se usa el fallback
-            de conteos apoyo/critica/neutral de aprobaciones_agrupadas.
+            sentimiento, emoción, tema y zona con reglas léxicas.
+        textos_previos: textos del período anterior para temas emergentes.
+        es_oficial: True si los posts son de fuentes oficiales (activa
+            regla "me divierte" en clasificación de emoción).
 
     Returns:
         dict con la estructura completa de analysis.json.
@@ -88,19 +96,38 @@ def construir_analysis(aprobaciones_agrupadas: list,
     else:
         etiqueta_tendencia = "estable"
 
-    # Indice de emociones global
-    emo_global = {}
-    for t in aprobaciones_agrupadas:
-        for emo, info in t.get("emociones", {}).items():
-            emo_global[emo] = emo_global.get(emo, 0) + info.get("count", 0)
-    pcts_global = emotion_pcts_for_theme(emo_global)
+    # ── 16.1: Índice de emociones por reglas léxicas ──
+    if comentarios_texts:
+        emo_agg = aggregate_emotions(comentarios_texts, es_oficial=es_oficial)
+        indice_emociones = {
+            "emocion_dominante": emo_agg["dominante"],
+            "narrativa": "",
+            "enlaces_referencia": [],
+        }
+        indice_emociones.update(emo_agg["pct"])
+    else:
+        # Fallback: desde aprobaciones manuales por tema
+        emo_global = {}
+        for t in aprobaciones_agrupadas:
+            for emo, info in t.get("emociones", {}).items():
+                emo_global[emo] = emo_global.get(emo, 0) + info.get("count", 0)
+        pcts_global = emotion_pcts_for_theme(emo_global)
+        indice_emociones = {
+            "emocion_dominante": dominant_emotion(emo_global),
+            "narrativa": "",
+            "enlaces_referencia": [],
+        }
+        indice_emociones.update(pcts_global)
 
-    indice_emociones = {
-        "emocion_dominante": dominant_emotion(emo_global),
-        "narrativa": "",
-        "enlaces_referencia": [],
-    }
-    indice_emociones.update(pcts_global)
+    # ── 16.2: Clasificación temática por reglas léxicas ──
+    topic_counts: dict[str, int] = {}
+    topic_results_by_text: dict[int, TopicResult] = {}
+    if comentarios_texts:
+        for i, text in enumerate(comentarios_texts):
+            result = classify_topic(text)
+            topic_results_by_text[i] = result
+            tema = result.tema
+            topic_counts[tema] = topic_counts.get(tema, 0) + 1
 
     # Concentracion tematica
     ramas = []
@@ -159,6 +186,52 @@ def construir_analysis(aprobaciones_agrupadas: list,
             "enlaces_referencia": [],
         })
 
+    # ── 16.3: Temas emergentes por n-gramas ──
+    # 18.4: Filtrar solo textos no_aplica/low-signal (n_coincidencias < 2)
+    emergentes_result = {}
+    if comentarios_texts and topic_results_by_text:
+        textos_sin_tema_claro = []
+        for i, text in enumerate(comentarios_texts):
+            tr = topic_results_by_text.get(i)
+            if tr and (tr.tema == "no_aplica" or tr.n_coincidencias < 2):
+                textos_sin_tema_claro.append(text)
+
+        if textos_sin_tema_claro:
+            emergentes_result = analizar_emergentes(
+                textos_sin_tema_claro,
+                textos_previos=textos_previos,
+                top_n=10,
+                min_freq=2,
+            )
+    elif comentarios_texts:
+        # Sin topic_results disponibles (fallback)
+        emergentes_result = analizar_emergentes(
+            comentarios_texts,
+            textos_previos=textos_previos,
+            top_n=10,
+            min_freq=2,
+        )
+    else:
+        emergentes_result = {
+            "emergentes": [],
+            "total_bigramas_actual": 0,
+            "total_bigramas_previo": 0,
+            "n_acelerando": 0,
+            "n_desacelerando": 0,
+            "n_nuevos": 0,
+        }
+
+    temas_emergentes_lda = []
+    for e in emergentes_result.get("emergentes", []):
+        temas_emergentes_lda.append({
+            "tema": e["ngrama"],
+            "n_comentarios": e["frecuencia_actual"],
+            "tendencia": e["tendencia"],
+            "acelerando": e["tendencia"] == "acelerando",
+            "pct_cambio_semana": e["ratio"],
+            "narrativa": "",
+        })
+
     bloque2 = {
         "voces_influencia": voces,
         "polarizacion": {
@@ -166,14 +239,32 @@ def construir_analysis(aprobaciones_agrupadas: list,
             "narrativa": "",
             "enlaces_referencia": [],
         },
+        "temas_emergentes_lda": temas_emergentes_lda,
     }
 
     # ── Bloque 3: Friccion ──
+    # 16.4: Zona por gazetteer + registro de propuestas
+    zona_por_tema: dict[str, str] = {}
+    if comentarios_texts:
+        for i, text in enumerate(comentarios_texts):
+            topic_result = topic_results_by_text.get(i)
+            if topic_result is None:
+                topic_result = classify_topic(text)
+            zona_result = detectar_zona(text)
+            if zona_result.zona and topic_result.tema:
+                if topic_result.tema not in zona_por_tema:
+                    zona_por_tema[topic_result.tema] = zona_result.zona
+
+            # 18.3: Registrar propuestas de zona
+            es_propuesta_zona(text)
+
     fricciones = []
     for t in aprobaciones_agrupadas:
         if t.get("critica", 0) > 0:
+            tema_key = t.get("categoria", "")
             fricciones.append({
-                "tema": t.get("categoria", ""),
+                "tema": tema_key,
+                "zona": zona_por_tema.get(tema_key, ""),
                 "n_negativos": t.get("critica", 0),
                 "n_comentarios_total": t.get("doc_count", 0),
                 "pct_del_total": t.get("pct_critica", 0),
@@ -201,6 +292,26 @@ def construir_analysis(aprobaciones_agrupadas: list,
         "comparativa_sectorial", "proyeccion_escenario", "recomendacion_estrategica",
     ]
     bloque4 = {sec: {"narrativa": "", "enlaces_referencia": []} for sec in bloque4_secciones}
+
+    # 16.3: Evolución de temas emergentes
+    temas_emergentes_evolucion = []
+    for e in emergentes_result.get("emergentes", []):
+        if e["tendencia"] in ("acelerando", "desacelerando"):
+            temas_emergentes_evolucion.append({
+                "tema": e["ngrama"],
+                "estado": e["tendencia"],
+                "variacion_semanal": e["ratio"],
+                "n_comentarios": e["frecuencia_actual"],
+                "pct_cambio": round((e["ratio"] - 1) * 100, 1),
+                "acelerando": e["tendencia"] == "acelerando",
+            })
+
+    bloque4["temas_emergentes_evolucion"] = temas_emergentes_evolucion
+    bloque4["temas_extinction"] = [
+        {"tema": e["ngrama"], "variacion_semanal": e["ratio"], "pct_cambio": round((e["ratio"] - 1) * 100, 1)}
+        for e in emergentes_result.get("emergentes", [])
+        if e["tendencia"] == "desacelerando"
+    ]
 
     return {
         "meta": meta,
@@ -237,8 +348,9 @@ def _clasificar_polarizacion(apoyo, critica):
 def generar_reporte_completo(aprobaciones_agrupadas, periodo, fecha_hasta, **kwargs):
     """Genera y valida el analysis.json completo.
 
-    Accepts any extra keyword arguments (e.g. comentarios_texts) and
-    passes them through to construir_analysis().
+    Accepts any extra keyword arguments (e.g. comentarios_texts,
+    textos_previos, es_oficial) and passes them through to
+    construir_analysis().
 
     Returns:
         tuple: (analysis_dict, ValidationResult)

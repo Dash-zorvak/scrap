@@ -108,6 +108,78 @@ El catálogo de intención comunicativa (`INTENCIONES`) en `dashboard/intencion_
 
 ---
 
+### RG-8: Emoción por reglas léxicas (sin IA)
+
+La clasificación de emoción en MIPA se ejecuta mediante **reglas léxicas deterministas**. No se utilizan modelos de inferencia.
+
+**Componentes del método (`analytics/emotion.py`):**
+
+1. **Léxico semilla**: ~80 palabras/frases por una de las 31 categorías canónicas de Plutchik (ver `EMOTION_LEXICON`). Cada emoción tiene su propio set de semillas.
+
+2. **Coincidencia por tokens y frases**: tokens individuales se buscan en el set normalizado; frases multi-palabra se buscan por substring en el texto normalizado.
+
+3. **Intensificadores**: palabras ("muy", "totalmente", "extremadamente"), mayúsculas de 3+ letras y signos de exclamación repetidos (`!!`) empujan la intensidad de leve → media → intensa dentro de la misma familia.
+
+4. **Regla "me divierte"**: en publicaciones oficiales, marcadores de risa/ironía ("jaja", "me divierten", "xd") clasifican como `ironia` (familia `civica`). Esta regla **solo** aplica cuando el parámetro `es_oficial=True`.
+
+5. **Agregación batch**: `aggregate_emotions()` retorna conteos por emoción, porcentajes, dominante y conteos por familia.
+
+**Nunca** mencionar en las narrativas que la emoción fue calculada por IA.
+
+---
+
+### RG-9: Tema por reglas léxicas (sin IA)
+
+La clasificación de tema se ejecuta mediante **reglas léxicas deterministas**.
+
+**Componentes del método (`analytics/topic.py`):**
+
+1. **Léxico por tema**: ~50 palabras/frases por cada una de las 10 categorías fijas (`TOPIC_LEXICON`): obras_servicios, seguridad, movilidad, empleo, salud, educacion, medio_ambiente, gobernanza, cultura_deportes, apoyo_generico.
+
+2. **Coincidencia**: mismo patrón de tokens + frases multi-palabra que la emoción.
+
+3. **Desempate**: mayor conteo gana. Sin coincidencias → `no_aplica`.
+
+4. **Remapeo de categorías legacy**: `obras_publicas`/`servicios_publicos` → `obras_servicios`, `corrupcion`/`transparencia` → `gobernanza`, `cultura`/`deportes` → `cultura_deportes`.
+
+---
+
+### RG-10: Temas emergentes por n-gramas (sin IA)
+
+La detección de temas emergentes se ejecuta mediante **extracción de bigramas/trigramas y comparación de frecuencia entre períodos**.
+
+**Componentes del método (`analytics/emergent.py`):**
+
+1. **Extracción**: bigramas y trigramas de textos con stopwords removidas.
+
+2. **Frecuencia**: conteo de cada n-grama en el período actual.
+
+3. **Tendencia** (si hay período previo):
+   - `frecuencia_actual / max(frecuencia_previa, 1) ≥ 1.5` → `acelerando`
+   - `frecuencia_actual / max(frecuencia_previa, 1) ≤ 0.67` → `desacelerando`
+   - `frecuencia_previa == 0` y `actual > 0` → `nuevo`
+   - Sin historial previo → `sin_comparacion`
+
+4. **Mínimo**: `min_freq=2` por defecto para filtrar ruido.
+
+---
+
+### RG-11: Zona/ubicación por gazetteer (sin IA)
+
+La detección de zona se ejecuta mediante **coincidencia de substring/palabra** contra un gazetteer curado.
+
+**Componentes del método (`analytics/zona.py`):**
+
+1. **Gazetteer**: departamentos (22), municipios (~60), zonas de la Ciudad de Guatemala (~25), barrios/colonias (~50).
+
+2. **Prioridad**: zona GT > barrios > municipios > departamentos.
+
+3. **Sin zona por defecto**: si no se reconoce ninguna zona en el texto, se retorna `zona=""`. Nunca se fuerza una zona.
+
+4. **Propuestas**: nombres que parecen zona pero no están en el gazetteer se registran como propuesta (`tipo="zona"`). El gazetteer es extensible.
+
+---
+
 ## Bloque I — Pulso General
 
 | Sección | Reglas |
@@ -281,6 +353,8 @@ Antes de guardar el JSON, verifique:
 - [ ] Voces de Influencia: si `engagement > 0`, sus submétricas no son 0.
 - [ ] Alertas Cambridge: cada `tipo` incluye `enlaces_referencia` si menciona posts específicos.
 - [ ] Puntos de Fricción: si `n_negativos > 0`, `emocion_dominante` no está vacío.
+- [ ] Puntos de Fricción: campo `zona` poblado con gazetteer (vacío si no se detectó zona).
+- [ ] Temas Emergentes: `temas_emergentes_lda` contiene n-gramas reales, no temas genéricos.
 - [ ] Bloque IV: cada sección es `{"narrativa": "...", "enlaces_referencia": [...]}`.
 - [ ] Bloque IV: cada `enlaces_referencia` contiene las URLs reales, no está vacío si la narrativa hace afirmaciones específicas.
 - [ ] Ninguna afirmación se basa en datos fuera del período del `meta.periodo`.

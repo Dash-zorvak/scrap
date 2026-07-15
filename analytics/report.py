@@ -11,6 +11,14 @@ from datetime import datetime, timezone
 from analytics.compute import (
     n, s, get, top_emotions, engagement_inconsistency_badge,
     emotion_pcts_for_theme, dominant_emotion, tendency_style,
+    engagement_rate_fb, engagement_rate_tk, ratio_amor_enojo_fb,
+    reacciones_positivas_fb, reacciones_negativas_fb,
+    net_sentiment_index, controversy_index, effectiveness_index,
+    approval_pct, rejection_pct, vol_factor, risk_reputacional,
+    _detectar_alertas, calcular_hhi,
+    calcular_pulso_iq_fb, calcular_pulso_iq_tk,
+    pulso_iq_score, pulso_iq_cuadrante,
+    coeficiente_variacion, autenticidad_pct,
 )
 from analytics.sentiment import aggregate_sentiment, SENTIMENT_ORDER
 from analytics.emotion import aggregate_emotions
@@ -48,13 +56,6 @@ def construir_analysis(aprobaciones_agrupadas: list,
         dict con la estructura completa de analysis.json.
     """
     ahora = datetime.now(timezone.utc).isoformat()
-
-    # ── Meta ──
-    meta = {
-        "periodo": periodo,
-        "fecha_datos_hasta": fecha_hasta,
-        "generado_en": ahora,
-    }
 
     # ── Bloque 1: Clima ──
     total_aprobados = sum(t.get("doc_count", 0) for t in aprobaciones_agrupadas)
@@ -95,6 +96,32 @@ def construir_analysis(aprobaciones_agrupadas: list,
         etiqueta_tendencia = "empeorando"
     else:
         etiqueta_tendencia = "estable"
+
+    # ── Meta ──
+    meta = {
+        "periodo": periodo,
+        "fecha_datos_hasta": fecha_hasta,
+        "generado_en": ahora,
+        "plataforma": "",
+        "total_posts_analizados": 0,
+        "total_comentarios_analizados": n_total,
+        "total_reacciones_sumadas": 0,
+        "total_impresiones_vistas": 0,
+        "enlaces_analizados": [],
+    }
+    if fb_stats:
+        meta["plataforma"] = meta["plataforma"] or "facebook"
+        meta["total_posts_analizados"] += n(fb_stats.get("posts", 0))
+        meta["total_reacciones_sumadas"] += n(fb_stats.get("total_reacciones", 0))
+        meta["total_impresiones_vistas"] += n(fb_stats.get("views", 0))
+    if tk_stats:
+        if meta["plataforma"]:
+            meta["plataforma"] = "multicanal"
+        else:
+            meta["plataforma"] = "tiktok"
+        meta["total_posts_analizados"] += n(tk_stats.get("videos", 0))
+        meta["total_reacciones_sumadas"] += n(tk_stats.get("likes", 0))
+        meta["total_impresiones_vistas"] += n(tk_stats.get("views", 0))
 
     # ── 16.1: Índice de emociones por reglas léxicas ──
     if comentarios_texts:
@@ -139,6 +166,82 @@ def construir_analysis(aprobaciones_agrupadas: list,
             "emocion_dominante": t.get("emocion_dominante", "calma"),
         })
 
+    # ── §G: HHI de concentración temática ──
+    shares_para_hhi = [r.get("share", 0) for r in ramas if isinstance(r, dict)]
+    hhi = calcular_hhi(shares_para_hhi)
+    top_tema = ramas[0]["tema"] if ramas else ""
+    n_temas = len(ramas)
+
+    # ── §D: Engagement Rate ──
+    er_fb = er_tk = 0.0
+    er_basis_fb = er_basis_tk = "sin_datos"
+    ratio_amor_fb = 0.0
+    reac_pos_fb = reac_neg_fb = 0
+    if fb_stats:
+        er_fb, er_basis_fb = engagement_rate_fb(
+            fb_stats.get("likes", 0), fb_stats.get("loves", 0),
+            fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
+            fb_stats.get("wows", 0), fb_stats.get("sads", 0),
+            fb_stats.get("angrys", 0), fb_stats.get("comments", 0),
+            fb_stats.get("shares", 0), fb_stats.get("views", 0),
+        )
+        ratio_amor_fb = ratio_amor_enojo_fb(
+            fb_stats.get("likes", 0), fb_stats.get("loves", 0),
+            fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
+            fb_stats.get("sads", 0), fb_stats.get("angrys", 0),
+        )
+        reac_pos_fb = reacciones_positivas_fb(
+            fb_stats.get("likes", 0), fb_stats.get("loves", 0),
+            fb_stats.get("cares", 0),
+        )
+        reac_neg_fb = reacciones_negativas_fb(
+            fb_stats.get("angrys", 0), fb_stats.get("sads", 0),
+            fb_stats.get("hahas", 0),
+        )
+    if tk_stats:
+        er_tk, er_basis_tk = engagement_rate_tk(
+            tk_stats.get("views", 0), tk_stats.get("likes", 0),
+            tk_stats.get("shares", 0), tk_stats.get("favorites", 0),
+            tk_stats.get("comments", 0),
+        )
+
+    # §J: Ponderar ER por volumen real al combinar plataformas
+    er_display = er_fb
+    er_basis = er_basis_fb
+    if fb_stats and tk_stats:
+        vol_fb = n(fb_stats.get("engagement", 0))
+        vol_tk = n(tk_stats.get("engagement", 0))
+        vol_total = vol_fb + vol_tk
+        if vol_total > 0:
+            er_display = round(
+                er_fb * (vol_fb / vol_total) + er_tk * (vol_tk / vol_total), 2
+            )
+            er_basis = "ponderado_volumen"
+    elif tk_stats:
+        er_display = er_tk
+        er_basis = er_basis_tk
+
+    # §E: Reacciones positivas/negativas (FB) para metricas_rendimiento
+    total_reac_fb = reac_pos_fb + reac_neg_fb
+    reac_pos_pct = round(reac_pos_fb / total_reac_fb * 100, 1) if total_reac_fb > 0 else 0.0
+    reac_neg_pct = round(reac_neg_fb / total_reac_fb * 100, 1) if total_reac_fb > 0 else 0.0
+
+    # §H: Pulso IQ
+    dims_fb = None
+    dims_tk = None
+    if fb_stats:
+        dims_fb = calcular_pulso_iq_fb(
+            pct_favorable, pct_critico, n_total,
+            fb_stats.get("posts", 0), shares_para_hhi, tono_score_hoy,
+        )
+    if tk_stats:
+        dims_tk = calcular_pulso_iq_tk(
+            pct_favorable, pct_critico, n_total,
+            tk_stats.get("videos", 0), shares_para_hhi, tono_score_hoy,
+        )
+    iq_score, iq_dims = pulso_iq_score(dims_fb, dims_tk)
+    iq_cuadrante = pulso_iq_cuadrante(iq_score, iq_dims)
+
     bloque1 = {
         "clima_narrativo": {
             "tono_dominante": tono_dominante,
@@ -164,12 +267,41 @@ def construir_analysis(aprobaciones_agrupadas: list,
         },
         "concentracion_tematica": {
             "ramas": ramas,
+            "hhi": hhi,
             "nivel": _clasificar_concentracion(ramas),
+            "top_tema": top_tema,
+            "n_temas": n_temas,
+            "narrativa": "",
+            "enlaces_referencia": [],
+            "formula_usada": "HHI = Σ(share_i²) donde share_i = n_tema_i / total_temas",
+        },
+        "pulso_iq": {
+            "valor": iq_score,
+            "cuadrante": iq_cuadrante,
+            "componentes": iq_dims,
             "narrativa": "",
             "enlaces_referencia": [],
         },
-        "pulso_iq": {"narrativa": "", "enlaces_referencia": []},
-        "metricas_rendimiento": {"narrativa": "", "enlaces_referencia": []},
+        "metricas_rendimiento": {
+            "engagement_rate": er_display,
+            "engagement_rate_formula": (
+                "ER = (reacciones + comentarios + compartidos) / vistas * 100"
+            ),
+            "engagementBasis": er_basis,
+                "alcance_estimado": n(
+                    (fb_stats.get("views", 0) if fb_stats else 0)
+                    + (tk_stats.get("views", 0) if tk_stats else 0)
+                ),
+            "reacciones_positivas": reac_pos_fb,
+            "reacciones_negativas": reac_neg_fb,
+            "reacciones_positivas_pct": reac_pos_pct,
+            "reacciones_negativas_pct": reac_neg_pct,
+            "ratio_amor_enojo": ratio_amor_fb,
+            "ratio_amor_enojo_formula": "R = (likes + loves + cares) / (angrys + sads + hahas)",
+            "porque_funciona": "",
+            "narrativa": "",
+            "enlaces_referencia": [],
+        },
     }
 
     # ── Bloque 2: Voces ──
@@ -185,6 +317,12 @@ def construir_analysis(aprobaciones_agrupadas: list,
             "narrativa": "",
             "enlaces_referencia": [],
         })
+
+    # §E: Polarización índice = |pct_apoyo - pct_critica| / 100
+    total_apoyo_critica = total_apoyo + total_critica
+    polarizacion_indice = 0.0
+    if total_apoyo_critica > 0:
+        polarizacion_indice = round(abs(total_apoyo - total_critica) / total_apoyo_critica, 3)
 
     # ── 16.3: Temas emergentes por n-gramas ──
     # 18.4: Filtrar solo textos no_aplica/low-signal (n_coincidencias < 2)
@@ -235,9 +373,11 @@ def construir_analysis(aprobaciones_agrupadas: list,
     bloque2 = {
         "voces_influencia": voces,
         "polarizacion": {
+            "indice": polarizacion_indice,
             "nivel": _clasificar_polarizacion(total_apoyo, total_critica),
             "narrativa": "",
             "enlaces_referencia": [],
+            "formula_usada": "PI = |pct_simpatizantes - pct_criticos| / 100",
         },
         "temas_emergentes_lda": temas_emergentes_lda,
     }
@@ -274,14 +414,71 @@ def construir_analysis(aprobaciones_agrupadas: list,
                 "enlaces_relacionados": [],
             })
 
+    # ── §F: Alertas ──
+    # Angrys ratio para FB
+    angrys_ratio = 0.0
+    if fb_stats:
+        total_reacciones_fb = n(fb_stats.get("total_reacciones", 0))
+        if total_reacciones_fb > 0:
+            angrys_ratio = n(fb_stats.get("angrys", 0)) / total_reacciones_fb
+    controversy_score = controversy_index(pct_favorable, pct_critico)
+    alertas = _detectar_alertas(pct_critico, angrys_ratio, controversy_score)
+
+    # ── §I: Autenticidad ──
+    daily_vols_fb = []
+    daily_vols_tk = []
+    if fb_stats and fb_stats.get("daily_volumes"):
+        daily_vols_fb = [v for _, v in fb_stats["daily_volumes"]]
+    if tk_stats and tk_stats.get("daily_volumes"):
+        daily_vols_tk = [v for _, v in tk_stats["daily_volumes"]]
+    daily_vols_all = daily_vols_fb + daily_vols_tk
+    pct_organico, pct_coordinado = autenticidad_pct(daily_vols_all) if daily_vols_all else (100.0, 0.0)
+
+    # ── §E: Risk Reputacional ──
+    rr = risk_reputacional(pct_critico, angrys_ratio, hhi)
+    # Semáforo
+    if rr >= 60:
+        semaforo = "rojo"
+    elif rr >= 30:
+        semaforo = "amarillo"
+    else:
+        semaforo = "verde"
+
     bloque3 = {
         "puntos_friccion": fricciones,
-        "autenticidad": {"narrativa": "", "enlaces_referencia": []},
-        "velocidad_propagacion": {"narrativa": "", "enlaces_referencia": []},
-        "nivel_alerta": {
-            "alertas_cambridge": [],
+        "autenticidad": {
+            "pct_organico": pct_organico,
+            "pct_coordinado": pct_coordinado,
+            "n_duplicados": 0,
             "narrativa": "",
             "enlaces_referencia": [],
+            "formula_usada": "% coordinado = n_mensajes_duplicados_o_similares / total_comentarios * 100",
+        },
+        "velocidad_propagacion": {
+            "proyeccion_24h": "",
+            "tendencia_dias": [],
+            "narrativa": "",
+            "enlaces_referencia": [],
+            "temas_acelerando": [],
+            "temas_desacelerando": [],
+            "formula_usada": "Velocidad = Δcomentarios / Δtiempo; proyección = tendencia_lineal últimas 72h",
+        },
+        "nivel_alerta": {
+            "semaforo": semaforo,
+            "indice_riesgo": rr,
+            "pct_negativos": pct_critico,
+            "indice_enojo_reacciones": round(angrys_ratio * 100, 1),
+            "balance_confrontacion": controversy_score,
+            "n_temas_friccion": len(fricciones),
+            "tema_principal": fricciones[0]["tema"] if fricciones else "",
+            "emocion_principal": fricciones[0]["emocion_dominante"] if fricciones else "",
+            "alertas_cambridge": [
+                {"tipo": a["tipo"], "descripcion": a["descripcion"], "enlaces_referencia": []}
+                for a in alertas
+            ],
+            "narrativa": "",
+            "enlaces_referencia": [],
+            "formula_riesgo": "IR = (pct_negativos*0.4 + indice_enojo*0.3 + balance_confrontacion*0.3) * sensibilidad_tema",
         },
     }
 

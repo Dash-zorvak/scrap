@@ -189,3 +189,125 @@ def get_tk_video_ids(db_path=None):
         return {r["id"] for r in rows}
     finally:
         conn.close()
+
+
+# ── §D-I: Aggregated stats for compute formulas ──
+
+def get_fb_stats(db_path=None):
+    """§D — Agrega métricas de Facebook para engagement/reacciones.
+
+    Retorna dict con:
+      - posts, comments: conteos
+      - likes, loves, cares, hahas, wows, sads, angrys: sumatorias
+      - shares, views: sumatorias
+      - total_reacciones: suma de todas las reacciones
+      - engagement: reacciones + comments + shares
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT "
+            "  COUNT(*) as posts, "
+            "  SUM(COALESCE(likes_count,0)) as likes, "
+            "  SUM(COALESCE(loves_count,0)) as loves, "
+            "  SUM(COALESCE(cares_count,0)) as cares, "
+            "  SUM(COALESCE(hahas_count,0)) as hahas, "
+            "  SUM(COALESCE(wows_count,0)) as wows, "
+            "  SUM(COALESCE(sads_count,0)) as sads, "
+            "  SUM(COALESCE(angrys_count,0)) as angrys, "
+            "  SUM(COALESCE(comments_count,0)) as comments, "
+            "  SUM(COALESCE(shares_count,0)) as shares, "
+            "  SUM(COALESCE(views_count,0)) as views "
+            "FROM fb_posts"
+        ).fetchone()
+        likes = row["likes"] or 0
+        loves = row["loves"] or 0
+        cares = row["cares"] or 0
+        hahas = row["hahas"] or 0
+        wows = row["wows"] or 0
+        sads = row["sads"] or 0
+        angrys = row["angrys"] or 0
+        comments = row["comments"] or 0
+        shares = row["shares"] or 0
+        total_reacciones = likes + loves + cares + hahas + wows + sads + angrys
+        engagement = total_reacciones + comments + shares
+        return {
+            "posts": row["posts"] or 0,
+            "likes": likes, "loves": loves, "cares": cares,
+            "hahas": hahas, "wows": wows, "sads": sads, "angrys": angrys,
+            "comments": comments, "shares": shares,
+            "views": row["views"] or 0,
+            "total_reacciones": total_reacciones,
+            "engagement": engagement,
+        }
+    finally:
+        conn.close()
+
+
+def get_tk_stats(db_path=None):
+    """§D — Agrega métricas de TikTok para engagement.
+
+    Retorna dict con:
+      - videos, comments: conteos
+      - views, likes, shares, favorites: sumatorias
+      - engagement: likes + shares + favorites + comments
+    """
+    db_path = db_path or Config.TIKTOK_DB
+    conn = _conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT "
+            "  COUNT(*) as videos, "
+            "  SUM(COALESCE(views,0)) as views, "
+            "  SUM(COALESCE(likes,0)) as likes, "
+            "  SUM(COALESCE(shares,0)) as shares, "
+            "  SUM(COALESCE(favorites_count,0)) as favorites, "
+            "  SUM(COALESCE(comments_count,0)) as comments "
+            "FROM videos"
+        ).fetchone()
+        views = row["views"] or 0
+        likes = row["likes"] or 0
+        shares = row["shares"] or 0
+        favorites = row["favorites"] or 0
+        comments = row["comments"] or 0
+        engagement = likes + shares + favorites + comments
+        return {
+            "videos": row["videos"] or 0,
+            "views": views, "likes": likes, "shares": shares,
+            "favorites": favorites, "comments": comments,
+            "engagement": engagement,
+        }
+    finally:
+        conn.close()
+
+
+def get_fb_daily_volumes(db_path=None):
+    """§I — Volumen diario de posts de Facebook para CV de autenticidad.
+
+    Retorna lista de (fecha_str, conteo_posts).
+    """
+    db_path = db_path or Config.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT DATE(created_time) as dia, COUNT(*) as n "
+            "FROM fb_posts GROUP BY dia ORDER BY dia"
+        ).fetchall()
+        return [(r["dia"], r["n"]) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_tk_daily_volumes(db_path=None):
+    """§I — Volumen diario de videos de TikTok para CV de autenticidad."""
+    db_path = db_path or Config.TIKTOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT DATE(created_at) as dia, COUNT(*) as n "
+            "FROM videos GROUP BY dia ORDER BY dia"
+        ).fetchall()
+        return [(r["dia"], r["n"]) for r in rows]
+    finally:
+        conn.close()

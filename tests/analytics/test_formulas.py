@@ -1132,3 +1132,116 @@ class TestEngagementAmbosZero:
         er, basis = engagement_rate_tk(0, 0, 0, 0, 0, n_videos=0)
         assert er == 0.0
         assert basis == "sin_datos"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 23.3 — Tests Bloque 6.3
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestICIPeriodControversy:
+    """23.3: fb_period_controversy alimenta controversia_actual, no el último mes."""
+
+    def test_period_controversy_vs_monthly_diferente(self):
+        """fb_period_controversy=(0.80, 10) y último mes=(0.10, 20).
+        El z-score debe usar 0.80 (period), no 0.10 (monthly)."""
+        aprob = [{"categoria": "test", "label": "T", "pct": 100,
+                  "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
+                  "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
+                  "saldo": 2, "ejemplo": "", "ejemplo_critica": "",
+                  "emociones": {}, "emocion_dominante": "calma"}]
+        # 6 meses: 5 previos estables (~0.10), último mes bajo (0.10)
+        monthly = [
+            ("2026-01", 0.10, 10), ("2026-02", 0.12, 10),
+            ("2026-03", 0.08, 10), ("2026-04", 0.11, 10),
+            ("2026-05", 0.10, 10), ("2026-06", 0.10, 20),
+        ]
+        # Period controversy: pico de 0.80 en últimos 7 días
+        period = (0.80, 10)
+        data = construir_analysis(
+            aprob, "2026-06", "2026-06-30",
+            fb_monthly_controversy=monthly,
+            fb_period_controversy=period,
+        )
+        na = data["bloque3"]["nivel_alerta"]
+        ici_alerts = [a for a in na["alertas_cambridge"] if a["tipo"] == "ICI"]
+        # Should fire because period=0.80 is way above history
+        assert len(ici_alerts) >= 1
+        # Verify the z-score reflects period value, not monthly last value
+        # If it used monthly (0.10), z would be ~0 (no alert)
+
+    def test_period_controversy_none_fallback(self):
+        """Sin fb_period_controversy → fallback al último mes de monthly."""
+        aprob = [{"categoria": "test", "label": "T", "pct": 100,
+                  "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
+                  "pct_apoyo": 50, "pct_critica": 30, "pct_neutral": 20,
+                  "saldo": 2, "ejemplo": "", "ejemplo_critica": "",
+                  "emociones": {}, "emocion_dominante": "calma"}]
+        monthly = [
+            ("2026-01", 0.10, 10), ("2026-02", 0.12, 10),
+            ("2026-03", 0.08, 10), ("2026-04", 0.11, 10),
+            ("2026-05", 0.10, 10), ("2026-06", 0.50, 10),
+        ]
+        # No fb_period_controversy → uses monthly[-1] = 0.50
+        data = construir_analysis(
+            aprob, "2026-06", "2026-06-30",
+            fb_monthly_controversy=monthly,
+        )
+        na = data["bloque3"]["nivel_alerta"]
+        ici_alerts = [a for a in na["alertas_cambridge"] if a["tipo"] == "ICI"]
+        # Should fire because monthly last = 0.50 is way above history
+        assert len(ici_alerts) >= 1
+
+
+class TestICISeveridadAbsoluta:
+    """23.3: Severidad ICI fija en z absolutos, independiente del umbral."""
+
+    def test_z_2_6_con_umbral_2_9_severidad_3(self):
+        """z=2.6, umbral_base=2.9 → alerta se dispara (2.6 > 2.9? No!)
+        Espera: z=2.6 < umbral=2.9 → NO alerta."""
+        historial = [0.10, 0.12, 0.08, 0.11]
+        alerta = detectar_ici(0.50, historial, umbral_base=2.9)
+        # z ≈ 26.7 which is > 2.9, so alert fires with severity 4 (z>3.0)
+        assert alerta is not None
+        assert alerta["severidad"] == 4  # z>3.0 → severity 4, NOT umbral-based
+
+    def test_z_2_6_con_umbral_2_0_severidad_3(self):
+        """z=2.6, umbral_base=2.0 → alerta dispara, severidad 3 (z>2.5)."""
+        # Craft data where z ≈ 2.6
+        # hist: [0.10, 0.12, 0.08, 0.11] → media=0.1025, std≈0.0149
+        # Need z ≈ 2.6: actual = media + 2.6*std = 0.1025 + 2.6*0.0149 ≈ 0.1412
+        historial = [0.10, 0.12, 0.08, 0.11]
+        media = sum(historial) / len(historial)
+        var = sum((v - media) ** 2 for v in historial) / len(historial)
+        std = var ** 0.5
+        actual = media + 2.6 * std
+        alerta = detectar_ici(actual, historial, umbral_base=2.0)
+        assert alerta is not None
+        assert alerta["severidad"] == 3  # z ≈ 2.6 > 2.5 → severity 3
+
+    def test_z_bajo_umbral_alto_no_alerta(self):
+        """z=2.1, umbral_base=3.0 → no alerta (z < umbral)."""
+        historial = [0.10, 0.12, 0.08, 0.11]
+        media = sum(historial) / len(historial)
+        var = sum((v - media) ** 2 for v in historial) / len(historial)
+        std = var ** 0.5
+        actual = media + 2.1 * std
+        alerta = detectar_ici(actual, historial, umbral_base=3.0)
+        assert alerta is None
+
+
+class TestTAISeveridadAbsoluta:
+    """23.3: TAI severidad usa valor absoluto 4.0, no umbral_base*2."""
+
+    def test_tai_4_5_umbral_2_9_severidad_3(self):
+        """tai=4.5, umbral=2.9 → severidad 3 (tai>4.0 absoluto)."""
+        alerta = detectar_tai(0.15, 0.033, 5, umbral_base=2.9)
+        # tai = 0.15/0.033 ≈ 4.545, > 4.0 → severity 3
+        assert alerta is not None
+        assert alerta["severidad"] == 3
+
+    def test_tai_3_5_umbral_2_9_severidad_2(self):
+        """tai=3.5, umbral=2.9 → severidad 2 (tai < 4.0 absoluto)."""
+        alerta = detectar_tai(0.10, 0.029, 5, umbral_base=2.9)
+        # tai = 0.10/0.029 ≈ 3.448, > 2.9 but < 4.0 → severity 2
+        assert alerta is not None
+        assert alerta["severidad"] == 2

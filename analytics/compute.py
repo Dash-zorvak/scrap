@@ -570,7 +570,10 @@ def detectar_ici(controversia_actual, historial_controversia, umbral_base=2.0):
         de períodos mensuales previos (mínimo 4 meses de historia).
         Alerta si z > umbral_base (por defecto 2.0σ, ajustable por
         sensibilidad temática: umbral_base = 2.0 * sensibilidad_ajustada).
-        Severidad: z > umbral_base+1 → 4, z > umbral_base+0.5 → 3, otro → 2.
+        Severidad fija en valores absolutos de z (independiente del umbral):
+            z > 3.0 → severidad 4
+            z > 2.5 → severidad 3
+            otro (z > umbral_base) → severidad 2
 
     Args:
         controversia_actual: controversia del período actual (0-1).
@@ -589,9 +592,9 @@ def detectar_ici(controversia_actual, historial_controversia, umbral_base=2.0):
     z = _zscore(controversia_actual, media, desviacion)
     if z <= umbral_base:
         return None
-    if z > umbral_base + 1.0:
+    if z > 3.0:
         severidad = 4
-    elif z > umbral_base + 0.5:
+    elif z > 2.5:
         severidad = 3
     else:
         severidad = 2
@@ -702,7 +705,7 @@ def detectar_tai(ratio_enojo_tema, ratio_enojo_general, n_posts_tema, umbral_bas
     tai = n(ratio_enojo_tema) / denom
     if tai <= umbral_base:
         return None
-    severidad = 3 if tai > umbral_base * 2 else 2
+    severidad = 3 if tai > 4.0 else 2
     return {
         "tipo": "TAI",
         "severidad": severidad,

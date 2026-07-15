@@ -56,6 +56,8 @@ def construir_analysis(aprobaciones_agrupadas: list,
                        # Bloque 6.2: ICI monthly controversy + sensitivity
                        fb_monthly_controversy: list | None = None,
                        fb_monthly_theme_controversy: list | None = None,
+                       # Bloque 6.3: ICI 7-day period controversy
+                       fb_period_controversy: tuple | None = None,
                        ) -> dict:
     """Construye el dict de analysis.json desde datos pre-procesados.
 
@@ -81,6 +83,10 @@ def construir_analysis(aprobaciones_agrupadas: list,
         fb_monthly_controversy: [(mes, controversia, n)] para historial ICI.
         fb_monthly_theme_controversy: [{mes, tema, controversy, n_posts}]
             para cv_28d/velocidad en sensibilidad temática de TAI e ICI.
+        fb_period_controversy: (controversia, n_posts) resultado de
+            get_fb_period_controversy() para ventana de 7 días de ICI.
+            Si se provee, se usa como controversia_actual en vez del
+            último mes de fb_monthly_controversy.
 
     Returns:
         dict con la estructura completa de analysis.json.
@@ -524,15 +530,19 @@ def construir_analysis(aprobaciones_agrupadas: list,
     # Pre-compute monthly theme controversy for sensitivity calculations
     monthly_theme_controversy = fb_monthly_theme_controversy or []
 
-    # ── ICI: usar controversia mensual real, no controversia por tema ──
+    # ── ICI: controversia_actual de ventana de 7 días, historial mensual ──
     if fb_monthly_controversy and len(fb_monthly_controversy) >= 5:
-        # Separar mes actual vs histórico
-        # El mes más reciente en monthly_controversy es el actual;
-        # los previos son historial
-        mes_actual = fb_monthly_controversy[-1]
-        historial_mensual = fb_monthly_controversy[:-1]
+        # controversia_actual: usar fb_period_controversy si se proveyó,
+        # fallback al último mes de fb_monthly_controversy
+        if fb_period_controversy is not None:
+            controversia_actual_ici = fb_period_controversy[0]
+        else:
+            controversia_actual_ici = fb_monthly_controversy[-1][1]
 
-        # Para historial, tomar los 4+ meses previos al actual
+        # Historial: meses previos, excluyendo el actual para evitar
+        # traslape con la ventana de 7 días (el mes en curso parcialmente
+        # cubierto por la ventana se excluye del historial mensual)
+        historial_mensual = fb_monthly_controversy[:-1]
         hist_controversias = [c for _, c, n in historial_mensual if n >= 3]
 
         if len(hist_controversias) >= 4:
@@ -553,7 +563,7 @@ def construir_analysis(aprobaciones_agrupadas: list,
             umbral_ici = 2.0 * sens_ici
 
             alerta_ici = detectar_ici(
-                mes_actual[1], hist_controversias, umbral_base=umbral_ici
+                controversia_actual_ici, hist_controversias, umbral_base=umbral_ici
             )
             if alerta_ici:
                 if verificar_cooldown(cooldown.get("ICI"), ahora, "ICI"):

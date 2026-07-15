@@ -3,6 +3,8 @@
 Lee datos de las DBs via queries, aplica formulas via compute,
 construye la estructura de analysis.json y la valida con schema_validator.
 Es el unico modulo que conecta queries + compute + validator.
+
+Bloque 6.1: Wiring de formulas literales §D-I.
 """
 import json
 import os
@@ -13,12 +15,17 @@ from analytics.compute import (
     emotion_pcts_for_theme, dominant_emotion, tendency_style,
     engagement_rate_fb, engagement_rate_tk, ratio_amor_enojo_fb,
     reacciones_positivas_fb, reacciones_negativas_fb,
-    net_sentiment_index, controversy_index, effectiveness_index,
-    approval_pct, rejection_pct, vol_factor, risk_reputacional,
-    _detectar_alertas, calcular_hhi,
+    interacciones_fb,
+    net_sentiment_reacciones, controversy_reacciones,
+    effectiveness_reacciones, approval_pct_reacciones, rejection_pct_reacciones,
+    net_sentiment_index, nsi_deviation, vol_factor, risk_reputacional,
+    detectar_ici, detectar_sdi, detectar_efi, detectar_tai, detectar_zdi,
+    verificar_cooldown, calcular_sensibilidad_tema, calcular_sensibilidad_para_alertas,
+    calcular_hhi,
     calcular_pulso_iq_fb, calcular_pulso_iq_tk,
     pulso_iq_score, pulso_iq_cuadrante,
     coeficiente_variacion, autenticidad_pct,
+    clamp,
 )
 from analytics.sentiment import aggregate_sentiment, SENTIMENT_ORDER
 from analytics.emotion import aggregate_emotions
@@ -37,6 +44,20 @@ def construir_analysis(aprobaciones_agrupadas: list,
                        comentarios_texts: list[str] | None = None,
                        textos_previos: list[str] | None = None,
                        es_oficial: bool = False,
+                       # Bloque 6.1: historical data
+                       fb_monthly_sentiment: list | None = None,
+                       fb_per_theme_controversy: list | None = None,
+                       fb_posts_with_sentiment: list | None = None,
+                       fb_controversial_posts: list | None = None,
+                       fb_anger_by_zone: list | None = None,
+                       alertas_cooldown_state: dict | None = None,
+                       nsi_previo: float | None = None,
+                       er_previo: float | None = None,
+                       # Bloque 6.2: ICI monthly controversy + sensitivity
+                       fb_monthly_controversy: list | None = None,
+                       fb_monthly_theme_controversy: list | None = None,
+                       # Bloque 6.3: ICI 7-day period controversy
+                       fb_period_controversy: tuple | None = None,
                        ) -> dict:
     """Construye el dict de analysis.json desde datos pre-procesados.
 
@@ -51,6 +72,21 @@ def construir_analysis(aprobaciones_agrupadas: list,
         textos_previos: textos del período anterior para temas emergentes.
         es_oficial: True si los posts son de fuentes oficiales (activa
             regla "me divierte" en clasificación de emoción).
+        fb_monthly_sentiment: [(mes, avg_score, n)] para consistencia §H.
+        fb_per_theme_controversy: [{tema, controversy, n_posts}] para §E risk.
+        fb_posts_with_sentiment: [{created_time, sentiment_score, topic_category, zona}].
+        fb_controversial_posts: [{post_id, post_url, ratio, ...}] para alert links.
+        fb_anger_by_zone: [{zona, negativos, total, pct_negativos}] para ZDI.
+        alertas_cooldown_state: {tipo: last_alert_timestamp_iso} para cooldown §F.
+        nsi_previo: NSI del período anterior para SDI.
+        er_previo: ER del período anterior para EFI.
+        fb_monthly_controversy: [(mes, controversia, n)] para historial ICI.
+        fb_monthly_theme_controversy: [{mes, tema, controversy, n_posts}]
+            para cv_28d/velocidad en sensibilidad temática de TAI e ICI.
+        fb_period_controversy: (controversia, n_posts) resultado de
+            get_fb_period_controversy() para ventana de 7 días de ICI.
+            Si se provee, se usa como controversia_actual en vez del
+            último mes de fb_monthly_controversy.
 
     Returns:
         dict con la estructura completa de analysis.json.
@@ -72,7 +108,6 @@ def construir_analysis(aprobaciones_agrupadas: list,
         tono_dominante = agg["dominante"]
         tono_score_hoy = round(pct_favorable - pct_critico, 1)
     else:
-        # Fallback: derivar desde conteos de aprobaciones
         n_total = total_aprobados
         if n_total > 0:
             pct_favorable = round(total_apoyo / n_total * 100, 1)
@@ -133,7 +168,6 @@ def construir_analysis(aprobaciones_agrupadas: list,
         }
         indice_emociones.update(emo_agg["pct"])
     else:
-        # Fallback: desde aprobaciones manuales por tema
         emo_global = {}
         for t in aprobaciones_agrupadas:
             for emo, info in t.get("emociones", {}).items():
@@ -156,7 +190,6 @@ def construir_analysis(aprobaciones_agrupadas: list,
             tema = result.tema
             topic_counts[tema] = topic_counts.get(tema, 0) + 1
 
-    # Concentracion tematica
     ramas = []
     for t in aprobaciones_agrupadas:
         pct = t.get("pct", 0)
@@ -184,6 +217,7 @@ def construir_analysis(aprobaciones_agrupadas: list,
             fb_stats.get("wows", 0), fb_stats.get("sads", 0),
             fb_stats.get("angrys", 0), fb_stats.get("comments", 0),
             fb_stats.get("shares", 0), fb_stats.get("views", 0),
+            n_posts=fb_stats.get("posts", 0),
         )
         ratio_amor_fb = ratio_amor_enojo_fb(
             fb_stats.get("likes", 0), fb_stats.get("loves", 0),
@@ -203,6 +237,7 @@ def construir_analysis(aprobaciones_agrupadas: list,
             tk_stats.get("views", 0), tk_stats.get("likes", 0),
             tk_stats.get("shares", 0), tk_stats.get("favorites", 0),
             tk_stats.get("comments", 0),
+            n_videos=tk_stats.get("videos", 0),
         )
 
     # §J: Ponderar ER por volumen real al combinar plataformas
@@ -221,23 +256,98 @@ def construir_analysis(aprobaciones_agrupadas: list,
         er_display = er_tk
         er_basis = er_basis_tk
 
-    # §E: Reacciones positivas/negativas (FB) para metricas_rendimiento
+    # ── §E: Reacciones (FB) ──
+    ns_reac = 0.0
+    controversy_r = 0.0
+    effectiveness_r = 0.0
+    approval_r = 0.0
+    rejection_r = 0.0
+    if fb_stats:
+        ns_reac = net_sentiment_reacciones(
+            fb_stats.get("likes", 0), fb_stats.get("loves", 0),
+            fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
+            fb_stats.get("sads", 0), fb_stats.get("angrys", 0),
+        )
+        controversy_r = controversy_reacciones(
+            fb_stats.get("likes", 0), fb_stats.get("loves", 0),
+            fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
+            fb_stats.get("sads", 0), fb_stats.get("angrys", 0),
+        )
+        effectiveness_r = effectiveness_reacciones(
+            fb_stats.get("likes", 0), fb_stats.get("loves", 0),
+            fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
+            fb_stats.get("sads", 0), fb_stats.get("angrys", 0),
+        )
+        approval_r = approval_pct_reacciones(
+            fb_stats.get("likes", 0), fb_stats.get("loves", 0),
+            fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
+            fb_stats.get("sads", 0), fb_stats.get("angrys", 0),
+        )
+        rejection_r = rejection_pct_reacciones(
+            fb_stats.get("likes", 0), fb_stats.get("loves", 0),
+            fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
+            fb_stats.get("sads", 0), fb_stats.get("angrys", 0),
+        )
+
     total_reac_fb = reac_pos_fb + reac_neg_fb
     reac_pos_pct = round(reac_pos_fb / total_reac_fb * 100, 1) if total_reac_fb > 0 else 0.0
     reac_neg_pct = round(reac_neg_fb / total_reac_fb * 100, 1) if total_reac_fb > 0 else 0.0
 
-    # §H: Pulso IQ
+    # ── §H: Pulso IQ ──
+    promedio_so_fb = 0.0
+    n_posts_con_tema_fb = 0
+    n_posts_con_zona_fb = 0
+    if fb_posts_with_sentiment:
+        scores = [p.get("sentiment_score", 0) for p in fb_posts_with_sentiment]
+        promedio_so_fb = sum(scores) / len(scores) if scores else 0.0
+        n_posts_con_tema_fb = sum(1 for p in fb_posts_with_sentiment
+                                  if p.get("topic_category", ""))
+        n_posts_con_zona_fb = sum(1 for p in fb_posts_with_sentiment
+                                   if p.get("zona", ""))
+
+    interacciones_fb_total = 0
+    if fb_stats:
+        interacciones_fb_total = interacciones_fb(
+            fb_stats.get("likes", 0), fb_stats.get("loves", 0),
+            fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
+            fb_stats.get("wows", 0), fb_stats.get("sads", 0),
+            fb_stats.get("angrys", 0), fb_stats.get("comments", 0),
+            fb_stats.get("shares", 0),
+        )
+
+    promedios_mensuales_fb = []
+    if fb_monthly_sentiment:
+        promedios_mensuales_fb = [(avg, n_posts) for _, avg, n_posts in fb_monthly_sentiment]
+
     dims_fb = None
     dims_tk = None
     if fb_stats:
         dims_fb = calcular_pulso_iq_fb(
-            pct_favorable, pct_critico, n_total,
-            fb_stats.get("posts", 0), shares_para_hhi, tono_score_hoy,
+            promedio_sentiment_order=promedio_so_fb,
+            interacciones=interacciones_fb_total,
+            vistas=fb_stats.get("views", 0),
+            angrys=fb_stats.get("angrys", 0),
+            sads=fb_stats.get("sads", 0),
+            hahas=fb_stats.get("hahas", 0),
+            total_reacciones=fb_stats.get("total_reacciones", 0),
+            n_posts_con_tema=n_posts_con_tema_fb,
+            n_posts_total=fb_stats.get("posts", 0),
+            n_posts_con_zona=n_posts_con_zona_fb,
+            total_comentarios=fb_stats.get("comments", 0),
+            promedios_mensuales=promedios_mensuales_fb,
         )
     if tk_stats:
         dims_tk = calcular_pulso_iq_tk(
-            pct_favorable, pct_critico, n_total,
-            tk_stats.get("videos", 0), shares_para_hhi, tono_score_hoy,
+            promedio_sentiment_order=0.0,
+            interacciones=n(tk_stats.get("likes", 0)) + n(tk_stats.get("shares", 0))
+                         + n(tk_stats.get("favorites", 0)) + n(tk_stats.get("comments", 0)),
+            vistas=tk_stats.get("views", 0),
+            angrys=0, sads=0, hahas=0,
+            total_reacciones=n(tk_stats.get("likes", 0)),
+            n_videos_con_tema=0,
+            n_videos_total=tk_stats.get("videos", 0),
+            n_videos_con_zona=0,
+            total_comentarios=tk_stats.get("comments", 0),
         )
     iq_score, iq_dims = pulso_iq_score(dims_fb, dims_tk)
     iq_cuadrante = pulso_iq_cuadrante(iq_score, iq_dims)
@@ -288,16 +398,21 @@ def construir_analysis(aprobaciones_agrupadas: list,
                 "ER = (reacciones + comentarios + compartidos) / vistas * 100"
             ),
             "engagementBasis": er_basis,
-                "alcance_estimado": n(
-                    (fb_stats.get("views", 0) if fb_stats else 0)
-                    + (tk_stats.get("views", 0) if tk_stats else 0)
-                ),
+            "alcance_estimado": n(
+                (fb_stats.get("views", 0) if fb_stats else 0)
+                + (tk_stats.get("views", 0) if tk_stats else 0)
+            ),
             "reacciones_positivas": reac_pos_fb,
             "reacciones_negativas": reac_neg_fb,
             "reacciones_positivas_pct": reac_pos_pct,
             "reacciones_negativas_pct": reac_neg_pct,
             "ratio_amor_enojo": ratio_amor_fb,
             "ratio_amor_enojo_formula": "R = (likes + loves + cares) / (angrys + sads + hahas)",
+            "net_sentiment_reacciones": ns_reac,
+            "controversy_reacciones": controversy_r,
+            "effectiveness_reacciones": effectiveness_r,
+            "aprobacion_pct_reacciones": approval_r,
+            "rechazo_pct_reacciones": rejection_r,
             "porque_funciona": "",
             "narrativa": "",
             "enlaces_referencia": [],
@@ -318,14 +433,12 @@ def construir_analysis(aprobaciones_agrupadas: list,
             "enlaces_referencia": [],
         })
 
-    # §E: Polarización índice = |pct_apoyo - pct_critica| / 100
     total_apoyo_critica = total_apoyo + total_critica
     polarizacion_indice = 0.0
     if total_apoyo_critica > 0:
         polarizacion_indice = round(abs(total_apoyo - total_critica) / total_apoyo_critica, 3)
 
-    # ── 16.3: Temas emergentes por n-gramas ──
-    # 18.4: Filtrar solo textos no_aplica/low-signal (n_coincidencias < 2)
+    # ── 16.3: Temas emergentes ──
     emergentes_result = {}
     if comentarios_texts and topic_results_by_text:
         textos_sin_tema_claro = []
@@ -333,7 +446,6 @@ def construir_analysis(aprobaciones_agrupadas: list,
             tr = topic_results_by_text.get(i)
             if tr and (tr.tema == "no_aplica" or tr.n_coincidencias < 2):
                 textos_sin_tema_claro.append(text)
-
         if textos_sin_tema_claro:
             emergentes_result = analizar_emergentes(
                 textos_sin_tema_claro,
@@ -342,7 +454,6 @@ def construir_analysis(aprobaciones_agrupadas: list,
                 min_freq=2,
             )
     elif comentarios_texts:
-        # Sin topic_results disponibles (fallback)
         emergentes_result = analizar_emergentes(
             comentarios_texts,
             textos_previos=textos_previos,
@@ -383,7 +494,6 @@ def construir_analysis(aprobaciones_agrupadas: list,
     }
 
     # ── Bloque 3: Friccion ──
-    # 16.4: Zona por gazetteer + registro de propuestas
     zona_por_tema: dict[str, str] = {}
     if comentarios_texts:
         for i, text in enumerate(comentarios_texts):
@@ -394,8 +504,6 @@ def construir_analysis(aprobaciones_agrupadas: list,
             if zona_result.zona and topic_result.tema:
                 if topic_result.tema not in zona_por_tema:
                     zona_por_tema[topic_result.tema] = zona_result.zona
-
-            # 18.3: Registrar propuestas de zona
             es_propuesta_zona(text)
 
     fricciones = []
@@ -414,15 +522,139 @@ def construir_analysis(aprobaciones_agrupadas: list,
                 "enlaces_relacionados": [],
             })
 
-    # ── §F: Alertas ──
-    # Angrys ratio para FB
-    angrys_ratio = 0.0
-    if fb_stats:
-        total_reacciones_fb = n(fb_stats.get("total_reacciones", 0))
-        if total_reacciones_fb > 0:
-            angrys_ratio = n(fb_stats.get("angrys", 0)) / total_reacciones_fb
-    controversy_score = controversy_index(pct_favorable, pct_critico)
-    alertas = _detectar_alertas(pct_critico, angrys_ratio, controversy_score)
+    # ── §F: Alertas con series de tiempo, cooldown, sensibilidad y enlaces ──
+    cooldown = alertas_cooldown_state or {}
+    alertas = []
+    alertas_links = []
+
+    # Pre-compute monthly theme controversy for sensitivity calculations
+    monthly_theme_controversy = fb_monthly_theme_controversy or []
+
+    # ── ICI: controversia_actual de ventana de 7 días, historial mensual ──
+    if fb_monthly_controversy and len(fb_monthly_controversy) >= 5:
+        # controversia_actual: usar fb_period_controversy si se proveyó,
+        # fallback al último mes de fb_monthly_controversy
+        if fb_period_controversy is not None:
+            controversia_actual_ici = fb_period_controversy[0]
+        else:
+            controversia_actual_ici = fb_monthly_controversy[-1][1]
+
+        # Historial: meses previos, excluyendo el actual para evitar
+        # traslape con la ventana de 7 días (el mes en curso parcialmente
+        # cubierto por la ventana se excluye del historial mensual)
+        historial_mensual = fb_monthly_controversy[:-1]
+        hist_controversias = [c for _, c, n in historial_mensual if n >= 3]
+
+        if len(hist_controversias) >= 4:
+            # Sensibilidad del tema dominante del período
+            tema_dominante = ""
+            max_n_posts = 0
+            if fb_per_theme_controversy:
+                for td in fb_per_theme_controversy:
+                    if td.get("n_posts", 0) > max_n_posts:
+                        max_n_posts = td["n_posts"]
+                        tema_dominante = td.get("tema", "")
+
+            sens_ici = 1.0
+            if tema_dominante and monthly_theme_controversy:
+                sens_ici = calcular_sensibilidad_para_alertas(
+                    tema_dominante, monthly_theme_controversy, fecha_hasta
+                )
+            umbral_ici = 2.0 * sens_ici
+
+            alerta_ici = detectar_ici(
+                controversia_actual_ici, hist_controversias, umbral_base=umbral_ici
+            )
+            if alerta_ici:
+                if verificar_cooldown(cooldown.get("ICI"), ahora, "ICI"):
+                    if fb_controversial_posts:
+                        alerta_ici["enlaces_referencia"] = [
+                            p["post_url"] for p in fb_controversial_posts[:5]
+                            if p.get("post_url")
+                        ]
+                    alertas.append(alerta_ici)
+                    alertas_links.extend(alerta_ici.get("enlaces_referencia", []))
+
+    nsi_actual = net_sentiment_index(total_apoyo, total_critica, n_total)
+    nsi_prev = n(nsi_previo) if nsi_previo is not None else 0.0
+    alerta_sdi = detectar_sdi(nsi_actual, nsi_prev)
+    if alerta_sdi:
+        if verificar_cooldown(cooldown.get("SDI"), ahora, "SDI"):
+            # enlaces_referencia: posts más controversiales del período
+            if fb_controversial_posts:
+                alerta_sdi["enlaces_referencia"] = [
+                    p["post_url"] for p in fb_controversial_posts[:5]
+                    if p.get("post_url")
+                ]
+            alertas.append(alerta_sdi)
+            alertas_links.extend(alerta_sdi.get("enlaces_referencia", []))
+
+    total_reacciones_fb = n(fb_stats.get("total_reacciones", 0)) if fb_stats else 0
+    er_prev = n(er_previo) if er_previo is not None else 0.0
+    alerta_efi = detectar_efi(er_display, er_prev, total_reacciones_fb)
+    if alerta_efi:
+        if verificar_cooldown(cooldown.get("EFI"), ahora, "EFI"):
+            # enlaces_referencia: posts con mayor caída de engagement
+            if fb_controversial_posts:
+                alerta_efi["enlaces_referencia"] = [
+                    p["post_url"] for p in fb_controversial_posts[:5]
+                    if p.get("post_url")
+                ]
+            alertas.append(alerta_efi)
+            alertas_links.extend(alerta_efi.get("enlaces_referencia", []))
+
+    if fb_per_theme_controversy:
+        total_neg_r = sum(t.get("negativos", 0) for t in fb_per_theme_controversy)
+        total_reac_r = sum(t.get("total_reacciones", 0) for t in fb_per_theme_controversy)
+        ratio_enojo_general = total_neg_r / total_reac_r if total_reac_r > 0 else 0.0
+        for tema_data in fb_per_theme_controversy:
+            if tema_data.get("n_posts", 0) < 3:
+                continue
+            ratio_enojo_tema = tema_data["controversy"]
+
+            # Sensibilidad temática ajustada para TAI
+            tema_nombre = tema_data.get("tema", "")
+            sens_tai = 1.0
+            if tema_nombre and monthly_theme_controversy:
+                sens_tai = calcular_sensibilidad_para_alertas(
+                    tema_nombre, monthly_theme_controversy, fecha_hasta
+                )
+            umbral_tai = 2.0 * sens_tai
+
+            alerta_tai = detectar_tai(
+                ratio_enojo_tema, ratio_enojo_general,
+                tema_data["n_posts"], umbral_base=umbral_tai
+            )
+            if alerta_tai:
+                if verificar_cooldown(cooldown.get(f"TAI_{tema_data['tema']}"),
+                                       ahora, "TAI"):
+                    # enlaces_referencia: posts del tema que disparó la alerta
+                    if fb_controversial_posts:
+                        alerta_tai["enlaces_referencia"] = [
+                            p["post_url"] for p in fb_controversial_posts
+                            if p.get("topic_category") == tema_nombre
+                            and p.get("post_url")
+                        ][:5]
+                    alertas.append(alerta_tai)
+                    alertas_links.extend(alerta_tai.get("enlaces_referencia", []))
+
+    if fb_anger_by_zone:
+        for zona_data in fb_anger_by_zone:
+            alerta_zdi = detectar_zdi(zona_data["pct_negativos"], zona_data["total"])
+            if alerta_zdi:
+                if verificar_cooldown(cooldown.get(f"ZDI_{zona_data['zona']}"),
+                                       ahora, "ZDI"):
+                    # enlaces_referencia: posts de la zona que disparó la alerta
+                    zona_nombre = zona_data.get("zona", "")
+                    if zona_nombre and zona_nombre != "sin_zona":
+                        from analytics.queries import get_fb_posts_by_zone
+                        posts_zona = get_fb_posts_by_zone(zona_nombre)
+                        alerta_zdi["enlaces_referencia"] = [
+                            p["post_url"] for p in posts_zona
+                            if p.get("post_url")
+                        ][:5]
+                    alertas.append(alerta_zdi)
+                    alertas_links.extend(alerta_zdi.get("enlaces_referencia", []))
 
     # ── §I: Autenticidad ──
     daily_vols_fb = []
@@ -435,11 +667,21 @@ def construir_analysis(aprobaciones_agrupadas: list,
     pct_organico, pct_coordinado = autenticidad_pct(daily_vols_all) if daily_vols_all else (100.0, 0.0)
 
     # ── §E: Risk Reputacional ──
-    rr = risk_reputacional(pct_critico, angrys_ratio, hhi)
-    # Semáforo
-    if rr >= 60:
+    max_topic_controversy = 0.0
+    if fb_per_theme_controversy:
+        max_topic_controversy = max(
+            (t.get("controversy", 0) for t in fb_per_theme_controversy), default=0.0
+        )
+    elif controversy_r > 0:
+        max_topic_controversy = controversy_r
+
+    vf = vol_factor(n(fb_stats.get("posts", 0)) if fb_stats else 0)
+    rr = risk_reputacional(nsi_actual, max_topic_controversy, vf)
+
+    rr_100 = rr * 100
+    if rr_100 >= 60:
         semaforo = "rojo"
-    elif rr >= 30:
+    elif rr_100 >= 30:
         semaforo = "amarillo"
     else:
         semaforo = "verde"
@@ -465,20 +707,27 @@ def construir_analysis(aprobaciones_agrupadas: list,
         },
         "nivel_alerta": {
             "semaforo": semaforo,
-            "indice_riesgo": rr,
+            "indice_riesgo": round(rr_100, 1),
             "pct_negativos": pct_critico,
-            "indice_enojo_reacciones": round(angrys_ratio * 100, 1),
-            "balance_confrontacion": controversy_score,
+            "indice_enojo_reacciones": round(
+                (n(fb_stats.get("angrys", 0)) / total_reacciones_fb * 100)
+                if total_reacciones_fb > 0 else 0, 1
+            ),
+            "balance_confrontacion": controversy_r,
             "n_temas_friccion": len(fricciones),
             "tema_principal": fricciones[0]["tema"] if fricciones else "",
             "emocion_principal": fricciones[0]["emocion_dominante"] if fricciones else "",
             "alertas_cambridge": [
-                {"tipo": a["tipo"], "descripcion": a["descripcion"], "enlaces_referencia": []}
+                {"tipo": a["tipo"], "descripcion": a["descripcion"],
+                 "enlaces_referencia": a.get("enlaces_referencia", [])}
                 for a in alertas
             ],
             "narrativa": "",
-            "enlaces_referencia": [],
-            "formula_riesgo": "IR = (pct_negativos*0.4 + indice_enojo*0.3 + balance_confrontacion*0.3) * sensibilidad_tema",
+            "enlaces_referencia": alertas_links,
+            "formula_riesgo": (
+                "RR = clamp((max_topic_controversy * 10 * 0.50 + nsi_deviation * 0.50) "
+                "* vol_factor, 0, 1)"
+            ),
         },
     }
 
@@ -490,7 +739,6 @@ def construir_analysis(aprobaciones_agrupadas: list,
     ]
     bloque4 = {sec: {"narrativa": "", "enlaces_referencia": []} for sec in bloque4_secciones}
 
-    # 16.3: Evolución de temas emergentes
     temas_emergentes_evolucion = []
     for e in emergentes_result.get("emergentes", []):
         if e["tendencia"] in ("acelerando", "desacelerando"):
@@ -505,7 +753,8 @@ def construir_analysis(aprobaciones_agrupadas: list,
 
     bloque4["temas_emergentes_evolucion"] = temas_emergentes_evolucion
     bloque4["temas_extinction"] = [
-        {"tema": e["ngrama"], "variacion_semanal": e["ratio"], "pct_cambio": round((e["ratio"] - 1) * 100, 1)}
+        {"tema": e["ngrama"], "variacion_semanal": e["ratio"],
+         "pct_cambio": round((e["ratio"] - 1) * 100, 1)}
         for e in emergentes_result.get("emergentes", [])
         if e["tendencia"] == "desacelerando"
     ]

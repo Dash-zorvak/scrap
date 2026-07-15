@@ -8,6 +8,30 @@ Este documento define las reglas que **debe** seguir todo proceso (LLM, script, 
 
 ## Reglas Generales
 
+### RG-0: Sentimiento por reglas léxicas (sin IA)
+
+El análisis de sentimiento en MIPA se ejecuta exclusivamente mediante **reglas léxicas deterministas**. No se utilizan modelos entrenados (BERT, RoBERTa, u otros), ni llamadas a APIs de inferencia.
+
+**Componentes del método:**
+
+1. **Léxico**: diccionario de datos plano con ~80 palabras positivas y ~80 negativas en español, tuneado para discurso municipal/público. Ver `analytics/sentiment.py` → `POSITIVE_WORDS` / `NEGATIVE_WORDS`.
+
+2. **Negación**: palabras "no", "nunca", "jamás", "tampoco", "ni" invierten la polaridad de la palabra positiva/negativa que aparezca dentro de las 3 palabras siguientes.
+
+3. **Clasificación a 5 niveles**:
+   - Sin coincidencias → `neutral`
+   - Mayoría clara de un signo → `positivo` / `negativo`
+   - Proporción ≥ 0.8 en un lado → `muy_positivo` / `muy_negativo`
+
+4. **Escala numérica** (`SENTIMENT_ORDER`):
+   - `muy_positivo = 2`, `positivo = 1`, `neutral = 0`, `negativo = -1`, `muy_negativo = -2`
+
+5. **NSI (Net Sentiment Index)**: `(positivos - negativos) / total * 100` — se usa en `clima_narrativo` y narrativas.
+
+**Nunca** mencionar en las narrativas que el sentimiento fue calculado por un modelo de IA. El método es completamente explicable y auditado via léxico + reglas.
+
+---
+
 ### RG-1: Jerga técnica solo en `formula_usada`
 
 Los campos `narrativa` / `explicacion_simple` **nunca** deben contener siglas técnicas como `HHI`, `NSI`, `IR`, `PI`, `ER`, etc. Esos nombres van **únicamente** en `formula_usada`.
@@ -51,6 +75,36 @@ No mezclar estos conceptos. *Engagement* = reacciones + comentarios + compartido
 ### RG-5: Cada afirmación específica debe traer su enlace real
 
 El campo `enlaces_referencia` debe contener **la lista completa** de URLs de los posts que respaldan las afirmaciones de esa sección. No una muestra ni un subconjunto. Si la narrativa dice "3 posts sobre política antisoborno", deben aparecer los 3 enlaces.
+
+---
+
+### RG-6: Catálogo abierto de emociones y temas
+
+El catálogo de emociones (`EMOCIONES`) y temas (`TEMAS`) en `dashboard/tema_taxonomia.py` es un **punto de partida, no un techo**. Las familias (joy, trust, fear, surprise, sadness, disgust, anger, anticipation, diada, civica) y los temas englobantes están fijos — son la estructura. Las hojas dentro de cada familia dejan de estar cerradas.
+
+**Regla para el analista:** cuando el texto real no calce en ninguna emoción o tema existente, **debe proponer la hoja nueva** en vez de forzarlo a la más parecida. El sistema registra automáticamente la propuesta en `dashboard/taxonomias_pendientes.json` para revisión. No se descarta nada, no se fuerza a un valor por defecto.
+
+**Cómo proponer:**
+- Emociones: usar la clave descriptiva en minúsculas, sin espacios (ej. `indignacion_comunitaria`). El sistema asigna automáticamente la familia "civica" si no hay señal clara; el analista puede sugerir la familia más cercana.
+- Temas: usar la clave descriptiva (ej. `infraestructura_deportiva`). Se registra como propuesta pendiente.
+
+**Prohibido:** asignar una emoción o tema a `no_aplica` o `calma` solo porque no existe en el catálogo actual. Eso oculta información real.
+
+---
+
+### RG-7: Catálogo abierto de intención comunicativa
+
+El catálogo de intención comunicativa (`INTENCIONES`) en `dashboard/intencion_taxonomia.py` es un **punto de partida, no un techo**. Las 12 familias (informacion, evaluacion, solicitud, fiscalizacion, participacion, deliberacion, expresion_social, movilizacion, humor, identidad, interaccion, enganoso) están fijas — son la estructura. Las hojas (intenciones específicas) dentro de cada familia son abiertas.
+
+**Regla para el analista:** cuando el texto real no calce en ninguna intención existente, **debe proponer la hoja nueva** en vez de forzarlo a la más parecida. El sistema registra automáticamente la propuesta en `dashboard/taxonomias_pendientes.json` para revisión. No se descarta nada, no se fuerza a un valor por defecto.
+
+**Clasificación dual (A01 §11):** cada comentario puede tener una `intencion_principal` (una sola) y `intenciones_secundarias` (lista de atéste 3). La intención principal es la que define el propósito comunicativo dominante; las secundarias capturan matices (ej. un comentario que critica Y propone solución tiene intención principal "evaluacion" y secundaria "solicitud").
+
+**Cómo proponer:**
+- Intenciones: usar la clave descriptiva en minúsculas, sin espacios (ej. `exigir_transparencia`). Se registra como propuesta pendiente con su familia asociada.
+- Si la familia no es obvia, usar `informacion` como familia por defecto (la más genérica del catálogo).
+
+**Prohibido:** asignar una intención a `no_aplica` solo porque no existe en el catálogo actual. Eso oculta información real sobre qué está haciendo el ciudadano con su comunicación.
 
 ---
 
@@ -218,6 +272,8 @@ en obras públicas escala, el balance se revierte.
 
 Antes de guardar el JSON, verifique:
 
+- [ ] `clima_narrativo` tiene `tono_dominante`, `pct_favorable`, `pct_neutral`, `pct_critico` calculados por reglas léxicas (no por modelo IA).
+- [ ] `clima_narrativo` tiene `tono_score_hoy` (promedio SENTIMENT_ORDER) y `formula_usada` = "NSI = (positivos - negativos) / total * 100".
 - [ ] `narrativa` de Clima Narrativo tiene una frase "Conclusión:" explícita y ningún adjetivo sin cifra o tema detrás.
 - [ ] Ninguna `narrativa` contiene HHI, NSI, IR, PI, ER.
 - [ ] Ninguna `narrativa` contiene "censura" o "autocensura".

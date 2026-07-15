@@ -14,9 +14,9 @@ from analytics.compute import (
 )
 from analytics.sentiment import aggregate_sentiment, SENTIMENT_ORDER
 from analytics.emotion import aggregate_emotions
-from analytics.topic import classify_topic
+from analytics.topic import classify_topic, TopicResult
 from analytics.emergent import analizar_emergentes
-from analytics.zona import detectar_zona
+from analytics.zona import detectar_zona, es_propuesta_zona
 from analytics.schema_validator import validar, ValidationResult
 
 
@@ -121,9 +121,11 @@ def construir_analysis(aprobaciones_agrupadas: list,
 
     # ── 16.2: Clasificación temática por reglas léxicas ──
     topic_counts: dict[str, int] = {}
+    topic_results_by_text: dict[int, TopicResult] = {}
     if comentarios_texts:
-        for text in comentarios_texts:
+        for i, text in enumerate(comentarios_texts):
             result = classify_topic(text)
+            topic_results_by_text[i] = result
             tema = result.tema
             topic_counts[tema] = topic_counts.get(tema, 0) + 1
 
@@ -185,8 +187,24 @@ def construir_analysis(aprobaciones_agrupadas: list,
         })
 
     # ── 16.3: Temas emergentes por n-gramas ──
+    # 18.4: Filtrar solo textos no_aplica/low-signal (n_coincidencias < 2)
     emergentes_result = {}
-    if comentarios_texts:
+    if comentarios_texts and topic_results_by_text:
+        textos_sin_tema_claro = []
+        for i, text in enumerate(comentarios_texts):
+            tr = topic_results_by_text.get(i)
+            if tr and (tr.tema == "no_aplica" or tr.n_coincidencias < 2):
+                textos_sin_tema_claro.append(text)
+
+        if textos_sin_tema_claro:
+            emergentes_result = analizar_emergentes(
+                textos_sin_tema_claro,
+                textos_previos=textos_previos,
+                top_n=10,
+                min_freq=2,
+            )
+    elif comentarios_texts:
+        # Sin topic_results disponibles (fallback)
         emergentes_result = analizar_emergentes(
             comentarios_texts,
             textos_previos=textos_previos,
@@ -225,15 +243,20 @@ def construir_analysis(aprobaciones_agrupadas: list,
     }
 
     # ── Bloque 3: Friccion ──
-    # 16.4: Zona por gazetteer
+    # 16.4: Zona por gazetteer + registro de propuestas
     zona_por_tema: dict[str, str] = {}
     if comentarios_texts:
-        for text in comentarios_texts:
-            topic_result = classify_topic(text)
+        for i, text in enumerate(comentarios_texts):
+            topic_result = topic_results_by_text.get(i)
+            if topic_result is None:
+                topic_result = classify_topic(text)
             zona_result = detectar_zona(text)
             if zona_result.zona and topic_result.tema:
                 if topic_result.tema not in zona_por_tema:
                     zona_por_tema[topic_result.tema] = zona_result.zona
+
+            # 18.3: Registrar propuestas de zona
+            es_propuesta_zona(text)
 
     fricciones = []
     for t in aprobaciones_agrupadas:

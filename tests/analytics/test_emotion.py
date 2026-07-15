@@ -279,3 +279,27 @@ def test_aggregate_emotions_es_oficial():
     texts = ["Me divierte jaja", "Triste situación"]
     agg = aggregate_emotions(texts, es_oficial=True)
     assert agg["total"] == 2
+
+
+# ── 18.1: Texto sin match en léxico → propuesta en taxonomias_pendientes ──
+
+def test_emotion_sin_match_registra_propuesta(tmp_path):
+    """Un texto sin palabras del léxico pero con señal emocional debe
+    registrar propuesta en taxonomias_pendientes.json, no devolver 'calma'."""
+    import json, os
+    from unittest.mock import patch
+
+    pendientes_path = str(tmp_path / "taxonomias_pendientes.json")
+
+    with patch("analytics._propuestas._TAXONOMIAS_PATH", pendientes_path):
+        r = classify_emotion("xyzzy flurb nobbat")
+        # Debe detectar familia (civica por defecto) y registrar propuesta
+        assert r.familia in ("civica", "joy", "trust", "fear", "surprise",
+                              "sadness", "disgust", "anger", "anticipation", "diada")
+        # Verificar que se escribió la propuesta
+        assert os.path.exists(pendientes_path)
+        with open(pendientes_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        assert len(data) >= 1
+        assert data[-1]["tipo"] == "emocion"
+        assert data[-1]["estado"] == "pendiente"

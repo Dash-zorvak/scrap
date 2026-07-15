@@ -1,11 +1,13 @@
 """Detección de zona/ubicación por gazetteer de nombres conocidos.
 
 Coincidencia por substring/palabra en el texto. Nombres frecuentes no
-reconocidos se registran como propuesta (tipo="zona"), nunca se fuerza
-una zona por defecto ni se descarta.
+reconocidos se registran como propuesta (tipo="zona") en
+taxonomias_pendientes.json, nunca se fuerza una zona por defecto ni se descarta.
 """
 import re
 import unicodedata
+
+from analytics._propuestas import _registrar_propuesta
 
 
 # ── Gazetteer: zonas conocidas de Guatemala ──
@@ -15,31 +17,31 @@ DEPARTAMENTOS: set[str] = {
     "guatemala", "sacatepequez", "chimaltenango", "solola", "totonicapan",
     "quetzaltenango", "retalhuleu", "suchitepequez", "escuintla",
     "santa rosa", "jutiapa", "jalapa", "chiquimula", "zacapa",
-    "izabal", "peten", "bahia de izabal", "coban", "alta verapaz",
+    "izabal", "peten", "alta verapaz",
     "baja verapaz", "quiche", "huehuetenango", "san marcos",
-    "san luis peteni", "el progreso", "el progresso", "jirón",
+    "el progreso",
 }
 
 # Municipios principales (muestra)
 MUNICIPIOS: set[str] = {
     "guatemala", "mixco", "villa nueva", "coban", "quetzaltenango",
     "escuintla", "petapa", "villa canales", "san juan sacatepequez",
-    "san josé pinula", "santa catarina pinula", "fraijanes",
+    "san jose pinula", "santa catarina pinula", "fraijanes",
     "palencia", "chinautla", "san pedro ayampuc", "san pedro sacatepequez",
     "san juan zapotitlan", "san raymundo", "chuarrancho",
     "mazatenango", "retalhuleu", "coatepeque", "tonala",
     "antigua guatemala", "ciudad vieja", "jocotenango", "santa apolonia",
     "san antonio aguas calientes", "san bartolo aguas calientes",
-    "san lucas sacatepequez", "san miguelDueñas", "santiago sacatepequez",
+    "san lucas sacatepequez", "san miguel duenas", "santiago sacatepequez",
     "santo domingo xenacoj", "san andres itzapa", "parramos",
-    "tejar", "chimaltenango", "san juan comalapa", "san andrés xecul",
-    "san francisco el alto", "totonicapan", "san cristóbal totocostepec",
-    "malacatán", "san marcos", "tajumulco", "coatepeque",
+    "tejar", "chimaltenango", "san juan comalapa", "san andres xecul",
+    "san francisco el alto", "totonicapan", "san cristobal totocostepec",
+    "malacatan", "san marcos", "tajumulco", "coatepeque",
     "huehuetenango", "san ildefonso ixtahuacan", "san pedro necta",
     "la libertad", "chiantla", "cuilapa", "barberena",
-    "jutiapa", "el adelanto", "zapotitlan", "san josé acatempa",
+    "jutiapa", "el adelanto", "zapotitlan", "san jose acatempa",
     "jalapa", "san pedro pinula", "san luis jilotepeque",
-    "chiquimula", "esquipulas", "copán", "copan",
+    "chiquimula", "esquipulas", "copan",
 }
 
 # Zonas de la Ciudad de Guatemala
@@ -54,7 +56,6 @@ ZONAS_GT: set[str] = {
 
 # Barrios / colonias comunes
 BARRIOS: set[str] = {
-    "zona 1", "zona 4", "zona 7", "zona 10", "zona 13", "zona 14",
     "la aurora", "vista hermosa", "el naranjo", "jardines de la finca",
     "residenciales", "condado el naranjo", "club campos de quetzaltenango",
     "el mirador", "lomas de san francisco", "san nicolas",
@@ -149,8 +150,9 @@ def es_propuesta_zona(text: str) -> str | None:
     """Si el texto contiene una palabra que parece nombre de zona pero no
     está en el gazetteer, retorna la palabra candidata para registrar como propuesta.
 
-    Heurística: 3+ palabras capitalizadas al inicio de oración,
-    o contenido después de "en ", "de ", "por ", "desde ".
+    Registra automáticamente en taxonomias_pendientes.json con tipo="zona".
+
+    Heurística: contenido después de "en ", "de ", "por ", "desde ".
     """
     if not text or not text.strip():
         return None
@@ -168,6 +170,12 @@ def es_propuesta_zona(text: str) -> str | None:
             # Verificar que no esté ya en el gazetteer
             zona = detectar_zona(candidata_limpia)
             if not zona.zona:
+                _registrar_propuesta(
+                    clave_propuesta=candidata_limpia,
+                    ejemplo_texto=text[:200],
+                    tipo="zona",
+                    familia_mas_cercana="",
+                )
                 return candidata_limpia
 
     return None

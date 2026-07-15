@@ -2,10 +2,13 @@
 
 Sin modelos entrenados, sin llamadas a APIs. Cada categoría tiene un léxico
 de palabras/frases semilla. Clasifica por conteo de coincidencias; mayor
-conteo gana; sin coincidencias → "no_aplica".
+conteo gana; sin coincidencias y texto vacío → "no_aplica". Texto con
+señal pero sin match → propuesta abierta en taxonomias_pendientes.json.
 """
 import re
 import unicodedata
+
+from analytics._propuestas import _registrar_propuesta
 
 
 # ── Normalización ──
@@ -187,8 +190,12 @@ class TopicResult:
 def classify_topic(text: str) -> TopicResult:
     """Clasifica el tema de un texto usando léxico semilla.
 
+    El resultado pasa por remapear() del catálogo abierto.
+    Si no hay coincidencias pero el texto tiene contenido real (no vacío
+    ni saludo de una palabra), se registra como propuesta abierta.
+
     Retorna TopicResult con la categoría de mayor conteo, o "no_aplica"
-    si no hay coincidencias.
+    solo para texto vacío o genuinamente sin señal.
     """
     if not text or not text.strip():
         return TopicResult(tema="no_aplica")
@@ -217,14 +224,34 @@ def classify_topic(text: str) -> TopicResult:
             evidence_map[tema] = evi
 
     if not scores:
+        # Texto vacío o muy corto → no_aplica
+        stripped_tokens = [t for t in tokens if len(t) > 1]
+        if len(stripped_tokens) <= 1:
+            return TopicResult(tema="no_aplica", scores=scores)
+
+        # Texto con contenido real pero sin match → propuesta abierta
+        from dashboard.tema_taxonomia import remapear
+        propuesta_key = remapear("no_aplica")  # returns "no_aplica"
+        # Registrar como propuesta
+        _registrar_propuesta(
+            clave_propuesta=f"tema_nuevo_{tokens.pop() if tokens else 'desconocido'}",
+            ejemplo_texto=text[:200],
+            tipo="tema",
+            familia_mas_cercana="",
+        )
         return TopicResult(tema="no_aplica", scores=scores)
 
     best_tema = max(scores, key=lambda k: scores[k])
+
+    # Remapear con el catálogo abierto
+    from dashboard.tema_taxonomia import remapear
+    best_tema = remapear(best_tema)
+
     return TopicResult(
         tema=best_tema,
         scores=scores,
         evidence=evidence_map.get(best_tema, []),
-        n_coincidencias=scores[best_tema],
+        n_coincidencias=scores.get(best_tema, 0),
     )
 
 

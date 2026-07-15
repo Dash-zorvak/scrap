@@ -167,3 +167,57 @@ def test_aggregate_zonas_una_sola_zona():
     agg = aggregate_zonas(texts)
     assert agg["dominante"] == "zona 10"
     assert agg["pct"]["zona 10"] == 100.0
+
+
+# ── 18.5: DEPARTAMENTOS = 22 exactos ──
+
+def test_departamentos_exactamente_22():
+    """Guatemala tiene exactamente 22 departamentos."""
+    assert len(DEPARTAMENTOS) == 22
+
+
+def test_departamentos_nombres_validos():
+    """Ninguna entrada de DEPARTAMENTOS contiene caracteres no válidos."""
+    import re
+    # Solo letras, espacios, y acentos/ñ esperados en español
+    pat = re.compile(r"^[a-záéíóúñü\s]+$")
+    for depto in DEPARTAMENTOS:
+        assert pat.match(depto), f"DEPARTAMENTO '{depto}' tiene caracteres no válidos"
+
+
+def test_municipios_nombres_validos():
+    """Ninguna entrada de MUNICIPIOS contiene caracteres no válidos."""
+    import re
+    pat = re.compile(r"^[a-záéíóúñü\s]+$")
+    for muni in MUNICIPIOS:
+        assert pat.match(muni), f"MUNICIPIO '{muni}' tiene caracteres no válidos"
+
+
+def test_zonas_gt_nombres_validos():
+    """Ninguna entrada de ZONAS_GT contiene caracteres no válidos."""
+    import re
+    pat = re.compile(r"^[a-záéíóúñü\s\d]+$")
+    for zona in ZONAS_GT:
+        assert pat.match(zona), f"ZONA_GT '{zona}' tiene caracteres no válidos"
+
+
+# ── 18.3: Propuesta de zona se registra en taxonomias_pendientes ──
+
+def test_propuesta_zona_registra_en_pendientes(tmp_path):
+    """Una zona plausible no reconocida debe registrarse en taxonomias_pendientes.json."""
+    import json, os
+    from unittest.mock import patch
+
+    pendientes_path = str(tmp_path / "taxonomias_pendientes_zona.json")
+
+    with patch("analytics._propuestas._TAXONOMIAS_PATH", pendientes_path):
+        propuesta = es_propuesta_zona("En colonia Las Magnolias hay baches")
+        assert propuesta is not None
+        assert "magnolias" in propuesta.lower() or "colonia" in propuesta.lower()
+        # Verificar que se escribió
+        assert os.path.exists(pendientes_path)
+        with open(pendientes_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        assert len(data) >= 1
+        assert data[-1]["tipo"] == "zona"
+        assert data[-1]["estado"] == "pendiente"

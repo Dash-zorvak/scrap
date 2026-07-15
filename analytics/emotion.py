@@ -8,6 +8,8 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
+from analytics._propuestas import _registrar_propuesta
+
 
 # ── Normalización (reutiliza patron de sentiment.py) ──
 
@@ -34,7 +36,7 @@ def _raw_lower(text: str) -> str:
 INTENSIFICADORES: set[str] = {
     "muy", "bastante", "totalmente", "completamente", "extremadamente",
     "sumamente", "increiblemente", "demasiado", "enormemente", "absolutamente",
-    "真", "mucho", "muchisimo", "horriblemente", "altamente",
+    "mucho", "muchisimo", "horriblemente", "altamente",
 }
 
 # Signos de exclamación/repetición que indican intensidad
@@ -58,6 +60,35 @@ def _detectar_intensidad_texto(text: str) -> bool:
     return False
 
 
+# ── Heurística de familia para textos sin match en léxico ──
+
+_FAMILIA_KEYWORDS: dict[str, list[str]] = {
+    "joy": ["bien", "bueno", "bonito", "gracias", "apoyo", "me gusta"],
+    "trust": ["confianza", "respaldo", "apoyo", "creo", "fe"],
+    "fear": ["miedo", "preocupa", "peligro", "riesgo", "amenaza", "cuidado"],
+    "surprise": ["sorprendido", "increible", "no esperaba", "inesperado", "vaya"],
+    "sadness": ["triste", "pena", "llorar", "deprimir", "dolor", "sufrir"],
+    "disgust": ["asco", "asco", "feo", "repugnante", "indignacion"],
+    "anger": ["enojado", "furioso", "rabia", "irritado", "molesto", "harto"],
+    "anticipation": ["espero", "pendiente", "seguimiento", "proximo", "cuando"],
+    "diada": ["esperanza", "amor", "solidaridad", "resignado"],
+    "civica": ["exijo", "reclamo", "queja", "satisfecho", "agradezco", "normal"],
+}
+
+
+def _detectar_familia_emocion(text: str) -> str:
+    """Intenta detectar la familia emocional por palabras clave del texto.
+
+    Retorna una familia de Plutchik o "civica" si no detecta nada.
+    """
+    low = (text or "").lower()
+    for familia, keywords in _FAMILIA_KEYWORDS.items():
+        for kw in keywords:
+            if kw in low:
+                return familia
+    return "civica"
+
+
 # ── Léxico por emoción (31 categorías) ──
 # Cada emoción tiene un set de palabras/frases semilla normalizadas (sin acentos).
 
@@ -71,7 +102,7 @@ EMOTION_LEXICON: dict[str, set[str]] = {
     "alegria": {
         "alegre", "alegria", "feliz", "contento", "contenta", "gozo",
         "encantado", "encantada", "disfruto", "gustoso", "gustosa",
-        "satisfecho", "satisfecha", "bienestar", "regocijo", "placerville",
+        "satisfecho", "satisfecha", "bienestar", "regocijo",
         "sonrisa", "divertido", "divertida",
     },
     "euforia": {
@@ -298,6 +329,10 @@ class EmotionResult:
 def classify_emotion(text: str, es_oficial: bool = False) -> EmotionResult:
     """Clasifica la emoción de un texto usando léxico semilla.
 
+    El resultado final pasa por normalizar_emocion() del catálogo abierto.
+    Si el léxico no matchea y hay texto, se intenta detectar la familia y
+    proponer una hoja nueva en taxonomias_pendientes.json.
+
     Args:
         text: texto del comentario
         es_oficial: True si el post es de una fuente oficial (activa regla "me divierte")
@@ -308,7 +343,7 @@ def classify_emotion(text: str, es_oficial: bool = False) -> EmotionResult:
     if not text or not text.strip():
         return EmotionResult(emocion="calma", familia="civica", intensidad="media")
 
-    from dashboard.tema_taxonomia import EMOCIONES, familia_de
+    from dashboard.tema_taxonomia import EMOCIONES, EMOCIONES_VALIDAS, familia_de
 
     low = _raw_lower(text)
     tokens = set(_tokenize(text))
@@ -347,7 +382,41 @@ def classify_emotion(text: str, es_oficial: bool = False) -> EmotionResult:
         )
 
     if not scores:
-        return EmotionResult(emocion="calma", familia="civica", intensidad="media", scores=scores)
+        # Sin match en léxico: detectar familia y proponer hoja nueva
+        familia = _detectar_familia_emocion(text)
+        from dashboard.tema_taxonomia import normalizar_emocion
+        try:
+            emocion_norm = normalizar_emocion(familia)
+        except (ValueError, KeyError):
+            # La familia no es una emoción válida directamente; proponer
+            propuesta = f"{familia}_nueva"
+            _registrar_propuesta(
+                clave_propuesta=propuesta,
+                ejemplo_texto=text[:200],
+                tipo="emocion",
+                familia_mas_cercana=familia,
+            )
+            emocion_norm = "calma"
+            familia = "civica"
+        else:
+            # La normalización funcionó; si la emoción no estaba en el lexicon,
+            # registrar como propuesta
+            if emocion_norm not in EMOTION_LEXICON:
+                _registrar_propuesta(
+                    clave_propuesta=emocion_norm,
+                    ejemplo_texto=text[:200],
+                    tipo="emocion",
+                    familia_mas_cercana=familia,
+                )
+            familia = familia_de(emocion_norm)
+
+        return EmotionResult(
+            emocion=emocion_norm,
+            familia=familia,
+            intensidad="media",
+            evidence=[],
+            scores=scores,
+        )
 
     # Emoción con mayor score
     best_emo = max(scores, key=lambda k: scores[k])
@@ -376,6 +445,18 @@ def classify_emotion(text: str, es_oficial: bool = False) -> EmotionResult:
                 best_emo = candidate
                 intensidad = "intensa"
                 break
+
+    # Normalizar con el catálogo abierto
+    from dashboard.tema_taxonomia import normalizar_emocion
+    try:
+        best_emo = normalizar_emocion(best_emo)
+    except (ValueError, KeyError):
+        _registrar_propuesta(
+            clave_propuesta=best_emo,
+            ejemplo_texto=text[:200],
+            tipo="emocion",
+            familia_mas_cercana=familia,
+        )
 
     return EmotionResult(
         emocion=best_emo,

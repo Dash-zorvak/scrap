@@ -217,3 +217,39 @@ def test_aggregate_topics_sin_tema():
     texts = ["Hola", "¿Qué tal?", "Buenos días", "Adiós"]
     agg = aggregate_topics(texts)
     assert agg["n_sin_tema"] == len(texts)
+
+
+# ── 18.2: Texto con contenido real pero sin match → propuesta en taxonomias_pendientes ──
+
+def test_topic_sin_match_registra_propuesta(tmp_path):
+    """Un texto con contenido real pero sin palabras del léxico debe
+    registrar propuesta, no devolver 'no_aplica' silenciosamente."""
+    import json, os
+    from unittest.mock import patch
+
+    pendientes_path = str(tmp_path / "taxonomias_pendientes.json")
+
+    with patch("analytics._propuestas._TAXONOMIAS_PATH", pendientes_path):
+        r = classify_topic("El cielo está hermoso hoy en la mañana")
+        # Texto real sin match léxico → propuesta
+        assert r.tema == "no_aplica"
+        assert os.path.exists(pendientes_path)
+        with open(pendientes_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        assert len(data) >= 1
+        assert data[-1]["tipo"] == "tema"
+        assert data[-1]["estado"] == "pendiente"
+
+
+def test_topic_texto_vacio_no_registra_propuesta(tmp_path):
+    """Texto vacío no debe registrar propuesta."""
+    import os
+    from unittest.mock import patch
+
+    pendientes_path = str(tmp_path / "taxonomias_pendientes_vacio.json")
+
+    with patch("analytics._propuestas._TAXONOMIAS_PATH", pendientes_path):
+        r = classify_topic("")
+        assert r.tema == "no_aplica"
+        # No debe crear el archivo
+        assert not os.path.exists(pendientes_path)

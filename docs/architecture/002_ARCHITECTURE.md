@@ -55,29 +55,27 @@ MIPA se implementa mediante una arquitectura por capas.
                             │
                             ▼
 
-                  Pipeline Analítico
+            Pipeline Analítico + Motor Analítico
+            (analytics/compute.py, analytics/queries.py,
+             analytics/report.py::construir_analysis())
 
                             │
                             ▼
 
                  ┌──────────────────────┐
-                 │    analytics.db       │
+                 │  data/analysis.json   │
                  └──────────┬───────────┘
 
                             │
                             ▼
 
-                  Motor Analítico
+                     Dashboard Ejecutivo
+                     (app.py, solo lee)
 
-                            │
-                            ▼
-
-                 dashboard_snapshot.json
-
-                            │
-                            ▼
-
-                    Dashboard Ejecutivo
+  ┌─────────────────────────────────────────────────────────┐
+  │  DIFERIDO (diseño futuro): analytics.db como base       │
+  │  analítica separada. Ver §9, §10. Hoy no existe.        │
+  └─────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -252,23 +250,18 @@ Persistencia
 
 ↓
 
-Pipeline
+Pipeline Analítico + Motor Analítico
+(compute.py, queries.py, report.py::construir_analysis())
 
 ↓
 
-analytics.db
+data/analysis.json
 
 ↓
 
-Motor Analítico
+Dashboard (app.py, solo lee)
 
-↓
-
-dashboard_snapshot.json
-
-↓
-
-Dashboard
+── DIFERIDO (diseño futuro): analytics.db — ver §9, §10 ──
 ```
 
 Ningún componente podrá alterar este flujo.
@@ -297,44 +290,60 @@ Dashboard → Evidencia
 
 # 8. Componentes del Repositorio
 
-La arquitectura actual del repositorio deberá evolucionar hacia la siguiente distribución.
+Estructura real del repositorio:
 
 ```
 dashboard/
-
-    app.py
-
-    panel_carga.py
+    app.py                    ← Motor narrativo + renderizado (solo lee analysis.json)
+    auth.py                   ← Autenticación LLM
+    capturas_store.py         ← Persistencia de capturas
+    dash_ingesta.py           ← Panel de ingesta
+    dash_metrics.py           ← Métricas de rendimiento
+    dash_temas.py             ← Tarjetas de temas
+    dash_ui.py                ← UI y estilos
+    intencion_taxonomia.py    ← Catálogo abierto de intención comunicativa
+    tema_aprobaciones.py      ← Persistencia de aprobaciones manuales
+    tema_taxonomia.py         ← Catálogo abierto de emociones y temas
+    taxonomias_pendientes.json← Propuestas pendientes de revisión
+    (módulos de soporte: html_safety, dimension_labels, estilos, etc.)
 
 analytics/
-
-    pipeline/
-
-    calculations/
-
-    validation/
-
-    evidence/
-
-    narrative/
-
-storage/
-
-    facebook.db
-
-    tiktok.db
-
-    externos.db
-
-    analytics.db
+    compute.py                ← Pipeline analítico + Motor Analítico
+    report.py                 ← Construcción de analysis.json (construir_analysis)
+    schema_validator.py       ← Validación del esquema de salida
+    narrative_renderer.py     ← Renderizado de narrativas LLM
+    publish.py                ← Publicación de resultados
+    queries.py                ← Consultas a bases de evidencia
+    freshness.py              ← Detección de datos desactualizados
+    cli.py                    ← Interfaz de línea de comandos
 
 data/
+    facebook.db               ← Base de evidencia (Facebook)
+    tiktok.db                 ← Base de evidencia (TikTok)
+    externos.db               ← Base de evidencia (externos)
+    analysis.json             ← Salida oficial del pipeline (contrato dashboard↔analytics)
+    analysis_schema.json      ← Esquema del contrato
+    ANALYST_GUIDE.md          ← Reglas para generadores de analysis.json
 
-    dashboard_snapshot.json
+scripts/
+    _common.py                ← Utilidades compartidas
+    clean_simulated.py        ← Limpieza de datos simulados
+    dedupe_existing.py        ← Deduplicación
+    purge_out_of_range.py     ← Eliminación fuera de rango
+    verificar.py              ← Verificación de integridad
 
-docs/
+src/
+    config.py                 ← Configuración global
+    storage/                  ← Capa de almacenamiento
 
 tests/
+    analytics/                ← Tests del pipeline y report
+    dashboard/                ← Tests del catálogo de intención
+    (tests de integración, deduplicación, HTML safety, etc.)
+
+docs/
+    architecture/             ← Documentación arquitectónica
+    appendix/                 ← Documentos de referencia (A01, etc.)
 ```
 
 ---
@@ -355,7 +364,9 @@ No contienen cálculos.
 
 ---
 
-## Base analítica
+## Base analítica (DIFERIDO)
+
+> **Estado: DIFERIDO** — `analytics.db` es un diseño objetivo a futuro. Hoy, `data/analysis.json` cumple el rol de contrato entre el pipeline y el dashboard.
 
 Representa únicamente resultados derivados.
 
@@ -365,9 +376,11 @@ Nunca almacena evidencia original.
 
 ---
 
-# 10. analytics.db
+# 10. analytics.db (DIFERIDO)
 
-analytics.db constituye la única base autorizada para almacenar resultados derivados.
+> **Estado: DIFERIDO** — `analytics.db` es un diseño objetivo a futuro. Hoy, `data/analysis.json` cumple este rol: almacena resultados derivados como un JSON consistente generado por `analytics/report.py::construir_analysis()`.
+
+analytics.db constituirá la única base autorizada para almacenar resultados derivados.
 
 Contendrá exclusivamente:
 
@@ -389,12 +402,14 @@ Nunca sustituirá las bases fuente.
 
 ---
 
-# 11. dashboard_snapshot.json
+# 11. dashboard_snapshot.json (DIFERIDO)
 
-El Dashboard leerá únicamente un archivo oficial.
+> **Estado: DIFERIDO** — `dashboard_snapshot.json` es un diseño objetivo a futuro. Hoy, `data/analysis.json` cumple este rol: el Dashboard lee únicamente este archivo como contrato de entrada.
+
+El Dashboard leerá únicamente un archivo oficial (actualmente `data/analysis.json`):
 
 ```
-dashboard_snapshot.json
+data/analysis.json
 ```
 
 Este archivo representa un snapshot consistente del estado del sistema.
@@ -461,7 +476,7 @@ Nunca modifica indicadores.
 
 El Dashboard tiene únicamente cuatro responsabilidades.
 
-- cargar dashboard_snapshot.json;
+- cargar data/analysis.json;
 - validar integridad del archivo;
 - renderizar;
 - informar errores.
@@ -503,7 +518,9 @@ analytics.db
 
 Puede acceder únicamente a:
 
-dashboard_snapshot.json
+data/analysis.json (contrato actual)
+
+> **Nota:** En el diseño diferido, el Dashboard leerá `dashboard_snapshot.json`. Hoy, `data/analysis.json` cumple este rol.
 
 ---
 
@@ -515,7 +532,7 @@ El Dashboard no podrá ejecutar consultas SQL.
 
 El Dashboard no podrá recalcular indicadores.
 
-El Dashboard no podrá modificar JSON.
+El Dashboard no podrá modificar data/analysis.json.
 
 ---
 
@@ -561,10 +578,10 @@ La arquitectura se considerará correctamente implementada cuando:
 
 - el Dashboard no ejecute cálculos;
 - exista una separación física entre evidencia y resultados derivados;
-- analytics.db pueda reconstruirse completamente desde las bases fuente;
-- dashboard_snapshot.json pueda regenerarse completamente desde analytics.db;
+- analytics.db pueda reconstruirse completamente desde las bases fuente (DIFERIDO);
+- data/analysis.json pueda regenerarse completamente desde las bases fuente (vía report.py::construir_analysis());
 - eliminar analytics.db no implique pérdida de evidencia;
-- eliminar dashboard_snapshot.json no implique pérdida de información analítica.
+- eliminar data/analysis.json no implique pérdida de evidencia (se regenera desde las bases fuente).
 
 ---
 
@@ -586,4 +603,4 @@ Toda implementación futura deberá respetar las responsabilidades, dependencias
 | Tipo | Normativo |
 | Depende de | 000_PROJECT_CHARTER.md, 001_FOUNDATION.md |
 | Referenciado por | 003_DATA_MODEL.md, 004_PIPELINE.md |
-| Última actualización | Baseline MIPA 1.0 |
+| Última actualización | Bloque 3.1 — analytics.db fuera del flujo activo en §3/§6 |

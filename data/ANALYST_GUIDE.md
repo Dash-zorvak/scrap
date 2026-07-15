@@ -1,5 +1,11 @@
 # Guía del Analista — Generación de `data/analysis.json`
 
+> **DEPRECADO (Block 25):** Esta guía describía el proceso manual/LLM externo
+> para generar `data/analysis.json`. Ha sido reemplazada por el pipeline
+> automatizado `python -m analytics.cli generar`, que es el único punto de
+> escritura soportado. Este documento se conserva como referencia histórica de
+> las reglas de negocio que el pipeline ahora implementa en código.
+
 Este documento define las reglas que **debe** seguir todo proceso (LLM, script, manual) que genere o modifique `data/analysis.json`. El objetivo es garantizar consistencia, trazabilidad y que el panel renderice datos correctos sin depender de lógica correctiva en runtime.
 
 > El panel (`dashboard/app.py`) lee este JSON sin calcular, inferir ni corregir nada. Lo que llegue aquí es lo que se muestra.

@@ -7,11 +7,18 @@ La postura es un eje SEPARADO del tema (ver dashboard/tema_taxonomia.py): permit
 que la tarjeta de cada tema se divida en apoyo / critica / neutral y que una
 critica NO se cuente como impulso positivo del tema.
 
+Campos nuevos (Punto 5 / Punto 2 / Punto 3 / Punto 4):
+  - subtema_especifico: entidad o subtema concreto (nullable)
+  - intensidad_postura: leve/moderada/fuerte (nullable, default moderada)
+  - emociones: JSON array de 1+ claves de emoción (reemplaza emoción única)
+  - relevancia_al_post: directo_al_post/tangencial_via_respuesta/ruido_conversacional
+
 Modulo puro de datos (sqlite + stdlib), sin Streamlit, para que sea verificable
 en CI.
 """
 
 import sqlite3
+import json
 import pandas as pd
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -29,6 +36,12 @@ from dashboard.tema_taxonomia import (
 )
 
 TABLA = "tema_aprobaciones"
+
+INTENSIDADES_POSTURA = {"leve", "moderada", "fuerte"}
+INTENSIDAD_POSTURA_DEFAULT = "moderada"
+
+RELEVANCIAS_POST = {"directo_al_post", "tangencial_via_respuesta", "ruido_conversacional"}
+RELEVANCIA_DEFAULT = "directo_al_post"
 
 
 def _conectar(db_path):
@@ -81,7 +94,8 @@ def _ids_comentarios_en_periodo(db_path, ini, fin):
 
 def asegurar_tabla(db_path):
     """Crea la tabla de aprobaciones si no existe y la migra si es de una
-    version anterior (agrega la columna 'postura')."""
+    version anterior (agrega columnas postura, emocion, subtema_especifico,
+    intensidad_postura, emociones, relevancia_al_post)."""
     conn = _conectar(db_path)
     try:
         conn.execute(
@@ -95,7 +109,12 @@ def asegurar_tabla(db_path):
                 confianza REAL,
                 texto TEXT,
                 estado TEXT DEFAULT 'aprobado',
-                fecha TEXT
+                fecha TEXT,
+                emocion TEXT DEFAULT 'calma',
+                subtema_especifico TEXT,
+                intensidad_postura TEXT DEFAULT 'moderada',
+                emociones TEXT,
+                relevancia_al_post TEXT DEFAULT 'directo_al_post'
             )
             """
         )
@@ -109,6 +128,22 @@ def asegurar_tabla(db_path):
             conn.execute(
                 f"ALTER TABLE {TABLA} ADD COLUMN emocion TEXT DEFAULT 'calma'"
             )
+        if "subtema_especifico" not in cols:
+            conn.execute(
+                f"ALTER TABLE {TABLA} ADD COLUMN subtema_especifico TEXT"
+            )
+        if "intensidad_postura" not in cols:
+            conn.execute(
+                f"ALTER TABLE {TABLA} ADD COLUMN intensidad_postura TEXT DEFAULT 'moderada'"
+            )
+        if "emociones" not in cols:
+            conn.execute(
+                f"ALTER TABLE {TABLA} ADD COLUMN emociones TEXT"
+            )
+        if "relevancia_al_post" not in cols:
+            conn.execute(
+                f"ALTER TABLE {TABLA} ADD COLUMN relevancia_al_post TEXT DEFAULT 'directo_al_post'"
+            )
         conn.commit()
     finally:
         conn.close()
@@ -116,7 +151,9 @@ def asegurar_tabla(db_path):
 
 def guardar_aprobacion(db_path, comment_id, tema, texto="",
                        tema_sugerido=None, tono=None, confianza=None,
-                       postura="neutral", emocion=None):
+                       postura="neutral", emocion=None, emociones=None,
+                       subtema_especifico=None, intensidad_postura=None,
+                       relevancia_al_post=None):
     """Guarda (o actualiza) la aprobacion de un comentario.
 
     Devuelve True si se guardo. En la aprobacion MANUAL validamos de forma
@@ -127,16 +164,24 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
     `postura` (apoyo/critica/neutral) se normaliza; lanza ValueError si no es
     reconocida (H-DS1: sin normalizacion silenciosa).
 
-    `emocion` se normaliza con normalizar_emocion(); lanza ValueError si no es
-    reconocida. Si no se provee `emocion` o `tono`, se auto-detectan desde el
-    texto usando classify_emotion().
+    `intensidad_postura` (leve/moderada/fuerte): solo aplica a apoyo y critica.
+    Para neutral se usa "moderada" por defecto. Lanza ValueError si no es
+    reconocida.
 
-    Nota: a diferencia de remapear() -que degrada lo desconocido a 'no_aplica'
-    para tolerar ruido del modelo-, aqui un tema invalido se RECHAZA, porque es
-    una decision explicita del usuario y no debe colarse como 'no_aplica'.
+    `emociones` (Punto 3): lista de 1+ claves de emoción. Se guarda como JSON.
+    Si se provee `emocion` (legacy) en vez de `emociones`, se envuelve en lista.
+
+    `emocion` (legacy) se normaliza con normalizar_emocion(); lanza ValueError
+    si no es reconocida. Si no se provee `emocion` ni `emociones`, se auto-detecta
+    desde el texto usando classify_emotion().
+
+    `subtema_especifico` (Punto 1): entidad o subtema concreto (nullable).
+
+    `relevancia_al_post` (Punto 4): directo_al_post/tangencial_via_respuesta/
+    ruido_conversacional. Si no se provee, default "directo_al_post".
 
     Raises:
-        ValueError: si postura o emocion no son reconocidas.
+        ValueError: si postura, intensidad_postura o emociones no son reconocidas.
     """
     if not comment_id or not tema:
         return False
@@ -144,31 +189,85 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
         return False
     tema = remapear(tema)
     postura = normalizar_postura(postura)
-    # Auto-detectar emocion/tono desde el texto si no se proveyeron explicitamente
-    if emocion is None or tono is None:
+
+    # Normalizar intensidad_postura
+    if intensidad_postura is None:
+        intensidad_postura = INTENSIDAD_POSTURA_DEFAULT
+    else:
+        ip = str(intensidad_postura).strip().lower()
+        if ip not in INTENSIDADES_POSTURA:
+            raise ValueError(
+                f"Intensidad de postura '{intensidad_postura}' no reconocida. "
+                f"Valores válidos: {sorted(INTENSIDADES_POSTURA)}"
+            )
+        intensidad_postura = ip
+    # Neutral siempre "moderada" (no tiene dirección que intensificar)
+    if postura == "neutral":
+        intensidad_postura = INTENSIDAD_POSTURA_DEFAULT
+
+    # Normalizar relevancia_al_post
+    if relevancia_al_post is None:
+        relevancia_al_post = RELEVANCIA_DEFAULT
+    else:
+        ra = str(relevancia_al_post).strip().lower()
+        if ra not in RELEVANCIAS_POST:
+            raise ValueError(
+                f"Relevancia al post '{relevancia_al_post}' no reconocida. "
+                f"Valores válidos: {sorted(RELEVANCIAS_POST)}"
+            )
+        relevancia_al_post = ra
+
+    # Auto-detectar emocion/tono desde el texto si no se proveyeron
+    emociones_lista = None
+    if emociones is not None:
+        # Punto 3: emociones como lista
+        if isinstance(emociones, str):
+            try:
+                emociones_lista = json.loads(emociones)
+            except (json.JSONDecodeError, TypeError):
+                emociones_lista = [emociones]
+        else:
+            emociones_lista = list(emociones)
+        if not emociones_lista:
+            emociones_lista = [EMOCION_DEFAULT]
+    elif emocion is not None:
+        # Legacy: emoción única → envolver en lista
+        emociones_lista = [emocion]
+    else:
+        # Auto-detectar desde el texto
         from analytics.emotion import classify_emotion
         er = classify_emotion(texto or "")
-        if emocion is None:
-            emocion = er.emocion
+        emociones_lista = [er.emocion]
         if tono is None:
             tono = er.familia
-    try:
-        emocion = normalizar_emocion(emocion)
-    except ValueError:
-        # El clasificador devolvio una clave propuesta (ej. "civica_nueva_calle")
-        # que aun no esta en el catalogo canonico. Conservarla como emocion real
-        # (ya se registro en taxonomias_pendientes dentro de classify_emotion).
-        # Solo degradar a "calma" si el valor no es una propuesta reconocible.
-        if "_nueva_" not in emocion and not emocion.startswith("nueva_"):
-            emocion = "calma"
+
+    # Normalizar cada emoción de la lista
+    emociones_normalizadas = []
+    for emo in emociones_lista:
+        try:
+            emociones_normalizadas.append(normalizar_emocion(emo))
+        except ValueError:
+            if "_nueva_" in emo or emo.startswith("nueva_"):
+                emociones_normalizadas.append(emo)
+            else:
+                emociones_normalizadas.append(EMOCION_DEFAULT)
+    if not emociones_normalizadas:
+        emociones_normalizadas = [EMOCION_DEFAULT]
+
+    # Emoción dominante = primera de la lista (la que el usuario seleccionó primero)
+    emocion_dominante = emociones_normalizadas[0]
+    emociones_json = json.dumps(emociones_normalizadas, ensure_ascii=False)
+
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:
         conn.execute(
             f"""
             INSERT OR REPLACE INTO {TABLA}
-            (comment_id, tema, tema_sugerido, tono, postura, confianza, texto, estado, fecha, emocion)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado', ?, ?)
+            (comment_id, tema, tema_sugerido, tono, postura, confianza, texto,
+             estado, fecha, emocion, subtema_especifico, intensidad_postura,
+             emociones, relevancia_al_post)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado', ?, ?, ?, ?, ?, ?)
             """,
             (
                 comment_id,
@@ -179,7 +278,11 @@ def guardar_aprobacion(db_path, comment_id, tema, texto="",
                 confianza,
                 (texto or "")[:500],
                 datetime.now(timezone.utc).isoformat(),
-                emocion,
+                emocion_dominante,
+                subtema_especifico or None,
+                intensidad_postura,
+                emociones_json,
+                relevancia_al_post,
             ),
         )
         conn.commit()
@@ -200,18 +303,26 @@ def ids_aprobados(db_path):
 
 
 def obtener_aprobaciones(db_path):
-    """Devuelve {comment_id: {tema, tema_sugerido, tono, postura, emocion, confianza, texto, ...}}."""
+    """Devuelve {comment_id: {tema, tema_sugerido, tono, postura, emocion,
+    emociones, subtema_especifico, intensidad_postura, relevancia_al_post,
+    confianza, texto, ...}}.
+
+    `emociones` es una lista de claves (JSON parseado). `emocion` es la dominante
+    (primera de la lista, o la legacy si la fila es anterior a la migración).
+    """
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:
         rows = conn.execute(
-            f"SELECT comment_id, tema, tema_sugerido, tono, postura, emocion, confianza, "
-            f"texto, estado, fecha FROM {TABLA}"
+            f"SELECT comment_id, tema, tema_sugerido, tono, postura, emocion, "
+            f"confianza, texto, estado, fecha, subtema_especifico, "
+            f"intensidad_postura, emociones, relevancia_al_post FROM {TABLA}"
         ).fetchall()
     finally:
         conn.close()
     salida = {}
-    for cid, tema, sug, tono, postura, emocion, conf, texto, estado, fecha in rows:
+    for (cid, tema, sug, tono, postura, emocion, conf, texto, estado, fecha,
+         subtema, ipost, emociones_raw, relevancia) in rows:
         try:
             postura_norm = normalizar_postura(postura)
         except ValueError:
@@ -219,13 +330,31 @@ def obtener_aprobaciones(db_path):
         try:
             emocion_norm = normalizar_emocion(emocion)
         except ValueError:
-            emocion_norm = EMOCION_DEFAULT
+            if "_nueva_" not in emocion and not emocion.startswith("nueva_"):
+                emocion_norm = EMOCION_DEFAULT
+            else:
+                emocion_norm = emocion
+        # Parsear emociones JSON (Punto 3)
+        if emociones_raw:
+            try:
+                emociones_lista = json.loads(emociones_raw)
+                if not isinstance(emociones_lista, list):
+                    emociones_lista = [emociones_raw]
+            except (json.JSONDecodeError, TypeError):
+                emociones_lista = [emociones_raw]
+        else:
+            # Fila legacy: usar emocion singular
+            emociones_lista = [emocion_norm]
         salida[cid] = {
             "tema": tema,
             "tema_sugerido": sug,
             "tono": tono,
             "postura": postura_norm,
             "emocion": emocion_norm,
+            "emociones": emociones_lista,
+            "subtema_especifico": subtema,
+            "intensidad_postura": ipost or INTENSIDAD_POSTURA_DEFAULT,
+            "relevancia_al_post": relevancia or RELEVANCIA_DEFAULT,
             "confianza": conf,
             "texto": texto,
             "estado": estado,
@@ -240,43 +369,107 @@ def agregar_por_tema(db_path):
     Excluye 'no_aplica'. El porcentaje es sobre el total de comentarios con un
     tema aprobado (no sobre el total analizado). Cada tema se divide ademas por
     POSTURA (apoyo/critica/neutral) para que una critica no se lea como impulso
-    positivo. Se incluye ademas desglose por EMOCION (10 emociones del catalogo).
+    positivo. Se incluye ademas desglose por EMOCION con soporte para seleccion
+    multiple (Punto 3): cada comentario contribuye a TODAS sus emociones
+    seleccionadas, no solo a la dominante.
+
+    Nuevos campos (Puntos 1-4):
+    - saldo_ponderado: saldo ponderado por intensidad de postura (leve=1,
+      moderada=2, fuerte=3). No reemplaza saldo simple.
+    - subtema_especificoBreakdown: conteo de entidades/subtemas específicos.
+    - relevance_excluidos: comentarios marcados como 'ruido_conversacional' que
+      se excluyen de los conteos.
 
     Devuelve una lista de dicts ordenada de mayor a menor doc_count:
     {id, categoria, label, pct, doc_count, ejemplo, apoyo, critica, neutral,
-     pct_apoyo, pct_critica, pct_neutral, saldo, ejemplo_critica, emociones,
-     emocion_dominante}.
+     pct_apoyo, pct_critica, pct_neutral, saldo, saldo_ponderado,
+     ejemplo_critica, emociones, emocion_dominante, entidades}.
     """
     asegurar_tabla(db_path)
     conn = _conectar(db_path)
     try:
         rows = conn.execute(
-            f"SELECT tema, texto, postura, emocion FROM {TABLA} WHERE estado='aprobado'"
+            f"SELECT tema, texto, postura, emocion, emociones, "
+            f"intensidad_postura, subtema_especifico, relevancia_al_post "
+            f"FROM {TABLA} WHERE estado='aprobado'"
         ).fetchall()
     finally:
         conn.close()
 
+    _PESOS_INTENSIDAD = {"leve": 1, "moderada": 2, "fuerte": 3}
+
     conteo = defaultdict(int)
     posturas = defaultdict(lambda: {"apoyo": 0, "critica": 0, "neutral": 0})
-    emociones = defaultdict(lambda: defaultdict(int))
+    pesos = defaultdict(float)  # saldo ponderado por tema
+    emociones_conteo = defaultdict(lambda: defaultdict(int))
     ejemplos = {}
     ejemplos_critica = {}
+    entidades_conteo = defaultdict(lambda: defaultdict(int))
     total_con_tema = 0
-    for tema, texto, postura, emocion in rows:
+
+    for tema, texto, postura, emocion_legacy, emociones_raw, ipost, subtema, relevancia in rows:
         if not tema or tema == "no_aplica":
             continue
+        # Punto 4: excluir ruido conversacional
+        if relevancia == "ruido_conversacional":
+            continue
+
         try:
             post = normalizar_postura(postura)
         except ValueError:
             post = POSTURA_DEFAULT
-        try:
-            emo = normalizar_emocion(emocion)
-        except ValueError:
-            emo = EMOCION_DEFAULT
+
+        # Parsear emociones (Punto 3)
+        if emociones_raw:
+            try:
+                emociones_lista = json.loads(emociones_raw)
+                if not isinstance(emociones_lista, list):
+                    emociones_lista = [emociones_raw]
+            except (json.JSONDecodeError, TypeError):
+                emociones_lista = [emociones_raw]
+        else:
+            # Fila legacy: usar emoción singular
+            try:
+                emociones_lista = [normalizar_emocion(emocion_legacy)]
+            except ValueError:
+                if "_nueva_" in emocion_legacy or emocion_legacy.startswith("nueva_"):
+                    emociones_lista = [emocion_legacy]
+                else:
+                    emociones_lista = [EMOCION_DEFAULT]
+
+        # Normalizar cada emoción de la lista
+        emociones_norm = []
+        for emo in emociones_lista:
+            try:
+                emociones_norm.append(normalizar_emocion(emo))
+            except ValueError:
+                if "_nueva_" in emo or emo.startswith("nueva_"):
+                    emociones_norm.append(emo)
+                else:
+                    emociones_norm.append(EMOCION_DEFAULT)
+        if not emociones_norm:
+            emociones_norm = [EMOCION_DEFAULT]
+
         conteo[tema] += 1
         posturas[tema][post] += 1
-        emociones[tema][emo] += 1
+
+        # Saldo ponderado (Punto 2)
+        peso = _PESOS_INTENSIDAD.get(ipost or INTENSIDAD_POSTURA_DEFAULT, 2)
+        if post == "apoyo":
+            pesos[tema] += peso
+        elif post == "critica":
+            pesos[tema] -= peso
+
+        # Conteo de emociones: cada emoción de la lista suma 1
+        for emo in emociones_norm:
+            emociones_conteo[tema][emo] += 1
+
         total_con_tema += 1
+
+        # Entidad/subtema específico (Punto 1)
+        if subtema:
+            entidades_conteo[tema][subtema] += 1
+
         limpio = " ".join((texto or "").split())
         prev = ejemplos.get(tema)
         if limpio and (prev is None or 15 <= len(limpio) < len(prev)):
@@ -297,7 +490,7 @@ def agregar_por_tema(db_path):
         if len(ej_c) > 120:
             ej_c = ej_c[:117] + "..."
         pst = posturas[tema]
-        emo_counts = emociones.get(tema, {})
+        emo_counts = emociones_conteo.get(tema, {})
         emo_total = sum(emo_counts.values()) or 1
         emo_detalle = {
             e: {
@@ -307,6 +500,10 @@ def agregar_por_tema(db_path):
             for e in EMOCIONES_VALIDAS
         }
         emo_dominante = max(EMOCIONES_VALIDAS, key=lambda e: emo_counts.get(e, 0)) if emo_counts else "calma"
+        # Entidades del tema (top 5)
+        entidades_tema = entidades_conteo.get(tema, {})
+        entidades_sorted = sorted(entidades_tema.items(), key=lambda x: -x[1])[:5]
+
         temas.append({
             "id": i + 1,
             "categoria": tema,
@@ -321,9 +518,11 @@ def agregar_por_tema(db_path):
             "pct_critica": round(pst["critica"] / n * 100, 1) if n else 0.0,
             "pct_neutral": round(pst["neutral"] / n * 100, 1) if n else 0.0,
             "saldo": pst["apoyo"] - pst["critica"],
+            "saldo_ponderado": round(pesos.get(tema, 0), 1),
             "ejemplo_critica": ej_c,
             "emociones": emo_detalle,
             "emocion_dominante": emo_dominante,
+            "entidades": {e: c for e, c in entidades_sorted},
         })
     temas.sort(key=lambda x: -x["doc_count"])
     return temas

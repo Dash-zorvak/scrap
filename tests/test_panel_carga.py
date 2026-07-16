@@ -39,9 +39,20 @@ def test_panel_carga_llama_render_revisor_externos():
 
 
 def test_panel_carga_facebook_default():
-    """La llamada original (Facebook) sigue usando solo FACEBOOK_DB sin parámetros extras."""
+    """La llamada Facebook incluye col_parent para parent_comment_id."""
     src = _leer_fuente()
-    assert "render_revisor_temas(FACEBOOK_DB)" in src
+    assert "render_revisor_temas(FACEBOOK_DB" in src
+    assert "parent_comment_id" in src
+
+
+def test_panel_carga_tiktok_sin_parent():
+    """La llamada TikTok NO incluye col_parent (no tiene parent_comment_id)."""
+    src = _leer_fuente()
+    # TikTok no tiene parent_comment_id
+    idx_tk = src.index('render_revisor_temas(TIKTOK_DB')
+    idx_next_line = src.index("\n", idx_tk)
+    linea_tk = src[idx_tk:idx_next_line]
+    assert "parent_comment_id" not in linea_tk
 
 
 def test_panel_carga_importa_config():

@@ -1,7 +1,9 @@
 """Helper para registrar propuestas nuevas en taxonomias_pendientes.json.
 
-Usado por emotion.py, topic.py y zona.py cuando detectan una categoría o zona
-que no existe en el catálogo actual.
+Usado por emotion.py, topic.py, zona.py y dash_temas.py cuando detectan una
+categoría, zona o entidad que no existe en el catálogo actual.
+
+Tipos soportados: "emocion", "tema", "zona", "entidad".
 """
 import json
 import os

@@ -239,8 +239,12 @@ EMOCIONES = {
         "descripcion": "Inquietud explícita por un riesgo o problema concreto.",
     },
     "terror": {
-        "label": "Terror / Pánico", "familia": "fear", "intensidad": "intensa",
-        "descripcion": "Miedo extremo, lenguaje de alarma o emergencia.",
+        "label": "Terror", "familia": "fear", "intensidad": "intensa",
+        "descripcion": "Miedo extremo ante una amenaza concreta y percibida como real.",
+    },
+    "panico": {
+        "label": "Pánico", "familia": "fear", "intensidad": "intensa",
+        "descripcion": "Reacción de alarma generalizada, sin amenaza concreta identificable.",
     },
     # Familia: SORPRESA (surprise)
     "distraccion": {
@@ -265,34 +269,54 @@ EMOCIONES = {
         "descripcion": "Pesar explícito frente a una noticia o situación.",
     },
     "dolor": {
-        "label": "Dolor / Pena profunda", "familia": "sadness", "intensidad": "intensa",
-        "descripcion": "Duelo o pesar intenso (pérdidas, tragedias, luto).",
+        "label": "Dolor", "familia": "sadness", "intensidad": "intensa",
+        "descripcion": "Duelo o pesar intenso por una pérdida o tragedia concreta.",
+    },
+    "pena_profunda": {
+        "label": "Pena profunda", "familia": "sadness", "intensidad": "intensa",
+        "descripcion": "Luto colectivo, conmoción por hechos que afectan a la comunidad.",
     },
     # Familia: DESAGRADO / ASCO (disgust)
     "aburrimiento": {
-        "label": "Aburrimiento / Indiferencia", "familia": "disgust", "intensidad": "leve",
-        "descripcion": "Desinterés, comentario desganado.",
+        "label": "Aburrimiento", "familia": "disgust", "intensidad": "leve",
+        "descripcion": "Desinterés manifiesto, comentario desganado sobre el tema.",
+    },
+    "indiferencia": {
+        "label": "Indiferencia", "familia": "disgust", "intensidad": "leve",
+        "descripcion": "Ausencia de reacción emocional, desapego explícito respecto al tema.",
     },
     "desagrado": {
         "label": "Desagrado", "familia": "disgust", "intensidad": "media",
         "descripcion": "Rechazo explícito, algo 'no gusta' sin llegar a la indignación.",
     },
     "repulsion": {
-        "label": "Repulsión / Indignación moral", "familia": "disgust", "intensidad": "intensa",
-        "descripcion": "Rechazo fuerte, lenguaje de asco o condena moral.",
+        "label": "Repulsión", "familia": "disgust", "intensidad": "intensa",
+        "descripcion": "Rechazo visceral, lenguaje de asco ante lo percibido como inaceptable.",
+    },
+    "indignacion_moral": {
+        "label": "Indignación moral", "familia": "disgust", "intensidad": "intensa",
+        "descripcion": "Condena ética explícita, juicio de valor sobre una acción institucional.",
     },
     # Familia: ENOJO (anger)
     "fastidio": {
-        "label": "Fastidio / Molestia", "familia": "anger", "intensidad": "leve",
-        "descripcion": "Irritación leve, queja sin agresividad.",
+        "label": "Fastidio", "familia": "anger", "intensidad": "leve",
+        "descripcion": "Irritación acumulada, hartazgo ante una situación repetida.",
+    },
+    "molestia": {
+        "label": "Molestia", "familia": "anger", "intensidad": "leve",
+        "descripcion": "Incomodidad puntual, queja sin agresividad ante un hecho concreto.",
     },
     "enojo": {
         "label": "Enojo", "familia": "anger", "intensidad": "media",
         "descripcion": "Molestia clara y directa.",
     },
     "furia": {
-        "label": "Furia / Ira", "familia": "anger", "intensidad": "intensa",
-        "descripcion": "Enojo extremo, insultos, mayúsculas, lenguaje agresivo.",
+        "label": "Furia", "familia": "anger", "intensidad": "intensa",
+        "descripcion": "Enojo extremo con expresión explosiva, insultos o mayúsculas.",
+    },
+    "ira": {
+        "label": "Ira", "familia": "anger", "intensidad": "intensa",
+        "descripcion": "Enojo profundo y sostenido, con carga de condena moral.",
     },
     # Familia: ANTICIPACIÓN (anticipation)
     "interes": {
@@ -304,8 +328,12 @@ EMOCIONES = {
         "descripcion": "Comentario que anticipa un resultado o pide seguimiento.",
     },
     "vigilancia": {
-        "label": "Vigilancia / Alerta expectante", "familia": "anticipation", "intensidad": "intensa",
-        "descripcion": "Seguimiento atento y desconfiado.",
+        "label": "Vigilancia", "familia": "anticipation", "intensidad": "intensa",
+        "descripcion": "Seguimiento atento y desconfiado de una situación en desarrollo.",
+    },
+    "alerta_expectante": {
+        "label": "Alerta expectante", "familia": "anticipation", "intensidad": "intensa",
+        "descripcion": "Atención elevada ante un posible desenlace, con tono de advertencia.",
     },
     # DÍADAS (combinación de dos primarias adyacentes)
     "optimismo": {
@@ -340,29 +368,61 @@ EMOCIONES = {
         "label": "Agresividad", "familia": "diada", "deriva_de": ["anger", "anticipation"],
         "descripcion": "Enojo + anticipación: amenaza o confrontación activa.",
     },
+    "envidia": {
+        "label": "Envidia", "familia": "diada", "deriva_de": ["sadness", "anger"],
+        "descripcion": "Tristeza + enojo: frustración por ver que otros reciben lo que uno desea.",
+    },
+    "culpa": {
+        "label": "Culpa", "familia": "diada", "deriva_de": ["joy", "fear"],
+        "descripcion": "Alegría + miedo: remordimiento por haber disfrutado algo que se percibe como indebido.",
+    },
+    "curiosidad": {
+        "label": "Curiosidad", "familia": "diada", "deriva_de": ["trust", "surprise"],
+        "descripcion": "Confianza + sorpresa: interés genuino por entender algo nuevo o inesperado.",
+    },
+    "esperanza": {
+        "label": "Esperanza", "familia": "diada", "deriva_de": ["anticipation", "trust"],
+        "descripcion": "Anticipación + confianza: expectativa positiva sustentada en credibilidad.",
+    },
+    "indignacion": {
+        "label": "Indignación", "familia": "diada", "deriva_de": ["surprise", "anger"],
+        "descripcion": "Sorpresa + enojo: reacción ante algo que se considera injusto o inaceptable.",
+    },
+    "incredulidad": {
+        "label": "Incredulidad", "familia": "diada", "deriva_de": ["surprise", "disgust"],
+        "descripcion": "Sorpresa + disgusto: incapacidad de aceptar algo percibido como falso o absurdo.",
+    },
+    "ansiedad": {
+        "label": "Ansiedad", "familia": "diada", "deriva_de": ["anticipation", "fear"],
+        "descripcion": "Anticipación + miedo: inquietud anticipatoria ante un resultado incierto.",
+    },
+    "pesimismo": {
+        "label": "Pesimismo", "familia": "diada", "deriva_de": ["sadness", "anticipation"],
+        "descripcion": "Tristeza + anticipación: expectativa negativa sobre el futuro.",
+    },
     # POSTURAS CÍVICAS (del catálogo original)
     "reclamo": {
-        "label": "Reclamo", "familia": "civica",
+        "label": "Reclamo", "familia": "civica", "intensidad": "moderada",
         "descripcion": "Exige una acción o respuesta concreta de la institución.",
     },
     "objecion": {
-        "label": "Objeción", "familia": "civica",
+        "label": "Objeción", "familia": "civica", "intensidad": "leve",
         "descripcion": "Cuestiona una decisión o dato sin necesariamente exigir acción.",
     },
     "satisfaccion": {
-        "label": "Satisfacción", "familia": "civica",
+        "label": "Satisfacción", "familia": "civica", "intensidad": "moderada",
         "descripcion": "Declara conformidad con un resultado o servicio concreto.",
     },
     "calma": {
-        "label": "Calma", "familia": "civica",
+        "label": "Calma", "familia": "civica", "intensidad": "leve",
         "descripcion": "Tono neutro, informativo, sin carga emocional relevante.",
     },
     "reconocimiento": {
-        "label": "Reconocimiento", "familia": "civica",
+        "label": "Reconocimiento", "familia": "civica", "intensidad": "moderada",
         "descripcion": "Agradece o felicita explícitamente una acción institucional.",
     },
     "ironia": {
-        "label": "Ironía / Sarcasmo", "familia": "civica",
+        "label": "Ironía / Sarcasmo", "familia": "civica", "intensidad": "moderada",
         "descripcion": "Crítica indirecta disfrazada de elogio o burla.",
     },
 }
@@ -421,18 +481,21 @@ _EMOCION_SINONIMOS = {
     "confío": "confianza", "confio": "confianza", "respaldo": "confianza",
     "admiro": "admiracion", "bravo": "admiracion", "elogio": "admiracion",
     "aprensión": "aprension", "aprehensión": "aprension",
-    "miedo": "terror", "pánico": "terror", "panico": "terror", "alarma": "terror",
+    "miedo": "terror", "pánico": "panico", "panico": "panico", "alarma": "panico",
+    "pánico generalizado": "panico", "angustia extrema": "panico",
     "sorprendido": "sorpresa", "asombrado": "asombro",
     "melancólico": "melancolia", "melancolico": "melancolia",
     "pena": "dolor", "duelo": "dolor",
-    "aburrido": "aburrimiento", "indiferente": "aburrimiento",
+    "luto": "pena_profunda", "conmoción": "pena_profunda", "conmocion": "pena_profunda",
+    "aburrido": "aburrimiento", "indiferente": "indiferencia",
     "disgusto": "desagrado", "me molesta": "desagrado",
     "asco": "repulsion", "vergüenza": "repulsion", "indignación": "repulsion",
-    "molesto": "fastidio", "cansado de": "fastidio", "hartazgo": "fastidio",
-    "furioso": "furia", "iracundo": "furia",
+    "indignación moral": "indignacion_moral", "conda moral": "indignacion_moral",
+    "molesto": "molestia", "cansado de": "fastidio", "hartazgo": "fastidio",
+    "furioso": "furia", "iracundo": "ira",
     "interesado": "interes", "curioso": "interes",
     "espero que": "expectativa", "a ver si": "expectativa",
-    "vigilo": "vigilancia", "atento a": "vigilancia",
+    "vigilo": "vigilancia", "atento a": "alerta_expectante",
     "optimista": "optimismo",
     "cariño": "amor_civico", "aprecio": "amor_civico",
     "resignado": "sumision", "toca aceptar": "sumision",
@@ -441,6 +504,14 @@ _EMOCION_SINONIMOS = {
     "lamento": "remordimiento", "me arrepiento": "remordimiento",
     "desprecio": "desprecio", "menosprecio": "desprecio",
     "amenaza": "agresividad", "confrontación": "agresividad",
+    "envidioso": "envidia", "le duele que": "envidia",
+    "culpable": "culpa", "me siento culpable": "culpa",
+    "curioso": "curiosidad", "quiero saber": "curiosidad",
+    "espero": "esperanza", "confío en que": "esperanza", "ojalá": "esperanza",
+    "indignado": "indignacion", "no es justo": "indignacion",
+    "no puedo creer": "incredulidad", "imposible": "incredulidad",
+    "ansioso": "ansiedad", "nervioso": "ansiedad", "inquietud anticipatoria": "ansiedad",
+    "pesimista": "pesimismo", "no va a mejorar": "pesimismo",
 }
 
 

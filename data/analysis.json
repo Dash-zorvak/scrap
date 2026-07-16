@@ -1,354 +1,947 @@
 {
   "meta": {
-    "periodo": "2026-07",
-    "fecha_datos_hasta": "2026-07-14",
-    "generado_en": "2026-07-15T07:28:13.442443+00:00",
-    "plataforma": "multicanal",
-    "total_posts_analizados": 11.0,
-    "total_comentarios_analizados": 69,
-    "total_reacciones_sumadas": 1457.0,
-    "total_impresiones_vistas": 57589.0,
-    "enlaces_analizados": []
+    "generado_en": "2026-07-15T23:30:00-06:00",
+    "periodo": "14-15 de julio de 2026",
+    "plataforma": "Facebook (TikTok verificado en el periodo: 0 publicaciones y 0 comentarios, sin datos que analizar)",
+    "fecha_datos_hasta": "2026-07-15",
+    "total_posts_analizados": 20,
+    "total_comentarios_analizados": 171,
+    "total_reacciones_sumadas": 2299,
+    "total_impresiones_vistas": 152000,
+    "enlaces_analizados": [
+      "https://www.facebook.com/share/r/19HperNTet/",
+      "https://www.facebook.com/share/p/1DMTcfxMxZ/",
+      "https://www.facebook.com/share/p/1KYviQyyAv/",
+      "https://www.facebook.com/share/p/187CiYMSGQ/",
+      "https://www.facebook.com/share/p/1GH4whvNUA/",
+      "https://www.facebook.com/share/p/1JJWus4iUb/",
+      "https://www.facebook.com/share/p/1FFfd8geH9/",
+      "https://www.facebook.com/share/p/195XqCjRkF/",
+      "https://www.facebook.com/SantaAnaAlcaldia/posts/pfbid02j7JVCjGZKwLVrYxuE8UBVkVdcpDKNxbaJsKQsgyM6pbYRUT7xwy2wcRfkW39SAgJl",
+      "https://www.facebook.com/share/p/18qixAEpZu/",
+      "https://www.facebook.com/share/p/1AYe4uYcgk/",
+      "https://www.facebook.com/share/p/1ECqEf4wYY/",
+      "https://www.facebook.com/share/p/1ERoeZsJGR/",
+      "https://www.facebook.com/share/p/1BMVnA7CwT/",
+      "https://www.facebook.com/share/p/198RFM8Yw8/",
+      "https://www.facebook.com/share/r/1HbjpJrLRD/",
+      "https://www.facebook.com/share/v/1M59qkyvo4/",
+      "https://www.facebook.com/share/p/18rhFRgQJ2/",
+      "https://www.facebook.com/share/p/14izQavLxgx/",
+      "https://www.facebook.com/share/p/1DwubcmtAN/"
+    ]
   },
   "bloque1": {
     "clima_narrativo": {
       "tono_dominante": "neutral",
-      "pct_favorable": 1.4,
-      "pct_neutral": 79.7,
-      "pct_critico": 18.8,
-      "n_total_comentarios": 69,
-      "tono_score_hoy": -17.4,
-      "tono_score_ayer": 0.0,
-      "tendencia": -17.4,
-      "etiqueta_tendencia": "empeorando",
-      "narrativa": "De 69 comentarios del período, 1.4% son favorables, 79.7% neutros y 18.8% críticos — saldo neto de −17.4 puntos sobre 100 (−17.4 pts respecto al período anterior, que registraba 0). Obras y servicios públicos concentra el 100% de los comentarios críticos (28 comentarios negativos de 69 totales). Conclusión: el período abre con saldo fuertemente negativo y sin contrapeso favorable — un solo punto de malla en obras arrastra todo el balance hacia la crítica.\n= OBRAS HUNDE EL SALDO",
-      "enlaces_referencia": [],
-      "formula_usada": "NSI = (positivos - negativos) / total * 100"
+      "pct_favorable": 23.0,
+      "pct_neutral": 56.3,
+      "pct_critico": 20.7,
+      "n_total_comentarios": 135,
+      "tono_score_hoy": 2.2,
+      "tono_score_ayer": null,
+      "tendencia": 0,
+      "etiqueta_tendencia": "sin_periodo_anterior",
+      "narrativa": "De 135 comentarios del periodo, 23.0% son favorables, 56.3% neutros y 20.7% criticos -- saldo neto de 2.2 puntos sobre 100 (no hay periodo anterior disponible con el que comparar, por lo que la tendencia no puede calcularse todavia). \"Seguridad\" concentra 9 de los 28 comentarios criticos (32.1%), por el caso de la gorra robada y las acusaciones de corrupcion contra el edil. Conclusion: el saldo apenas positivo depende de que la conversacion sobre seguridad no escale, porque ahi se concentra casi la mitad de la critica real.\n= SEGURIDAD SOSTIENE LA CRITICA",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/",
+        "https://www.facebook.com/share/p/1ERoeZsJGR/",
+        "https://www.facebook.com/share/p/14izQavLxgx/"
+      ],
+      "formula_usada": "NSI = (positivos - negativos) / total * 100 (metodo: reglas lexicas, sin IA)"
     },
     "indice_emociones": {
-      "emocion_dominante": "furia",
-      "narrativa": "La emoción dominante del período es furia, empatada con repulsión (ambas en 5.8% de los comentarios), seguida de preocupación y expectativa (4.3% cada una). La furia y la repulsión juntas superan en peso a cualquier señal positiva: confianza alcanza solo 1.4% y amor cívico 2.9%. El patrón de palabras cívicas emergentes confirma el registro: los ciudadanos hablan de baches reportados desde enero, de gasto sin rendición de cuentas y de robos, lo que explica la concentración emocional en el extremo negativo del espectro. Conclusión: el estado emocional de la audiencia es de rechazo activo, no de simple indiferencia — la furia está articulada en reclamos concretos.\n= FURIA CON NOMBRE Y APELLIDO",
-      "enlaces_referencia": [],
-      "preocupacion": 4.3,
-      "desagrado": 0.0,
-      "amor_civico": 2.9,
-      "melancolia": 0.0,
-      "alegria": 0.0,
-      "sorpresa": 0.0,
-      "furia": 5.8,
-      "expectativa": 4.3,
-      "objecion": 0.0,
-      "calma": 0.0,
-      "ironia": 0.0,
-      "remordimiento": 0.0,
-      "optimismo": 0.0,
-      "aburrimiento": 0.0,
-      "dolor": 0.0,
-      "reclamo": 0.0,
-      "desprecio": 0.0,
-      "sumision": 0.0,
-      "aceptacion": 2.9,
-      "satisfaccion": 0.0,
-      "serenidad": 0.0,
-      "admiracion": 0.0,
-      "euforia": 0.0,
-      "tristeza": 0.0,
-      "fastidio": 0.0,
-      "repulsion": 5.8,
-      "terror": 2.9,
-      "enojo": 0.0,
-      "distraccion": 0.0,
-      "asombro_temeroso": 0.0,
-      "asombro": 0.0,
-      "agresividad": 0.0,
-      "aprension": 0.0,
-      "reconocimiento": 0.0,
-      "interes": 0.0,
-      "vigilancia": 0.0,
-      "confianza": 1.4,
-      "desaprobacion": 0.0,
-      "civica_nueva_cada": 2.9,
-      "civica_nueva_varios": 1.4,
-      "civica_nueva_llevo": 4.3,
-      "civica_nueva_otra": 4.3,
-      "civica_nueva_pago": 1.4,
-      "civica_nueva_hijos": 2.9,
-      "civica_nueva_llevamos": 1.4,
-      "civica_nueva_restablecieron": 1.4,
-      "civica_nueva_tenemos": 2.9,
-      "civica_nueva_gastan": 2.9,
-      "civica_nueva_cuanto": 4.3,
-      "civica_nueva_encima": 2.9,
-      "civica_nueva_desorden": 1.4,
-      "civica_nueva_hora": 1.4,
-      "civica_nueva_perdimos": 2.9,
-      "civica_nueva_pagamos": 1.4,
-      "civica_nueva_paso": 1.4,
-      "civica_nueva_inseguridad": 1.4,
-      "civica_nueva_meten": 4.3,
-      "civica_nueva_reportamos": 2.9,
-      "civica_nueva_tres": 4.3,
-      "civica_nueva_puro": 4.3,
-      "civica_nueva_visto": 1.4,
-      "civica_nueva_operativos": 2.9,
-      "civica_nueva_solo": 2.9,
-      "civica_nueva_robaron": 2.9
+      "_doc": "CATÁLOGO ABIERTO: las claves de emociones son strings libres. Las que aparecen aquí son la semilla (ver dashboard/tema_taxonomia.py EMOCIONES_VALIDAS). Se permiten claves no-canónicas nuevas — cada emoción debe tener un campo 'familia' válido (joy|trust|fear|surprise|sadness|disgust|anger|anticipation|diada|civica). Las claves pct_* usan el mismo patrón: pct_{clave_emocion}. Las propuestas nuevas se registran en dashboard/taxonomias_pendientes.json.",
+      "_doc_intencion": "CATÁLOGO ABIERTO DE INTENCIÓN COMUNICATIVA: 12 familias fijas (informacion, evaluacion, solicitud, fiscalizacion, participacion, deliberacion, expresion_social, movilizacion, humor, identidad, interaccion, enganoso) con semillas de intención (ver dashboard/intencion_taxonomia.py INTENCIONES_VALIDAS). Cada comentario puede tener intencion_principal (una) + intenciones_secundarias (lista). Nuevas intenciones se registran en taxonomias_pendientes.json. Las familias son estructura fija; las hojas dentro de cada familia son abiertas.",
+      "reclamo": 5,
+      "objecion": 1,
+      "satisfaccion": 2,
+      "calma": 93,
+      "enojo": 0,
+      "tristeza": 2,
+      "alegria": 3,
+      "reconocimiento": 3,
+      "ironia": 4,
+      "preocupacion": 1,
+      "serenidad": 1,
+      "euforia": 2,
+      "aceptacion": 1,
+      "confianza": 0,
+      "admiracion": 3,
+      "aprension": 0,
+      "terror": 1,
+      "distraccion": 1,
+      "sorpresa": 0,
+      "asombro": 0,
+      "melancolia": 0,
+      "dolor": 0,
+      "aburrimiento": 0,
+      "desagrado": 0,
+      "repulsion": 3,
+      "fastidio": 0,
+      "furia": 1,
+      "interes": 0,
+      "expectativa": 4,
+      "vigilancia": 2,
+      "optimismo": 0,
+      "amor_civico": 2,
+      "sumision": 0,
+      "asombro_temeroso": 0,
+      "desaprobacion": 0,
+      "remordimiento": 0,
+      "desprecio": 0,
+      "agresividad": 0,
+      "pct_reclamo": 3.7,
+      "pct_objecion": 0.7,
+      "pct_satisfaccion": 1.5,
+      "pct_calma": 68.9,
+      "pct_enojo": 0.0,
+      "pct_tristeza": 1.5,
+      "pct_alegria": 2.2,
+      "pct_reconocimiento": 2.2,
+      "pct_ironia": 3.0,
+      "pct_preocupacion": 0.7,
+      "pct_serenidad": 0.7,
+      "pct_euforia": 1.5,
+      "pct_aceptacion": 0.7,
+      "pct_confianza": 0.0,
+      "pct_admiracion": 2.2,
+      "pct_aprension": 0.0,
+      "pct_terror": 0.7,
+      "pct_distraccion": 0.7,
+      "pct_sorpresa": 0.0,
+      "pct_asombro": 0.0,
+      "pct_melancolia": 0.0,
+      "pct_dolor": 0.0,
+      "pct_aburrimiento": 0.0,
+      "pct_desagrado": 0.0,
+      "pct_repulsion": 2.2,
+      "pct_fastidio": 0.0,
+      "pct_furia": 0.7,
+      "pct_interes": 0.0,
+      "pct_expectativa": 3.0,
+      "pct_vigilancia": 1.5,
+      "pct_optimismo": 0.0,
+      "pct_amor_civico": 1.5,
+      "pct_sumision": 0.0,
+      "pct_asombro_temeroso": 0.0,
+      "pct_desaprobacion": 0.0,
+      "pct_remordimiento": 0.0,
+      "pct_desprecio": 0.0,
+      "pct_agresividad": 0.0,
+      "emocion_dominante": "calma",
+      "narrativa": "De los 135 comentarios analizados, la emocion dominante es calma con 93 comentarios (68.9%), seguida de reclamo con 5 (3.7%) e ironia con 4 (3.0%). No hay periodo anterior para comparar el porcentaje de calma. De los 93 comentarios en calma, 54 (58.1%) corresponden a \"no_aplica\" (conversacion general sin tema municipal claro) y 13 (14.0%) a seguridad -- el tono de calma es en realidad ausencia de carga emocional marcada, no satisfaccion activa. Conclusion: la conversacion diaria es mayormente neutra en forma, pero el reclamo real que existe se concentra en obras y seguridad, no esta disuelto en el ruido general.",
+      "formula_usada": "% emocion = (n_emocion / total_comentarios) * 100 (metodo: reglas lexicas, sin IA)"
     },
     "intensidad": {
-      "vol_hoy": 69,
-      "promedio_semanal": 69,
-      "pct_diferencia": 0.0,
-      "narrativa": "El volumen del período es de 69 comentarios, idéntico al promedio semanal (diferencia: 0.0%). No hay pico ni caída atípica — la conversación corre a ritmo estable. Con un solo canal activo (Obras y servicios públicos) y 11 publicaciones analizadas, la ausencia de variación impide identificar un detonador específico de actividad. Conclusión: volumen estable no significa ausencia de riesgo — la negatividad de este período proviene de una base sostenida, no de un pico puntual.\n= NEGATIVIDAD CONSTANTE SIN PICO",
-      "enlaces_referencia": []
+      "vol_hoy": 135,
+      "promedio_semanal": 0,
+      "pct_diferencia": 0,
+      "etiqueta": "sin_historico",
+      "fecha_hoy": "2026-07-15",
+      "n_dias_referencia": 1,
+      "narrativa": "Hoy se registraron 135 comentarios en las paginas oficiales monitoreadas; no existe todavia un promedio semanal real con el que compararlo porque este es el primer periodo con datos crudos disponibles. No hay dato de dias previos para calcular una diferencia porcentual valida en este momento. La publicacion sobre la gorra robada (https://www.facebook.com/share/v/1M59qkyvo4/) concentra 35 de los 135 comentarios del dia (25.9%), y explica buena parte del volumen de hoy. Conclusion: el volumen de conversacion de hoy esta impulsado por un solo incidente viral, no por una tendencia sostenida verificable todavia.\n= UN SOLO INCIDENTE MUEVE EL VOLUMEN",
+      "explicacion_simple": "Solo hay datos de un dia; todavia no se puede comparar contra un promedio semanal real.",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/"
+      ],
+      "formula_usada": "Δ% = ((vol_hoy - promedio) / promedio) * 100"
     },
     "concentracion_tematica": {
+      "hhi": 0.2951,
+      "nivel": "dominado",
+      "estado": "sin_historico",
+      "top_tema": "no_aplica",
+      "n_temas": 9,
       "ramas": [
         {
+          "tema": "no_aplica",
+          "n": 76,
+          "doc_count": 76,
+          "share": 49.6,
+          "tendencia": "sin_historico",
+          "acelerando": false,
+          "pct_cambio_semana": 0,
+          "emocion_dominante": "calma",
+          "pct_apoyo": 6.6,
+          "pct_critica": 11.8,
+          "pct_neutral": 81.6
+        },
+        {
+          "tema": "seguridad",
+          "n": 21,
+          "doc_count": 21,
+          "share": 13.6,
+          "tendencia": "sin_historico",
+          "acelerando": false,
+          "pct_cambio_semana": 0,
+          "emocion_dominante": "calma",
+          "pct_apoyo": 23.8,
+          "pct_critica": 47.6,
+          "pct_neutral": 28.6
+        },
+        {
           "tema": "obras_servicios",
-          "share": 100.0,
-          "emocion_dominante": "serenidad"
+          "n": 16,
+          "doc_count": 16,
+          "share": 10.4,
+          "tendencia": "sin_historico",
+          "acelerando": false,
+          "pct_cambio_semana": 0,
+          "emocion_dominante": "calma",
+          "pct_apoyo": 18.8,
+          "pct_critica": 37.5,
+          "pct_neutral": 43.8
+        },
+        {
+          "tema": "gobernanza",
+          "n": 15,
+          "doc_count": 15,
+          "share": 9.7,
+          "tendencia": "sin_historico",
+          "acelerando": false,
+          "pct_cambio_semana": 0,
+          "emocion_dominante": "calma",
+          "pct_apoyo": 46.7,
+          "pct_critica": 13.3,
+          "pct_neutral": 40.0
+        },
+        {
+          "tema": "cultura_deportes",
+          "n": 11,
+          "doc_count": 11,
+          "share": 7.1,
+          "tendencia": "sin_historico",
+          "acelerando": false,
+          "pct_cambio_semana": 0,
+          "emocion_dominante": "calma",
+          "pct_apoyo": 45.5,
+          "pct_critica": 18.2,
+          "pct_neutral": 36.4
+        },
+        {
+          "tema": "apoyo_generico",
+          "n": 11,
+          "doc_count": 11,
+          "share": 7.1,
+          "tendencia": "sin_historico",
+          "acelerando": false,
+          "pct_cambio_semana": 0,
+          "emocion_dominante": "calma",
+          "pct_apoyo": 100.0,
+          "pct_critica": 0.0,
+          "pct_neutral": 0.0
+        },
+        {
+          "tema": "movilidad",
+          "n": 2,
+          "doc_count": 2,
+          "share": 1.3,
+          "tendencia": "sin_historico",
+          "acelerando": false,
+          "pct_cambio_semana": 0,
+          "emocion_dominante": "calma",
+          "pct_apoyo": 0.0,
+          "pct_critica": 0.0,
+          "pct_neutral": 100.0
+        },
+        {
+          "tema": "empleo",
+          "n": 1,
+          "doc_count": 1,
+          "share": 0.6,
+          "tendencia": "sin_historico",
+          "acelerando": false,
+          "pct_cambio_semana": 0,
+          "emocion_dominante": "calma",
+          "pct_apoyo": 100.0,
+          "pct_critica": 0.0,
+          "pct_neutral": 0.0
+        },
+        {
+          "tema": "salud",
+          "n": 1,
+          "doc_count": 1,
+          "share": 0.6,
+          "tendencia": "sin_historico",
+          "acelerando": false,
+          "pct_cambio_semana": 0,
+          "emocion_dominante": "calma",
+          "pct_apoyo": 100.0,
+          "pct_critica": 0.0,
+          "pct_neutral": 0.0
         }
       ],
-      "hhi": 1.0,
-      "nivel": "dominado",
-      "top_tema": "obras_servicios",
-      "n_temas": 1,
-      "narrativa": "La conversación del período está completamente dominada por un único tema: obras y servicios públicos (100% del total, índice de concentración máximo de 1.0 sobre 1). No existe dispersión temática — todos los 69 comentarios analizados apuntan al mismo foco. Esta concentración extrema es una señal de alerta operativa: cualquier crisis o escalada en este tema no tiene competencia narrativa que la amortigüe. Conclusión: el monocultivo temático en obras expone al municipio — si la percepción en este tema se deteriora, no hay otro eje de conversación que estabilice el balance.\n= UN TEMA, CERO AMORTIGUADORES",
-      "enlaces_referencia": [],
+      "temas_acelerando": [],
+      "temas_desacelerando": [],
+      "narrativa": "\"no_aplica\" (conversacion general sin tema municipal claro) es la rama mas grande con 76 de los 154 documentos del periodo (posts + comentarios), un 49.6%. Las dos ramas mas grandes (no_aplica y seguridad) concentran juntas mas de la mitad de todo lo publicado y comentado en el periodo. La derivacion es directa: 21 de 154 documentos tocan seguridad, 21 / 154 = 13.6%. Dentro de los temas municipales reales (excluyendo no_aplica), seguridad domina por el caso de la gorra robada y la captura del sospechoso (https://www.facebook.com/share/v/1M59qkyvo4/, https://www.facebook.com/share/p/1ERoeZsJGR/). Conclusion: la agenda publica real del periodo no esta fragmentada entre muchos temas menores, esta concentrada en un incidente de seguridad puntual.\n= SEGURIDAD CONCENTRA LA AGENDA REAL",
+      "explicacion_simple": "Ya no aplica a esta seccion (fusionada en narrativa).",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/",
+        "https://www.facebook.com/share/p/1ERoeZsJGR/"
+      ],
       "formula_usada": "HHI = Σ(share_i²) donde share_i = n_tema_i / total_temas"
     },
-    "pulso_iq": {
-      "valor": 50.83,
-      "cuadrante": "LIDERAZGO",
-      "componentes": {
-        "fb_aprobacion": 50.0,
-        "fb_conexion": 96.51,
-        "fb_tranquilidad": 56.62,
-        "fb_diversidad_temas": 0.0,
-        "fb_presencia_zonas": 0.0,
-        "fb_consistencia": 50.0,
-        "fb_atencion": 100.0,
-        "tk_aprobacion": 50.0,
-        "tk_conexion": 49.77,
-        "tk_tranquilidad": 100.0,
-        "tk_diversidad_temas": 0.0,
-        "tk_presencia_zonas": 0.0,
-        "tk_consistencia": 50.0,
-        "tk_atencion": 94.0
-      },
-      "narrativa": "El índice de pulso del período alcanza 50.83 sobre 100, posicionado en el cuadrante de Liderazgo. El componente más sólido es la atención en Facebook (100.0) y la conexión en Facebook (96.51), lo que indica que el contenido llega y genera respuesta. Sin embargo, la diversidad de temas es 0.0 en ambas plataformas y la presencia por zonas también es 0.0 — dos vectores completamente apagados. En TikTok la tranquilidad es perfecta (100.0) pero la conexión es apenas 49.77. Conclusión: el municipio mantiene atención alta pero opera con alcance temático y territorial mínimo — está conectado con quienes ya lo siguen, pero no está expandiendo conversación hacia nuevas zonas ni temas.\n= CONECTADO PERO SIN EXPANSIÓN",
-      "enlaces_referencia": []
-    },
-    "metricas_rendimiento": {
-      "engagement_rate": 3.48,
-      "engagement_rate_formula": "ER = (reacciones + comentarios + compartidos) / vistas * 100",
-      "engagementBasis": "ponderado_volumen",
-      "alcance_estimado": 57589.0,
-      "reacciones_positivas": 352.0,
-      "reacciones_negativas": 282.0,
-      "reacciones_positivas_pct": 55.5,
-      "reacciones_negativas_pct": 44.5,
-      "ratio_amor_enojo": 1.25,
-      "ratio_amor_enojo_formula": "R = (likes + loves + cares) / (angrys + sads + hahas)",
-      "net_sentiment_reacciones": 0.1104,
-      "controversy_reacciones": 0.4448,
-      "effectiveness_reacciones": 0.5552,
-      "aprobacion_pct_reacciones": 55.5,
-      "rechazo_pct_reacciones": 44.5,
-      "porque_funciona": "El contenido de obras y servicios genera participación precisamente porque toca un dolor cotidiano de la ciudadanía — los baches y el mantenimiento vial son experiencias diarias verificables. La audiencia reacciona porque puede constatar con sus propios ojos si lo que se publica corresponde a su realidad. Esa misma cercanía con lo cotidiano es lo que convierte cada publicación en un punto de fiscalización, no solo de información.",
-      "narrativa": "Con 57,589 impresiones y una tasa de participación de 3.48%, el contenido genera reacción activa. De 1,457 reacciones totales, 352 son positivas (55.5%) y 282 negativas (44.5%), con una relación positivo-negativo de 1.25 — estrecha. El nivel de controversia en reacciones es 0.4448, lo que indica que casi la mitad de las reacciones expresan desacuerdo o malestar. Conclusión: el contenido tiene alcance real pero la audiencia está dividida casi al medio en reacciones — una publicación de obras que acumula más del 44% de reacciones negativas no puede considerarse exitosa.\n= ALCANCE REAL, APROBACIÓN FRÁGIL",
-      "enlaces_referencia": []
-    }
-  },
-  "bloque2": {
-    "voces_influencia": [
+    "termometro_lugares": [
       {
-        "pagina": "Obras y servicios públicos",
-        "postura": "neutral",
-        "engagement": 690,
-        "reacciones_totales": 185,
-        "comentarios_totales": 69,
-        "compartidos_totales": 56,
-        "narrativa": "La única fuente activa del período es la página Obras y servicios públicos, con postura neutral y 690 unidades de participación totales (185 reacciones + 69 comentarios + 56 compartidos). Esta página concentra el 100% de la conversación analizada — no existe voz alternativa que module o equilibre el relato. Con 11 publicaciones en el período, el promedio de participación por publicación es 62.7 unidades. Conclusión: la ausencia de otras voces institucionales deja el campo narrativo completamente expuesto — si la página de Obras falla en gestionar la crítica, no hay respaldo comunicacional.\n= UNA VOZ, NINGÚN RESPALDO",
-        "enlaces_referencia": []
+        "lugar": "santa ana centro",
+        "n_comentarios": 38,
+        "tema_dominante": "seguridad",
+        "n_tema_dominante": 13,
+        "nivel_tension": 26.3,
+        "pct_reclamo": 2.6,
+        "pct_objecion": 0.0,
+        "pct_satisfaccion": 0.0,
+        "pct_calma": 73.7,
+        "pct_enojo": 0.0,
+        "pct_tristeza": 0.0,
+        "pct_alegria": 0.0,
+        "pct_reconocimiento": 0.0,
+        "pct_ironia": 7.9,
+        "pct_preocupacion": 2.6,
+        "pct_serenidad": 2.6,
+        "pct_euforia": 0.0,
+        "pct_aceptacion": 0.0,
+        "pct_confianza": 0.0,
+        "pct_admiracion": 2.6,
+        "pct_aprension": 0.0,
+        "pct_terror": 0.0,
+        "pct_distraccion": 2.6,
+        "pct_sorpresa": 0.0,
+        "pct_asombro": 0.0,
+        "pct_melancolia": 0.0,
+        "pct_dolor": 0.0,
+        "pct_aburrimiento": 0.0,
+        "pct_desagrado": 0.0,
+        "pct_repulsion": 0.0,
+        "pct_fastidio": 0.0,
+        "pct_furia": 0.0,
+        "pct_interes": 0.0,
+        "pct_expectativa": 0.0,
+        "pct_vigilancia": 5.3,
+        "pct_optimismo": 0.0,
+        "pct_amor_civico": 0.0,
+        "pct_sumision": 0.0,
+        "pct_asombro_temeroso": 0.0,
+        "pct_desaprobacion": 0.0,
+        "pct_remordimiento": 0.0,
+        "pct_desprecio": 0.0,
+        "pct_agresividad": 0.0,
+        "emocion_dominante": "calma",
+        "citas_ejemplo": [
+          "A gastar más en juegos artificiales para el fas las calles de las colonias de Santa Ana son lo de menos verdad maestro",
+          "Como quedó Inglaterra? Por que casaca que estuvo en esa reunión"
+        ],
+        "narrativa": "La zona de santa ana centro registra 38 comentarios en el periodo, con \"calma\" como emocion dominante (73.7%). Un 26.3% de esos comentarios son criticos. El tema real mas mencionado en esa zona es seguridad con 13 comentarios. Ancla: \"No encontramos a este senor, ya lo andamos buscando en las camaras de la ciudad\" (https://www.facebook.com/share/v/1M59qkyvo4/). Conclusion: santa ana centro concentra la conversacion del incidente de seguridad puntual del periodo mas que cualquier otro tema.\n= SANTA ANA CENTRO EN LA MIRA",
+        "enlaces_referencia": [
+          "https://www.facebook.com/share/v/1M59qkyvo4/"
+        ]
+      },
+      {
+        "lugar": "parque libertad",
+        "n_comentarios": 14,
+        "tema_dominante": "seguridad",
+        "n_tema_dominante": 3,
+        "nivel_tension": 7.1,
+        "pct_reclamo": 0.0,
+        "pct_objecion": 0.0,
+        "pct_satisfaccion": 0.0,
+        "pct_calma": 78.6,
+        "pct_enojo": 0.0,
+        "pct_tristeza": 7.1,
+        "pct_alegria": 0.0,
+        "pct_reconocimiento": 0.0,
+        "pct_ironia": 0.0,
+        "pct_preocupacion": 0.0,
+        "pct_serenidad": 0.0,
+        "pct_euforia": 14.3,
+        "pct_aceptacion": 0.0,
+        "pct_confianza": 0.0,
+        "pct_admiracion": 0.0,
+        "pct_aprension": 0.0,
+        "pct_terror": 0.0,
+        "pct_distraccion": 0.0,
+        "pct_sorpresa": 0.0,
+        "pct_asombro": 0.0,
+        "pct_melancolia": 0.0,
+        "pct_dolor": 0.0,
+        "pct_aburrimiento": 0.0,
+        "pct_desagrado": 0.0,
+        "pct_repulsion": 0.0,
+        "pct_fastidio": 0.0,
+        "pct_furia": 0.0,
+        "pct_interes": 0.0,
+        "pct_expectativa": 0.0,
+        "pct_vigilancia": 0.0,
+        "pct_optimismo": 0.0,
+        "pct_amor_civico": 0.0,
+        "pct_sumision": 0.0,
+        "pct_asombro_temeroso": 0.0,
+        "pct_desaprobacion": 0.0,
+        "pct_remordimiento": 0.0,
+        "pct_desprecio": 0.0,
+        "pct_agresividad": 0.0,
+        "emocion_dominante": "calma",
+        "citas_ejemplo": [
+          "Xuantas me pueden dar??",
+          "Yo quiero 2"
+        ],
+        "narrativa": "La zona de parque libertad registra 14 comentarios en el periodo, con \"calma\" como emocion dominante (78.6%). Un 7.1% de esos comentarios son criticos. El tema real mas mencionado en esa zona es seguridad con 3 comentarios. Ancla: \"El sujeto que robo una gorra... ha sido capturado en el parque Libertad por nuestros agentes del CAM\" (https://www.facebook.com/share/p/1ERoeZsJGR/). Conclusion: parque libertad concentra la conversacion del incidente de seguridad puntual del periodo mas que cualquier otro tema.\n= PARQUE LIBERTAD EN LA MIRA",
+        "enlaces_referencia": [
+          "https://www.facebook.com/share/p/1ERoeZsJGR/"
+        ]
+      },
+      {
+        "lugar": "67 calle poniente",
+        "n_comentarios": 13,
+        "tema_dominante": "obras_servicios",
+        "n_tema_dominante": 8,
+        "nivel_tension": 23.1,
+        "pct_reclamo": 23.1,
+        "pct_objecion": 0.0,
+        "pct_satisfaccion": 7.7,
+        "pct_calma": 61.5,
+        "pct_enojo": 0.0,
+        "pct_tristeza": 0.0,
+        "pct_alegria": 0.0,
+        "pct_reconocimiento": 0.0,
+        "pct_ironia": 0.0,
+        "pct_preocupacion": 0.0,
+        "pct_serenidad": 0.0,
+        "pct_euforia": 0.0,
+        "pct_aceptacion": 0.0,
+        "pct_confianza": 0.0,
+        "pct_admiracion": 0.0,
+        "pct_aprension": 0.0,
+        "pct_terror": 0.0,
+        "pct_distraccion": 0.0,
+        "pct_sorpresa": 0.0,
+        "pct_asombro": 0.0,
+        "pct_melancolia": 0.0,
+        "pct_dolor": 0.0,
+        "pct_aburrimiento": 0.0,
+        "pct_desagrado": 0.0,
+        "pct_repulsion": 0.0,
+        "pct_fastidio": 0.0,
+        "pct_furia": 0.0,
+        "pct_interes": 0.0,
+        "pct_expectativa": 0.0,
+        "pct_vigilancia": 0.0,
+        "pct_optimismo": 0.0,
+        "pct_amor_civico": 7.7,
+        "pct_sumision": 0.0,
+        "pct_asombro_temeroso": 0.0,
+        "pct_desaprobacion": 0.0,
+        "pct_remordimiento": 0.0,
+        "pct_desprecio": 0.0,
+        "pct_agresividad": 0.0,
+        "emocion_dominante": "calma",
+        "citas_ejemplo": [
+          "Gustavo Monster Pacheco",
+          "Si como ahi pasan familiares del alcalde les conviene  mientras sean colonias lodosas ahi ni se acercan"
+        ],
+        "narrativa": "La zona de 67 calle poniente registra 13 comentarios en el periodo, con \"calma\" como emocion dominante (61.5%). Un 23.1% de esos comentarios son criticos. El tema real mas mencionado en esa zona es obras_servicios con 8 comentarios. Ancla: \"hemos iniciado con la reparacion del baden ubicado en la 67 Calle Poniente\" (https://www.facebook.com/share/p/18qixAEpZu/). Conclusion: 67 calle poniente concentra la conversacion del incidente de seguridad puntual del periodo mas que cualquier otro tema.\n= 67 CALLE PONIENTE EN LA MIRA",
+        "enlaces_referencia": [
+          "https://www.facebook.com/share/p/18qixAEpZu/"
+        ]
       }
     ],
-    "polarizacion": {
-      "indice": 0.138,
-      "nivel": "confrontacion",
-      "narrativa": "El índice de confrontación del período es 0.138, clasificado en nivel confrontación. La brecha entre simpatizantes (1.4%) y críticos (18.8%) es de 17.4 puntos porcentuales — la audiencia no está polarizada entre dos bandos iguales sino claramente inclinada hacia la crítica. La masa neutral (79.7%) actúa como colchón que atenúa la confrontación directa, pero no resuelve el desequilibrio de fondo. Una limitación metodológica de medir solo texto público es que parte de la crítica real puede expresarse más en reacciones (44.5% negativas) que en comentarios de texto. Conclusión: la confrontación es asimétrica — casi todo el peso está del lado crítico, con apoyo explícito casi inexistente.\n= CRÍTICA SIN CONTRAPESO",
-      "enlaces_referencia": [],
-      "formula_usada": "PI = |pct_simpatizantes - pct_criticos| / 100"
+    "pulso_iq": {
+      "valor": 67.11,
+      "cuadrante": "LIDERAZGO",
+      "componentes": {
+        "aprobacion": 57.89,
+        "conexion": 100.0,
+        "tranquilidad": 74.08,
+        "diversidad": 68.42,
+        "presencia": 36.84,
+        "consistencia": 50.0,
+        "atencion": 75.26
+      },
+      "narrativa": "El indice Pulso IQ de Facebook para el periodo es de 67.11 sobre 100, ubicado en el cuadrante de LIDERAZGO (aprobacion y conexion ambas por encima de 50). TikTok no tuvo publicaciones ni comentarios en el periodo, por lo que el indice combinado de ambas plataformas todavia no se puede calcular; se reporta unicamente el de Facebook. Este resultado retoma el saldo de 23.0% de comentarios favorables contra 20.7% criticos ya reportado en el clima narrativo del periodo. El componente mas fuerte es conexion (100 de 100, saturado por el alto engagement por publicacion) y el mas debil es presencia en zonas (36.84 de 100), porque solo 7 de 19 publicaciones mencionan una zona identificable como https://www.facebook.com/share/v/1M59qkyvo4/. No hay periodo anterior para medir si el indice esta subiendo o bajando. Conclusion: el indice alto de hoy depende de un volumen de reacciones inusualmente alto en pocas publicaciones, no de una cobertura territorial amplia.\n= LIDERAZGO SOSTENIDO POR POCAS PUBLICACIONES",
+      "explicacion_simple": "Indice compuesto de Facebook; TikTok no tuvo actividad en el periodo y no entra en el calculo.",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/r/19HperNTet/",
+        "https://www.facebook.com/share/p/1DMTcfxMxZ/",
+        "https://www.facebook.com/share/p/1KYviQyyAv/",
+        "https://www.facebook.com/share/p/187CiYMSGQ/",
+        "https://www.facebook.com/share/p/1GH4whvNUA/",
+        "https://www.facebook.com/share/p/1JJWus4iUb/",
+        "https://www.facebook.com/share/p/1FFfd8geH9/",
+        "https://www.facebook.com/share/p/195XqCjRkF/",
+        "https://www.facebook.com/SantaAnaAlcaldia/posts/pfbid02j7JVCjGZKwLVrYxuE8UBVkVdcpDKNxbaJsKQsgyM6pbYRUT7xwy2wcRfkW39SAgJl",
+        "https://www.facebook.com/share/p/18qixAEpZu/",
+        "https://www.facebook.com/share/p/1AYe4uYcgk/",
+        "https://www.facebook.com/share/p/1ECqEf4wYY/",
+        "https://www.facebook.com/share/p/1ERoeZsJGR/",
+        "https://www.facebook.com/share/p/1BMVnA7CwT/",
+        "https://www.facebook.com/share/p/198RFM8Yw8/",
+        "https://www.facebook.com/share/r/1HbjpJrLRD/",
+        "https://www.facebook.com/share/v/1M59qkyvo4/",
+        "https://www.facebook.com/share/p/18rhFRgQJ2/",
+        "https://www.facebook.com/share/p/14izQavLxgx/"
+      ]
     },
+    "metricas_rendimiento": {
+      "engagement_rate": 1.68,
+      "engagement_rate_formula": "ER = (reacciones + comentarios + compartidos) / impresiones * 100",
+      "alcance_estimado": 152000,
+      "reacciones_positivas": 1595,
+      "reacciones_negativas": 596,
+      "reacciones_positivas_pct": 69.4,
+      "reacciones_negativas_pct": 25.9,
+      "ratio_amor_enojo": 2.68,
+      "ratio_amor_enojo_formula": "R = (likes + loves + cares) / (angrys + sads + hahas)",
+      "porque_funciona": "La publicacion sobre la gorra robada (https://www.facebook.com/share/v/1M59qkyvo4/) con 947 reacciones, 35 comentarios y 152000 vistas.",
+      "narrativa": "El periodo suma 1595 reacciones positivas (69.4%) y 596 reacciones negativas (25.9%), un indice neto de reaccion de 43.5 sobre 100. El engagement_rate medido contra el alcance real disponible es de 1.68%, con un alcance estimado de 152000 vistas (dato real solo de una publicacion, la unica del periodo con vistas registradas). No hay periodo anterior disponible con el que comparar estas cifras en puntos exactos. La publicacion sobre la gorra robada (https://www.facebook.com/share/v/1M59qkyvo4/) concentra 947 de las 2299 reacciones del periodo (41.2%), la misma que explica el alcance estimado. Conclusion: el rendimiento del periodo depende casi por completo de una sola publicacion viral, no de un desempeno sostenido en todas las publicaciones.\n= UNA PUBLICACION SOSTIENE EL RENDIMIENTO",
+      "explicacion_simple": "Cuantas reacciones buenas y malas hubo en total, y que tan rapido crece la conversacion frente a las vistas reales que tuvo la unica publicacion con ese dato.",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/"
+      ]
+    },
+    "cierre_factual": "947 reacciones y 35 comentarios en la publicacion sobre la gorra robada en Santa Ana Centro definieron la semana en la conversacion digital municipal."
+  },
+  "bloque2": {
+    "mapa_publicos": {
+      "pct_simpatizantes": 23.0,
+      "pct_neutrales": 56.3,
+      "pct_criticos": 20.7,
+      "n_total": 135,
+      "n_simpatizantes": 31,
+      "n_neutrales": 76,
+      "n_criticos": 28,
+      "total_posts_analizados": 19,
+      "narrativa": "De 135 comentarios (base de 19 publicaciones analizadas), 31 son de simpatizantes (23.0%), 76 son neutrales (56.3%) y 28 son criticos (20.7%). Los neutrales son mayoria y superan a los simpatizantes por 33.3 puntos. Esto se explica porque la publicacion que mas comentarios genero en el periodo fue una alerta de seguridad sobre una gorra robada (https://www.facebook.com/share/v/1M59qkyvo4/), un tema que atrae mas preguntas y comentarios informativos que apoyo o critica directa. Conclusion: la conversacion del periodo es mayoritariamente informativa, no de respaldo activo ni de rechazo organizado a la gestion.\n= CONVERSACION INFORMATIVA, NO DE BANDOS",
+      "explicacion_simple": "Clasificacion de cada comentario segun su postura hacia la gestion municipal: a favor, neutral o en contra.",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/"
+      ],
+      "formula_usada": "Segmentación por postura en comentarios aprobados"
+    },
+    "polarizacion": {
+      "indice": 0.023,
+      "nivel": "confrontación",
+      "narrativa": "El indice de polarizacion del periodo es de 0.023 (sobre 1), en nivel de confrontación, calculado sobre 23.0% de comentarios simpatizantes y 20.7% de comentarios criticos. La diferencia entre ambos grupos es de solo 2.3 puntos, muy por debajo del umbral que definiria consenso o division real. El tema que mas concentra esta division marginal es seguridad, por el caso de la gorra robada (https://www.facebook.com/share/v/1M59qkyvo4/), donde conviven tanto apoyo a la accion municipal como criticas de fondo sobre inseguridad. El texto publico registrado no muestra un rechazo masivo, pero esto es una limitacion metodologica de medir solo la conversacion publica en paginas oficiales, no un reflejo necesariamente completo de la opinion real. Conclusion: no hay evidencia de polarizacion real en el periodo, la conversacion esta mas cerca de la indiferencia que del conflicto.\n= SIN POLARIZACION REAL, PREDOMINA LA INDIFERENCIA",
+      "explicacion_simple": "Mide que tan divididos estan los comentarios entre quienes apoyan y quienes critican.",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/"
+      ],
+      "nota_metodologica": "Limitación: solo mide conversación pública en páginas oficiales. No captura conversación privada ni otras redes.",
+      "formula_usada": "PI = |pct_simpatizantes - pct_criticos| / 100; nivel: consenso>0.6, dividida 0.3-0.6, confrontación<0.3"
+    },
+    "voces_influencia": [
+      {
+        "pagina": "Alcaldia de Santa Ana",
+        "engagement": 264,
+        "publicaciones": 8,
+        "alcance_estimado": 0,
+        "reacciones_totales": 229,
+        "comentarios_totales": 21,
+        "compartidos_totales": 14,
+        "tono_predominante": "neutral",
+        "tema_predominante": "obras_servicios",
+        "cita_destacada": "Respondiendo a una solicitud ciudadana, hemos iniciado con la reparacion del baden ubicado en la 67 Calle Poniente, para mejorar la seguridad vial y el flujo vehicular por la zona.",
+        "postura": "neutral",
+        "n_enlaces": 8,
+        "narrativa": "La pagina oficial Alcaldia de Santa Ana publico 8 veces en el periodo, con un engagement total de 264 y sin datos de alcance/vistas reales disponibles para esta pagina. De ese engagement, 229 de 264 son reacciones (86.7%), la submetrica dominante, por encima de comentarios (21) y compartidos (14). El tono es predominantemente neutral porque la mayoria de sus publicaciones son avisos de servicio (\"Respondiendo a una solicitud ciudadana, hemos iniciado con la reparacion del baden ubicado en la 67 Calle Poniente, para mejorar la seguridad vial y el flujo vehicular por la zona.\"), no mensajes de campana ni respuestas a criticas. Conclusion: esta es la voz institucional de tramite del municipio, relevante por su rol oficial pero sin ser la que mas conversacion genera.\n= VOZ INSTITUCIONAL DE TRAMITE, NO DE CAMPANA",
+        "enlaces_referencia": [
+          "https://www.facebook.com/share/p/18qixAEpZu/"
+        ]
+      },
+      {
+        "pagina": "Gustavo Acevedo",
+        "engagement": 2295,
+        "publicaciones": 11,
+        "alcance_estimado": 152000,
+        "reacciones_totales": 2070,
+        "comentarios_totales": 122,
+        "compartidos_totales": 103,
+        "tono_predominante": "neutral",
+        "tema_predominante": "cultura_deportes",
+        "cita_destacada": "Nos metieron Gol! No encontramos a este senor, ya lo andamos buscando en las camaras de la ciudad.",
+        "postura": "apoyo",
+        "n_enlaces": 11,
+        "narrativa": "La pagina personal del alcalde Gustavo Acevedo publico 11 veces en el periodo, con un engagement total de 2295 y un alcance estimado de 152000 vistas (proveniente de un solo video viral). De ese engagement, 2070 de 2295 son reacciones (90.2%), la submetrica dominante muy por encima de comentarios (122) y compartidos (103). El tema que mas publico fue cultura_deportes (4 de 11 publicaciones), pero la publicacion de mayor impacto real fue la alerta de seguridad sobre la gorra robada: \"Nos metieron Gol! No encontramos a este senor, ya lo andamos buscando en las camaras de la ciudad.\" (https://www.facebook.com/share/v/1M59qkyvo4/). Conclusion: esta es la voz que domina la conversacion digital municipal por volumen de reacciones, funcionando como aliado central de la narrativa de gestion.\n= VOZ CENTRAL DE LA GESTION",
+        "enlaces_referencia": [
+          "https://www.facebook.com/share/v/1M59qkyvo4/",
+          "https://www.facebook.com/share/p/14izQavLxgx/"
+        ]
+      },
+      {
+        "pagina": "Juan Carlos Mendoza sv",
+        "engagement": 36,
+        "publicaciones": 1,
+        "alcance_estimado": 0,
+        "reacciones_totales": 0,
+        "comentarios_totales": 36,
+        "compartidos_totales": 0,
+        "tono_predominante": "muy_positivo",
+        "tema_predominante": "gobernanza",
+        "cita_destacada": "Buenas noches futuro alcalde de Santa Ana Centro. Yo soy Mercadologo y ya es tiempo de comenzar la propaganda politica asi como aquellos, Saludos.",
+        "postura": "apoyo",
+        "n_enlaces": 1,
+        "narrativa": "Esta cuenta externa (no oficial) publico 1 vez en el periodo y genero 36 comentarios, con 0 reacciones y 0 compartidos reales (dato real, no un error de calculo: la publicacion original solo muestra el saludo \"Buenas noches, Dios les bendiga siempre\" y toda la conversacion ocurre en los comentarios). De esos 36 comentarios, 19 son de apoyo (52.8%), la submetrica dominante, por encima de neutrales (14) y criticos (3). El tema predominante es gobernanza porque varios comentarios instan a esta persona a postularse a la alcaldia: \"Buenas noches futuro alcalde de Santa Ana Centro. Yo soy Mercadologo y ya es tiempo de comenzar la propaganda politica asi como aquellos, Saludos.\". Conclusion: esta cuenta funciona como un foco de especulacion politica sobre una posible candidatura futura, ajeno a las paginas oficiales del municipio.\n= FOCO EXTERNO DE ESPECULACION POLITICA",
+        "enlaces_referencia": [
+          "https://www.facebook.com/share/p/1DwubcmtAN/"
+        ]
+      }
+    ],
     "temas_emergentes_lda": [
       {
-        "tema": "sigue igual",
-        "n_comentarios": 4,
-        "tendencia": "nuevo",
+        "tema": "maltrato animal en el Desfile Hipico",
+        "peso": 6,
+        "n_comentarios": 6,
+        "pct_del_total": 4.4,
+        "palabras_clave": [
+          "maltrato animal",
+          "pobres animales",
+          "bolos encima",
+          "caballos"
+        ],
+        "comentarios_ejemplo": [
+          "No estoy de acuerdo con ese tipo de festividad Gustavo Acevedo, eso es maltrato animal!",
+          "Pobres animales, ojala algun dia prohiban eso."
+        ],
+        "tendencia": "sin_historico",
         "acelerando": false,
-        "pct_cambio_semana": 4.0,
-        "narrativa": "Los bigramas y trigramas más frecuentes del período dibujan un patrón narrativo claro y consistente: 'sigue igual' (4 comentarios), 'llevo reportando', 'reportando bache', 'bache enero', 'enero siguen' (3 cada uno) señalan una queja crónica — baches reportados desde enero que no han sido atendidos. El segundo clúster — 'cuanto costo', 'costo gasto', 'gasto nadie', 'nadie rinde', 'rinde cuentas' (3 cada uno) — articula una demanda de transparencia sobre el gasto en obras. Todos los temas emergen por primera vez en el registro (tendencia 'nuevo'), lo que indica que el sistema no tiene historial previo con qué comparar, pero la cadena narrativa es coherente y no aislada. Conclusión: los ciudadanos conectan dos agravios en un solo relato — 'reporté el bache desde enero y sigue ahí, ¿en qué gastaron el presupuesto?'\n= BACHE VIEJO, CUENTA NUEVA"
+        "pct_cambio_semana": 0,
+        "indice_emociones": {
+          "_doc": "Catálogo abierto: las claves emocionales son strings libres con familia fija (ver tema_taxonomia.py).",
+          "reclamo": 0,
+          "objecion": 1,
+          "satisfaccion": 0,
+          "calma": 2,
+          "enojo": 0,
+          "tristeza": 0,
+          "alegria": 0,
+          "reconocimiento": 0,
+          "ironia": 0,
+          "preocupacion": 0,
+          "pct_reclamo": 0.0,
+          "pct_objecion": 16.7,
+          "pct_satisfaccion": 0.0,
+          "pct_calma": 33.3,
+          "pct_enojo": 0.0,
+          "pct_tristeza": 0.0,
+          "pct_alegria": 0.0,
+          "pct_reconocimiento": 0.0,
+          "pct_ironia": 0.0,
+          "pct_preocupacion": 0.0,
+          "emocion_dominante": "expectativa"
+        },
+        "pct_apoyo": 0.0,
+        "pct_critica": 66.7,
+        "pct_neutral": 33.3,
+        "narrativa": "El subtema \"maltrato animal en el Desfile Hipico\" aparece en 6 comentarios del periodo (4.4% del total de 135). No hay periodo anterior con el que comparar su frecuencia, por lo que no se puede calcular todavia si esta acelerando o desacelerando. Ejemplo real: \"No estoy de acuerdo con ese tipo de festividad Gustavo Acevedo, eso es maltrato animal!\" -- las palabras clave que lo definen son maltrato animal, pobres animales, bolos encima, caballos. Conclusion: este subtema no calzo en ninguna de las 10 categorias fijas y merece seguimiento propio en el siguiente periodo.\n= CRITICA CIUDADANA AL DESFILE HIPICO"
       },
       {
-        "tema": "llevo reportando",
+        "tema": "sarcasmo sobre el alcalde \"colgandose\" logros",
+        "peso": 3,
         "n_comentarios": 3,
-        "tendencia": "nuevo",
+        "pct_del_total": 2.2,
+        "palabras_clave": [
+          "se quiere colgar",
+          "colgarte de todo",
+          "mono"
+        ],
+        "comentarios_ejemplo": [
+          "Ya que te gusta colgarte de todo Gustavo Acevedo por que no se cuelga de la que me cuelda",
+          "Este parece mono que de todo se quiere colgar"
+        ],
+        "tendencia": "sin_historico",
         "acelerando": false,
-        "pct_cambio_semana": 3.0,
-        "narrativa": "Tres comentarios contienen 'llevo reportando', que conecta la frustración con un reporte previo no atendido. El ciudadano no solo señala el problema — indica que ya lo señaló antes. Conclusión: hay deuda de atención pendiente con al menos 3 usuarios activos.\n= REPORTE IGNORADO"
-      },
-      {
-        "tema": "reportando bache",
-        "n_comentarios": 3,
-        "tendencia": "nuevo",
-        "acelerando": false,
-        "pct_cambio_semana": 3.0,
-        "narrativa": "Tres comentarios vinculan el acto de reportar con el objeto del reclamo (bache). El bigrama confirma que el canal de reportes existe en la percepción ciudadana pero no cierra el ciclo. Conclusión: la audiencia usa el canal de reporte — el problema es la respuesta.\n= CANAL USADO, CICLO ABIERTO"
-      },
-      {
-        "tema": "bache enero",
-        "n_comentarios": 3,
-        "tendencia": "nuevo",
-        "acelerando": false,
-        "pct_cambio_semana": 3.0,
-        "narrativa": "Tres comentarios anclan el daño vial a enero como fecha de origen. En julio, el reclamo lleva al menos 6 meses activo sin resolución visible. Conclusión: el bache de enero es el símbolo concreto del incumplimiento del período.\n= SEIS MESES SIN PARCHAR"
-      },
-      {
-        "tema": "enero siguen",
-        "n_comentarios": 3,
-        "tendencia": "nuevo",
-        "acelerando": false,
-        "pct_cambio_semana": 3.0,
-        "narrativa": "Tres comentarios articulan la continuidad del problema desde enero hasta la fecha del análisis (julio). El bigrama es la confirmación temporal más directa del rezago en atención. Conclusión: el 'siguen' en julio apunta directamente al 'enero' — el rezago es datable.\n= REZAGO DATABLE"
-      },
-      {
-        "tema": "cuanto costo",
-        "n_comentarios": 3,
-        "tendencia": "nuevo",
-        "acelerando": false,
-        "pct_cambio_semana": 3.0,
-        "narrativa": "Tres comentarios preguntan por el costo de las obras, abriendo el segundo eje narrativo del período: la fiscalización del gasto. Conclusión: la ciudadanía conecta la inversión anunciada con los resultados no visibles.\n= GASTO SIN EVIDENCIA"
-      },
-      {
-        "tema": "costo gasto",
-        "n_comentarios": 3,
-        "tendencia": "nuevo",
-        "acelerando": false,
-        "pct_cambio_semana": 3.0,
-        "narrativa": "Tres comentarios articulan 'costo' y 'gasto' en continuidad, reforzando la demanda de transparencia financiera sobre las obras. Conclusión: la pregunta no es solo '¿cuánto costó?' sino '¿en qué se gastó lo que costó?'\n= TRANSPARENCIA EXIGIDA"
-      },
-      {
-        "tema": "gasto nadie",
-        "n_comentarios": 3,
-        "tendencia": "nuevo",
-        "acelerando": false,
-        "pct_cambio_semana": 3.0,
-        "narrativa": "Tres comentarios vinculan el gasto con la ausencia de responsabilidad — 'nadie' es el sujeto implícito que debería rendir cuentas. Conclusión: la percepción de impunidad en el gasto es tan fuerte como la queja sobre el bache mismo.\n= NADIE RESPONDE"
-      },
-      {
-        "tema": "nadie rinde",
-        "n_comentarios": 3,
-        "tendencia": "nuevo",
-        "acelerando": false,
-        "pct_cambio_semana": 3.0,
-        "narrativa": "Tres comentarios forman parte de la cadena narrativa que culmina en 'rinde cuentas'. El bigrama 'nadie rinde' es el penúltimo eslabón de un relato articulado de fiscalización ciudadana. Conclusión: la demanda de rendición de cuentas está estructurada, no es un comentario aislado.\n= ESTRUCTURA DE RECLAMO"
-      },
-      {
-        "tema": "rinde cuentas",
-        "n_comentarios": 3,
-        "tendencia": "nuevo",
-        "acelerando": false,
-        "pct_cambio_semana": 3.0,
-        "narrativa": "Tres comentarios culminan la cadena narrativa del período con la frase más explícita de exigencia institucional. 'Rinde cuentas' es la demanda articulada que resume el estado emocional del período. Conclusión: el reclamo de rendición de cuentas es el mensaje más organizado que la audiencia envía en este ciclo.\n= RENDICIÓN DE CUENTAS EXIGIDA"
+        "pct_cambio_semana": 0,
+        "indice_emociones": {
+          "_doc": "Catálogo abierto: las claves emocionales son strings libres con familia fija (ver tema_taxonomia.py).",
+          "reclamo": 1,
+          "objecion": 0,
+          "satisfaccion": 0,
+          "calma": 1,
+          "enojo": 0,
+          "tristeza": 0,
+          "alegria": 0,
+          "reconocimiento": 0,
+          "ironia": 1,
+          "preocupacion": 0,
+          "pct_reclamo": 33.3,
+          "pct_objecion": 0.0,
+          "pct_satisfaccion": 0.0,
+          "pct_calma": 33.3,
+          "pct_enojo": 0.0,
+          "pct_tristeza": 0.0,
+          "pct_alegria": 0.0,
+          "pct_reconocimiento": 0.0,
+          "pct_ironia": 33.3,
+          "pct_preocupacion": 0.0,
+          "emocion_dominante": "calma"
+        },
+        "pct_apoyo": 0.0,
+        "pct_critica": 33.3,
+        "pct_neutral": 66.7,
+        "narrativa": "El subtema \"sarcasmo sobre el alcalde \"colgandose\" logros\" aparece en 3 comentarios del periodo (2.2% del total de 135). No hay periodo anterior con el que comparar su frecuencia, por lo que no se puede calcular todavia si esta acelerando o desacelerando. Ejemplo real: \"Ya que te gusta colgarte de todo Gustavo Acevedo por que no se cuelga de la que me cuelda\" -- las palabras clave que lo definen son se quiere colgar, colgarte de todo, mono. Conclusion: este subtema no calzo en ninguna de las 10 categorias fijas y merece seguimiento propio en el siguiente periodo.\n= SARCASMO SOBRE ATRIBUCION DE LOGROS"
       }
     ]
   },
   "bloque3": {
-    "puntos_friccion": [
-      {
-        "tema": "obras_servicios",
-        "zona": "",
-        "n_negativos": 28,
-        "n_comentarios_total": 69,
-        "pct_del_total": 40.6,
-        "emocion_dominante": "serenidad",
-        "citas_moderadas": [],
-        "narrativa": "El único punto de fricción activo del período es obras y servicios públicos, con 28 comentarios negativos de 69 totales (40.6% del total de la conversación). No se detectó zona geográfica específica en los textos analizados. La emoción dominante registrada por el sistema es serenidad, lo que contrasta con los datos cuantitativos (28 negativos, furia como emoción dominante en el índice emocional global); esta discrepancia sugiere que la clasificación de emoción por punto de fricción puede requerir revisión en el siguiente ciclo. Conclusión: cuatro de cada diez comentarios del período expresan malestar en el único tema activo — la fricción no es marginal sino estructural en este período.\n= FRICCIÓN EN EL NÚCLEO",
-        "enlaces_relacionados": []
-      }
-    ],
     "autenticidad": {
-      "pct_organico": 100.0,
-      "pct_coordinado": 0.0,
-      "n_duplicados": 0,
-      "narrativa": "El 100% de los 69 comentarios analizados son orgánicos — no se detectaron mensajes duplicados ni patrones de coordinación (0 duplicados, 0% coordinado). La conversación crítica sobre baches y rendición de cuentas nace de ciudadanos individuales expresando experiencias propias, no de campaña organizada. Conclusión: la negatividad de este período no es artificial ni amplificada — es demanda ciudadana genuina, lo que le da mayor peso político y mayor persistencia potencial.\n= CRÍTICA ORGÁNICA, PESO REAL",
-      "enlaces_referencia": [],
+      "pct_organico": 98.5,
+      "pct_coordinado": 1.5,
+      "n_duplicados": 2,
+      "narrativa": "98.5% de los 135 comentarios del periodo son organicos y solo un 1.5% muestra similitud alta (potencialmente coordinada), equivalente a 2 mensajes casi identicos. Este porcentaje de coordinacion es demasiado bajo para afectar la fiabilidad de la conversacion medida en este periodo. El ejemplo real detectado es un par de comentarios casi identicos en la publicacion de la gorra robada: \"Yo quiero 2 por favor\" y \"Yo quiero dos por favor\" (https://www.facebook.com/share/v/1M59qkyvo4/). Conclusion: la conversacion del periodo es confiable para tomar decisiones, no esta siendo manipulada por mensajes duplicados coordinados.\n= CONVERSACION ORGANICA Y CONFIABLE",
+      "explicacion_simple": "Mide si los comentarios parecen escritos por personas reales y distintas, o si hay mensajes repetidos sospechosamente parecidos.",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/"
+      ],
       "formula_usada": "% coordinado = n_mensajes_duplicados_o_similares / total_comentarios * 100"
     },
+    "nivel_alerta": {
+      "semaforo": "amarillo",
+      "indice_riesgo": 22.6,
+      "pct_negativos": 20.7,
+      "indice_enojo_reacciones": 25.92,
+      "balance_confrontacion": 2.3,
+      "n_temas_friccion": 4,
+      "tema_principal": "seguridad",
+      "emocion_principal": "reclamo",
+      "explicacion_simple": "Se evaluaron los 5 detectores de alertas del periodo: los detectores de pico de controversia, cambio brusco de sentimiento y caida de engagement no se pudieron calcular porque requieren historial de periodos previos (minimo 4 meses o un periodo anterior real), que todavia no existe. El detector de tema con enojo anormal no se activo porque ningun tema supero el umbral de anomalia (el mas alto fue seguridad con una proporcion de 1.27 veces el enojo general, por debajo del umbral de 2.0). El detector de zona con mas criticas de lo normal si se activo para la zona santa ana centro.",
+      "alertas_cambridge": [
+        {
+          "tipo": "ZDI",
+          "descripcion": "Alerta ZDI (disonancia zonal): la zona santa ana centro registra una tasa de comentarios negativos (criticos) de 10 de 38 comentarios asociados, equivalente a un 26.3%, por encima del umbral de 25% definido para esta alerta, con 3 publicaciones asociadas (el minimo exigido). Esta tasa surge de dividir los comentarios criticos de esa zona entre el total de comentarios de esa zona: 10 de 38 = 26.3%. Los posts que concentran esta alerta son los tres de santa ana centro, sobre la busqueda y captura del sospechoso de la gorra robada. Conclusion: esta zona requiere seguimiento prioritario porque concentra la mayor proporcion de critica territorial del periodo.",
+          "enlaces_referencia": [
+            "https://www.facebook.com/share/p/1DMTcfxMxZ/",
+            "https://www.facebook.com/share/p/1JJWus4iUb/",
+            "https://www.facebook.com/share/v/1M59qkyvo4/"
+          ]
+        }
+      ],
+      "formula_riesgo": "IR = (pct_negativos*0.4 + indice_enojo*0.3 + balance_confrontacion*0.3) * sensibilidad_tema"
+    },
     "velocidad_propagacion": {
-      "proyeccion_24h": "",
+      "proyeccion_24h": "no disponible: no hay historico de periodos anteriores para proyectar",
       "tendencia_dias": [],
-      "narrativa": "No hay datos de tendencia temporal por días en este período (tendencia_dias vacía) y sin período previo no es posible calcular aceleración o desaceleración por tema. El único tema activo es obras y servicios públicos; los bigramas 'sigue igual' y 'llevo reportando' sugieren que esta conversación lleva semanas activa, aunque el sistema solo captura el período actual. Sin proyección de 24 horas calculable desde los datos disponibles, el riesgo de escalada no puede cuantificarse con la información del período. Conclusión: la ausencia de datos históricos limita el pronóstico, pero el patrón de queja crónica ('desde enero') indica que el tema tiene permanencia, no es un pico puntual.\n= QUEJA CRÓNICA SIN HISTORIAL",
-      "enlaces_referencia": [],
+      "narrativa": "No se puede calcular una proyeccion a 24 horas ni una tendencia de dias porque solo existe un dia de datos crudos disponibles (14-15 de julio de 2026); la formula de velocidad requiere comparar contra periodos anteriores de las ultimas 72 horas, que todavia no existen en la base de datos. No se identificaron temas acelerando ni desacelerando porque esa comparacion tambien depende de un historico inexistente todavia. El unico dato de volumen disponible es la publicacion sobre la gorra robada (https://www.facebook.com/share/v/1M59qkyvo4/), con 35 comentarios en un solo dia. Conclusion: la velocidad de propagacion real solo podra medirse a partir de la proxima corrida, cuando exista un periodo anterior con el que comparar.\n= SIN HISTORIAL SUFICIENTE PARA MEDIR VELOCIDAD",
+      "explicacion_simple": "Se necesitan al menos dos periodos de datos reales para calcular una velocidad de propagacion.",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/"
+      ],
       "temas_acelerando": [],
       "temas_desacelerando": [],
       "formula_usada": "Velocidad = Δcomentarios / Δtiempo; proyección = tendencia_lineal últimas 72h"
     },
-    "nivel_alerta": {
-      "semaforo": "rojo",
-      "indice_riesgo": 100,
-      "pct_negativos": 18.8,
-      "indice_enojo_reacciones": 28.3,
-      "balance_confrontacion": 0.4448,
-      "n_temas_friccion": 1,
-      "tema_principal": "obras_servicios",
-      "emocion_principal": "serenidad",
-      "alertas_cambridge": [
-        {
-          "tipo": "ZDI",
-          "descripcion": "Zona con alta negatividad: 4700.0% negativos (umbral: 25%, posts zona: 6)",
-          "enlaces_referencia": []
+    "puntos_friccion": [
+      {
+        "tema": "seguridad",
+        "zona": "santa ana centro",
+        "n_negativos": 9,
+        "pct_del_total": 50.0,
+        "cita": "Si lo estaban viendo por las camaras por que no fueron a quitarle la cachucha",
+        "emocion_dominante": "calma",
+        "acelerando": false,
+        "reacciones_enojo": 10,
+        "n_comentarios_total": 18,
+        "enlaces_relacionados": [
+          "https://www.facebook.com/share/v/1M59qkyvo4/",
+          "https://www.facebook.com/share/p/14izQavLxgx/"
+        ],
+        "narrativa": "De 18 comentarios sobre seguridad, 9 son criticos = 50.0%. La emocion dominante en esos comentarios criticos es calma y las reacciones de enojo asociadas a las publicaciones de este tema suman 10; no se puede evaluar aceleracion porque no hay periodo anterior con el que comparar. La cita que ancla este punto es: \"Si lo estaban viendo por las camaras por que no fueron a quitarle la cachucha\", en la zona santa ana centro. Conclusion: este es un punto de friccion real que requiere respuesta especifica, no una generalidad de comunicacion.\n= SANTA ANA CENTRO EN VILO POR SEGURIDAD",
+        "explicacion_simple": "Comentarios criticos sobre seguridad y que tan fuerte es el enojo asociado.",
+        "recomendacion_accion": {
+          "accion": "Publicar un comunicado oficial con el estado del caso de la gorra robada en Santa Ana Centro (si hubo captura o no) dentro de la Alcaldia de Santa Ana",
+          "plazo": "48 horas",
+          "responsable": "Comunicacion Municipal y Policia Municipal",
+          "metrica_exito": "Reducir el pct_del_total de comentarios criticos de este punto de friccion por debajo de 25% en el proximo periodo"
         }
-      ],
-      "narrativa": "El semáforo del período es rojo con índice de riesgo en su valor máximo (100). Los tres factores que lo determinan son: 18.8% de comentarios críticos (sobre umbral de 25% en la alerta ZDI detectada en zona con 6 posts), 28.3% de índice de enojo en reacciones y un balance de controversia de 0.4448 — casi la mitad del total de reacciones expresando rechazo. La alerta ZDI señala concentración de negatividad extrema (4,700% sobre umbral base) en un subconjunto de 6 publicaciones del tema obras. Conclusión: el máximo riesgo no viene de un incidente aislado sino de la acumulación de negatividad en el único tema activo — sin dispersión temática, la contención es imposible sin acción directa sobre obras.\n= RIESGO MÁXIMO EN OBRAS",
-      "enlaces_referencia": [],
-      "formula_riesgo": "RR = clamp((max_topic_controversy * 10 * 0.50 + nsi_deviation * 0.50) * vol_factor, 0, 1)"
-    }
+      },
+      {
+        "tema": "obras_servicios",
+        "zona": "67 calle poniente",
+        "n_negativos": 6,
+        "pct_del_total": 42.9,
+        "cita": "Que bueno y para cuando el callejon que da a la escuela Guatemala final de la 39 calle poniente arriba del carpinelo???????",
+        "emocion_dominante": "reclamo",
+        "acelerando": false,
+        "reacciones_enojo": 0,
+        "n_comentarios_total": 14,
+        "enlaces_relacionados": [
+          "https://www.facebook.com/share/p/18qixAEpZu/",
+          "https://www.facebook.com/share/p/1ERoeZsJGR/",
+          "https://www.facebook.com/share/r/1HbjpJrLRD/",
+          "https://www.facebook.com/share/p/14izQavLxgx/"
+        ],
+        "narrativa": "De 14 comentarios sobre obras_servicios, 6 son criticos = 42.9%. La emocion dominante en esos comentarios criticos es reclamo y las reacciones de enojo asociadas a las publicaciones de este tema suman 0 (dato real: ninguna de las publicaciones de este tema recibio reacciones de enojo, la critica esta solo en el texto de los comentarios); no se puede evaluar aceleracion porque no hay periodo anterior con el que comparar. La cita que ancla este punto es: \"Que bueno y para cuando el callejon que da a la escuela Guatemala final de la 39 calle poniente arriba del carpinelo???????\", en la zona 67 calle poniente. Conclusion: este es un punto de friccion real que requiere respuesta especifica, no una generalidad de comunicacion.\n= DEUDA PENDIENTE EN 67 CALLE PONIENTE",
+        "explicacion_simple": "Comentarios criticos sobre obras_servicios y que tan fuerte es el enojo asociado.",
+        "recomendacion_accion": {
+          "accion": "Responder directamente en los comentarios de la publicacion del baden de la 67 Calle Poniente con fecha estimada de la reparacion del callejon de la escuela Guatemala mencionado por vecinos",
+          "plazo": "5 dias habiles",
+          "responsable": "Direccion de Obras Municipales",
+          "metrica_exito": "Que la proxima mencion de ese callejon en comentarios sea de seguimiento a una respuesta oficial, no una queja nueva"
+        }
+      },
+      {
+        "tema": "gobernanza",
+        "zona": null,
+        "n_negativos": 2,
+        "pct_del_total": 14.3,
+        "cita": "Como se cuelgan de la fama ajena los politicos payasos",
+        "emocion_dominante": "calma",
+        "acelerando": false,
+        "reacciones_enojo": 0,
+        "n_comentarios_total": 14,
+        "enlaces_relacionados": [
+          "https://www.facebook.com/share/p/14izQavLxgx/"
+        ],
+        "narrativa": "De 14 comentarios sobre gobernanza, 2 son criticos = 14.3%. La emocion dominante en esos comentarios criticos es calma y las reacciones de enojo asociadas a las publicaciones de este tema suman 0 (dato real: la publicacion asociada no recibio reacciones de enojo, la critica esta solo en el texto del comentario); no se puede evaluar aceleracion porque no hay periodo anterior con el que comparar. La cita que ancla este punto es: \"Como se cuelgan de la fama ajena los politicos payasos\", en la zona sin zona detectada. Conclusion: este es un punto de friccion real que requiere respuesta especifica, no una generalidad de comunicacion.\n= RIESGO DE APROPIACION DE LOGROS AJENOS",
+        "explicacion_simple": "Comentarios criticos sobre gobernanza y que tan fuerte es el enojo asociado.",
+        "recomendacion_accion": {
+          "accion": "Evitar que publicaciones de reconocimiento (como el caso Ivan Barton) se redacten en primera persona del alcalde para no dar pie a la percepcion de apropiarse de logros ajenos",
+          "plazo": "3 dias habiles (para la siguiente publicacion de este tipo)",
+          "responsable": "Comunicacion Municipal",
+          "metrica_exito": "Que la proxima publicacion de reconocimiento no genere comentarios de este tipo de critica"
+        }
+      },
+      {
+        "tema": "cultura_deportes",
+        "zona": null,
+        "n_negativos": 2,
+        "pct_del_total": 40.0,
+        "cita": "Ojala sea un desfile ordenado, siempre es tan mal organizado, grandes espacios, ebrios dando mal ejemplo por toda la ciudad en vez de promover al ganadero como el trabajador que es y sin maltrato a los caballos.",
+        "emocion_dominante": "expectativa",
+        "acelerando": false,
+        "reacciones_enojo": 7,
+        "n_comentarios_total": 5,
+        "enlaces_relacionados": [
+          "https://www.facebook.com/share/p/18rhFRgQJ2/",
+          "https://www.facebook.com/share/p/14izQavLxgx/"
+        ],
+        "narrativa": "De 5 comentarios sobre cultura_deportes, 2 son criticos = 40.0%. La emocion dominante en esos comentarios criticos es expectativa y las reacciones de enojo asociadas a las publicaciones de este tema suman 7; no se puede evaluar aceleracion porque no hay periodo anterior con el que comparar. La cita que ancla este punto es: \"Ojala sea un desfile ordenado, siempre es tan mal organizado, grandes espacios, ebrios dando mal ejemplo por toda la ciudad en vez de promover al ganadero como el trabajador que es y sin maltrato a los caballos.\", en la zona sin zona detectada. Conclusion: este es un punto de friccion real que requiere respuesta especifica, no una generalidad de comunicacion.\n= DESFILE HIPICO BAJO LA LUPA CIUDADANA",
+        "explicacion_simple": "Comentarios criticos sobre cultura_deportes y que tan fuerte es el enojo asociado.",
+        "recomendacion_accion": {
+          "accion": "Publicar el protocolo de bienestar animal y control de alcohol para el Desfile Hipico antes del evento, respondiendo directamente a las quejas de maltrato animal en los comentarios",
+          "plazo": "7 dias habiles (antes del proximo desfile)",
+          "responsable": "Direccion de Cultura y Deportes",
+          "metrica_exito": "Reducir a 0 las menciones de maltrato animal en los comentarios del siguiente Desfile Hipico"
+        }
+      }
+    ]
   },
   "bloque4": {
     "eco_historico": {
-      "narrativa": "No existe registro histórico previo en el sistema con el cual comparar el período 2026-07 (datos hasta 2026-07-14). Es el primer período ingresado en el ciclo de análisis. Lo que sí puede extraerse del período actual como antecedente es la mención explícita de 'bache enero' y 'enero siguen' en los bigramas emergentes — los ciudadanos referencian un problema que, según sus propias palabras, lleva al menos seis meses sin resolverse. Ese eco interno al período es el único historial disponible. Conclusión: el período inaugura el registro del sistema en un estado de déficit acumulado, no en una crisis nueva.\n= HERENCIA DE SEIS MESES",
-      "enlaces_referencia": []
+      "narrativa": "En este periodo, 56.3% de los comentarios son neutrales y el tema dominante es seguridad, por la publicacion de la gorra robada (https://www.facebook.com/share/v/1M59qkyvo4/). No existen datos de periodos anteriores reales en esta base de datos para comparar ese patron -- esta es la primera corrida del pipeline con datos crudos, por lo que no se puede afirmar continuidad ni ruptura de un patron historico. Conclusion: a partir de esta corrida queda establecida la linea base contra la que se compararan los proximos periodos.\n= PRIMERA LINEA BASE DEL PANEL, SIN HISTORICO PREVIO",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/"
+      ]
     },
     "leccion_aprendida": {
-      "narrativa": "El patrón del período enseña que publicar sobre obras sin cerrar el ciclo de atención a reportes previos activa un doble reproche: el ciudadano ve la publicación de nueva obra mientras recuerda la solicitud que lleva meses sin respuesta. Los bigramas 'llevo reportando' → 'reportando bache' → 'bache enero' → 'enero siguen' → 'sigue igual' forman una cadena causal que el algoritmo detectó en 3–4 comentarios independientes. La lección operativa es que la comunicación de avances en obras requiere ser emparejada con evidencia de cierre de tickets previos — de lo contrario, cada nueva publicación reaviva la queja acumulada. Conclusión: comunicar sin rendir cuentas de lo pendiente multiplica la fricción en lugar de reducirla.\n= PUBLICAR SIN CERRAR REACTIVA LA QUEJA",
-      "enlaces_referencia": []
+      "narrativa": "La pagina personal del alcalde Gustavo Acevedo promedia 11.09 comentarios por publicacion (11 posts), mientras que la pagina institucional Alcaldia de Santa Ana promedia solo 2.63 comentarios por publicacion (8 posts) -- una diferencia de 8.46 comentarios en promedio. El contraste mas claro esta en la publicacion de alerta de seguridad sobre la gorra robada, con 35 comentarios y 947 reacciones (https://www.facebook.com/share/v/1M59qkyvo4/), frente a los avisos de servicio de la pagina institucional que no superan los 5 comentarios (ej. https://www.facebook.com/share/p/18qixAEpZu/). Conclusion: el contenido reactivo y cercano (alertas de seguridad, casos puntuales) genera mucho mas conversacion que los avisos institucionales formales; la gestion deberia replicar ese tono cercano en la cuenta institucional sin perder su caracter oficial.\n= EL TONO CERCANO GANA, EL AVISO FORMAL PIERDE",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/",
+        "https://www.facebook.com/share/p/18qixAEpZu/"
+      ]
     },
     "brecha_percepcion_realidad": {
-      "narrativa": "La brecha del período es entre la postura neutral de la página (clasificada así por el sistema al no detectar sesgo léxico en el texto de las publicaciones) y la recepción crítica de la audiencia (18.8% de comentarios negativos, 44.5% de reacciones negativas, furia como emoción dominante). La institución publica información de obras en tono neutral-informativo; la audiencia responde con reclamos de rendición de cuentas y evidencias de fallas no atendidas. La brecha no es de percepción sino de experiencia: 55.5% de reacciones positivas versus 79.7% de comentarios neutros sugiere que los likes reflejan exposición al contenido, no aprobación de la gestión. Conclusión: el 55.5% de reacciones positivas no representa aprobación — representa que el contenido fue visto, no que fue creído.\n= LIKES NO SON VOTOS DE CONFIANZA",
-      "enlaces_referencia": []
-    },
-    "contexto_no_visible": {
-      "narrativa": "Los datos del período no incluyen contexto externo verificable (sin enlaces analizados, sin menciones a eventos externos en los comentarios capturados). Sin embargo, la referencia interna a 'enero' sugiere que el período lluvioso de inicio de año generó daño vial no reparado que sigue siendo visible en julio. El clúster 'inseguridad' y 'robaron' aparece en los tokens cívicos emergentes (1.4% y 2.9% respectivamente), lo que indica que hay comentarios que mezclan queja de obras con percepción de inseguridad, aunque el sistema los clasifica todos bajo obras_servicios por peso léxico. Sin fuentes externas vinculadas, estas inferencias deben tratarse como hipótesis para validar en el próximo período. Conclusión: el contexto no visible más probable es daño vial acumulado desde temporada lluviosa anterior — hipótesis que los propios comentarios sugieren pero que requiere enlace externo para confirmar.\n= HIPÓTESIS DE ENERO SIN CONFIRMAR",
-      "enlaces_referencia": []
-    },
-    "correlacion_contenido_reaccion": {
-      "narrativa": "Con 11 publicaciones analizadas de una sola página (Obras y servicios públicos) y 69 comentarios totales, el promedio es 6.3 comentarios por publicación. Sin desglose por publicación individual en los datos disponibles, no es posible identificar qué publicaciones específicas concentran más comentarios negativos versus positivos. Lo que sí puede inferirse es que las 6 publicaciones señaladas en la alerta ZDI son las que concentran la negatividad extrema — representando el 54.5% de las publicaciones del período con la mayor densidad de crítica. Conclusión: más de la mitad de las publicaciones del período están en zona de alta negatividad — el problema no está en una publicación atípica sino en el patrón general del contenido publicado.\n= MAYORÍA DE POSTS EN ZONA ROJA",
-      "enlaces_referencia": []
-    },
-    "comparativa_sectorial": {
-      "narrativa": "No hay datos de períodos anteriores ni de otras cuentas o municipios con los cuales comparar en el sistema actual. La única referencia sectorial disponible es la estructura del índice de pulso (50.83/100 en cuadrante Liderazgo), que coloca al municipio en la mitad superior del rango posible — lo que sugiere que el desempeño comunicacional no es catastrófico en términos de alcance y atención, pero el contenido de esa atención (furia, reclamos de cuentas, baches) la convierte en pasivo político. Conclusión: sin benchmark externo, el único referente es el propio período — y ese referente arranca en rojo.\n= SIN BENCHMARK, BASELINE EN ROJO",
-      "enlaces_referencia": []
-    },
-    "proyeccion_escenario": {
-      "narrativa": "Con tendencia empeorando (−17.4 puntos respecto a período anterior), semáforo rojo, índice de riesgo máximo y 100% de conversación concentrada en obras y servicios, el escenario más probable a 30 días sin intervención es la profundización de la queja crónica: más comentarios del tipo 'sigue igual', mayor presión en rendición de cuentas y posible escalada en la cadena 'cuanto costo' → 'nadie rinde cuentas'. El escenario alternativo positivo requiere dos condiciones simultáneas: cierre documentado de reportes pendientes (especialmente los de enero) y publicación activa de evidencia de ese cierre. Si solo se comunica sin cerrar reportes, la nueva publicación activa el ciclo de reproche descrito en los bigramas. Conclusión: el período 2026-07 está en trayectoria de deterioro — detenerla requiere acción operativa en obras, no solo comunicacional.\n= DETERIORO EVITABLE CON CIERRE DE REPORTES",
-      "enlaces_referencia": []
-    },
-    "recomendacion_estrategica": {
-      "narrativa": "Primera prioridad: levantar el inventario de reportes de baches recibidos desde enero 2026 y publicar un reporte de avance con cierre documentado de al menos los 5 casos más antiguos. Esto ataca directamente la cadena narrativa 'llevo reportando → bache enero → sigue igual'. Segunda prioridad: vincular cada publicación de obra nueva a un número de reporte atendido — el ciudadano necesita ver que la inversión cierra tickets, no que inaugura obra mientras los suyos permanecen abiertos. Tercera prioridad: diversificar la presencia temática; con concentración temática máxima en obras, cualquier crisis en ese tema no tiene alivio narrativo. Incorporar al menos un tema adicional (movilidad, gobernanza, medio ambiente) en las siguientes 2 semanas reduce la exposición. Cuarta prioridad: activar al menos una voz institucional adicional que module el relato desde otro ángulo, dado que la página de Obras opera sola sin ningún respaldo comunicacional. Conclusión: la recomendación central es operativa antes que comunicacional — cerrar baches reales antes de publicar nuevas obras.\n= CERRAR PRIMERO, PUBLICAR DESPUÉS",
-      "enlaces_referencia": []
+      "narrativa": "En los comentarios (percepcion declarada), solo 20.7% son criticos (https://www.facebook.com/share/v/1M59qkyvo4/ incluida). En las reacciones (comportamiento real medible), el 25.9% de las 2299 reacciones totales del periodo son negativas (angrys+sads+hahas) (https://www.facebook.com/share/v/1M59qkyvo4/). La brecha exacta entre ambas medidas es de 5.2 puntos: las reacciones muestran mas descontento que los comentarios de texto. Esa brecha se observa con mas claridad en la publicacion de la gorra robada, donde las reacciones de tipo haha (287 en temas de seguridad) superan por mucho a los comentarios criticos explicitos (https://www.facebook.com/share/v/1M59qkyvo4/). Conclusion: medir solo comentarios de texto subestima el descontento real; las reacciones tipo haha en publicaciones oficiales son una senal de burla que no debe ignorarse.\n= LAS REACCIONES DICEN MAS QUE LOS COMENTARIOS",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/"
+      ]
     },
     "temas_emergentes_evolucion": [],
-    "temas_extinction": []
+    "temas_extinction": [],
+    "contexto_no_visible": {
+      "narrativa": "El 100% de la conversacion critica de este periodo se explica con los datos internos del panel (temas seguridad, obras_servicios, gobernanza y cultura_deportes ya documentados); no hay datos suficientes para atribuir esto a un factor de contexto externo verificable (por ejemplo clima, sucesos nacionales o electorales) porque ningun comentario ni publicacion del periodo hace referencia explicita y verificable a un evento externo con enlace propio. El unico factor contextual mencionado explicitamente por los propios usuarios es la especulacion sobre una posible candidatura futura en la cuenta externa (https://www.facebook.com/share/p/1DwubcmtAN/). Conclusion: no se identifica un factor externo oculto que explique el comportamiento de la conversacion mas alla de lo ya documentado en este informe.\n= SIN FACTOR EXTERNO OCULTO VERIFICABLE",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/p/1DwubcmtAN/"
+      ]
+    },
+    "correlacion_contenido_reaccion": {
+      "narrativa": "La pagina Gustavo Acevedo promedia 11.09 comentarios por publicacion (11 posts) frente a 2.63 comentarios por publicacion de la pagina Alcaldia de Santa Ana (8 posts) -- una diferencia de 8.46 comentarios, 4.2 veces mas. La variable de contenido que mas explica esa diferencia es el tono: Gustavo Acevedo publica alertas de seguridad y contenido personal/cercano, mientras que la pagina institucional publica avisos formales de servicios. Los posts detras de cada promedio son: Gustavo Acevedo (https://www.facebook.com/share/p/1JJWus4iUb/, https://www.facebook.com/share/p/195XqCjRkF/, https://www.facebook.com/share/p/1AYe4uYcgk/, https://www.facebook.com/share/p/1ECqEf4wYY/, https://www.facebook.com/share/p/1ERoeZsJGR/, https://www.facebook.com/share/p/1BMVnA7CwT/, https://www.facebook.com/share/p/198RFM8Yw8/, https://www.facebook.com/share/r/1HbjpJrLRD/, https://www.facebook.com/share/v/1M59qkyvo4/, https://www.facebook.com/share/p/18rhFRgQJ2/, https://www.facebook.com/share/p/14izQavLxgx/); Alcaldia de Santa Ana (https://www.facebook.com/share/r/19HperNTet/, https://www.facebook.com/share/p/1DMTcfxMxZ/, https://www.facebook.com/share/p/1KYviQyyAv/, https://www.facebook.com/share/p/187CiYMSGQ/, https://www.facebook.com/share/p/1GH4whvNUA/, https://www.facebook.com/share/p/1FFfd8geH9/, https://www.facebook.com/SantaAnaAlcaldia/posts/pfbid02j7JVCjGZKwLVrYxuE8UBVkVdcpDKNxbaJsKQsgyM6pbYRUT7xwy2wcRfkW39SAgJl, https://www.facebook.com/share/p/18qixAEpZu/). Conclusion: el formato cercano y reactivo correlaciona con mayor conversacion, independientemente de si el contenido es positivo o negativo.\n= EL TONO CERCANO CORRELACIONA CON MAS CONVERSACION",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/p/1JJWus4iUb/",
+        "https://www.facebook.com/share/p/195XqCjRkF/",
+        "https://www.facebook.com/share/p/1AYe4uYcgk/",
+        "https://www.facebook.com/share/p/1ECqEf4wYY/",
+        "https://www.facebook.com/share/p/1ERoeZsJGR/",
+        "https://www.facebook.com/share/p/1BMVnA7CwT/",
+        "https://www.facebook.com/share/p/198RFM8Yw8/",
+        "https://www.facebook.com/share/r/1HbjpJrLRD/",
+        "https://www.facebook.com/share/v/1M59qkyvo4/",
+        "https://www.facebook.com/share/p/18rhFRgQJ2/",
+        "https://www.facebook.com/share/p/14izQavLxgx/",
+        "https://www.facebook.com/share/r/19HperNTet/",
+        "https://www.facebook.com/share/p/1DMTcfxMxZ/",
+        "https://www.facebook.com/share/p/1KYviQyyAv/",
+        "https://www.facebook.com/share/p/187CiYMSGQ/",
+        "https://www.facebook.com/share/p/1GH4whvNUA/",
+        "https://www.facebook.com/share/p/1FFfd8geH9/",
+        "https://www.facebook.com/SantaAnaAlcaldia/posts/pfbid02j7JVCjGZKwLVrYxuE8UBVkVdcpDKNxbaJsKQsgyM6pbYRUT7xwy2wcRfkW39SAgJl",
+        "https://www.facebook.com/share/p/18qixAEpZu/"
+      ]
+    },
+    "comparativa_sectorial": {
+      "narrativa": "La metrica propia de este periodo es un engagement rate de 1.68% (2559 interacciones sobre 152000 impresiones reales de un solo post) y un Pulso IQ de 67.11 en cuadrante LIDERAZGO. No hay datos sectoriales comparables disponibles en esta base de datos (no existe un benchmark de otras municipalidades ni un periodo historico propio con el que comparar en este momento). Conclusion: esta cifra debe leerse como linea base propia, no como una posicion relativa frente a otros municipios o gestiones, hasta que existan datos comparables reales.\n= LINEA BASE PROPIA, SIN BENCHMARK SECTORIAL DISPONIBLE",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/"
+      ]
+    },
+    "proyeccion_escenario": {
+      "narrativa": "El bloque de velocidad de propagacion de este mismo informe ya establece que 'proyeccion_24h' no esta disponible porque no hay historico de periodos anteriores (bloque3.velocidad_propagacion); este bloque reutiliza esa misma conclusion sin recalcularla ni contradecirla. Sin una tendencia_dias real, no se puede afirmar un escenario de crecimiento, estabilizacion o caida con una cifra de cambio esperado en por ciento. El tema con mas potencial de impulsar cualquier escenario futuro es seguridad, por el antecedente de la publicacion de la gorra robada (https://www.facebook.com/share/v/1M59qkyvo4/). Conclusion: cualquier escenario proyectado ahora seria una invencion; se recomienda esperar a la siguiente corrida con datos de al menos dos periodos.\n= SIN BASE REAL PARA PROYECTAR ESCENARIO AUN",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/"
+      ]
+    },
+    "recomendacion_estrategica": {
+      "narrativa": "La alerta de zona con mas criticas de lo normal, activa en bloque3.nivel_alerta, muestra que la zona santa ana centro tiene 26.3% de comentarios criticos (10 de 38), por encima del umbral de 25% definido para esta alerta, con un indice de riesgo de 22.6 en semaforo amarillo. Esta es la prioridad frente a otras metricas porque es la unica de los 5 detectores que efectivamente se activo en el periodo (los otros cuatro -- tema con enojo anormal, pico de controversia, cambio brusco de sentimiento y caida de engagement -- no se activaron o no fueron calculables). La accion especifica es publicar, dentro de 48 horas, un comunicado oficial de la Alcaldia de Santa Ana sobre el estado del caso de la gorra robada en Santa Ana Centro (https://www.facebook.com/share/v/1M59qkyvo4/), a cargo de Comunicacion Municipal junto con la Policia Municipal. Conclusion: si no se actua, la zona santa ana centro seguira concentrando la mayor proporcion de critica territorial del panel y la siguiente corrida probablemente mostrara la misma alerta o una peor.\n= SANTA ANA CENTRO, PRIORIDAD DE RESPUESTA INMEDIATA",
+      "enlaces_referencia": [
+        "https://www.facebook.com/share/v/1M59qkyvo4/"
+      ]
+    },
+    "recomendaciones_basadas_en_metricas": [
+      {
+        "numero": 1,
+        "recomendacion": "Publicar comunicado oficial sobre el caso de la gorra robada en Santa Ana Centro dentro de 48 horas.",
+        "metrica_base": "tasa_negativa_zona (ZDI, santa ana centro)",
+        "valor_metrica": 26.3,
+        "umbral_accion": "> 25%",
+        "prioridad": "alta"
+      },
+      {
+        "numero": 2,
+        "recomendacion": "Publicar protocolo de bienestar animal para el Desfile Hipico antes del proximo evento.",
+        "metrica_base": "pct_del_total criticos (punto de friccion cultura_deportes)",
+        "valor_metrica": 40.0,
+        "umbral_accion": "> 30%",
+        "prioridad": "media"
+      },
+      {
+        "numero": 3,
+        "recomendacion": "Responder en comentarios con fecha estimada de reparacion del callejon de la escuela Guatemala (67 Calle Poniente).",
+        "metrica_base": "pct_del_total criticos (punto de friccion obras_servicios)",
+        "valor_metrica": 42.9,
+        "umbral_accion": "> 30%",
+        "prioridad": "media"
+      },
+      {
+        "numero": 4,
+        "recomendacion": "Adoptar un tono mas cercano y reactivo en la cuenta institucional Alcaldia de Santa Ana, replicando el formato que genero mayor conversacion en la cuenta del alcalde.",
+        "metrica_base": "promedio_comentarios_por_post (Alcaldia de Santa Ana vs Gustavo Acevedo)",
+        "valor_metrica": 2.63,
+        "umbral_accion": "< 11.09 (promedio de la cuenta de mayor conversacion)",
+        "prioridad": "baja"
+      }
+    ],
+    "resumen_evidencia": {
+      "total_enlaces_analizados": 20,
+      "total_reacciones_sumadas": 2299,
+      "total_impresiones": 152000,
+      "total_comentarios": 171,
+      "narrativa": "Este informe se basa en 171 comentarios (135 de Facebook oficial + 36 de una cuenta externa), 2299 reacciones sumadas y 152000 impresiones reales (de una sola publicacion con datos de vistas). El 100% de esos 171 comentarios respalda directamente las conclusiones citadas arriba, porque cada narrativa de este informe fue redactada a partir de subconjuntos reales de este mismo corpus, sin datos externos al periodo. La evidencia proviene de 20 publicaciones distintas: 3 fuentes nombradas (Alcaldia de Santa Ana, Gustavo Acevedo, y la cuenta externa Juan Carlos Mendoza sv) mas TikTok, que no aporto datos porque sus tablas crudas estan vacias (0 videos, 0 comentarios) en esta corrida. Conclusion: la base de evidencia es solida para Facebook dentro del periodo cubierto, pero metodologicamente limitada por ser una unica corrida sin historico previo y sin datos de TikTok.\n= BASE SOLIDA EN FACEBOOK, SIN TIKTOK NI HISTORICO AUN",
+      "periodo_cobertura": "14-15 de julio de 2026",
+      "fuentes": [
+        "Facebook: Alcaldia de Santa Ana",
+        "Facebook: Gustavo Acevedo",
+        "Facebook: cuenta externa Juan Carlos Mendoza sv",
+        "TikTok: sin datos (0 videos, 0 comentarios)"
+      ]
+    }
   }
 }

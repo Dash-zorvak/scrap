@@ -243,7 +243,7 @@ def aggregate_zonas(texts: list[str]) -> dict:
         for zona, count in conteo.items()
     }
 
-    dominante = max(conteo, key=lambda k: conteo[k]) if conteo else ""
+    dominante = max(conteo, key=lambda k: (conteo[k], k)) if conteo else ""
 
     return {
         "total": total,

@@ -251,6 +251,39 @@ Esta colección constituye la especificación metodológica base de MIPA.
 
 ---
 
+# Registro de cambios — Auditoría forense de cálculos (v2)
+
+**Fecha:** 2026-07-16
+**Responsable:** opencode (automatizado)
+**Alcance:** analytics/compute.py, analytics/report.py, analytics/sentiment.py, analytics/topic.py, analytics/emotion.py, analytics/schema_validator.py, dashboard/tema_aprobaciones.py, docs/architecture/028_FORMULA_REFERENCE.md
+
+## Cambios realizados
+
+| ID | Hallazgo | Severidad | Cambio |
+|----|----------|-----------|--------|
+| H1 | ER Oficial/Externo separados | CRÍTICO | ER Oficial (FB+TK) ya no incluye vol_ext en denominador. Nuevo campo er_externo independiente. |
+| H2 | Voces fabricadas eliminadas | CRÍTICO | Eliminados multiplicadores doc_count*10, apoyo*5, critica*2. Solo quedan voces con datos reales (Externos). |
+| H3 | Alcance_estimado limpio | ALTO | Eliminada heurística posts*100 para Externos. Solo FB+TK contribuyen a alcance. |
+| H4 | EMOTION_LEXICON deduplicado | ALTO | Palabras duplicadas resueltas a categoría más específica. Tabla de desambiguación documentada en código. |
+| H5 | risk_reputacional corregido | MEDIO | Eliminado factor *10 que saturaba con ~20% controversia. Peso 50/50 controversia+NSI. |
+| H6 | Wows en total_reactions | CRÍTICO | Las 5 funciones §E ahora incluyen wows como reacción neutra. |
+| H7 | V01/V10 unificados | MEDIO | Eliminada regla duplicada V10_ENGAGEMENT_SIN_SUBMETRICAS (V01 bloqueante la cubre). |
+| H8 | Desempate determinista | MEDIO | max() con tie-breaker alfabético en 5 funciones de agregación. |
+| H9 | Negación completa | BAJO | Ventana de negación invierte todas las palabras, no solo la primera. |
+| H10 | REMAP_TOPIC_LEGACY eliminado | BAJO | Código muerto eliminado de analytics/topic.py. |
+
+## Documentos afectados
+
+- 028_FORMULA_REFERENCE.md — Anexo §25 con fórmulas documentadas
+- 024_CHANGELOG.md — Este registro
+
+## Compatibilidad
+
+- **Incompatible** con versiones anteriores: los valores de ER, risk_reputacional, y métricas §E cambiarán.
+- Requiere regeneración de analysis.json con el pipeline actualizado.
+
+---
+
 # Relación con otros documentos
 
 El Historial de Cambios complementa la totalidad de la documentación metodológica del proyecto.

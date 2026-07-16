@@ -285,6 +285,68 @@ Toda modificación requerirá actualización de la versión metodológica.
 
 ---
 
+# 25. Anexo: Fórmulas documentadas (auditoría forense v2)
+
+Las siguientes fórmulas fueron documentadas o modificadas durante la auditoría forense.
+Cada una incluye su decisión de ingeniería correspondiente.
+
+## FORM-D01 — Engagement Rate Oficial (FB+TK)
+
+```
+ER_oficial = (reacciones + comentarios + compartidos) / vistas * 100
+```
+
+- Solo incluye Facebook y TikTok. Externos NO participa (H1).
+- Si ambas plataformas tienen datos: ponderado por volumen de engagement.
+- Basis: "views", "per_post", "engagement_abs", "ponderado_volumen", o "sin_datos".
+
+## FORM-D02 — Engagement Rate Externos
+
+```
+ER_externos = (total_reactions + comments_count) / n_posts
+```
+
+- Calculado exclusivamente con datos de Externos (H1).
+- Sin vistas disponibles en la fuente; usa proxy por post.
+- Independiente de ER Oficial. No se promedian.
+- Basis: "per_post", "engagement_abs", o "sin_datos".
+
+## FORM-E01 — Total Reactions (con wows)
+
+```
+total_reactions = likes + loves + cares + wows + hahas + sads + angrys
+```
+
+- wows se incluyen como reacción neutra (no positiva ni negativa) (H6).
+- Aplica a: net_sentiment_reacciones, controversy_reacciones,
+  effectiveness_reacciones, approval_pct_reacciones, rejection_pct_reacciones.
+
+## FORM-E02 — Risk Reputacional (corregido)
+
+```
+risk = clamp((max_topic_controversy * 0.50 + nsi_deviation * 0.50) * vol_factor, 0, 1)
+```
+
+- Cambio vs. v1: eliminado factor *10 sobre max_topic_controversy (H5).
+- La v1 no estaba documentada en ningún documento metodológico oficial.
+- Peso igualitario (50/50) a controversia y desviación NSI.
+- vol_factor amplifica 1x a 2x según volumen de posts.
+
+## REGLA-D01 — Desempate determinista
+
+Cuando `max()` seleccione entre categorías con conteo igual,
+el desempate es alfabético por clave: `max(items, key=lambda k: (conteo[k], k))`.
+Aplica a: aggregate_topics, aggregate_emotions, aggregate_sentiment,
+aggregate_zonas (H8).
+
+## REGLA-S01 — Ventana de negación
+
+La ventana de negación (NEGATION_WINDOW=3 tokens) invierte TODAS las
+palabras de sentimiento dentro de ella, no solo la primera (H9).
+Se reactiva con cada nueva palabra de negación.
+
+---
+
 # Control del Documento
 
 | Campo | Valor |

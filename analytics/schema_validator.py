@@ -375,8 +375,12 @@ def _validar_placeholders_sin_resolver(data: dict, result: ValidationResult):
 def _validar_coherencia_totales(data: dict, result: ValidationResult):
     """V10: Verifica que los totales en analysis.json sean coherentes.
 
-    Compara el total de voces_influencia con la suma de sus sub-metricas
-    y verifica que no haya valores negativos donde no corresponden.
+    Verifica valores negativos en voces_influencia y shares negativos
+    en concentracion_tematica.
+
+    Nota: la validación de engagement sin submetricas fue eliminada
+    porque V01_ENGAGEMENT_SIN_SUBMETRICAS (bloqueante) ya cubre esa
+    condición. auditoría forense H7.
     """
     voces = _get(data, "bloque2", "voces_influencia", default=[])
     for i, v in enumerate(voces):
@@ -398,16 +402,6 @@ def _validar_coherencia_totales(data: dict, result: ValidationResult):
                     mensaje_tecnico=f"{campo}={val} es negativo",
                     mensaje_humano=f"El campo {campo} tiene un valor negativo inesperado.",
                 ))
-
-        # Si engagement > 0, al menos una submetrica debe ser > 0
-        if eng > 0 and reco == 0 and comp == 0 and compa == 0:
-            result.errores.append(ValidationError(
-                codigo="V10_ENGAGEMENT_SIN_SUBMETRICAS",
-                seccion=f"bloque2.voces_influencia[{i}]",
-                severidad="advertencia",
-                mensaje_tecnico=f"engagement={eng} pero todas las submetricas son 0",
-                mensaje_humano=f"Los datos de engagement en la voz {i} parecen incompletos.",
-            ))
 
     # Verificar shares de concentracion tematica
     ramas = _get(data, "bloque1", "concentracion_tematica", "ramas", default=[])

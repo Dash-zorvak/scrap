@@ -288,6 +288,32 @@ def engagement_rate_tk(views, likes, shares, favorites, comments, n_videos=0):
     return 0.0, "sin_datos"
 
 
+def engagement_rate_externos(total_reactions, comments_count, n_posts=0):
+    """§D — Engagement Rate para fuentes Externas.
+
+    Fórmula (decisión de ingeniería v2 — auditoría forense H1):
+        ER_ext = (total_reactions + comments_count) / n_posts
+
+    Nota: la fuente de datos Externos no provee vistas/impresiones,
+    por lo que se usa un proxy por post. Esta métrica es separada e
+    independiente del ER Oficial (FB+TK). No deben promediarse.
+
+    Si n_posts > 0 → ER = eng / n_posts, basis = "per_post".
+    Si n_posts == 0 y eng > 0 → fallback: eng como valor absoluto,
+        basis = "engagement_abs".
+    Si eng == 0 → 0.0, basis = "sin_datos".
+
+    Retorna (er, basis_label).
+    """
+    eng = n(total_reactions) + n(comments_count)
+    posts = n(n_posts)
+    if posts > 0:
+        return round(eng / posts, 2), "per_post"
+    if eng > 0:
+        return round(eng, 2), "engagement_abs"
+    return 0.0, "sin_datos"
+
+
 def ratio_amor_enojo_fb(likes, loves, cares, hahas, sads, angrys):
     """§D — Ratio amor/enojo Facebook.
 
@@ -324,83 +350,98 @@ def interacciones_fb(likes, loves, cares, hahas, wows, sads, angrys,
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def net_sentiment_reacciones(likes, loves, cares, hahas, sads, angrys):
+def net_sentiment_reacciones(likes, loves, cares, hahas, wows, sads, angrys):
     """§E — Net Sentiment basado en reacciones de Facebook.
 
     Fórmula literal:
         negativas = angrys + sads + hahas
-        total_reactions = likes + loves + cares + hahas + sads + angrys
+        total_reactions = likes + loves + cares + wows + hahas + sads + angrys
         net_sentiment = (likes + loves + cares - negativas) / total_reactions
+
+    Nota: wows se incluyen en el total como reacción neutra (no positiva
+    ni negativa). Decisión de ingeniería v2 — auditoría forense H6.
 
     Rango: -1 a +1. Métrica separada de NSI (que usa posts).
     """
     amor = n(likes) + n(loves) + n(cares)
     negativas = n(angrys) + n(sads) + n(hahas)
-    total_reactions = amor + negativas
+    total_reactions = amor + n(wows) + negativas
     if total_reactions == 0:
         return 0.0
     return round((amor - negativas) / total_reactions, 4)
 
 
-def controversy_reacciones(likes, loves, cares, hahas, sads, angrys):
+def controversy_reacciones(likes, loves, cares, hahas, wows, sads, angrys):
     """§E — Controversy basada en reacciones de Facebook.
 
     Fórmula literal:
         negativas = angrys + sads + hahas
-        total_reactions = likes + loves + cares + hahas + sads + angrys
+        total_reactions = likes + loves + cares + wows + hahas + sads + angrys
         controversy = negativas / total_reactions
+
+    Nota: wows se incluyen en el total como reacción neutra.
+    Decisión de ingeniería v2 — auditoría forense H6.
 
     Rango: 0 a 1.
     """
     negativas = n(angrys) + n(sads) + n(hahas)
     amor = n(likes) + n(loves) + n(cares)
-    total_reactions = amor + negativas
+    total_reactions = amor + n(wows) + negativas
     if total_reactions == 0:
         return 0.0
     return round(negativas / total_reactions, 4)
 
 
-def effectiveness_reacciones(likes, loves, cares, hahas, sads, angrys):
+def effectiveness_reacciones(likes, loves, cares, hahas, wows, sads, angrys):
     """§E — Effectiveness basada en reacciones de Facebook.
 
     Fórmula literal:
         effectiveness = (likes + loves + cares) / total_reactions
 
+    Nota: wows se incluyen en el total como reacción neutra.
+    Decisión de ingeniería v2 — auditoría forense H6.
+
     Rango: 0 a 1. Proporción de reacciones positivas sobre el total.
     """
     amor = n(likes) + n(loves) + n(cares)
     negativas = n(angrys) + n(sads) + n(hahas)
-    total_reactions = amor + negativas
+    total_reactions = amor + n(wows) + negativas
     if total_reactions == 0:
         return 0.0
     return round(amor / total_reactions, 4)
 
 
-def approval_pct_reacciones(likes, loves, cares, hahas, sads, angrys):
+def approval_pct_reacciones(likes, loves, cares, hahas, wows, sads, angrys):
     """§E — Aprobación % basada en reacciones de Facebook.
 
     Fórmula literal:
         aprobacion% = (likes + loves + cares) / max(total_reactions, 1) * 100
 
+    Nota: wows se incluyen en el total como reacción neutra.
+    Decisión de ingeniería v2 — auditoría forense H6.
+
     Rango: 0 a 100.
     """
     amor = n(likes) + n(loves) + n(cares)
     negativas = n(angrys) + n(sads) + n(hahas)
-    total_reactions = amor + negativas
+    total_reactions = amor + n(wows) + negativas
     return round(amor / max(total_reactions, 1) * 100, 1)
 
 
-def rejection_pct_reacciones(likes, loves, cares, hahas, sads, angrys):
+def rejection_pct_reacciones(likes, loves, cares, hahas, wows, sads, angrys):
     """§E — Rechazo % basada en reacciones de Facebook.
 
     Fórmula literal:
         rechazo% = negativas / max(total_reactions, 1) * 100
 
+    Nota: wows se incluyen en el total como reacción neutra.
+    Decisión de ingeniería v2 — auditoría forense H6.
+
     Rango: 0 a 100.
     """
     negativas = n(angrys) + n(sads) + n(hahas)
     amor = n(likes) + n(loves) + n(cares)
-    total_reactions = amor + negativas
+    total_reactions = amor + n(wows) + negativas
     return round(negativas / max(total_reactions, 1) * 100, 1)
 
 
@@ -445,9 +486,9 @@ def vol_factor(total_posts):
 def risk_reputacional(nsi_value, max_topic_controversy, vf):
     """§E — Risk Reputacional.
 
-    Fórmula literal:
+    Fórmula (decisión de ingeniería v2 — auditoría forense H5):
         riskReputacional = clamp(
-            (max_topic_controversy * 10 * 0.50 + nsi_deviation * 0.50) * vol_factor,
+            (max_topic_controversy * 0.50 + nsi_deviation * 0.50) * vol_factor,
             0, 1
         )
 
@@ -457,10 +498,19 @@ def risk_reputacional(nsi_value, max_topic_controversy, vf):
         - nsi_deviation = max(0, (50 - nsi) / 100)
         - vol_factor = min(2.0, 1.0 + total_posts / 1000)
 
+    Cambio vs. v1: se eliminó el factor *10 sobre max_topic_controversy
+    que saturaba el índice con ~20% de controversia. La fórmula v1 no
+    estaba documentada en ningún documento metodológico oficial
+    (011_POPULARIDAD_DIGITAL.md, 012_RIESGO_DIGITAL.md solo describen
+    la metodología de forma genérica; 028_FORMULA_REFERENCE.md es un
+    documento de gobernanza sin fórmulas concretas). Esta nueva versión
+    asigna peso igualitario (50/50) a controversia y desviación NSI,
+    con vol_factor como amplificador (1x a 2x).
+
     Rango: 0 a 1.
     """
     dev = nsi_deviation(nsi_value)
-    raw = (n(max_topic_controversy) * 10 * 0.50 + dev * 0.50) * n(vf)
+    raw = (n(max_topic_controversy) * 0.50 + dev * 0.50) * n(vf)
     return round(clamp(raw, 0, 1), 4)
 
 

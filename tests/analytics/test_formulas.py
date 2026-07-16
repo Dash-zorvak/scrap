@@ -8,7 +8,8 @@ import pytest
 
 from analytics.compute import (
     clamp,
-    engagement_rate_fb, engagement_rate_tk, ratio_amor_enojo_fb,
+    engagement_rate_fb, engagement_rate_tk, engagement_rate_externos,
+    ratio_amor_enojo_fb,
     reacciones_positivas_fb, reacciones_negativas_fb, interacciones_fb,
     net_sentiment_reacciones, controversy_reacciones, effectiveness_reacciones,
     approval_pct_reacciones, rejection_pct_reacciones,
@@ -93,6 +94,27 @@ class TestEngagementTK:
         assert basis == "engagement_abs"
 
 
+class TestEngagementExternos:
+    """§D — Engagement Rate Externos (H1: separado del ER Oficial)."""
+
+    def test_con_posts(self):
+        """(50+20) / 10 = 7.0"""
+        er, basis = engagement_rate_externos(50, 20, n_posts=10)
+        assert er == 7.0
+        assert basis == "per_post"
+
+    def test_sin_posts_con_eng(self):
+        """Sin posts pero con engagement → engagement_abs."""
+        er, basis = engagement_rate_externos(50, 20, n_posts=0)
+        assert er == 70.0
+        assert basis == "engagement_abs"
+
+    def test_cero(self):
+        er, basis = engagement_rate_externos(0, 0, 0)
+        assert er == 0.0
+        assert basis == "sin_datos"
+
+
 class TestRatioAmorEnojo:
     def test_ratio_normal(self):
         """(100+20+10) / (5+3+2) = 130/10 = 13.0"""
@@ -126,69 +148,77 @@ class TestReacciones:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestNetSentimentReacciones:
-    """§E literal: net_sentiment = (likes+loves+cares - negativas) / total_reactions"""
+    """§E literal: net_sentiment = (likes+loves+cares - negativas) / total_reactions
+    Nota: total_reactions incluye wows desde auditoría forense H6."""
 
     def test_positivo(self):
-        """(100+20+10 - 5-3-2) / (100+20+10+5+3+2) = 120/140 = 0.8571"""
-        ns = net_sentiment_reacciones(100, 20, 10, 5, 3, 2)
-        assert ns == 0.8571
+        """(100+20+10 - 5-3-2) / (100+20+10+15+5+3+2) = 120/155 = 0.7742"""
+        ns = net_sentiment_reacciones(100, 20, 10, 5, 15, 3, 2)
+        assert ns == 0.7742
 
     def test_negativo(self):
-        """(10+0+0 - 50+30+20) / (10+50+30+20) = -90/110 = -0.8182"""
-        ns = net_sentiment_reacciones(10, 0, 0, 20, 30, 50)
-        assert ns == -0.8182
+        """(10+0+0 - 20+30+50) / (10+0+10+20+30+50) = -90/120 = -0.75"""
+        ns = net_sentiment_reacciones(10, 0, 0, 20, 10, 30, 50)
+        assert ns == -0.75
 
     def test_neutral(self):
-        """(50+0+0 - 0+0+50) / 100 = 0.0"""
-        ns = net_sentiment_reacciones(50, 0, 0, 0, 0, 50)
+        """(50+0+0 - 0+0+50) / (50+0+0+10+0+0+50) = 0/110 = 0.0"""
+        ns = net_sentiment_reacciones(50, 0, 0, 0, 10, 0, 50)
         assert ns == 0.0
 
     def test_cero_reacciones(self):
-        ns = net_sentiment_reacciones(0, 0, 0, 0, 0, 0)
+        ns = net_sentiment_reacciones(0, 0, 0, 0, 0, 0, 0)
         assert ns == 0.0
+
+    def test_wows_no_cambian_signo(self):
+        """wows solo diluyen, no cambian signo: 100 love / 0 neg / 50 wow = 100/150 = 0.6667"""
+        ns = net_sentiment_reacciones(100, 0, 0, 0, 50, 0, 0)
+        assert ns == 0.6667
 
 
 class TestControversyReacciones:
-    """§E literal: controversy = negativas / total_reactions"""
+    """§E literal: controversy = negativas / total_reactions
+    Nota: total_reactions incluye wows desde auditoría forense H6."""
 
     def test_normal(self):
-        """(5+3+2) / (100+20+10+5+3+2) = 10/140 = 0.0714"""
-        c = controversy_reacciones(100, 20, 10, 5, 3, 2)
-        assert c == 0.0714
+        """(5+3+2) / (100+20+10+15+5+3+2) = 10/155 = 0.0645"""
+        c = controversy_reacciones(100, 20, 10, 5, 15, 3, 2)
+        assert c == 0.0645
 
     def test_todo_negativo(self):
-        """(50+30+20) / (0+0+0+50+30+20) = 100/100 = 1.0"""
-        c = controversy_reacciones(0, 0, 0, 50, 30, 20)
+        """(50+30+20) / (0+0+0+0+50+30+20) = 100/100 = 1.0"""
+        c = controversy_reacciones(0, 0, 0, 50, 0, 30, 20)
         assert c == 1.0
 
     def test_cero(self):
-        c = controversy_reacciones(0, 0, 0, 0, 0, 0)
+        c = controversy_reacciones(0, 0, 0, 0, 0, 0, 0)
         assert c == 0.0
 
 
 class TestEffectivenessReacciones:
-    """§E literal: effectiveness = (likes+loves+cares) / total_reactions"""
+    """§E literal: effectiveness = (likes+loves+cares) / total_reactions
+    Nota: total_reactions incluye wows desde auditoría forense H6."""
 
     def test_normal(self):
-        """(100+20+10) / 140 = 0.9286"""
-        e = effectiveness_reacciones(100, 20, 10, 5, 3, 2)
-        assert e == 0.9286
+        """(100+20+10) / (100+20+10+15+5+3+2) = 130/155 = 0.8387"""
+        e = effectiveness_reacciones(100, 20, 10, 5, 15, 3, 2)
+        assert e == 0.8387
 
     def test_cero(self):
-        e = effectiveness_reacciones(0, 0, 0, 0, 0, 0)
+        e = effectiveness_reacciones(0, 0, 0, 0, 0, 0, 0)
         assert e == 0.0
 
 
 class TestApprovalRejectionReacciones:
     def test_aprobacion(self):
-        """(100+20+10) / max(140,1) * 100 = 92.9%"""
-        a = approval_pct_reacciones(100, 20, 10, 5, 3, 2)
-        assert a == 92.9
+        """(100+20+10) / max(155,1) * 100 = 83.9%"""
+        a = approval_pct_reacciones(100, 20, 10, 5, 15, 3, 2)
+        assert a == 83.9
 
     def test_rechazo(self):
-        """(5+3+2) / max(140,1) * 100 = 7.1%"""
-        r = rejection_pct_reacciones(100, 20, 10, 5, 3, 2)
-        assert r == 7.1
+        """(5+3+2) / max(155,1) * 100 = 6.5%"""
+        r = rejection_pct_reacciones(100, 20, 10, 5, 15, 3, 2)
+        assert r == 6.5
 
 
 class TestNSI:
@@ -242,21 +272,21 @@ class TestRiskReputacional:
 
     def test_bajo(self):
         """max_tc=0.05, nsi=40(dev=0.1), vf=1.0
-        RR = (0.05*10*0.50 + 0.1*0.50) * 1.0 = (0.25+0.05)*1.0 = 0.3"""
+        RR = (0.05*0.50 + 0.1*0.50) * 1.0 = (0.025+0.05)*1.0 = 0.075"""
         rr = risk_reputacional(40, 0.05, 1.0)
-        assert rr == 0.3
+        assert rr == 0.075
 
     def test_alto(self):
         """max_tc=0.8, nsi=-50(dev=1.0), vf=2.0
-        RR = clamp((0.8*10*0.50 + 1.0*0.50) * 2.0, 0, 1) = clamp(9.0, 0, 1) = 1.0"""
+        RR = clamp((0.8*0.50 + 1.0*0.50) * 2.0, 0, 1) = clamp(1.8, 0, 1) = 1.0"""
         rr = risk_reputacional(-50, 0.8, 2.0)
         assert rr == 1.0
 
     def test_medio(self):
         """max_tc=0.3, nsi=0(dev=0.5), vf=1.5
-        RR = (0.3*10*0.50 + 0.5*0.50) * 1.5 = (1.5+0.25)*1.5 = 2.625 → clamp 1.0"""
+        RR = (0.3*0.50 + 0.5*0.50) * 1.5 = (0.15+0.25)*1.5 = 0.6"""
         rr = risk_reputacional(0, 0.3, 1.5)
-        assert rr == 1.0
+        assert rr == 0.6
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

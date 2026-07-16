@@ -90,8 +90,24 @@ def _detectar_familia_emocion(text: str) -> str:
     return "civica"
 
 
-# ── Léxico por emoción (31 categorías) ──
+# ── Léxico por emoción (53 categorías) ──
 # Cada emoción tiene un set de palabras/frases semilla normalizadas (sin acentos).
+#
+# REGLA DE DESAMBIGUACIÓN (auditoría forense H4):
+# Cada palabra/frase semilla pertenece a UNA sola categoría.
+# Cuando una palabra es ambigua entre categorías, se asigna a la más
+# específica. Tabla de resolución:
+#
+#   Palabra          → Categoría final    → Razón
+#   "molesto/molesta" → molestia           → Término medio; molestia captura mejor la intensidad
+#   "no me gusta"     → desagrado          → Evaluación general, no específicamente fastidio
+#   "indignado/..."   → indignacion        → Categoría más específica para esta emoción
+#   "corrupto/..."    → indignacion_moral  → Juicio moral explícito
+#   "inmoral"         → indignacion_moral  → Juicio moral explícito
+#   "escandalo"       → indignacion_moral  → Implica abuso de poder/inmoralidad
+#
+# Si se agregan nuevas emociones al catálogo, verificar que no creen
+# nuevas colisiones con este léxico antes de insertar.
 
 EMOTION_LEXICON: dict[str, set[str]] = {
     # ── ALEGRÍA (joy) ──
@@ -181,24 +197,22 @@ EMOTION_LEXICON: dict[str, set[str]] = {
     },
     "desagrado": {
         "desagrado", "desagradable", "feo", "fea", "no me gusta",
-        "disgusto", "molestia", "molesto", "molesta", "antipatico",
-        "antipatica", "fastidioso", "fastidiosa",
+        "disgusto", "antipatico", "antipatica", "fastidioso", "fastidiosa",
     },
     "repulsion": {
-        "asco", "repulsion", "repugnante", "repugna", "indignacion",
-        "indignado", "indignada", "vergüenza", "verguenza",
-        "indignacion moral", "inmoral", "corrupto", "corrupta",
+        "asco", "repulsion", "repugnante", "repugna",
+        "vergüenza", "verguenza",
         "depravado", "depravada",
     },
     # ── ENOJO (anger) ──
     "fastidio": {
-        "molesto", "molesta", "cansado", "cansada", "hartado", "hartada",
+        "cansado", "cansada", "hartado", "hartada",
         "fastidio", "fastidioso", "fastidiosa", "harto", "harta",
         "cansancio", "fatiga", "agobio",
     },
     "enojo": {
-        "enojado", "enojada", "furioso", "furiosa", "rabia", "indignado",
-        "indignada", "irritado", "irritada", "encabritado", "encabritada",
+        "enojado", "enojada", "furioso", "furiosa", "rabia",
+        "irritado", "irritada", "encabritado", "encabritada",
         "molestia fuerte", "cabreo",
     },
     "furia": {
@@ -313,7 +327,7 @@ EMOTION_LEXICON: dict[str, set[str]] = {
     },
     "molestia": {
         "molestia", "molesto", "molesta", "incomodo", "incmoda",
-        "no me gusta", "me cae mal", "fastidia",
+        "me cae mal", "fastidia",
     },
     "ira": {
         "ira", "iracundo", "iracunda", "odio profundo",
@@ -578,7 +592,7 @@ def aggregate_emotions(texts: list[str], es_oficial: bool = False) -> dict:
         for e in all_keys
     }
 
-    dominante = max(all_keys, key=lambda e: conteo.get(e, 0))
+    dominante = max(all_keys, key=lambda e: (conteo.get(e, 0), e))
     if conteo.get(dominante, 0) == 0:
         dominante = "calma"
 

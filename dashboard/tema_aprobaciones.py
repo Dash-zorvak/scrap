@@ -499,7 +499,7 @@ def agregar_por_tema(db_path):
             }
             for e in EMOCIONES_VALIDAS
         }
-        emo_dominante = max(EMOCIONES_VALIDAS, key=lambda e: emo_counts.get(e, 0)) if emo_counts else "calma"
+        emo_dominante = max(EMOCIONES_VALIDAS, key=lambda e: (emo_counts.get(e, 0), e)) if emo_counts else "calma"
         # Entidades del tema (top 5)
         entidades_tema = entidades_conteo.get(tema, {})
         entidades_sorted = sorted(entidades_tema.items(), key=lambda x: -x[1])[:5]

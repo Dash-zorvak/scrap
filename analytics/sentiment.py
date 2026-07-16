@@ -188,15 +188,17 @@ def classify_sentiment(text: str) -> SentimentResult:
                 negative_hits += 1
                 inverted += 1
                 evidence.append(f"~~{token}~~(inv)")
-                negation_active = False
-                negation_countdown = 0
+                negation_countdown -= 1
+                if negation_countdown <= 0:
+                    negation_active = False
                 continue
             elif is_neg:
                 positive_hits += 1
                 inverted += 1
                 evidence.append(f"~~{token}~~(inv)")
-                negation_active = False
-                negation_countdown = 0
+                negation_countdown -= 1
+                if negation_countdown <= 0:
+                    negation_active = False
                 continue
 
         if is_pos:
@@ -280,7 +282,7 @@ def aggregate_sentiment(texts: list[str]) -> dict:
     }
     score_avg = round(sum(all_scores) / total, 2) if total else 0.0
 
-    dominante = max(labels_count, key=lambda k: labels_count[k])
+    dominante = max(labels_count, key=lambda k: (labels_count[k], k))
     if labels_count[dominante] == 0:
         dominante = "neutral"
 

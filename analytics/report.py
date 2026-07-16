@@ -249,23 +249,33 @@ def construir_analysis(aprobaciones_agrupadas: list,
             n_videos=tk_stats.get("videos", 0),
         )
 
-    # §J: Ponderar ER por volumen real al combinar plataformas
+    # §J: Ponderar ER Oficial por volumen real (solo FB+TK, sin Externos)
     er_display = er_fb
     er_basis = er_basis_fb
     vol_fb = n(fb_stats.get("engagement", 0)) if fb_stats else 0
     vol_tk = n(tk_stats.get("engagement", 0)) if tk_stats else 0
-    vol_ext = n(externos_stats.get("engagement", 0)) if externos_stats else 0
-    n_plat = sum(1 for v in (vol_fb, vol_tk, vol_ext) if v > 0)
-    if n_plat >= 2:
-        vol_total = vol_fb + vol_tk + vol_ext
-        if vol_total > 0:
+    n_plat_oficial = sum(1 for v in (vol_fb, vol_tk) if v > 0)
+    if n_plat_oficial >= 2:
+        vol_total_oficial = vol_fb + vol_tk
+        if vol_total_oficial > 0:
             er_display = round(
-                (er_fb * vol_fb + er_tk * vol_tk) / vol_total, 2
+                (er_fb * vol_fb + er_tk * vol_tk) / vol_total_oficial, 2
             )
             er_basis = "ponderado_volumen"
     elif tk_stats:
         er_display = er_tk
         er_basis = er_basis_tk
+
+    # §J2: ER Externo (solo datos de Externos, separado del Oficial)
+    er_externo = 0.0
+    er_ext_basis = "sin_datos"
+    if externos_stats:
+        from analytics.compute import engagement_rate_externos
+        er_externo, er_ext_basis = engagement_rate_externos(
+            externos_stats.get("total_reactions", 0),
+            externos_stats.get("comments_count", 0),
+            n_posts=externos_stats.get("posts", 0),
+        )
 
     # ── §E: Reacciones (FB) ──
     ns_reac = 0.0
@@ -277,27 +287,32 @@ def construir_analysis(aprobaciones_agrupadas: list,
         ns_reac = net_sentiment_reacciones(
             fb_stats.get("likes", 0), fb_stats.get("loves", 0),
             fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
-            fb_stats.get("sads", 0), fb_stats.get("angrys", 0),
+            fb_stats.get("wows", 0), fb_stats.get("sads", 0),
+            fb_stats.get("angrys", 0),
         )
         controversy_r = controversy_reacciones(
             fb_stats.get("likes", 0), fb_stats.get("loves", 0),
             fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
-            fb_stats.get("sads", 0), fb_stats.get("angrys", 0),
+            fb_stats.get("wows", 0), fb_stats.get("sads", 0),
+            fb_stats.get("angrys", 0),
         )
         effectiveness_r = effectiveness_reacciones(
             fb_stats.get("likes", 0), fb_stats.get("loves", 0),
             fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
-            fb_stats.get("sads", 0), fb_stats.get("angrys", 0),
+            fb_stats.get("wows", 0), fb_stats.get("sads", 0),
+            fb_stats.get("angrys", 0),
         )
         approval_r = approval_pct_reacciones(
             fb_stats.get("likes", 0), fb_stats.get("loves", 0),
             fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
-            fb_stats.get("sads", 0), fb_stats.get("angrys", 0),
+            fb_stats.get("wows", 0), fb_stats.get("sads", 0),
+            fb_stats.get("angrys", 0),
         )
         rejection_r = rejection_pct_reacciones(
             fb_stats.get("likes", 0), fb_stats.get("loves", 0),
             fb_stats.get("cares", 0), fb_stats.get("hahas", 0),
-            fb_stats.get("sads", 0), fb_stats.get("angrys", 0),
+            fb_stats.get("wows", 0), fb_stats.get("sads", 0),
+            fb_stats.get("angrys", 0),
         )
 
     total_reac_fb = reac_pos_fb + reac_neg_fb
@@ -409,10 +424,18 @@ def construir_analysis(aprobaciones_agrupadas: list,
                 "ER = (reacciones + comentarios + compartidos) / vistas * 100"
             ),
             "engagementBasis": er_basis,
+            "er_externo": er_externo,
+            "er_externo_basis": er_ext_basis,
             "alcance_estimado": n(
                 (fb_stats.get("views", 0) if fb_stats else 0)
                 + (tk_stats.get("views", 0) if tk_stats else 0)
-            ) + n(externos_stats.get("posts", 0) * 100 if externos_stats else 0),
+            ),
+            "alcance_nota": (
+                "Solo incluye FB+TK (vistas). Externos excluido: "
+                "la fuente no provee datos de alcance/impresiones."
+                if externos_stats and externos_stats.get("posts", 0) > 0
+                else ""
+            ),
             "reacciones_positivas": reac_pos_fb,
             "reacciones_negativas": reac_neg_fb,
             "reacciones_positivas_pct": reac_pos_pct,
@@ -431,29 +454,27 @@ def construir_analysis(aprobaciones_agrupadas: list,
     }
 
     # ── Bloque 2: Voces ──
+    # H2: Solo se incluyen voces con datos REALES de engagement.
+    # Las voces internas (aprobaciones_agrupadas) fueron eliminadas porque
+    # no tenían datos reales de engagement/reacciones/compartidos — los
+    # valores anteriores (doc_count*10, apoyo*5, critica*2) eran
+    # multiplicadores arbitrarios sin fuente documentada.
     voces = []
-    for t in aprobaciones_agrupadas[:5]:
-        voces.append({
-            "pagina": t.get("label", t.get("categoria", "")),
-            "postura": "neutral",
-            "engagement": t.get("doc_count", 0) * 10,
-            "reacciones_totales": t.get("apoyo", 0) * 5,
-            "comentarios_totales": t.get("doc_count", 0),
-            "compartidos_totales": t.get("critica", 0) * 2,
-            "narrativa": "",
-            "enlaces_referencia": [],
-        })
 
-    # Agregar voces de Externos si hay datos de paginas externas
+    # Voces de Externos (datos reales de engagement por página)
     if externos_stats and externos_stats.get("posts", 0) > 0:
         try:
             from analytics.queries import get_external_page_engagement
             ext_pages = get_external_page_engagement()
-            for ep in ext_pages[:3]:
+            for ep in ext_pages[:5]:
                 if ep.get("engagement", 0) > 0:
                     voces.append({
                         "pagina": ep.get("page_name", ""),
-                        "postura": "neutral",
+                        "postura": None,
+                        "postura_nota": (
+                            "No disponible: la fuente Externos no provee "
+                            "sentimiento por comentario para derivar postura."
+                        ),
                         "engagement": ep.get("engagement", 0),
                         "reacciones_totales": ep.get("total_reactions", 0),
                         "comentarios_totales": ep.get("comments_count", 0),
@@ -777,8 +798,8 @@ def construir_analysis(aprobaciones_agrupadas: list,
             "narrativa": "",
             "enlaces_referencia": alertas_links,
             "formula_riesgo": (
-                "RR = clamp((max_topic_controversy * 10 * 0.50 + nsi_deviation * 0.50) "
-                "* vol_factor, 0, 1)"
+                "RR = clamp((max_topic_controversy * 0.50 + nsi_deviation * 0.50) "
+                "* vol_factor, 0, 1)  [decisión H5: sin factor *10]"
             ),
         },
     }

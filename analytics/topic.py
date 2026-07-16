@@ -162,15 +162,6 @@ CATEGORIAS_TEMA = set(TOPIC_LEXICON.keys()) | {"no_aplica"}
 
 # ── Remapeo de categorías legacy ──
 
-REMAP_TOPIC_LEGACY = {
-    "obras_publicas": "obras_servicios",
-    "servicios_publicos": "obras_servicios",
-    "corrupcion": "gobernanza",
-    "transparencia": "gobernanza",
-    "cultura": "cultura_deportes",
-    "deportes": "cultura_deportes",
-}
-
 
 # ── Result type ──
 
@@ -288,7 +279,7 @@ def aggregate_topics(texts: list[str]) -> dict:
         if count > 0
     }
 
-    dominante = max(conteo, key=lambda k: conteo[k])
+    dominante = max(conteo, key=lambda k: (conteo[k], k))
     if conteo.get(dominante, 0) == 0:
         dominante = "no_aplica"
 

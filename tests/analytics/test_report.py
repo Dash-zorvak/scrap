@@ -57,9 +57,14 @@ def test_construir_analysis_estructura():
 
 
 def test_construir_analysis_voces():
+    """H2: voces_influencia solo incluye actores con datos reales.
+    Sin datos de Externos, la lista queda vacía (las voces fabricadas
+    de aprobaciones_agrupadas fueron eliminadas)."""
     data = construir_analysis(_sample_aprobaciones(), "2026-04", "2026-04-30")
     voces = data["bloque2"]["voces_influencia"]
-    assert len(voces) == 3
+    assert isinstance(voces, list)
+    # Sin Externos reales, voces está vacía
+    assert len(voces) == 0
 
 
 def test_construir_analysis_fricciones():

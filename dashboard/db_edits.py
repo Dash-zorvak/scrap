@@ -1,34 +1,34 @@
 """Edicion directa de registros (correcciones del analista).
 
-Facebook (fb_posts/fb_comments): ahora delega a LocalStorage (T3.1/T3.2),
+Facebook (fb_posts/fb_comments): delega a LocalStorage (T3.1/T3.2),
 que es la unica puerta de escritura para estas tablas (C5).
 
-TikTok (tabla videos en tiktok.db): se mantiene con sqlite3 directo,
-fuera del alcance de C5 (ver T3.3).
+TikTok (tabla videos en tiktok.db): delega a TikTokStorage con audit_log.
+
+Externos (tabla external_posts en externos.db): delega a ExternosStorage con audit_log.
 """
 
 import os
 import sqlite3
 
 from src.config import Config
-from src.storage.db import LocalStorage
+from src.storage.db import (
+    LocalStorage, TikTokStorage, ExternosStorage,
+    COLUMNAS_TIKTOK_EDITABLES,
+)
 
 _cfg = Config()
 FACEBOOK_DB = _cfg.FACEBOOK_DB
 TIKTOK_DB = _cfg.TIKTOK_DB
+EXTERNOS_DB = _cfg.EXTERNOS_DB
 
 # Re-export desde LocalStorage (SSOT: src/storage/db.py)
 COLUMNAS_EDITABLES = LocalStorage.COLUMNAS_EDITABLES
 
-# Columnas editables de la tabla videos (TikTok) — fuera de alcance C5.
-COLUMNAS_TIKTOK_EDITABLES = {
-    "account_id", "description", "created_at", "views", "likes",
-    "shares", "favorites_count", "comments_count", "post_url",
+COLUMNAS_EXTERNOS_POST_EDITABLES = {
+    "page_name", "page_url", "message", "created_time",
+    "total_reactions", "comments_count", "post_url", "source",
 }
-
-# Nota: bases de datos antiguas pueden conservar una columna needs_recalculo
-# huérfana e inofensiva; no se elimina para evitar migraciones destructivas
-# (ver C6 en plan maestro).
 
 
 def _db(db_path=None):
@@ -37,6 +37,10 @@ def _db(db_path=None):
 
 def _db_tiktok(db_path=None):
     return db_path or os.getenv("TIKTOK_DB", "") or TIKTOK_DB
+
+
+def _db_externos(db_path=None):
+    return db_path or os.getenv("EXTERNOS_DB", "") or EXTERNOS_DB
 
 
 def leer_post(post_id, db_path=None):
@@ -67,13 +71,8 @@ def delete_fb_post(post_id, db_path=None):
 
 
 # ===========================================
-# TikTok (tabla videos en tiktok.db) — fuera de alcance C5
+# TikTok — delega a TikTokStorage con audit_log
 # ===========================================
-
-# NOTA DE ALCANCE (plan maestro, Fase 3 / C5): la unificacion de persistencia
-# (C5) cubre exclusivamente fb_posts/fb_comments. Este modulo (TikTok) queda
-# fuera de alcance en esta fase; se recomienda aplicar el mismo patron
-# (LocalStorage + validacion + audit_log) en un plan posterior, no incluido aqui.
 
 
 def leer_videos_tiktok(limit=500, offset=0, db_path=None):
@@ -93,35 +92,57 @@ def leer_videos_tiktok(limit=500, offset=0, db_path=None):
 
 
 def update_video_tiktok(video_id, fields, db_path=None):
-    """Actualiza columnas permitidas de un video. Devuelve True si cambio algo."""
-    campos = {k: v for k, v in (fields or {}).items() if k in COLUMNAS_TIKTOK_EDITABLES}
-    if not campos:
-        return False
-    sets = ", ".join(f'"{k}" = ?' for k in campos)
-    valores = list(campos.values()) + [str(video_id)]
-    conn = sqlite3.connect(_db_tiktok(db_path))
+    """Actualiza columnas permitidas via TikTokStorage. Lanza ValueError ante datos invalidos."""
+    store = TikTokStorage(db_path=_db_tiktok(db_path))
     try:
-        cur = conn.execute(
-            f"UPDATE videos SET {sets} WHERE id = ?", valores
-        )
-        cambio = cur.rowcount > 0
-        conn.commit()
-        return cambio
-    except Exception:
-        return False
+        return store.update_video(video_id, fields)
     finally:
-        conn.close()
+        store.close()
 
 
 def delete_video_tiktok(video_id, db_path=None):
-    """Elimina un video y sus comentarios. Devuelve True si no hubo error."""
-    conn = sqlite3.connect(_db_tiktok(db_path))
+    """Elimina un video y sus comentarios via TikTokStorage."""
+    store = TikTokStorage(db_path=_db_tiktok(db_path))
     try:
-        conn.execute("DELETE FROM comments WHERE video_id = ?", (str(video_id),))
-        conn.execute("DELETE FROM videos WHERE id = ?", (str(video_id),))
-        conn.commit()
-        return True
+        return store.delete_video(video_id)
+    finally:
+        store.close()
+
+
+# ===========================================
+# Externos — delega a ExternosStorage con audit_log
+# ===========================================
+
+
+def leer_posts_externos(limit=500, offset=0, db_path=None):
+    """Devuelve los posts externos como lista de dicts."""
+    conn = sqlite3.connect(_db_externos(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM external_posts ORDER BY created_time DESC LIMIT ? OFFSET ?",
+            (int(limit), int(offset)),
+        ).fetchall()
     except Exception:
-        return False
+        rows = []
     finally:
         conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_post_externo(post_id, fields, db_path=None):
+    """Actualiza columnas permitidas via ExternosStorage. Lanza ValueError ante datos invalidos."""
+    store = ExternosStorage(db_path=_db_externos(db_path))
+    try:
+        return store.update_post(post_id, fields)
+    finally:
+        store.close()
+
+
+def delete_post_externo(post_id, db_path=None):
+    """Elimina un post y sus comentarios via ExternosStorage."""
+    store = ExternosStorage(db_path=_db_externos(db_path))
+    try:
+        return store.delete_post(post_id)
+    finally:
+        store.close()

@@ -40,6 +40,7 @@ def construir_analysis(aprobaciones_agrupadas: list,
                        fecha_hasta: str,
                        fb_stats: dict | None = None,
                        tk_stats: dict | None = None,
+                       externos_stats: dict | None = None,
                        tema_aprobaciones_db: str | None = None,
                        comentarios_texts: list[str] | None = None,
                        textos_previos: list[str] | None = None,
@@ -67,6 +68,7 @@ def construir_analysis(aprobaciones_agrupadas: list,
         fecha_hasta: ISO date, ej. "2026-04-30".
         fb_stats: estadisticas de Facebook (posts, comments, engagement).
         tk_stats: estadisticas de TikTok (videos, comments, engagement).
+        externos_stats: estadisticas de Externos (posts, comments, engagement).
         comentarios_texts: textos crudos de comentarios para clasificar
             sentimiento, emoción, tema y zona con reglas léxicas.
         textos_previos: textos del período anterior para temas emergentes.
@@ -157,6 +159,13 @@ def construir_analysis(aprobaciones_agrupadas: list,
         meta["total_posts_analizados"] += n(tk_stats.get("videos", 0))
         meta["total_reacciones_sumadas"] += n(tk_stats.get("likes", 0))
         meta["total_impresiones_vistas"] += n(tk_stats.get("views", 0))
+    if externos_stats:
+        if meta["plataforma"]:
+            meta["plataforma"] = "multicanal"
+        else:
+            meta["plataforma"] = "externos"
+        meta["total_posts_analizados"] += n(externos_stats.get("posts", 0))
+        meta["total_reacciones_sumadas"] += n(externos_stats.get("total_reactions", 0))
 
     # ── 16.1: Índice de emociones por reglas léxicas ──
     if comentarios_texts:
@@ -243,13 +252,15 @@ def construir_analysis(aprobaciones_agrupadas: list,
     # §J: Ponderar ER por volumen real al combinar plataformas
     er_display = er_fb
     er_basis = er_basis_fb
-    if fb_stats and tk_stats:
-        vol_fb = n(fb_stats.get("engagement", 0))
-        vol_tk = n(tk_stats.get("engagement", 0))
-        vol_total = vol_fb + vol_tk
+    vol_fb = n(fb_stats.get("engagement", 0)) if fb_stats else 0
+    vol_tk = n(tk_stats.get("engagement", 0)) if tk_stats else 0
+    vol_ext = n(externos_stats.get("engagement", 0)) if externos_stats else 0
+    n_plat = sum(1 for v in (vol_fb, vol_tk, vol_ext) if v > 0)
+    if n_plat >= 2:
+        vol_total = vol_fb + vol_tk + vol_ext
         if vol_total > 0:
             er_display = round(
-                er_fb * (vol_fb / vol_total) + er_tk * (vol_tk / vol_total), 2
+                (er_fb * vol_fb + er_tk * vol_tk) / vol_total, 2
             )
             er_basis = "ponderado_volumen"
     elif tk_stats:
@@ -401,7 +412,7 @@ def construir_analysis(aprobaciones_agrupadas: list,
             "alcance_estimado": n(
                 (fb_stats.get("views", 0) if fb_stats else 0)
                 + (tk_stats.get("views", 0) if tk_stats else 0)
-            ),
+            ) + n(externos_stats.get("posts", 0) * 100 if externos_stats else 0),
             "reacciones_positivas": reac_pos_fb,
             "reacciones_negativas": reac_neg_fb,
             "reacciones_positivas_pct": reac_pos_pct,
@@ -432,6 +443,26 @@ def construir_analysis(aprobaciones_agrupadas: list,
             "narrativa": "",
             "enlaces_referencia": [],
         })
+
+    # Agregar voces de Externos si hay datos de paginas externas
+    if externos_stats and externos_stats.get("posts", 0) > 0:
+        try:
+            from analytics.queries import get_external_page_engagement
+            ext_pages = get_external_page_engagement()
+            for ep in ext_pages[:3]:
+                if ep.get("engagement", 0) > 0:
+                    voces.append({
+                        "pagina": ep.get("page_name", ""),
+                        "postura": "neutral",
+                        "engagement": ep.get("engagement", 0),
+                        "reacciones_totales": ep.get("total_reactions", 0),
+                        "comentarios_totales": ep.get("comments_count", 0),
+                        "compartidos_totales": 0,
+                        "narrativa": "",
+                        "enlaces_referencia": [],
+                    })
+        except Exception:
+            pass
 
     total_apoyo_critica = total_apoyo + total_critica
     polarizacion_indice = 0.0
@@ -596,7 +627,13 @@ def construir_analysis(aprobaciones_agrupadas: list,
             n(tk_stats.get("likes", 0)) + n(tk_stats.get("shares", 0))
             + n(tk_stats.get("favorites", 0)) + n(tk_stats.get("comments", 0))
         )
-    total_reacciones_all = total_reacciones_fb + total_reacciones_tk
+    total_reacciones_ext = 0
+    if externos_stats:
+        total_reacciones_ext = (
+            n(externos_stats.get("total_reactions", 0))
+            + n(externos_stats.get("comments", 0))
+        )
+    total_reacciones_all = total_reacciones_fb + total_reacciones_tk + total_reacciones_ext
     alerta_efi = None
     if er_previo is not None:
         alerta_efi = detectar_efi(er_display, er_previo, total_reacciones_all)
@@ -773,6 +810,17 @@ def construir_analysis(aprobaciones_agrupadas: list,
         for e in emergentes_result.get("emergentes", [])
         if e["tendencia"] == "desacelerando"
     ]
+
+    # ── Indice de correlacion externa (independiente) ──
+    try:
+        from analytics.queries import calcular_correlacion_noticias_picos
+        bloque4["indice_correlacion_externa"] = calcular_correlacion_noticias_picos()
+    except Exception:
+        bloque4["indice_correlacion_externa"] = {
+            "semana": "", "engagement": 0, "fuente": "", "noticia": "",
+            "fecha": "", "n_picos": 0, "coincidencias": 0,
+            "indice_correlacion": 0.0,
+        }
 
     return {
         "meta": meta,

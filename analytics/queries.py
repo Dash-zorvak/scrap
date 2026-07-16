@@ -31,6 +31,34 @@ def get_fb_comments_with_messages(db_path=None):
         conn.close()
 
 
+def get_tk_comments_with_messages(db_path=None):
+    """Fetch all non-empty TikTok comments for theme review."""
+    db_path = db_path or _cfg.TIKTOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT id, text FROM comments "
+            "WHERE text IS NOT NULL AND text != ''"
+        ).fetchall()
+        return [(r["id"], r["text"]) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_ext_comments_with_messages(db_path=None):
+    """Fetch all non-empty Externos comments for theme review."""
+    db_path = db_path or _cfg.EXTERNOS_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT comment_id, message FROM external_comments "
+            "WHERE message IS NOT NULL AND message != ''"
+        ).fetchall()
+        return [(r["comment_id"], r["message"]) for r in rows]
+    finally:
+        conn.close()
+
+
 def get_fb_post_signatures(db_path=None):
     """Load FB post signatures for dedup (post_id, firma)."""
     from dashboard._generar_id import firma_contenido
@@ -282,6 +310,278 @@ def get_tk_stats(db_path=None):
         }
     finally:
         conn.close()
+
+
+def get_externos_stats(db_path=None):
+    """§D — Agrega metricas de Externos para engagement.
+
+    Retorna dict con:
+      - posts, comments: conteos
+      - total_reactions: suma de reacciones
+      - engagement: total_reactions + comments (sin shares, Externos no los tiene)
+    """
+    db_path = db_path or _cfg.EXTERNOS_DB
+    conn = _conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT "
+            "  COUNT(*) as posts, "
+            "  SUM(COALESCE(total_reactions,0)) as total_reactions, "
+            "  SUM(COALESCE(comments_count,0)) as comments "
+            "FROM external_posts"
+        ).fetchone()
+        total_reactions = row["total_reactions"] or 0
+        comments = row["comments"] or 0
+        engagement = total_reactions + comments
+        return {
+            "posts": row["posts"] or 0,
+            "total_reactions": total_reactions,
+            "comments": comments,
+            "engagement": engagement,
+        }
+    finally:
+        conn.close()
+
+
+def get_external_page_engagement(db_path=None):
+    """Retorna engagement por pagina externa desde external_pages + external_posts.
+
+    Retorna lista de dicts: [{page_name, posts, total_reactions, comments_count, engagement}].
+    """
+    db_path = db_path or _cfg.EXTERNOS_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT p.name, "
+            "  COUNT(DISTINCT po.post_id) as posts, "
+            "  SUM(COALESCE(po.total_reactions,0)) as total_reactions, "
+            "  SUM(COALESCE(po.comments_count,0)) as comments_count "
+            "FROM external_pages p "
+            "LEFT JOIN external_posts po ON po.page_name = p.name "
+            "GROUP BY p.name "
+            "ORDER BY total_reactions + comments_count DESC"
+        ).fetchall()
+        result = []
+        for r in rows:
+            tr = r["total_reactions"] or 0
+            cc = r["comments_count"] or 0
+            result.append({
+                "page_name": r["name"],
+                "posts": r["posts"] or 0,
+                "total_reactions": tr,
+                "comments_count": cc,
+                "engagement": tr + cc,
+            })
+        return result
+    finally:
+        conn.close()
+
+
+def cargar_temas_aprobados():
+    """Combina aprobaciones de las 3 DBs con el mismo peso.
+
+    Retorna lista de dicts ordenada por doc_count descendente, donde cada
+    tema incluye la plataforma de origen. Los conteos por categoría se
+    suman entre plataformas (sin duplicar IDs entre DBs distintas).
+    """
+    from dashboard.tema_aprobaciones import agregar_por_tema
+    combinados = {}
+    for label, db in [("facebook", _cfg.FACEBOOK_DB),
+                      ("tiktok", _cfg.TIKTOK_DB),
+                      ("externos", _cfg.EXTERNOS_DB)]:
+        try:
+            parcial = agregar_por_tema(db)
+            for tema in parcial:
+                cat = tema["categoria"]
+                if cat not in combinados:
+                    combinados[cat] = {
+                        "id": 0,
+                        "categoria": cat,
+                        "label": tema["label"],
+                        "doc_count": 0,
+                        "apoyo": 0,
+                        "critica": 0,
+                        "neutral": 0,
+                        "ejemplo": "",
+                        "ejemplo_critica": "",
+                        "emociones": {},
+                        "emocion_dominante": "calma",
+                        "plataformas": [],
+                    }
+                entry = combinados[cat]
+                entry["doc_count"] += tema["doc_count"]
+                entry["apoyo"] += tema.get("apoyo", 0)
+                entry["critica"] += tema.get("critica", 0)
+                entry["neutral"] += tema.get("neutral", 0)
+                if label not in entry["plataformas"]:
+                    entry["plataformas"].append(label)
+                if tema.get("ejemplo") and (
+                    not entry["ejemplo"] or len(tema["ejemplo"]) < len(entry["ejemplo"])
+                ):
+                    entry["ejemplo"] = tema["ejemplo"]
+                if tema.get("ejemplo_critica") and (
+                    not entry["ejemplo_critica"]
+                    or len(tema["ejemplo_critica"]) < len(entry["ejemplo_critica"])
+                ):
+                    entry["ejemplo_critica"] = tema["ejemplo_critica"]
+                emo_counts = tema.get("emociones", {})
+                if isinstance(emo_counts, dict):
+                    for emo_key, emo_info in emo_counts.items():
+                        if isinstance(emo_info, dict):
+                            entry["emociones"][emo_key] = {
+                                "count": entry["emociones"].get(emo_key, {}).get("count", 0)
+                                         + emo_info.get("count", 0),
+                                "pct": 0,
+                            }
+        except Exception:
+            pass
+    total = sum(t["doc_count"] for t in combinados.values()) or 1
+    result = []
+    for i, (cat, entry) in enumerate(sorted(combinados.items(),
+                                              key=lambda x: -x[1]["doc_count"])):
+        entry["id"] = i + 1
+        entry["pct"] = round(entry["doc_count"] / total * 100, 1)
+        emo_total = sum(v.get("count", 0) for v in entry["emociones"].values()) or 1
+        for emo_key in entry["emociones"]:
+            entry["emociones"][emo_key]["pct"] = round(
+                entry["emociones"][emo_key]["count"] / emo_total * 100, 1
+            )
+        if entry["emociones"]:
+            entry["emocion_dominante"] = max(
+                entry["emociones"], key=lambda e: entry["emociones"][e].get("count", 0)
+            )
+        entry["pct_apoyo"] = round(entry["apoyo"] / entry["doc_count"] * 100, 1) if entry["doc_count"] else 0
+        entry["pct_critica"] = round(entry["critica"] / entry["doc_count"] * 100, 1) if entry["doc_count"] else 0
+        entry["pct_neutral"] = round(entry["neutral"] / entry["doc_count"] * 100, 1) if entry["doc_count"] else 0
+        entry["saldo"] = entry["apoyo"] - entry["critica"]
+        result.append(entry)
+    return result
+
+
+def calcular_correlacion_noticias_picos(z_umbral=1.0, ventana_dias=3, db_path=None):
+    """Calcula correlacion temporal entre picos de engagement y noticias externas.
+
+    Retorna dict con:
+      - semana: str con la semana analizada
+      - engagement: float engagement promedio de la semana
+      - fuente: str fuente externa con mayor actividad
+      - noticia: str titulo/mensaje de la noticia mas reciente
+      - fecha: str fecha de la noticia
+      - n_picos: int numero de picos detectados
+      - coincidencias: int picos que coinciden con noticias externas
+      - indice_correlacion: float entre 0 y 1
+    """
+    from datetime import datetime, timedelta
+    import statistics
+
+    db_externos = db_path or _cfg.EXTERNOS_DB
+    db_fb = _cfg.FACEBOOK_DB
+
+    # Obtener engagement semanal de Facebook
+    conn_fb = _conn(db_fb)
+    try:
+        rows_fb = conn_fb.execute(
+            "SELECT DATE(created_time) as dia, "
+            "  SUM(likes_count + loves_count + cares_count + hahas_count "
+            "      + wows_count + sads_count + angrys_count + comments_count "
+            "      + shares_count) as engagement "
+            "FROM fb_posts "
+            "WHERE created_time IS NOT NULL "
+            "GROUP BY dia ORDER BY dia"
+        ).fetchall()
+    except Exception:
+        rows_fb = []
+    finally:
+        conn_fb.close()
+
+    if not rows_fb:
+        return {
+            "semana": "", "engagement": 0, "fuente": "", "noticia": "",
+            "fecha": "", "n_picos": 0, "coincidencias": 0,
+            "indice_correlacion": 0.0,
+        }
+
+    # Calcular engagement promedio y desviacion
+    eng_vals = [r["engagement"] or 0 for r in rows_fb]
+    if len(eng_vals) < 3:
+        return {
+            "semana": "", "engagement": 0, "fuente": "", "noticia": "",
+            "fecha": "", "n_picos": 0, "coincidencias": 0,
+            "indice_correlacion": 0.0,
+        }
+
+    media = statistics.mean(eng_vals)
+    desv = statistics.stdev(eng_vals) if len(eng_vals) > 1 else 1.0
+    if desv == 0:
+        desv = 1.0
+
+    # Detectar picos (z-score > umbral)
+    picos = []
+    for i, r in enumerate(rows_fb):
+        eng = r["engagement"] or 0
+        z = (eng - media) / desv
+        if z > z_umbral:
+            picos.append({
+                "fecha": r["dia"],
+                "engagement": eng,
+                "z_score": round(z, 2),
+            })
+
+    # Obtener noticias externas
+    conn_ext = _conn(db_externos)
+    try:
+        rows_ext = conn_ext.execute(
+            "SELECT page_name, message, created_time "
+            "FROM external_posts "
+            "WHERE created_time IS NOT NULL "
+            "ORDER BY created_time DESC"
+        ).fetchall()
+    except Exception:
+        rows_ext = []
+    finally:
+        conn_ext.close()
+
+    # Contar coincidencias dentro de la ventana
+    coincidencias = 0
+    fuente_top = ""
+    noticia_top = ""
+    fecha_top = ""
+    for pico in picos:
+        try:
+            fecha_pico = datetime.strptime(pico["fecha"], "%Y-%m-%d")
+        except (ValueError, TypeError):
+            continue
+        for ext in rows_ext:
+            try:
+                ext_date = datetime.strptime(ext["created_time"][:10], "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+            diff = abs((fecha_pico - ext_date).days)
+            if diff <= ventana_dias:
+                coincidencias += 1
+                if not fuente_top:
+                    fuente_top = ext["page_name"] or ""
+                    noticia_top = (ext["message"] or "")[:200]
+                    fecha_top = ext["created_time"][:10]
+                break
+
+    n_picos = len(picos)
+    indice = round(coincidencias / n_picos, 2) if n_picos > 0 else 0.0
+
+    semana = ""
+    if rows_fb:
+        semana = rows_fb[-1]["dia"] or ""
+
+    return {
+        "semana": semana,
+        "engagement": round(media, 1),
+        "fuente": fuente_top,
+        "noticia": noticia_top,
+        "fecha": fecha_top,
+        "n_picos": n_picos,
+        "coincidencias": coincidencias,
+        "indice_correlacion": indice,
+    }
 
 
 def get_fb_daily_volumes(db_path=None):

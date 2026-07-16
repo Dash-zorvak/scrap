@@ -75,8 +75,9 @@ _page_head(
     "Cargue informes consolidados, evidencia documental y briefings diarios. Cada documento se incorpora al pipeline de inteligencia."
 )
 
-tab_carga, tab_editor, tab_aprobar = st.tabs([
-    "📥 Cargar contenido", "🛠️ Editar base de datos", "✅ Aprobar temas"
+tab_carga, tab_editor, tab_aprobar, tab_aprobar_tk, tab_aprobar_ext = st.tabs([
+    "📥 Cargar contenido", "🛠️ Editar base de datos",
+    "✅ Aprobar temas", "✅ Aprobar temas (TikTok)", "✅ Aprobar temas (Externos)",
 ])
 with tab_carga:
     seccion_cargar_contenido()
@@ -84,3 +85,7 @@ with tab_editor:
     seccion_editar_db()
 with tab_aprobar:
     render_revisor_temas(FACEBOOK_DB)
+with tab_aprobar_tk:
+    render_revisor_temas(TIKTOK_DB, tabla="comments", col_id="id", col_texto="text")
+with tab_aprobar_ext:
+    render_revisor_temas(EXTERNOS_DB, tabla="external_comments", col_id="comment_id", col_texto="message")

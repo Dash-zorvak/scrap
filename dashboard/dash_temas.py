@@ -42,15 +42,15 @@ def _ids_aprobados_en_periodo(db_path):
     return ids_aprobados(db_path)
 
 
-def render_revisor_temas(db_path):
+def render_revisor_temas(db_path, tabla="fb_comments", col_id="comment_id", col_texto="message"):
     with st.expander("✍️ Revisar y aprobar temas", expanded=False):
         import sqlite3
         ids_ok = _ids_aprobados_en_periodo(db_path)
         try:
             conn = sqlite3.connect(db_path)
             rows = conn.execute(
-                "SELECT comment_id, message FROM fb_comments "
-                "WHERE message IS NOT NULL AND message != ''"
+                f"SELECT {col_id}, {col_texto} FROM {tabla} "
+                f"WHERE {col_texto} IS NOT NULL AND {col_texto} != ''"
             ).fetchall()
             conn.close()
         except Exception:

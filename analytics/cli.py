@@ -67,7 +67,9 @@ def cmd_generar(args):
     """Genera y publica analysis.json."""
     from dashboard.tema_aprobaciones import agregar_por_tema
     from analytics.queries import (
-        get_fb_comments_with_messages, get_fb_stats, get_tk_stats,
+        get_fb_comments_with_messages, get_tk_comments_with_messages,
+        get_ext_comments_with_messages,
+        get_fb_stats, get_tk_stats, get_externos_stats,
         get_fb_daily_volumes, get_tk_daily_volumes,
         get_fb_monthly_sentiment, get_fb_per_theme_controversy,
         get_fb_posts_with_sentiment, get_fb_controversial_posts,
@@ -76,19 +78,42 @@ def cmd_generar(args):
         get_fb_monthly_er, get_tk_monthly_er,
     )
 
-    db_path = args.db or _cfg.EXTERNOS_DB
-    aprobaciones = agregar_por_tema(db_path)
+    # Combinar aprobaciones de las 3 DBs
+    if args.db:
+        aprobaciones = agregar_por_tema(args.db)
+        if aprobaciones:
+            for a in aprobaciones:
+                a.setdefault("plataforma", "override")
+    else:
+        aprobaciones = []
+        for label, db in [("facebook", _cfg.FACEBOOK_DB),
+                          ("tiktok", _cfg.TIKTOK_DB),
+                          ("externos", _cfg.EXTERNOS_DB)]:
+            try:
+                parcial = agregar_por_tema(db)
+                for a in parcial:
+                    a.setdefault("plataforma", label)
+                aprobaciones.extend(parcial)
+            except Exception:
+                pass
+        # Re-ordenar por doc_count descendente y renumerar ids
+        aprobaciones.sort(key=lambda x: -x.get("doc_count", 0))
+        for i, a in enumerate(aprobaciones):
+            a["id"] = i + 1
 
     if not aprobaciones:
         print("No hay aprobaciones para generar el reporte.")
         return 1
 
-    # Obtener textos crudos de comentarios para sentimiento léxico
-    try:
-        comments = get_fb_comments_with_messages()
-        texts = [msg for _, msg in comments if msg]
-    except Exception:
-        texts = []
+    # Obtener textos crudos de comentarios de las 3 plataformas
+    texts = []
+    for fetcher in (get_fb_comments_with_messages, get_tk_comments_with_messages,
+                    get_ext_comments_with_messages):
+        try:
+            comments = fetcher()
+            texts.extend(msg for _, msg in comments if msg)
+        except Exception:
+            pass
 
     # Obtener stats de plataformas desde las DBs
     fb_stats = None
@@ -105,6 +130,13 @@ def cmd_generar(args):
         if tk and tk.get("videos", 0) > 0:
             tk_stats = tk
             tk_stats["daily_volumes"] = get_tk_daily_volumes()
+    except Exception:
+        pass
+    externos_stats = None
+    try:
+        ext = get_externos_stats()
+        if ext and ext.get("posts", 0) > 0:
+            externos_stats = ext
     except Exception:
         pass
 
@@ -160,6 +192,7 @@ def cmd_generar(args):
         comentarios_texts=texts if texts else None,
         fb_stats=fb_stats,
         tk_stats=tk_stats,
+        externos_stats=externos_stats,
         er_previo=er_previo,
         fb_monthly_sentiment=fb_monthly_sentiment,
         fb_per_theme_controversy=fb_per_theme_controversy,

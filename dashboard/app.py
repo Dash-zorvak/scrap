@@ -1546,3 +1546,44 @@ with tab_intel:
                     f'color:var(--accent);margin:3px 0;text-decoration:none">🔗 {safe_url}</a>',
                     unsafe_allow_html=True
                 )
+
+    # ── 17 · Indice de Correlacion Externa ────────────────────────────
+    ice = b4.get("indice_correlacion_externa", {})
+    if ice and ice.get("n_picos", 0) > 0:
+        st.markdown('<div class="section-header" style="margin-top:24px"><div class="section-title">17 · Correlacion Externa</div></div>', unsafe_allow_html=True)
+        indice_val = _n(ice.get("indice_correlacion", 0))
+        n_picos = int(_n(ice.get("n_picos", 0)))
+        coincidencias = int(_n(ice.get("coincidencias", 0)))
+        fuente = safe_text(ice.get("fuente", "—"))
+        noticia = safe_text(ice.get("noticia", "—")[:200])
+        fecha = safe_text(ice.get("fecha", "—"))
+        indice_color = "var(--red)" if indice_val >= 0.6 else ("var(--amber)" if indice_val >= 0.3 else "var(--green)")
+        st.markdown(f"""
+        <div class="panel">
+            <div class="panel-head">
+                <div class="panel-title">CORRELACION PICOS vs NOTICIAS EXTERNAS</div>
+                <div class="panel-meta">INDICE: {indice_val:.2f}</div>
+            </div>
+            <div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
+                <div class="stat-card">
+                    <div class="stat-value" style="color:{indice_color}">{indice_val:.2f}</div>
+                    <div class="stat-label">INDICE</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{n_picos}</div>
+                    <div class="stat-label">PICOS DETECTADOS</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{coincidencias}</div>
+                    <div class="stat-label">COINCIDENCIAS</div>
+                </div>
+            </div>
+            <div style="font-size:11px;color:var(--fg-secondary);margin-top:8px">
+                <strong>Fuente:</strong> {fuente} · <strong>Fecha:</strong> {fecha}
+            </div>
+            {f'<div style="font-size:11px;color:var(--fg-muted);font-style:italic;margin-top:4px">"{noticia}"</div>' if noticia and noticia != "—" else ''}
+        </div>
+        """, unsafe_allow_html=True)
+    elif ice:
+        st.markdown('<div class="section-header" style="margin-top:24px"><div class="section-title">17 · Correlacion Externa</div></div>', unsafe_allow_html=True)
+        _render_estado_vacio("Sin datos suficientes para calcular correlacion con noticias externas.")

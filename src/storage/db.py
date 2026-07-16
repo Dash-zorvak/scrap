@@ -454,3 +454,214 @@ class LocalStorage:
             ))
         logger.info("delete_fb_post %s by %s (comments: %d)", post_id, actor, n_comments)
         return True
+
+
+# ════════════════════════════════════════════════════════════════
+# TikTok Storage (raw sqlite3 + audit_log)
+# ════════════════════════════════════════════════════════════════
+
+COLUMNAS_TIKTOK_EDITABLES = frozenset({
+    "account_id", "description", "created_at", "views", "likes",
+    "shares", "favorites_count", "comments_count", "post_url",
+})
+
+_CAMPOS_ENTEROS_TK = frozenset({
+    "views", "likes", "shares", "favorites_count", "comments_count",
+})
+
+
+def _asegurar_audit_log_tiktok(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY,
+            tabla TEXT NOT NULL,
+            registro_id TEXT NOT NULL,
+            accion TEXT NOT NULL,
+            actor TEXT DEFAULT 'analista',
+            campos_modificados TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+
+
+class TikTokStorage:
+    def __init__(self, db_path=None):
+        import sqlite3 as _sqlite3
+        cfg = Config()
+        self._db_path = db_path or cfg.TIKTOK_DB
+        self._conn = _sqlite3.connect(self._db_path)
+        self._conn.row_factory = _sqlite3.Row
+        _asegurar_audit_log_tiktok(self._conn)
+
+    def close(self):
+        if self._conn:
+            self._conn.close()
+
+    def _validar_fecha_iso(self, valor, campo):
+        if valor is None or valor == "":
+            return None
+        if isinstance(valor, str):
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+                try:
+                    return valor.strip()
+                except ValueError:
+                    continue
+            try:
+                datetime.fromisoformat(valor.strip())
+                return valor.strip()
+            except ValueError:
+                pass
+        raise ValueError(
+            f"Campo '{campo}': fecha no valida: {valor!r}. "
+            "Formato esperado YYYY-MM-DD o YYYY-MM-DD HH:MM:SS."
+        )
+
+    def _validar_entero(self, valor, campo):
+        if valor is None:
+            return 0
+        try:
+            v = int(valor)
+        except (ValueError, TypeError):
+            raise ValueError(f"Campo '{campo}': se esperaba entero, se recibio {valor!r}.")
+        if v < 0:
+            raise ValueError(f"Campo '{campo}': no puede ser negativo ({v}).")
+        return v
+
+    def update_video(self, video_id, fields, actor="analista"):
+        campos = {k: v for k, v in (fields or {}).items() if k in COLUMNAS_TIKTOK_EDITABLES}
+        if not campos:
+            return False
+        for k, v in campos.items():
+            if k == "created_at":
+                campos[k] = self._validar_fecha_iso(v, k)
+            elif k in _CAMPOS_ENTEROS_TK:
+                campos[k] = self._validar_entero(v, k)
+        sets = ", ".join(f'"{k}" = ?' for k in campos)
+        valores = list(campos.values()) + [str(video_id)]
+        cur = self._conn.execute(
+            f"UPDATE videos SET {sets} WHERE id = ?", valores
+        )
+        cambio = cur.rowcount > 0
+        if cambio:
+            self._conn.execute(
+                "INSERT INTO audit_log (tabla, registro_id, accion, actor, campos_modificados) "
+                "VALUES (?, ?, 'update', ?, ?)",
+                ("videos", str(video_id), actor, json.dumps(campos, default=str)),
+            )
+            self._conn.commit()
+        logger.info("update_video %s by %s: %s", video_id, actor, list(campos.keys()))
+        return cambio
+
+    def delete_video(self, video_id, actor="analista"):
+        n_comments = self._conn.execute(
+            "DELETE FROM comments WHERE video_id = ?", (str(video_id),)
+        ).rowcount
+        cur = self._conn.execute(
+            "DELETE FROM videos WHERE id = ?", (str(video_id),)
+        )
+        cambio = cur.rowcount > 0
+        if cambio:
+            self._conn.execute(
+                "INSERT INTO audit_log (tabla, registro_id, accion, actor, campos_modificados) "
+                "VALUES (?, ?, 'delete', ?, ?)",
+                ("videos", str(video_id), actor, json.dumps({"deleted_comments": n_comments})),
+            )
+            self._conn.commit()
+        logger.info("delete_video %s by %s (comments: %d)", video_id, actor, n_comments)
+        return cambio
+
+
+# ════════════════════════════════════════════════════════════════
+# Externos Storage (raw sqlite3 + audit_log)
+# ════════════════════════════════════════════════════════════════
+
+COLUMNAS_EXTERNOS_POST_EDITABLES = frozenset({
+    "page_name", "page_url", "message", "created_time",
+    "total_reactions", "comments_count", "post_url", "source",
+})
+
+_CAMPOS_ENTEROS_EXT = frozenset({
+    "total_reactions", "comments_count",
+})
+
+
+def _asegurar_audit_log_externos(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY,
+            tabla TEXT NOT NULL,
+            registro_id TEXT NOT NULL,
+            accion TEXT NOT NULL,
+            actor TEXT DEFAULT 'analista',
+            campos_modificados TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+
+
+class ExternosStorage:
+    def __init__(self, db_path=None):
+        import sqlite3 as _sqlite3
+        cfg = Config()
+        self._db_path = db_path or cfg.EXTERNOS_DB
+        self._conn = _sqlite3.connect(self._db_path)
+        self._conn.row_factory = _sqlite3.Row
+        _asegurar_audit_log_externos(self._conn)
+
+    def close(self):
+        if self._conn:
+            self._conn.close()
+
+    def _validar_entero(self, valor, campo):
+        if valor is None:
+            return 0
+        try:
+            v = int(valor)
+        except (ValueError, TypeError):
+            raise ValueError(f"Campo '{campo}': se esperaba entero, se recibio {valor!r}.")
+        if v < 0:
+            raise ValueError(f"Campo '{campo}': no puede ser negativo ({v}).")
+        return v
+
+    def update_post(self, post_id, fields, actor="analista"):
+        campos = {k: v for k, v in (fields or {}).items() if k in COLUMNAS_EXTERNOS_POST_EDITABLES}
+        if not campos:
+            return False
+        for k, v in campos.items():
+            if k in _CAMPOS_ENTEROS_EXT:
+                campos[k] = self._validar_entero(v, k)
+        sets = ", ".join(f'"{k}" = ?' for k in campos)
+        valores = list(campos.values()) + [str(post_id)]
+        cur = self._conn.execute(
+            f"UPDATE external_posts SET {sets} WHERE post_id = ?", valores
+        )
+        cambio = cur.rowcount > 0
+        if cambio:
+            self._conn.execute(
+                "INSERT INTO audit_log (tabla, registro_id, accion, actor, campos_modificados) "
+                "VALUES (?, ?, 'update', ?, ?)",
+                ("external_posts", str(post_id), actor, json.dumps(campos, default=str)),
+            )
+            self._conn.commit()
+        logger.info("update_post %s by %s: %s", post_id, actor, list(campos.keys()))
+        return cambio
+
+    def delete_post(self, post_id, actor="analista"):
+        n_comments = self._conn.execute(
+            "DELETE FROM external_comments WHERE post_id = ?", (str(post_id),)
+        ).rowcount
+        cur = self._conn.execute(
+            "DELETE FROM external_posts WHERE post_id = ?", (str(post_id),)
+        )
+        cambio = cur.rowcount > 0
+        if cambio:
+            self._conn.execute(
+                "INSERT INTO audit_log (tabla, registro_id, accion, actor, campos_modificados) "
+                "VALUES (?, ?, 'delete', ?, ?)",
+                ("external_posts", str(post_id), actor, json.dumps({"deleted_comments": n_comments})),
+            )
+            self._conn.commit()
+        logger.info("delete_post %s by %s (comments: %d)", post_id, actor, n_comments)
+        return cambio

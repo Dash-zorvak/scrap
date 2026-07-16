@@ -18,8 +18,6 @@ from typing import Any
 from dashboard.llm_groq import (
     chat_vision,
     groq_disponible,
-    VENTANA,
-    SOLAPE,
 )
 
 
@@ -914,12 +912,10 @@ def _depurar_posts(posts: list) -> list:
 def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
     """Extrae UNO O VARIOS posts desde archivos (PDF o imágenes) con Groq Visión.
 
-    Para pocas páginas (≤ VENTANA): una sola llamada con prompt multi-post.
-    Para muchas páginas (> VENTANA): extracción por ventanas con solape.
-
-    En ambos caminos se filtran posts vacíos y se fusionan los fragmentos del
-    mismo post (ver _fusionar_posts), de modo que un mismo post repartido en
-    varias páginas (enlace + captura + comentarios) NO se divida en varios.
+    Realiza una sola llamada a chat_vision con TODAS las páginas/imágenes
+    recibidas, sin importar cuántas sean. El modelo agrupa los posts y
+    _fusionar_posts() combina fragmentos del mismo post (enlace + captura
+    + comentarios) que el modelo devuelva por separado.
 
     Args:
         archivos: Lista de UploadedFile de Streamlit, bytes o imágenes PIL.
@@ -944,101 +940,51 @@ def extraer_posts_desde_archivos(archivos: list, plataforma: str) -> dict:
 
     prompt_multi = _construir_prompt_multi(plataforma)
 
-    # ── Pocas páginas (≤ VENTANA) → una sola llamada ──
-    if len(paginas) <= VENTANA:
-        ultimo_error = None
-        for intento in range(2):
-            try:
-                texto_respuesta = chat_vision(prompt_multi, paginas)
-                if not texto_respuesta or not texto_respuesta.strip():
-                    ultimo_error = "Groq devolvió respuesta vacía"
-                    if intento == 0:
-                        prompt_multi = (
-                            prompt_multi
-                            + "\n\nADVERTENCIA: la respuesta anterior fue inválida. "
-                            'Devuelve SOLO JSON con la forma {"posts": [...]}, sin markdown.'
-                        )
-                    continue
-
-                parsed = _parsear_respuesta(texto_respuesta)
-                posts_raw = _extraer_lista_posts(parsed) if parsed is not None else []
-                if not posts_raw:
-                    ultimo_error = "No se detectaron posts en los archivos"
-                    if intento == 0:
-                        prompt_multi = (
-                            prompt_multi
-                            + "\n\nADVERTENCIA: la respuesta anterior no fue JSON válido o no "
-                            'traía posts. Devuelve SOLO JSON con la forma {"posts": [...]}.'
-                        )
-                    continue
-
-                posts = [_aplicar_contrato(p, plataforma) for p in posts_raw]
-                posts = _depurar_posts(posts)
-                if not posts:
-                    ultimo_error = "No se detectaron posts con contenido"
-                    if intento == 0:
-                        prompt_multi = (
-                            prompt_multi
-                            + "\n\nADVERTENCIA: la respuesta anterior no traía posts con "
-                            'contenido. Recuerda agrupar páginas del mismo post y devolver '
-                            'SOLO JSON con la forma {"posts": [...]}.'
-                        )
-                    continue
-                return {"posts": posts}
-
-            except Exception as e:
-                ultimo_error = f"Error en llamada al modelo de visión: {e}"
+    ultimo_error = None
+    for intento in range(2):
+        try:
+            texto_respuesta = chat_vision(prompt_multi, paginas)
+            if not texto_respuesta or not texto_respuesta.strip():
+                ultimo_error = "Groq devolvió respuesta vacía"
+                if intento == 0:
+                    prompt_multi = (
+                        prompt_multi
+                        + "\n\nADVERTENCIA: la respuesta anterior fue inválida. "
+                        'Devuelve SOLO JSON con la forma {"posts": [...]}, sin markdown.'
+                    )
                 continue
 
-        return {"error": ultimo_error or "Error desconocido"}
-
-    # ── Muchas páginas (> VENTANA) → extracción por ventanas + fusión ──
-    paso = max(1, VENTANA - SOLAPE)
-    ultimo_error = None
-    posts_raw = []
-
-    for i in range(0, len(paginas), paso):
-        ventana = paginas[i:i + VENTANA]
-        extraido = False
-
-        for intento in range(2):
-            try:
-                texto_respuesta = chat_vision(prompt_multi, ventana)
-                if not texto_respuesta or not texto_respuesta.strip():
-                    ultimo_error = "Groq devolvió respuesta vacía"
-                    if intento == 0:
-                        continue
-                    break
-
-                parsed = _parsear_respuesta(texto_respuesta)
-                batch = _extraer_lista_posts(parsed) if parsed is not None else []
-                if batch:
-                    posts_raw.extend(batch)
-                    extraido = True
-                    break
-                else:
-                    ultimo_error = "No se detectaron posts en la ventana"
-                    if intento == 0:
-                        continue
-                    break
-
-            except Exception as e:
-                ultimo_error = f"Error en extracción: {e}"
+            parsed = _parsear_respuesta(texto_respuesta)
+            posts_raw = _extraer_lista_posts(parsed) if parsed is not None else []
+            if not posts_raw:
+                ultimo_error = "No se detectaron posts en los archivos"
                 if intento == 0:
-                    continue
-                break
+                    prompt_multi = (
+                        prompt_multi
+                        + "\n\nADVERTENCIA: la respuesta anterior no fue JSON válido o no "
+                        'traía posts. Devuelve SOLO JSON con la forma {"posts": [...]}.'
+                    )
+                continue
 
-        if not extraido:
+            posts = [_aplicar_contrato(p, plataforma) for p in posts_raw]
+            posts = _depurar_posts(posts)
+            if not posts:
+                ultimo_error = "No se detectaron posts con contenido"
+                if intento == 0:
+                    prompt_multi = (
+                        prompt_multi
+                        + "\n\nADVERTENCIA: la respuesta anterior no traía posts con "
+                        'contenido. Recuerda agrupar páginas del mismo post y devolver '
+                        'SOLO JSON con la forma {"posts": [...]}.'
+                    )
+                continue
+            return {"posts": posts}
+
+        except Exception as e:
+            ultimo_error = f"Error en llamada al modelo de visión: {e}"
             continue
 
-    if not posts_raw:
-        return {"error": ultimo_error or "No se pudo extraer ningún post"}
-
-    posts_contratos = [_aplicar_contrato(p, plataforma) for p in posts_raw]
-    posts_finales = _depurar_posts(posts_contratos)
-    if not posts_finales:
-        return {"error": ultimo_error or "No se pudo extraer ningún post con contenido"}
-    return {"posts": posts_finales}
+    return {"error": ultimo_error or "Error desconocido"}
 
 
 # ═══════════════════════════════════

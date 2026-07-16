@@ -37,11 +37,12 @@ autenticación y los 400 de petición (salvo el de multi-imagen) se propagan sin
 probar respaldos. LLM_VISION_FALLBACK admite una lista separada por comas.
 
 IMPORTANTE (multi-imagen): la ingesta envía VARIAS imágenes por llamada
-(ventanas de páginas/posts). El modelo de visión y cualquier respaldo DEBEN
-admitir múltiples imágenes por prompt. Si configuras un modelo de una sola
-imagen como meta/llama-3.2-11b-vision-instruct, NIM lo rechaza con 400 ("At most
-1 image(s) may be provided in one prompt"); ese error ahora también dispara la
-cascada hacia el siguiente respaldo, pero si TODOS los modelos configurados son
+(todas las páginas de los archivos cargados). El modelo de visión y cualquier
+respaldo DEBEN admitir múltiples imágenes por prompt. Si configuras un modelo
+de una sola imagen como meta/llama-3.2-11b-vision-instruct, NIM lo rechaza
+con 400 ("At most 1 image(s) may be provided in one prompt"); ese error ahora
+también dispara la cascada hacia el siguiente respaldo, pero si TODOS los
+modelos configurados son
 de una sola imagen la ingesta fallará. Configura siempre modelos multi-imagen.
 
 En local, las variables se leen de un archivo .env (cargado con load_dotenv).
@@ -104,8 +105,8 @@ VISION_MODEL = _primer_env(
 )
 # Modelos de respaldo de visión: se prueban en orden si el primario falla con
 # un error de servidor/modelo (5xx/404/DEGRADED) o si solo admite una imagen.
-# IMPORTANTE: la ingesta envía VARIAS imágenes por llamada (ventanas de
-# páginas/posts), así que el respaldo debe ser un modelo MULTI-IMAGEN. NO uses
+# IMPORTANTE: la ingesta envía VARIAS imágenes por llamada (todas las páginas
+# de los archivos cargados), así que el respaldo debe ser un modelo MULTI-IMAGEN. NO uses
 # modelos de una sola imagen como meta/llama-3.2-11b-vision-instruct: NIM los
 # rechaza con 400 ("At most 1 image(s) may be provided in one prompt"); ese
 # error ahora dispara la cascada, pero si todos los modelos son de una imagen la
@@ -115,8 +116,6 @@ VISION_FALLBACKS = _lista_env(
     "LLM_VISION_FALLBACK",
     [],
 )
-VENTANA = int(os.environ.get("GROQ_VENTANA_PAGINAS", "4"))
-SOLAPE = int(os.environ.get("GROQ_SOLAPE_PAGINAS", "1"))
 GROQ_MAX_LADO = int(os.environ.get("GROQ_MAX_LADO", "1280"))
 GROQ_JPEG_QUALITY = int(os.environ.get("GROQ_JPEG_QUALITY", "82"))
 

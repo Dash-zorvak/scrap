@@ -290,6 +290,81 @@ EMOTION_LEXICON: dict[str, set[str]] = {
         "ya veremos", "sarcastico", "burla", "ironia",
         "que bonito", "ay que bueno",
     },
+    # ── Nuevas primarias (split de slash labels) ──
+    "panico": {
+        "panico", "pavor", "desesperado", "desesperada", "angustia",
+        "alarma generalizada", "todo esta perdido", "catastrofe",
+        "se viene todo abajo",
+    },
+    "pena_profunda": {
+        "luto", "conmocion", "duelo", "communidad de dolor",
+        "lloramos juntos", "tragedia colectiva", "pueblo llora",
+        "nos duele", "dolor colectivo",
+    },
+    "indignacion_moral": {
+        "inmoral", "corrupto", "corrupta", "delincuente",
+        "no tiene verguenza", "ladron", "ladrona", "escandalo",
+        "abuso de poder", "falta de etica",
+    },
+    "indiferencia": {
+        "me da igual", "no me importa", "que importa",
+        "para que", "ya no creo", "ya nada importa",
+        "da igual", "sin interes", "apatico", "apatica",
+    },
+    "molestia": {
+        "molestia", "molesto", "molesta", "incomodo", "incmoda",
+        "no me gusta", "me cae mal", "fastidia",
+    },
+    "ira": {
+        "ira", "iracundo", "iracunda", "odio profundo",
+        "rabia profunda", "furia contenida", "rencor",
+        "resentimiento", "desesperanza furiosa",
+    },
+    "alerta_expectante": {
+        "vigilo", "atento", "atenta", "no me pierdo nada",
+        "seguir de cerca", "monitorear", "controlar",
+        "veremos que pasa", "estoy pendiente",
+    },
+    # ── Nuevas díadas ──
+    "envidia": {
+        "envidia", "envidioso", "envidiosa", "le duele que",
+        "que tienen ellos", "yo quiero eso", "por que ellos si",
+        "desigualdad", "injusticia",
+    },
+    "culpa": {
+        "culpa", "culpable", "me siento culpable", "fue mi culpa",
+        "no deberia haber", "me arrepiento", "deberia haber hecho",
+    },
+    "curiosidad": {
+        "curiosidad", "curioso", "curiosa", "quiero saber",
+        "me gustaria saber", "alguien sabe", "algun dato",
+        "informacion", "que pasaria si",
+    },
+    "esperanza": {
+        "esperanza", "espero", "confio en que", "ojala",
+        "ojala que", "tengo fe", "se puede mejorar",
+        "mejorara", "habra cambio",
+    },
+    "indignacion": {
+        "indignado", "indignada", "no es justo", "injusto",
+        "injusta", "como es posible", "no puede ser",
+        "escandalo", "abuso",
+    },
+    "incredulidad": {
+        "no puedo creer", "imposible", "de verdad",
+        "en serio", "no me lo creo", "es broma",
+        "es mentira", "fake", "no es cierto",
+    },
+    "ansiedad": {
+        "ansioso", "ansiosa", "nervioso", "nerviosa",
+        "inquieto", "inquieta", "no puedo dormir",
+        "me preocupa el futuro", "que va a pasar",
+    },
+    "pesimismo": {
+        "pesimista", "pesimismo", "no va a mejorar",
+        "cada vez peor", "no hay solucion", "estamos perdidos",
+        "ya no hay esperanza", "todo empeora",
+    },
 }
 
 

@@ -84,7 +84,7 @@ with tab_carga:
 with tab_editor:
     seccion_editar_db()
 with tab_aprobar:
-    render_revisor_temas(FACEBOOK_DB)
+    render_revisor_temas(FACEBOOK_DB, col_parent="parent_comment_id")
 with tab_aprobar_tk:
     render_revisor_temas(TIKTOK_DB, tabla="comments", col_id="id", col_texto="text")
 with tab_aprobar_ext:

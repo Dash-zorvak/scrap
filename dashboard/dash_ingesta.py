@@ -177,6 +177,126 @@ def seccion_revisar_lote() -> None:
             status.update(label=f"✅ Extracción completada ({n_total} posts)", state="complete", expanded=False)
             st.rerun()
 
+        # ── Vía alterna: importar JSON ya extraído ──
+        st.markdown("---")
+        st.markdown("#### 📥 Importar JSON extraído externamente")
+        st.caption(
+            "Si ya tienes el JSON generado por otro modelo (Gemini, ChatGPT, etc.), "
+            "sube aquí para aplicar directamente sin usar la IA."
+        )
+
+        if len(pendientes) > 1:
+            opciones_pendientes = [
+                f"{p['fuente']} ({p['plataforma']})" for p in pendientes
+            ]
+            idx_seleccionado = st.selectbox(
+                "Selecciona el item pendiente",
+                range(len(opciones_pendientes)),
+                format_func=lambda i: opciones_pendientes[i],
+                key="import_json_select",
+            )
+            item_seleccionado = pendientes[idx_seleccionado]
+        else:
+            item_seleccionado = pendientes[0]
+
+        archivo_json = st.file_uploader(
+            "Importar JSON ya extraído (opcional)",
+            type=["json"],
+            key="import_json_uploader",
+        )
+
+        if st.button("📥 Aplicar JSON importado", key="btn_importar_json"):
+            if not archivo_json:
+                st.error("Sube un archivo JSON primero.")
+            else:
+                import json as _json
+                from ingreso_extraccion import _aplicar_contrato
+
+                try:
+                    contenido = archivo_json.read().decode("utf-8")
+                    datos_json = _json.loads(contenido)
+                except (UnicodeDecodeError, _json.JSONDecodeError) as e:
+                    st.error(f"El archivo no es un JSON válido: {e}")
+                else:
+                    if (
+                        not isinstance(datos_json, dict)
+                        or "posts" not in datos_json
+                        or not isinstance(datos_json["posts"], list)
+                    ):
+                        st.error('El JSON debe tener la forma {"posts": [...]}.')
+                    else:
+                        posts_raw = datos_json["posts"]
+                        if not posts_raw:
+                            st.error("El JSON no contiene posts.")
+                        else:
+                            plat_extraccion = (
+                                "facebook"
+                                if item_seleccionado["plataforma"] == "externos"
+                                else item_seleccionado["plataforma"]
+                            )
+                            nuevos_items = []
+                            error_msg = None
+
+                            for i, post_crudo in enumerate(posts_raw):
+                                try:
+                                    post_normalizado = _aplicar_contrato(
+                                        post_crudo, plat_extraccion
+                                    )
+                                except Exception as e:
+                                    error_msg = (
+                                        f"Error al procesar post {i+1} del JSON: {e}"
+                                    )
+                                    break
+
+                                enlace_auto = (
+                                    post_normalizado.get("enlace") or {}
+                                ).get("valor")
+                                nuevos_items.append({
+                                    "id_temporal": str(uuid.uuid4()),
+                                    "plataforma": item_seleccionado["plataforma"],
+                                    "fuente": item_seleccionado["fuente"],
+                                    "imagenes": item_seleccionado["imagenes"],
+                                    "enlace": enlace_auto
+                                    or item_seleccionado.get("enlace", ""),
+                                    "enlace_confianza": (
+                                        post_normalizado.get("enlace") or {}
+                                    ).get("confianza", "no_detectado"),
+                                    "estado": "extraido",
+                                    "datos_extraidos": post_normalizado,
+                                })
+
+                            if error_msg:
+                                lote_actual = list(
+                                    st.session_state["lote_ingreso"]
+                                )
+                                for item in lote_actual:
+                                    if (
+                                        item["id_temporal"]
+                                        == item_seleccionado["id_temporal"]
+                                    ):
+                                        item["estado"] = "error"
+                                        item["error_msg"] = error_msg
+                                        break
+                                st.session_state["lote_ingreso"] = lote_actual
+                                st.error(f"❌ {error_msg}")
+                            else:
+                                lote_actual = list(
+                                    st.session_state["lote_ingreso"]
+                                )
+                                nuevos = [
+                                    item
+                                    for item in lote_actual
+                                    if item["id_temporal"]
+                                    != item_seleccionado["id_temporal"]
+                                ]
+                                nuevos.extend(nuevos_items)
+                                st.session_state["lote_ingreso"] = nuevos
+                                st.success(
+                                    f"✅ {len(nuevos_items)} post(s) importado(s) "
+                                    "desde JSON."
+                                )
+                                st.rerun()
+
     # ── Paso 2: Tarjetas editables ──
     if extraidos:
         st.markdown("### ✏️ Revisión y corrección")

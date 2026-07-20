@@ -432,14 +432,18 @@ def seccion_revisar_lote() -> None:
                     # ── Comentarios (data_editor dinámico) ──
                     comments_key = f"rev_comments_{id_}"
                     raw = datos.get("comentarios", [])
+                    _COMMENT_FIELDS = ["emocion", "intensidad", "confianza_emocion", "tema_sugerido"]
                     if item["plataforma"] in ("facebook", "externos"):
                         df_init = pd.DataFrame([
                             {"texto": c.get("texto", ""), "autor": c.get("autor") or ""}
+                            | {f: c.get(f, "") for f in _COMMENT_FIELDS}
                             for c in raw
                         ])
                     else:
                         df_init = pd.DataFrame([
-                            {"texto": c.get("texto", "")} for c in raw
+                            {"texto": c.get("texto", "")}
+                            | {f: c.get(f, "") for f in _COMMENT_FIELDS}
+                            for c in raw
                         ])
 
                     st.markdown("**Comentarios transcritos**")
@@ -501,6 +505,10 @@ def _confirmar_post(item: dict, texto_key: str, fecha_key: str, df_comentarios: 
             entry = {"texto": t}
             if plataforma in ("facebook", "externos"):
                 entry["autor"] = str(row.get("autor", "") or "").strip() or None
+            for field in ("emocion", "intensidad", "confianza_emocion", "tema_sugerido"):
+                val = row.get(field)
+                if val is not None and str(val).strip():
+                    entry[field] = str(val).strip()
             comentarios.append(entry)
 
     muestra_suf = len(comentarios) >= 15

@@ -144,8 +144,7 @@ def test_esquema_tiktok_tema_aprobaciones():
     esperadas = {
         "comment_id", "tema", "tema_sugerido", "tono",
         "postura", "confianza", "texto", "estado", "fecha", "emocion",
-        "subtema_especifico", "intensidad_postura", "emociones",
-        "relevancia_al_post",
+        "intensidad_postura", "emociones",
     }
     assert cols == esperadas, (
         f"Columnas en tiktok tema_aprobaciones: {cols}\n"

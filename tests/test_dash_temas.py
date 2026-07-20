@@ -1,8 +1,6 @@
-"""Tests para dashboard/dash_temas.py — parametrización y controles nuevos (Puntos 1-4)."""
+"""Tests para dashboard/dash_temas.py — parametrización y controles."""
 import inspect
 import os
-import sqlite3
-import tempfile
 
 import pytest
 
@@ -55,35 +53,32 @@ def test_render_revisor_temas_sql_usa_parametros():
     assert "{col_texto}" in src
 
 
-# ── Tests nuevos (Puntos 1-4) ──────────────────────────────
-
-
-def test_dash_temas_usa_multiselect_emociones():
-    """El selector de emoción usa st.multiselect (selección múltiple)."""
+def test_dash_temas_solo_selector_tema():
+    """El código solo incluye selector de tema, no controles manuales de postura/emoción."""
     src = _leer_fuente()
-    assert "st.multiselect" in src
-    assert "Emociones" in src
+    assert "selectbox" in src
+    assert "_OPCIONES" in src
+    assert "guardar_aprobacion" in src
 
 
-def test_dash_temas_tiene_intensidad_postura():
-    """El código incluye selector de intensidad de postura."""
+def test_dash_temas_no_tiene_entidad_control():
+    """El código ya no incluye control de entidad/subtema específico."""
     src = _leer_fuente()
-    assert "intensidad" in src.lower() or "INTENSIDAD" in src
-    assert "fuerte" in src
+    assert "entidad" not in src.lower() or "ENTIDAD" not in src
+    assert "subtema_especifico" not in src
 
 
-def test_dash_temas_tiene_entidad_control():
-    """El código incluye control de entidad/subtema específico."""
+def test_dash_temas_no_tiene_relevancia_control():
+    """El código ya no incluye control de relevancia al post."""
     src = _leer_fuente()
-    assert "entidad" in src.lower() or "ENTIDAD" in src
-    assert "subtema" in src.lower() or "Entidad" in src
+    assert "relevancia_al_post" not in src
+    assert "RELEVANCIAS_POST" not in src
 
 
-def test_dash_temas_tiene_relevancia_control():
-    """El código incluye control de relevancia al post."""
+def test_dash_temas_no_tiene_postura_selector():
+    """El código ya no incluye selector manual de postura."""
     src = _leer_fuente()
-    assert "relevancia" in src.lower() or "RELEVANCIA" in src
-    assert "ruido_conversacional" in src
+    assert "_POSTURA_OPCIONES" not in src
 
 
 def test_dash_temas_tiene_contexto_padre():
@@ -91,17 +86,3 @@ def test_dash_temas_tiene_contexto_padre():
     src = _leer_fuente()
     assert "padre" in src.lower() or "parent" in src.lower()
     assert "_obtener_texto_padre" in src
-
-
-def test_dash_temas_registra_entidad_propuesta():
-    """El código registra entidades nuevas写入手写 en propuestas."""
-    src = _leer_fuente()
-    assert "_registrar_entidad_propuesta" in src
-
-
-def test_dash_temas_importa_entidades():
-    """dash_temas.py importa del catálogo de entidades."""
-    src = _leer_fuente()
-    assert "entidades_taxonomia" in src
-    assert "ENTIDADES" in src or "entidad" in src.lower()
-

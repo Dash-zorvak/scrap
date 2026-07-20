@@ -1,4 +1,4 @@
-"""Tests para tema_aprobaciones.py — schema, campos nuevos y agregación (Puntos 1-4)."""
+"""Tests para tema_aprobaciones.py — schema, campos y agregación."""
 import json
 import os
 import sqlite3
@@ -14,8 +14,7 @@ from dashboard.tema_aprobaciones import (
     ids_aprobados,
     INTENSIDADES_POSTURA,
     INTENSIDAD_POSTURA_DEFAULT,
-    RELEVANCIAS_POST,
-    RELEVANCIA_DEFAULT,
+    derivar_postura,
 )
 
 
@@ -28,17 +27,17 @@ def _crear_bd_temp():
 
 
 class TestSchemaMigration:
-    def test_crea_tabla_con_nuevas_columnas(self):
+    def test_crea_tabla_con_columnas(self):
         db = _crear_bd_temp()
         try:
             asegurar_tabla(db)
             conn = sqlite3.connect(db)
             cols = {r[1] for r in conn.execute("PRAGMA table_info(tema_aprobaciones)").fetchall()}
             conn.close()
-            assert "subtema_especifico" in cols
             assert "intensidad_postura" in cols
             assert "emociones" in cols
-            assert "relevancia_al_post" in cols
+            assert "subtema_especifico" not in cols
+            assert "relevancia_al_post" not in cols
         finally:
             os.unlink(db)
 
@@ -53,6 +52,110 @@ class TestSchemaMigration:
             assert "emociones" in cols
         finally:
             os.unlink(db)
+
+    def test_elimina_columnas_obsoletas(self):
+        """Si la tabla ya tiene subtema_especifico/relevancia_al_post, se eliminan."""
+        db = _crear_bd_temp()
+        try:
+            conn = sqlite3.connect(db)
+            conn.execute("""
+                CREATE TABLE tema_aprobaciones (
+                    comment_id TEXT PRIMARY KEY,
+                    tema TEXT NOT NULL,
+                    tema_sugerido TEXT, tono TEXT,
+                    postura TEXT DEFAULT 'neutral',
+                    confianza REAL, texto TEXT,
+                    estado TEXT DEFAULT 'aprobado', fecha TEXT,
+                    emocion TEXT DEFAULT 'calma',
+                    subtema_especifico TEXT,
+                    intensidad_postura TEXT DEFAULT 'moderada',
+                    emociones TEXT,
+                    relevancia_al_post TEXT DEFAULT 'directo_al_post'
+                )
+            """)
+            conn.execute(
+                "INSERT INTO tema_aprobaciones "
+                "(comment_id, tema, texto, estado, fecha) "
+                "VALUES ('old1', 'seguridad', 'test old', 'aprobado', '2026-01-01')"
+            )
+            conn.commit()
+            conn.close()
+
+            asegurar_tabla(db)
+
+            conn = sqlite3.connect(db)
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(tema_aprobaciones)").fetchall()}
+            assert "subtema_especifico" not in cols
+            assert "relevancia_al_post" not in cols
+            row = conn.execute("SELECT comment_id, tema FROM tema_aprobaciones WHERE comment_id='old1'").fetchone()
+            conn.close()
+            assert row is not None
+            assert row[0] == "old1"
+        finally:
+            os.unlink(db)
+
+
+class TestDerivarPostura:
+    def test_alegria_es_apoyo(self):
+        assert derivar_postura("alegria") == "apoyo"
+
+    def test_confianza_es_apoyo(self):
+        assert derivar_postura("confianza") == "apoyo"
+
+    def test_optimismo_es_neutral(self):
+        """Optimismo es díada (anticipation+joy), familia 'diada' no está en
+        la tabla VALENCIA_POSTURA directamente, se devuelve neutral."""
+        assert derivar_postura("optimismo") == "neutral"
+
+    def test_esperanza_es_apoyo(self):
+        assert derivar_postura("esperanza") == "apoyo"
+
+    def test_enojo_es_critica(self):
+        assert derivar_postura("enojo") == "critica"
+
+    def test_tristeza_es_critica(self):
+        assert derivar_postura("tristeza") == "critica"
+
+    def test_desprecio_es_critica(self):
+        assert derivar_postura("desprecio") == "critica"
+
+    def test_ansiedad_es_critica(self):
+        assert derivar_postura("ansiedad") == "critica"
+
+    def test_indignacion_es_critica(self):
+        assert derivar_postura("indignacion") == "critica"
+
+    def test_sorpresa_es_neutral(self):
+        assert derivar_postura("sorpresa") == "neutral"
+
+    def test_culpa_es_neutral(self):
+        assert derivar_postura("culpa") == "neutral"
+
+    def test_calma_es_neutral(self):
+        assert derivar_postura("calma") == "neutral"
+
+    def test_reclamo_es_neutral(self):
+        assert derivar_postura("reclamo") == "neutral"
+
+    def test_reconocimiento_es_neutral(self):
+        assert derivar_postura("reconocimiento") == "neutral"
+
+    def test_ironia_es_neutral(self):
+        assert derivar_postura("ironia") == "neutral"
+
+    def test_none_devuelve_neutral(self):
+        assert derivar_postura(None) == "neutral"
+
+    def test_string_vacio_devuelve_neutral(self):
+        assert derivar_postura("") == "neutral"
+
+    def test_panico_es_critica(self):
+        """Panico pertenece a familia fear → critica."""
+        assert derivar_postura("panico") == "critica"
+
+    def test_euforia_es_apoyo(self):
+        """Euforia pertenece a familia joy → apoyo."""
+        assert derivar_postura("euforia") == "apoyo"
 
 
 class TestGuardarAprobacion:
@@ -90,18 +193,47 @@ class TestGuardarAprobacion:
         finally:
             os.unlink(db)
 
-    def test_guarda_subtema_especifico(self):
+    def test_postura_se_deriva_de_emocion(self):
         db = _crear_bd_temp()
         try:
-            ok = guardar_aprobacion(
-                db, "c3", "gobernanza", texto="test",
-                subtema_especifico="Juan Carlos",
+            guardar_aprobacion(
+                db, "c3a", "seguridad", texto="test",
+                emociones=["alegria"],
             )
-            assert ok is True
             conn = sqlite3.connect(db)
-            row = conn.execute("SELECT subtema_especifico FROM tema_aprobaciones WHERE comment_id='c3'").fetchone()
+            row = conn.execute("SELECT postura FROM tema_aprobaciones WHERE comment_id='c3a'").fetchone()
             conn.close()
-            assert row[0] == "Juan Carlos"
+            assert row[0] == "apoyo"
+        finally:
+            os.unlink(db)
+
+    def test_postura_critica_de_enojo(self):
+        db = _crear_bd_temp()
+        try:
+            guardar_aprobacion(
+                db, "c3b", "seguridad", texto="test",
+                emociones=["enojo"],
+            )
+            conn = sqlite3.connect(db)
+            row = conn.execute("SELECT postura FROM tema_aprobaciones WHERE comment_id='c3b'").fetchone()
+            conn.close()
+            assert row[0] == "critica"
+        finally:
+            os.unlink(db)
+
+    def test_postura_parametro_se_ignora(self):
+        """El parámetro postura se ignora siempre; se deriva de la emoción."""
+        db = _crear_bd_temp()
+        try:
+            guardar_aprobacion(
+                db, "c3c", "seguridad", texto="test",
+                emociones=["alegria"],
+                postura="critica",
+            )
+            conn = sqlite3.connect(db)
+            row = conn.execute("SELECT postura FROM tema_aprobaciones WHERE comment_id='c3c'").fetchone()
+            conn.close()
+            assert row[0] == "apoyo"
         finally:
             os.unlink(db)
 
@@ -110,7 +242,8 @@ class TestGuardarAprobacion:
         try:
             ok = guardar_aprobacion(
                 db, "c4", "seguridad", texto="test",
-                postura="apoyo", intensidad_postura="fuerte",
+                emociones=["enojo"],
+                intensidad_postura="fuerte",
             )
             assert ok is True
             conn = sqlite3.connect(db)
@@ -125,7 +258,8 @@ class TestGuardarAprobacion:
         try:
             ok = guardar_aprobacion(
                 db, "c5", "seguridad", texto="test",
-                postura="neutral", intensidad_postura="fuerte",
+                emociones=["calma"],
+                intensidad_postura="fuerte",
             )
             assert ok is True
             conn = sqlite3.connect(db)
@@ -141,45 +275,9 @@ class TestGuardarAprobacion:
             with pytest.raises(ValueError, match="Intensidad"):
                 guardar_aprobacion(
                     db, "c6", "seguridad", texto="test",
-                    postura="apoyo", intensidad_postura="extrema",
+                    emociones=["enojo"],
+                    intensidad_postura="extrema",
                 )
-        finally:
-            os.unlink(db)
-
-    def test_guarda_relevancia_al_post(self):
-        db = _crear_bd_temp()
-        try:
-            ok = guardar_aprobacion(
-                db, "c7", "seguridad", texto="test",
-                relevancia_al_post="ruido_conversacional",
-            )
-            assert ok is True
-            conn = sqlite3.connect(db)
-            row = conn.execute("SELECT relevancia_al_post FROM tema_aprobaciones WHERE comment_id='c7'").fetchone()
-            conn.close()
-            assert row[0] == "ruido_conversacional"
-        finally:
-            os.unlink(db)
-
-    def test_relevancia_invalida_lanza_value_error(self):
-        db = _crear_bd_temp()
-        try:
-            with pytest.raises(ValueError, match="Relevancia"):
-                guardar_aprobacion(
-                    db, "c8", "seguridad", texto="test",
-                    relevancia_al_post="fuera_de_tema",
-                )
-        finally:
-            os.unlink(db)
-
-    def test_relevancia_default(self):
-        db = _crear_bd_temp()
-        try:
-            guardar_aprobacion(db, "c9", "seguridad", texto="test")
-            conn = sqlite3.connect(db)
-            row = conn.execute("SELECT relevancia_al_post FROM tema_aprobaciones WHERE comment_id='c9'").fetchone()
-            conn.close()
-            assert row[0] == RELEVANCIA_DEFAULT
         finally:
             os.unlink(db)
 
@@ -203,15 +301,12 @@ class TestObtenerAprobaciones:
         try:
             guardar_aprobacion(
                 db, "o2", "seguridad", texto="test",
-                postura="apoyo",
-                subtema_especifico="Alcaldía",
+                emociones=["enojo"],
                 intensidad_postura="fuerte",
-                relevancia_al_post="tangencial_via_respuesta",
             )
             aps = obtener_aprobaciones(db)
-            assert aps["o2"]["subtema_especifico"] == "Alcaldía"
             assert aps["o2"]["intensidad_postura"] == "fuerte"
-            assert aps["o2"]["relevancia_al_post"] == "tangencial_via_respuesta"
+            assert aps["o2"]["postura"] == "critica"
         finally:
             os.unlink(db)
 
@@ -236,33 +331,18 @@ class TestObtenerAprobaciones:
 
 
 class TestAgregarPorTema:
-    def test_excluye_ruido_conversacional(self):
-        db = _crear_bd_temp()
-        try:
-            guardar_aprobacion(
-                db, "r1", "seguridad", texto="directo",
-                relevancia_al_post="directo_al_post",
-            )
-            guardar_aprobacion(
-                db, "r2", "seguridad", texto="ruido",
-                relevancia_al_post="ruido_conversacional",
-            )
-            temas = agregar_por_tema(db)
-            assert len(temas) == 1
-            assert temas[0]["doc_count"] == 1
-        finally:
-            os.unlink(db)
-
     def test_saldo_ponderado(self):
         db = _crear_bd_temp()
         try:
             guardar_aprobacion(
                 db, "s1", "seguridad", texto="apoyo fuerte",
-                postura="apoyo", intensidad_postura="fuerte",
+                emociones=["alegria"],
+                intensidad_postura="fuerte",
             )
             guardar_aprobacion(
                 db, "s2", "seguridad", texto="critica leve",
-                postura="critica", intensidad_postura="leve",
+                emociones=["tristeza"],
+                intensidad_postura="leve",
             )
             temas = agregar_por_tema(db)
             assert len(temas) == 1
@@ -287,33 +367,16 @@ class TestAgregarPorTema:
         finally:
             os.unlink(db)
 
-    def test_entidades_en_agregacion(self):
+    def test_no_contiene_entidades(self):
+        """La agregación ya no incluye campo entidades."""
         db = _crear_bd_temp()
         try:
             guardar_aprobacion(
                 db, "e1", "gobernanza", texto="test",
-                subtema_especifico="Juan Carlos",
-            )
-            guardar_aprobacion(
-                db, "e2", "gobernanza", texto="test2",
-                subtema_especifico="Juan Carlos",
+                emociones=["alegria"],
             )
             temas = agregar_por_tema(db)
             assert len(temas) == 1
-            assert temas[0]["entidades"]["Juan Carlos"] == 2
-        finally:
-            os.unlink(db)
-
-    def test_relevancia_excluida_no_aparece(self):
-        db = _crear_bd_temp()
-        try:
-            guardar_aprobacion(
-                db, "x1", "seguridad", texto="tangencial",
-                relevancia_al_post="tangencial_via_respuesta",
-            )
-            temas = agregar_por_tema(db)
-            # tangencial SÍ se cuenta (solo ruido se excluye)
-            assert len(temas) == 1
-            assert temas[0]["doc_count"] == 1
+            assert "entidades" not in temas[0]
         finally:
             os.unlink(db)

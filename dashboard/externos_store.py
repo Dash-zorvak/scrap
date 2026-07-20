@@ -77,6 +77,9 @@ def asegurar_tablas_externas(db_path=None):
         # Migrar columnas computed en external_comments
         from dashboard.tema_aprobaciones import _asegurar_columnas_computed
         _asegurar_columnas_computed(conn, "external_comments")
+        # Migrar columnas emocion/intensidad/confianza_emocion/tema_sugerido
+        from dashboard.tema_aprobaciones import _asegurar_columnas_emocion
+        _asegurar_columnas_emocion(conn, "external_comments")
         conn.commit()
     finally:
         conn.close()
@@ -194,12 +197,16 @@ def agregar_post_externo_manual(url, page_name="", total_reactions=0,
         conn.close()
 
 
-def insertar_comentario_externo(conn, comment_id, post_id, texto, autor=None):
+def insertar_comentario_externo(conn, comment_id, post_id, texto, autor=None,
+                                 emocion=None, intensidad=None,
+                                 confianza_emocion=None, tema_sugerido=None):
     """Inserta un comentario externo en external_comments."""
     conn.execute(
         """INSERT OR REPLACE INTO external_comments
-            (comment_id, post_id, message, author_name, created_time)
-            VALUES (?,?,?,?,?)""",
-        (comment_id, post_id, texto, (autor or "Anonymous"), None),
+            (comment_id, post_id, message, author_name, created_time,
+             emocion, intensidad, confianza_emocion, tema_sugerido)
+            VALUES (?,?,?,?,?,?,?,?,?)""",
+        (comment_id, post_id, texto, (autor or "Anonymous"), None,
+         emocion, intensidad, confianza_emocion, tema_sugerido),
     )
     return True

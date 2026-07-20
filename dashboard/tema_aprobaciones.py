@@ -600,6 +600,21 @@ def _asegurar_columnas_computed(conn, tabla):
             conn.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {tipo}")
 
 
+def _asegurar_columnas_emocion(conn, tabla):
+    """Agrega columnas emocion/intensidad/confianza_emocion/tema_sugerido
+    a una tabla de comentarios si no existen. Idempotente."""
+    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({tabla})").fetchall()}
+    migraciones = [
+        ("emocion", "TEXT"),
+        ("intensidad", "TEXT"),
+        ("confianza_emocion", "TEXT"),
+        ("tema_sugerido", "TEXT"),
+    ]
+    for col, tipo in migraciones:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {tipo}")
+
+
 def asegurar_computed_tiktok(tiktok_db_path):
     """Agrega columnas sentiment/sentiment_score/topic_category/zona a
     tiktok.db::comments (misma estructura que fb_comments)."""

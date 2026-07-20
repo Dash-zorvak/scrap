@@ -55,6 +55,10 @@ def _fb_comment_insert_dict(comentario: dict, comment_id: str, post_id: str) -> 
         "post_id": post_id,
         "message": comentario.get("texto", ""),
         "author_name": comentario.get("autor") or "",
+        "emocion": comentario.get("emocion") or None,
+        "intensidad": comentario.get("intensidad") or None,
+        "confianza_emocion": comentario.get("confianza_emocion") or None,
+        "tema_sugerido": comentario.get("tema_sugerido") or None,
     }
 
 
@@ -255,7 +259,13 @@ def guardar_lote(lote: list, progreso_cb=None) -> dict:
                             continue
                         cid = generar_id_comentario(post_id, texto, idx)
                         try:
-                            insertar_comentario_externo(conn_ext, cid, post_id, texto, c.get("autor"))
+                            insertar_comentario_externo(
+                                conn_ext, cid, post_id, texto, c.get("autor"),
+                                emocion=c.get("emocion") or None,
+                                intensidad=c.get("intensidad") or None,
+                                confianza_emocion=c.get("confianza_emocion") or None,
+                                tema_sugerido=c.get("tema_sugerido") or None,
+                            )
                             resumen["ext_comments"] += 1
                         except Exception:
                             resumen["errores"].append(f"Error insertando comentario externo: {cid}")

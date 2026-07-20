@@ -48,6 +48,10 @@ class FBComment(Base):
     like_count = sa.Column(sa.Integer, default=0)
     parent_comment_id = sa.Column(sa.Text, nullable=True)
     scraped_at = sa.Column(sa.DateTime, server_default=sa.func.now())
+    emocion = sa.Column(sa.Text, nullable=True)
+    intensidad = sa.Column(sa.Text, nullable=True)
+    confianza_emocion = sa.Column(sa.Text, nullable=True)
+    tema_sugerido = sa.Column(sa.Text, nullable=True)
 
 
 class AuditLog(Base):
@@ -73,7 +77,31 @@ class LocalStorage:
         self.db_path = db_path
         self.engine = sa.create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(self.engine)
+        self._asegurar_columnas_fb_comments()
         self.Session = sessionmaker(bind=self.engine)
+
+    def _asegurar_columnas_fb_comments(self):
+        """Agrega columnas emocion/intensidad/confianza_emocion/tema_sugerido
+        a fb_comments si no existen. Idempotente (patrón PRAGMA table_info)."""
+        import sqlite3 as _sqlite3
+        try:
+            conn = _sqlite3.connect(self.db_path)
+            try:
+                cols = {r[1] for r in conn.execute("PRAGMA table_info(fb_comments)").fetchall()}
+                migraciones = [
+                    ("emocion", "TEXT"),
+                    ("intensidad", "TEXT"),
+                    ("confianza_emocion", "TEXT"),
+                    ("tema_sugerido", "TEXT"),
+                ]
+                for col, tipo in migraciones:
+                    if col not in cols:
+                        conn.execute(f"ALTER TABLE fb_comments ADD COLUMN {col} {tipo}")
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception:
+            pass
 
     def _session(self):
         return self.Session()
@@ -130,6 +158,10 @@ class LocalStorage:
                 created_time=self._parse_dt(comment.get("created_time")),
                 like_count=comment.get("like_count", 0),
                 parent_comment_id=comment.get("parent_comment_id"),
+                emocion=comment.get("emocion"),
+                intensidad=comment.get("intensidad"),
+                confianza_emocion=comment.get("confianza_emocion"),
+                tema_sugerido=comment.get("tema_sugerido"),
             )
             s = self._session()
             s.merge(obj)

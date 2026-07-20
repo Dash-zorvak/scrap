@@ -10,6 +10,7 @@ Solo los comentarios aprobados cuentan en las tarjetas de Temas Emergentes.
 import json
 import streamlit as st
 
+from analytics.topic import classify_topic
 from dashboard.tema_aprobaciones import (
     guardar_aprobacion,
     resumen_revision,
@@ -77,19 +78,19 @@ def render_revisor_temas(db_path, tabla="fb_comments", col_id="comment_id",
             conn = sqlite3.connect(db_path)
             if tiene_padre:
                 rows = conn.execute(
-                    f"SELECT {col_id}, {col_texto}, {col_parent} FROM {tabla} "
+                    f"SELECT {col_id}, {col_texto}, {col_parent}, emocion FROM {tabla} "
                     f"WHERE {col_texto} IS NOT NULL AND {col_texto} != ''"
                 ).fetchall()
             else:
                 rows_raw = conn.execute(
-                    f"SELECT {col_id}, {col_texto} FROM {tabla} "
+                    f"SELECT {col_id}, {col_texto}, emocion FROM {tabla} "
                     f"WHERE {col_texto} IS NOT NULL AND {col_texto} != ''"
                 ).fetchall()
-                rows = [(cid, msg, None) for cid, msg in rows_raw]
+                rows = [(cid, msg, None, emocion) for cid, msg, emocion in rows_raw]
             conn.close()
         except Exception:
             rows = []
-        pendientes = [(cid, msg, parent) for cid, msg, parent in rows
+        pendientes = [(cid, msg, parent, emocion) for cid, msg, parent, emocion in rows
                       if cid not in ids_ok]
 
         if not pendientes:
@@ -106,7 +107,7 @@ def render_revisor_temas(db_path, tabla="fb_comments", col_id="comment_id",
             unsafe_allow_html=True,
         )
 
-        for cid, texto, parent_id in pendientes:
+        for cid, texto, parent_id, emocion_guardada in pendientes:
             from dashboard.html_safety import safe_text
             texto_clean = safe_text(texto)
             st.markdown(
@@ -127,17 +128,29 @@ def render_revisor_temas(db_path, tabla="fb_comments", col_id="comment_id",
                         unsafe_allow_html=True,
                     )
 
+            resultado_tema = classify_topic(texto)
+            tema_contado = resultado_tema.tema if resultado_tema.tema in _OPCIONES else "no_aplica"
+            default_idx = _OPCIONES.index(tema_contado)
+
             c1, c2 = st.columns([5, 1])
             with c1:
                 sel = st.selectbox(
                     "Tema", _OPCIONES, format_func=_label_opcion,
                     key=f"sel_{cid}", label_visibility="collapsed",
+                    index=default_idx,
+                )
+            if resultado_tema.n_coincidencias:
+                st.caption(
+                    f"Conteo léxico: {_label_opcion(tema_contado)} "
+                    f"({resultado_tema.n_coincidencias} coincidencia(s): "
+                    f"{', '.join(resultado_tema.evidence[:5])})"
                 )
             with c2:
                 if st.button("Aprobar", key=f"ap_{cid}"):
                     guardar_aprobacion(
                         db_path, cid, sel, texto=texto,
-                        tema_sugerido=None, tono=None,
-                        confianza=None,
+                        tema_sugerido=tema_contado,
+                        tono=None, confianza=None,
+                        emocion=emocion_guardada or None,
                     )
                     st.rerun()

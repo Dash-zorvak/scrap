@@ -63,9 +63,16 @@ def _calcular_er_previo(
     )
 
 
+PLATAFORMA_TABLAS = {
+    "facebook": ("", "fb_comments", "comment_id", "message"),
+    "tiktok": ("", "comments", "id", "text"),
+    "externos": ("", "external_comments", "comment_id", "message"),
+}
+
+
 def cmd_generar(args):
     """Genera y publica analysis.json."""
-    from dashboard.tema_aprobaciones import agregar_por_tema
+    from dashboard.tema_aprobaciones import agregar_por_tema_automatico
     from analytics.queries import (
         get_fb_comments_with_messages, get_tk_comments_with_messages,
         get_ext_comments_with_messages,
@@ -78,25 +85,27 @@ def cmd_generar(args):
         get_fb_monthly_er, get_tk_monthly_er,
     )
 
-    # Combinar aprobaciones de las 3 DBs
+    # Combinar aprobaciones de las 3 DBs (clasificación automática)
     if args.db:
-        aprobaciones = agregar_por_tema(args.db)
+        aprobaciones = agregar_por_tema_automatico(args.db)
         if aprobaciones:
             for a in aprobaciones:
                 a.setdefault("plataforma", "override")
     else:
         aprobaciones = []
-        for label, db in [("facebook", _cfg.FACEBOOK_DB),
-                          ("tiktok", _cfg.TIKTOK_DB),
-                          ("externos", _cfg.EXTERNOS_DB)]:
+        for label, (db_placeholder, tabla, col_id, col_texto) in PLATAFORMA_TABLAS.items():
+            db = {
+                "facebook": _cfg.FACEBOOK_DB,
+                "tiktok": _cfg.TIKTOK_DB,
+                "externos": _cfg.EXTERNOS_DB,
+            }[label]
             try:
-                parcial = agregar_por_tema(db)
+                parcial = agregar_por_tema_automatico(db, tabla=tabla, col_id=col_id, col_texto=col_texto)
                 for a in parcial:
                     a.setdefault("plataforma", label)
                 aprobaciones.extend(parcial)
             except Exception:
                 pass
-        # Re-ordenar por doc_count descendente y renumerar ids
         aprobaciones.sort(key=lambda x: -x.get("doc_count", 0))
         for i, a in enumerate(aprobaciones):
             a["id"] = i + 1
@@ -236,10 +245,10 @@ def cmd_verificar(args):
 
 def cmd_resumen(args):
     """Muestra estadisticas basicas."""
-    from dashboard.tema_aprobaciones import agregar_por_tema, resumen_revision
+    from dashboard.tema_aprobaciones import agregar_por_tema_automatico, resumen_revision
 
     db_path = args.db or _cfg.EXTERNOS_DB
-    aprob = agregar_por_tema(db_path)
+    aprob = agregar_por_tema_automatico(db_path)
     resumen = resumen_revision(db_path)
 
     print(f"Aprobados con tema: {resumen.get('aprobados', 0)}")

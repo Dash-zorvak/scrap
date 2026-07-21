@@ -406,32 +406,10 @@ def obtener_aprobaciones(db_path):
     return salida
 
 
-def agregar_por_tema(db_path):
-    """Agrega los comentarios APROBADOS por tema (para las tarjetas).
-
-    Excluye 'no_aplica'. El porcentaje es sobre el total de comentarios con un
-    tema aprobado (no sobre el total analizado). Cada tema se divide ademas por
-    POSTURA (apoyo/critica/neutral) para que una critica no se lea como impulso
-    positivo. Se incluye ademas desglose por EMOCION con soporte para seleccion
-    multiple (Punto 3): cada comentario contribuye a TODAS sus emociones
-    seleccionadas, no solo a la dominante.
-
-    Devuelve una lista de dicts ordenada de mayor a menor doc_count:
-    {id, categoria, label, pct, doc_count, ejemplo, apoyo, critica, neutral,
-     pct_apoyo, pct_critica, pct_neutral, saldo, saldo_ponderado,
-     ejemplo_critica, emociones, emocion_dominante, entidades}.
+def _agregar_desde_filas(filas):
+    """filas: iterable de (tema, texto, postura, emocion_legacy, emociones_raw, intensidad_postura).
+    Contiene la lógica de conteo/agregación ya existente en agregar_por_tema.
     """
-    asegurar_tabla(db_path)
-    conn = _conectar(db_path)
-    try:
-        rows = conn.execute(
-            f"SELECT tema, texto, postura, emocion, emociones, "
-            f"intensidad_postura "
-            f"FROM {TABLA} WHERE estado='aprobado'"
-        ).fetchall()
-    finally:
-        conn.close()
-
     _PESOS_INTENSIDAD = {"leve": 1, "moderada": 2, "fuerte": 3}
 
     conteo = defaultdict(int)
@@ -442,7 +420,7 @@ def agregar_por_tema(db_path):
     ejemplos_critica = {}
     total_con_tema = 0
 
-    for tema, texto, postura, emocion_legacy, emociones_raw, ipost in rows:
+    for tema, texto, postura, emocion_legacy, emociones_raw, ipost in filas:
         if not tema or tema == "no_aplica":
             continue
 
@@ -545,6 +523,79 @@ def agregar_por_tema(db_path):
         })
     temas.sort(key=lambda x: -x["doc_count"])
     return temas
+
+
+def agregar_por_tema(db_path):
+    """Agrega los comentarios APROBADOS por tema (para las tarjetas).
+
+    Excluye 'no_aplica'. El porcentaje es sobre el total de comentarios con un
+    tema aprobado (no sobre el total analizado). Cada tema se divide ademas por
+    POSTURA (apoyo/critica/neutral) para que una critica no se lea como impulso
+    positivo. Se incluye ademas desglose por EMOCION con soporte para seleccion
+    multiple (Punto 3): cada comentario contribuye a TODAS sus emociones
+    seleccionadas, no solo a la dominante.
+
+    Devuelve una lista de dicts ordenada de mayor a menor doc_count:
+    {id, categoria, label, pct, doc_count, ejemplo, apoyo, critica, neutral,
+     pct_apoyo, pct_critica, pct_neutral, saldo, saldo_ponderado,
+     ejemplo_critica, emociones, emocion_dominante, entidades}.
+    """
+    asegurar_tabla(db_path)
+    conn = _conectar(db_path)
+    try:
+        rows = conn.execute(
+            f"SELECT tema, texto, postura, emocion, emociones, "
+            f"intensidad_postura "
+            f"FROM {TABLA} WHERE estado='aprobado'"
+        ).fetchall()
+    finally:
+        conn.close()
+    return _agregar_desde_filas(rows)
+
+
+def agregar_por_tema_automatico(db_path, tabla="fb_comments", col_id="comment_id", col_texto="message"):
+    """Cuenta temas automáticamente vía clasificación léxica (classify_topic),
+    sin aprobación manual. Cada comentario con texto se clasifica y se cuenta
+    bajo el tema detectado (excluye 'no_aplica'/sin coincidencias). La postura
+    se deriva de la columna 'emocion' persistida en el comentario, si existe;
+    si no existe la columna, se usa EMOCION_DEFAULT. La intensidad de postura
+    usa siempre INTENSIDAD_POSTURA_DEFAULT ('moderada'), porque no hay revisión
+    humana que la ajuste.
+    """
+    from analytics.topic import classify_topic
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cols = [r[1] for r in conn.execute(f"PRAGMA table_info({tabla})").fetchall()]
+        tiene_emocion = "emocion" in cols
+        if tiene_emocion:
+            rows_raw = conn.execute(
+                f"SELECT {col_texto}, emocion FROM {tabla} "
+                f"WHERE {col_texto} IS NOT NULL AND {col_texto} != ''"
+            ).fetchall()
+        else:
+            rows_raw = [
+                (r[0], None) for r in conn.execute(
+                    f"SELECT {col_texto} FROM {tabla} "
+                    f"WHERE {col_texto} IS NOT NULL AND {col_texto} != ''"
+                ).fetchall()
+            ]
+    finally:
+        conn.close()
+
+    filas = []
+    for texto, emocion in rows_raw:
+        resultado = classify_topic(texto)
+        if not resultado.tema or resultado.tema == "no_aplica":
+            continue
+        emo = emocion or EMOCION_DEFAULT
+        filas.append((
+            resultado.tema, texto, derivar_postura(emo), emo, None,
+            INTENSIDAD_POSTURA_DEFAULT,
+        ))
+
+    return _agregar_desde_filas(filas)
 
 
 def resumen_revision(db_path, total_comentarios=None, ini=None, fin=None):

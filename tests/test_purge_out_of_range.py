@@ -485,3 +485,66 @@ def _build_fb_fixture_file(db_path: str) -> sqlite3.Connection:
 
     conn.commit()
     return conn
+
+
+class TestPurgeConTablaFaltante:
+    """Verify purge() handles DBs whose file exists but tables don't (empty sqlite file)."""
+
+    def test_empty_db_file_no_crash(self, capsys):
+        """An empty externos.db (no tables) must not raise OperationalError."""
+        ext_db = os.environ.get("EXTERNAL_DB", "")
+        assert ext_db, "EXTERNAL_DB env var must be set (conftest)"
+
+        # Create an empty sqlite file at the externos path (no CREATE TABLE)
+        conn = sqlite3.connect(ext_db)
+        conn.close()
+
+        fb_db = os.environ.get("FACEBOOK_DB", "")
+        assert fb_db, "FACEBOOK_DB env var must be set (conftest)"
+        _build_fb_fixture_file(fb_db)
+
+        import scripts.purge_out_of_range as pr
+        pr.DB_CONFIG = []
+        # Must not raise OperationalError
+        pr.purge(dry_run=True, skip_backup=True, skip_confirm=True, purge_null=False)
+        captured = capsys.readouterr()
+
+        # Externos should be reported as omitted
+        assert "external_posts" in captured.out and "omitien" in captured.out, (
+            f"Expected 'externos' skip message mentioning 'external_posts', got:\n{captured.out}"
+        )
+
+        # Facebook should still appear with normal counts
+        assert "fb_posts" in captured.out or "facebook" in captured.out, (
+            f"Expected facebook in output, got:\n{captured.out}"
+        )
+
+    def test_empty_db_file_with_nonexistent_comments_table(self, capsys):
+        """externos.db has posts table but no comments table — comments must be skipped."""
+        ext_db = os.environ.get("EXTERNAL_DB", "")
+        assert ext_db, "EXTERNAL_DB env var must be set (conftest)"
+
+        conn = sqlite3.connect(ext_db)
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE external_posts (
+                post_id TEXT PRIMARY KEY,
+                message TEXT,
+                created_time TEXT
+            )
+        """)
+        # No external_comments table
+        conn.commit()
+        conn.close()
+
+        fb_db = os.environ.get("FACEBOOK_DB", "")
+        assert fb_db, "FACEBOOK_DB env var must be set (conftest)"
+        _build_fb_fixture_file(fb_db)
+
+        import scripts.purge_out_of_range as pr
+        pr.DB_CONFIG = []
+        pr.purge(dry_run=True, skip_backup=True, skip_confirm=True, purge_null=False)
+        captured = capsys.readouterr()
+
+        # Should not crash and facebook should still be in output
+        assert "facebook" in captured.out or "fb_posts" in captured.out

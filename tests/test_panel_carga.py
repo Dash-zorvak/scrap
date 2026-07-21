@@ -1,4 +1,4 @@
-"""Tests para dashboard/panel_carga.py — pestañas de aprobación multiplataforma."""
+"""Tests para dashboard/panel_carga.py — pestañas (sin aprobación manual)."""
 import inspect
 import os
 import re
@@ -14,45 +14,24 @@ def _leer_fuente():
         return f.read()
 
 
-def test_panel_carga_tiene_tres_pestanas_aprobacion():
-    """panel_carga.py define 3 pestañas de aprobación (Facebook, TikTok, Externos)."""
+def test_panel_carga_no_tiene_pestanas_aprobacion():
+    """panel_carga.py ya NO define pestañas de aprobación manual."""
     src = _leer_fuente()
-    assert "Aprobar temas" in src
-    assert "Aprobar temas (TikTok)" in src
-    assert "Aprobar temas (Externos)" in src
+    assert "Aprobar temas" not in src
 
 
-def test_panel_carga_llama_render_revisor_tiktok():
-    """panel_carga.py llama render_revisor_temas con parámetros de TikTok."""
+def test_panel_carga_no_importa_render_revisor():
+    """panel_carga.py ya NO importa render_revisor_temas."""
     src = _leer_fuente()
-    assert 'tabla="comments"' in src
-    assert 'col_id="id"' in src
-    assert 'col_texto="text"' in src
+    assert "render_revisor_temas" not in src
 
 
-def test_panel_carga_llama_render_revisor_externos():
-    """panel_carga.py llama render_revisor_temas con parámetros de Externos."""
+def test_panel_carga_tres_pestanas():
+    """panel_carga.py define exactamente 3 pestañas: cargar, JSON, editor."""
     src = _leer_fuente()
-    assert 'tabla="external_comments"' in src
-    assert 'col_id="comment_id"' in src or "col_id" in src
-    assert 'col_texto="message"' in src
-
-
-def test_panel_carga_facebook_default():
-    """La llamada Facebook incluye col_parent para parent_comment_id."""
-    src = _leer_fuente()
-    assert "render_revisor_temas(FACEBOOK_DB" in src
-    assert "parent_comment_id" in src
-
-
-def test_panel_carga_tiktok_sin_parent():
-    """La llamada TikTok NO incluye col_parent (no tiene parent_comment_id)."""
-    src = _leer_fuente()
-    # TikTok no tiene parent_comment_id
-    idx_tk = src.index('render_revisor_temas(TIKTOK_DB')
-    idx_next_line = src.index("\n", idx_tk)
-    linea_tk = src[idx_tk:idx_next_line]
-    assert "parent_comment_id" not in linea_tk
+    assert "Cargar contenido" in src
+    assert "Importar JSON" in src
+    assert "Editar base de datos" in src
 
 
 def test_panel_carga_importa_config():
@@ -63,11 +42,9 @@ def test_panel_carga_importa_config():
 
 
 def test_panel_carga_orden_pestanas():
-    """Las pestañas están en el orden: cargar, editar, aprobar, aprobar TK, aprobar Ext."""
+    """Las pestañas están en el orden: cargar, JSON, editor."""
     src = _leer_fuente()
     idx_cargar = src.index("Cargar contenido")
+    idx_json = src.index("Importar JSON")
     idx_editar = src.index("Editar base de datos")
-    idx_aprobar_fb = src.index('"✅ Aprobar temas"')
-    idx_aprobar_tk = src.index('"✅ Aprobar temas (TikTok)"')
-    idx_aprobar_ext = src.index('"✅ Aprobar temas (Externos)"')
-    assert idx_cargar < idx_editar < idx_aprobar_fb < idx_aprobar_tk < idx_aprobar_ext
+    assert idx_cargar < idx_json < idx_editar

@@ -197,6 +197,49 @@ def test_v07_tema_desconocido():
     assert not r.es_publicable
 
 
+def test_v07_tema_propuesta_pendiente_es_advertencia():
+    d = _base_valid()
+    d["bloque1"]["concentracion_tematica"]["ramas"][0]["tema"] = "tema_nuevo_ahi"
+    r = validar(d)
+    assert r.es_publicable
+    v07_errors = [e for e in r.errores if e.codigo == "V07_CATEGORIA_DESCONOCIDA"
+                  and "tema" in e.seccion]
+    assert len(v07_errors) == 1
+    assert v07_errors[0].severidad == "advertencia"
+    assert "propuesta pendiente" in v07_errors[0].mensaje_tecnico
+
+
+def test_v07_tema_no_propuesta_es_bloqueante():
+    d = _base_valid()
+    d["bloque1"]["concentracion_tematica"]["ramas"][0]["tema"] = "tema_no_registrado"
+    r = validar(d)
+    assert not r.es_publicable
+    v07_errors = [e for e in r.errores if e.codigo == "V07_CATEGORIA_DESCONOCIDA"
+                  and "tema" in e.seccion]
+    assert any(e.severidad == "bloqueante" for e in v07_errors)
+
+
+def test_v07_emocion_propuesta_pendiente_es_advertencia():
+    d = _base_valid()
+    d["bloque1"]["indice_emociones"]["emocion_dominante"] = "trust_nueva"
+    r = validar(d)
+    assert r.es_publicable
+    v07_errors = [e for e in r.errores if e.codigo == "V07_CATEGORIA_DESCONOCIDA"
+                  and "emocion_dominante" in e.seccion]
+    assert len(v07_errors) == 1
+    assert v07_errors[0].severidad == "advertencia"
+
+
+def test_v07_emocion_no_propuesta_es_bloqueante():
+    d = _base_valid()
+    d["bloque1"]["indice_emociones"]["emocion_dominante"] = "super_feliz"
+    r = validar(d)
+    assert not r.es_publicable
+    v07_errors = [e for e in r.errores if e.codigo == "V07_CATEGORIA_DESCONOCIDA"
+                  and "emocion_dominante" in e.seccion]
+    assert any(e.severidad == "bloqueante" for e in v07_errors)
+
+
 # ── V08 ──
 def test_v08_narrativa_cita_cifras_sin_enlaces():
     d = _base_valid()

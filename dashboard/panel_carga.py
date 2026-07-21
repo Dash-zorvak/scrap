@@ -22,9 +22,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from dashboard.estilos import CSS
 from dashboard.estilos_override import CSS_OVERRIDE
 from dashboard.dash_ui import _page_head
-from dashboard.dash_ingesta import seccion_cargar_contenido
+from dashboard.dash_ingesta import seccion_cargar_contenido, seccion_importar_json
 from dashboard.editor_db import seccion_editar_db
-from dashboard.dash_temas import render_revisor_temas
 from dashboard.tema_aprobaciones import (
     asegurar_tabla_en_tiktok,
     asegurar_computed_tiktok,
@@ -75,17 +74,12 @@ _page_head(
     "Cargue informes consolidados, evidencia documental y briefings diarios. Cada documento se incorpora al pipeline de inteligencia."
 )
 
-tab_carga, tab_editor, tab_aprobar, tab_aprobar_tk, tab_aprobar_ext = st.tabs([
-    "📥 Cargar contenido", "🛠️ Editar base de datos",
-    "✅ Aprobar temas", "✅ Aprobar temas (TikTok)", "✅ Aprobar temas (Externos)",
+tab_carga, tab_json, tab_editor = st.tabs([
+    "📥 Cargar contenido", "📥 Importar JSON", "🛠️ Editar base de datos",
 ])
 with tab_carga:
     seccion_cargar_contenido()
+with tab_json:
+    seccion_importar_json()
 with tab_editor:
     seccion_editar_db()
-with tab_aprobar:
-    render_revisor_temas(FACEBOOK_DB, col_parent="parent_comment_id")
-with tab_aprobar_tk:
-    render_revisor_temas(TIKTOK_DB, tabla="comments", col_id="id", col_texto="text")
-with tab_aprobar_ext:
-    render_revisor_temas(EXTERNOS_DB, tabla="external_comments", col_id="comment_id", col_texto="message")

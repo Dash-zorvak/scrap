@@ -338,3 +338,82 @@ def test_cmd_generar_derives_texts_from_context(monkeypatch):
     passed_ctx = call_kwargs.get("comentarios_con_contexto")
     assert passed_texts == ["comentario alegre", "comentario triste"]
     assert passed_ctx == ctx_comments
+
+
+def test_cmd_generar_tolerancia_fallo_plataforma(monkeypatch):
+    """Si uno de los tres ctx_fetcher lanza excepción, cmd_generar sigue
+    ejecutándose con las otras dos plataformas en vez de propagar el error."""
+    from contextlib import ExitStack
+    from analytics.cli import cmd_generar
+
+    fb_comments = [
+        {"id": "c1", "texto": "comentario fb", "post_id": "p1", "plataforma": "facebook"},
+    ]
+    ext_comments = [
+        {"id": "c3", "texto": "comentario ext", "post_id": "p3", "plataforma": "externos"},
+    ]
+
+    mock_fb_ctx = MagicMock(return_value=fb_comments)
+    mock_tk_ctx = MagicMock(side_effect=Exception("TikTok DB not found"))
+    mock_ext_ctx = MagicMock(return_value=ext_comments)
+
+    mock_aprob = MagicMock(return_value=[
+        {"id": 1, "categoria": "seguridad", "label": "Seguridad",
+         "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
+         "pct": 50.0, "pct_apoyo": 50.0, "pct_critica": 30.0, "pct_neutral": 20.0,
+         "saldo": 2, "ejemplo": "", "ejemplo_critica": "",
+         "emociones": {}, "emocion_dominante": "calma"}
+    ])
+
+    args = MagicMock()
+    args.db = None
+    args.periodo = "2026-04"
+    args.fecha_hasta = "2026-04-30"
+    args.output = None
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    mock_gen = MagicMock(return_value=(
+        {"meta": {}, "bloque1": {}, "bloque2": {}, "bloque3": {}, "bloque4": {}},
+        MagicMock(es_publicable=True, bloqueantes=lambda: [], advertencias=lambda: []),
+    ))
+    mock_pub = MagicMock(return_value=MagicMock(es_publicable=True, advertencias=lambda: []))
+
+    patches = [
+        ("dashboard.tema_aprobaciones.agregar_por_tema_automatico", mock_aprob),
+        ("analytics.queries.get_fb_comments_with_context", mock_fb_ctx),
+        ("analytics.queries.get_tk_comments_with_context", mock_tk_ctx),
+        ("analytics.queries.get_ext_comments_with_context", mock_ext_ctx),
+        ("analytics.queries.get_fb_stats", MagicMock(return_value=None)),
+        ("analytics.queries.get_tk_stats", MagicMock(return_value=None)),
+        ("analytics.queries.get_externos_stats", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_daily_volumes", MagicMock(return_value=[])),
+        ("analytics.queries.get_tk_daily_volumes", MagicMock(return_value=[])),
+        ("analytics.queries.get_fb_monthly_sentiment", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_per_theme_controversy", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_posts_with_sentiment", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_controversial_posts", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_anger_by_zone", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_monthly_controversy", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_monthly_theme_controversy", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_monthly_er", MagicMock(return_value=[])),
+        ("analytics.queries.get_tk_monthly_er", MagicMock(return_value=[])),
+        ("analytics.cli.generar_reporte_completo", mock_gen),
+        ("analytics.cli.publicar_analysis", mock_pub),
+    ]
+
+    with ExitStack() as stack:
+        for target, replacement in patches:
+            stack.enter_context(patch(target, replacement))
+        # Must NOT raise despite TikTok fetcher failing
+        result = cmd_generar(args)
+
+    assert result == 0
+
+    # FB and Ext comments were collected; TikTok error was swallowed
+    call_kwargs = mock_gen.call_args[1]
+    passed_texts = call_kwargs.get("comentarios_texts")
+    passed_ctx = call_kwargs.get("comentarios_con_contexto")
+    assert "comentario fb" in passed_texts
+    assert "comentario ext" in passed_texts
+    assert len(passed_ctx) == 2

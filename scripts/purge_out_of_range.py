@@ -122,14 +122,29 @@ def purge(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
         conn = sqlite3.connect(str(cfg["path"]))
         cur = conn.cursor()
 
+        # Check that the required posts table exists in this database
+        posts_exists = cur.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+            (cfg["posts_table"],),
+        ).fetchone()[0]
+        if not posts_exists:
+            print(f"  {cfg['label']}: tabla '{cfg['posts_table']}' no existe en {cfg['path']}, omitiendo")
+            conn.close()
+            continue
+
         entry = {"label": cfg["label"], "path": cfg["path"], "post_stats": {}, "comment_stats": {}, "extra_stats": {}}
 
         # Posts
         entry["post_stats"] = count_out_of_range(cur, cfg["posts_table"], cfg["date_col"], since, purge_null)
 
-        # Comments
+        # Comments (skip if comments table doesn't exist)
         if cfg["comments_table"]:
-            entry["comment_stats"] = count_out_of_range(cur, cfg["comments_table"], cfg["date_col"], since, purge_null)
+            comments_exists = cur.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+                (cfg["comments_table"],),
+            ).fetchone()[0]
+            if comments_exists:
+                entry["comment_stats"] = count_out_of_range(cur, cfg["comments_table"], cfg["date_col"], since, purge_null)
 
         # Extra tables (only count rows referencing out-of-range posts)
         extra = {}
@@ -208,6 +223,16 @@ def purge(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
         conn = sqlite3.connect(str(cfg["path"]))
         cur = conn.cursor()
 
+        # Verify posts table still exists (defensive: skip if dropped between phases)
+        posts_exists = cur.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+            (cfg["posts_table"],),
+        ).fetchone()[0]
+        if not posts_exists:
+            print(f"  {cfg['label']}: tabla '{cfg['posts_table']}' no existe, omitiendo borrado")
+            conn.close()
+            continue
+
         validar_identificador(cfg["posts_table"])
         validar_identificador(cfg["comments_table"])
         validar_identificador(cfg["post_id_col"])
@@ -215,23 +240,28 @@ def purge(dry_run: bool = False, skip_backup: bool = False, skip_confirm: bool =
 
         # Delete comments referencing OOR posts
         if cfg["comments_table"]:
-            pid_col = cfg["post_id_col"]
-            subq = (
-                f"SELECT {pid_col} FROM \"{cfg['posts_table']}\" "
-                f"WHERE {cfg['date_col']} IS NOT NULL AND {cfg['date_col']} < ?"
-            )
-            params: list = [since]
-            if purge_null:
+            comments_exists = cur.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+                (cfg["comments_table"],),
+            ).fetchone()[0]
+            if comments_exists:
+                pid_col = cfg["post_id_col"]
                 subq = (
                     f"SELECT {pid_col} FROM \"{cfg['posts_table']}\" "
-                    f"WHERE ({cfg['date_col']} IS NOT NULL AND {cfg['date_col']} < ?) OR {cfg['date_col']} IS NULL"
+                    f"WHERE {cfg['date_col']} IS NOT NULL AND {cfg['date_col']} < ?"
                 )
-            cur.execute(
-                f"DELETE FROM \"{cfg['comments_table']}\" WHERE {pid_col} IN ({subq})",
-                params,
-            )
-            del_comments = cur.rowcount
-            print(f"  {cfg['label']}: deleted {fmt(del_comments)} comments")
+                params: list = [since]
+                if purge_null:
+                    subq = (
+                        f"SELECT {pid_col} FROM \"{cfg['posts_table']}\" "
+                        f"WHERE ({cfg['date_col']} IS NOT NULL AND {cfg['date_col']} < ?) OR {cfg['date_col']} IS NULL"
+                    )
+                cur.execute(
+                    f"DELETE FROM \"{cfg['comments_table']}\" WHERE {pid_col} IN ({subq})",
+                    params,
+                )
+                del_comments = cur.rowcount
+                print(f"  {cfg['label']}: deleted {fmt(del_comments)} comments")
 
         # Delete extra table rows referencing OOR posts
         pid_col = cfg["post_id_col"]

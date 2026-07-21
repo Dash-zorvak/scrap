@@ -31,6 +31,28 @@ def get_fb_comments_with_messages(db_path=None):
         conn.close()
 
 
+def get_fb_comments_with_context(db_path=None):
+    """Fetch non-empty FB comments with their parent post_id for evidence tracing.
+
+    Returns list of dicts: {"id": comment_id, "texto": message,
+    "post_id": post_id, "plataforma": "facebook"}.
+    """
+    db_path = db_path or _cfg.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT comment_id, message, post_id FROM fb_comments "
+            "WHERE message IS NOT NULL AND message != ''"
+        ).fetchall()
+        return [
+            {"id": r["comment_id"], "texto": r["message"],
+             "post_id": r["post_id"], "plataforma": "facebook"}
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
 def get_tk_comments_with_messages(db_path=None):
     """Fetch all non-empty TikTok comments for theme review."""
     db_path = db_path or _cfg.TIKTOK_DB
@@ -45,6 +67,28 @@ def get_tk_comments_with_messages(db_path=None):
         conn.close()
 
 
+def get_tk_comments_with_context(db_path=None):
+    """Fetch non-empty TikTok comments with their parent video_id for evidence tracing.
+
+    Returns list of dicts: {"id": comment_id, "texto": text,
+    "post_id": video_id, "plataforma": "tiktok"}.
+    """
+    db_path = db_path or _cfg.TIKTOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT id, text, video_id FROM comments "
+            "WHERE text IS NOT NULL AND text != ''"
+        ).fetchall()
+        return [
+            {"id": r["id"], "texto": r["text"],
+             "post_id": r["video_id"], "plataforma": "tiktok"}
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
 def get_ext_comments_with_messages(db_path=None):
     """Fetch all non-empty Externos comments for theme review."""
     db_path = db_path or _cfg.EXTERNOS_DB
@@ -55,6 +99,28 @@ def get_ext_comments_with_messages(db_path=None):
             "WHERE message IS NOT NULL AND message != ''"
         ).fetchall()
         return [(r["comment_id"], r["message"]) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_ext_comments_with_context(db_path=None):
+    """Fetch non-empty Externos comments with their parent post_id for evidence tracing.
+
+    Returns list of dicts: {"id": comment_id, "texto": message,
+    "post_id": post_id, "plataforma": "externos"}.
+    """
+    db_path = db_path or _cfg.EXTERNOS_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT comment_id, message, post_id FROM external_comments "
+            "WHERE message IS NOT NULL AND message != ''"
+        ).fetchall()
+        return [
+            {"id": r["comment_id"], "texto": r["message"],
+             "post_id": r["post_id"], "plataforma": "externos"}
+            for r in rows
+        ]
     finally:
         conn.close()
 

@@ -239,12 +239,15 @@ def _validar_categorias_json(data: dict, result: ValidationResult):
                 continue
             tema = (r.get("tema") or "").strip()
             if tema and tema not in CATEGORIAS_VALIDAS:
+                es_propuesta = tema in pendientes_keys
                 result.errores.append(ValidationError(
                     codigo="V07_CATEGORIA_DESCONOCIDA",
                     seccion=f"bloque1.concentracion_tematica.ramas[{i}].tema",
-                    severidad="bloqueante",
-                    mensaje_tecnico=f"tema '{tema}' no esta en el catalogo de categorias",
-                    mensaje_humano=f"El tema '{tema}' no es reconocido.",
+                    severidad="advertencia" if es_propuesta else "bloqueante",
+                    mensaje_tecnico=f"tema '{tema}' no esta en el catalogo de categorias"
+                    + (" (propuesta pendiente)" if es_propuesta else ""),
+                    mensaje_humano=f"El tema '{tema}' no es reconocido."
+                    + (" Está registrada como propuesta pendiente." if es_propuesta else ""),
                 ))
             emo = (r.get("emocion_dominante") or "").strip()
             if emo and emo not in EMOCIONES_VALIDAS:

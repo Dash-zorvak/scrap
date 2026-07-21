@@ -14,6 +14,8 @@ import logging
 from analytics.queries import (
     get_fb_references_by_ids,
     get_tk_references_by_ids,
+    get_fb_post_urls_by_pagina,
+    get_tk_post_urls_by_cuenta,
 )
 
 logger = logging.getLogger(__name__)
@@ -134,12 +136,24 @@ def resolver_evidencia_friccion(tema: str, evidencia: dict) -> list[str]:
 def resolver_evidencia_voz(pagina: str, evidencia: dict) -> list[str]:
     """Resuelve post_ids de una voz de influencia a URLs reales.
 
-    Busca en todas las fuentes de evidencia disponibles.
+    Busca posts de la página en fb_posts (por page_name) y en videos
+    de TikTok (por account_id). Si genuinamente no hay posts de esa
+    página en el período, retorna [].
     """
-    # Las voces no tienen evidencia directa por tema/emocion en el
-    # modelo actual. Retornamos URLs vacias por ahora; el campo
-    # enlaces_referencia se poblara si hay datos de fb_posts por pagina.
-    return []
+    if not pagina:
+        return []
+    urls = []
+    try:
+        fb_urls = get_fb_post_urls_by_pagina(pagina)
+        urls.extend(fb_urls)
+    except Exception as e:
+        logger.debug("FB page lookup failed for '%s': %s", pagina, e)
+    try:
+        tk_urls = get_tk_post_urls_by_cuenta(pagina)
+        urls.extend(tk_urls)
+    except Exception as e:
+        logger.debug("TK account lookup failed for '%s': %s", pagina, e)
+    return list(dict.fromkeys(urls))
 
 
 def resolver_evidencia_alertas(alertas: list, evidencia: dict) -> list[str]:

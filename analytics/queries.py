@@ -1010,6 +1010,52 @@ def get_fb_posts_by_zone(zona, db_path=None):
         conn.close()
 
 
+def get_fb_post_urls_by_pagina(pagina, limit=10, db_path=None):
+    """Voces — URLs de posts FB de una página específica para evidencia de voz.
+
+    Retorna lista de post_url de posts de la página indicada.
+    Filtra por page_name (case-insensitive match parcial).
+    """
+    if not pagina:
+        return []
+    db_path = db_path or _cfg.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT post_url FROM fb_posts "
+            "WHERE page_name LIKE ? "
+            "AND post_url IS NOT NULL AND TRIM(post_url) != '' "
+            "ORDER BY created_time DESC LIMIT ?",
+            (f"%{pagina}%", limit),
+        ).fetchall()
+        return [r["post_url"] for r in rows if r["post_url"]]
+    finally:
+        conn.close()
+
+
+def get_tk_post_urls_by_cuenta(cuenta, limit=10, db_path=None):
+    """Voces — URLs de videos TikTok de una cuenta específica para evidencia de voz.
+
+    Retorna lista de post_url de videos de la cuenta indicada.
+    Filtra por account_id (case-insensitive match parcial).
+    """
+    if not cuenta:
+        return []
+    db_path = db_path or _cfg.TIKTOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT post_url FROM videos "
+            "WHERE account_id LIKE ? "
+            "AND post_url IS NOT NULL AND TRIM(post_url) != '' "
+            "ORDER BY created_at DESC LIMIT ?",
+            (f"%{cuenta}%", limit),
+        ).fetchall()
+        return [r["post_url"] for r in rows if r["post_url"]]
+    finally:
+        conn.close()
+
+
 def get_fb_anger_by_zone(db_path=None):
     """§F — Ratio de enojo por zona para ZDI.
 

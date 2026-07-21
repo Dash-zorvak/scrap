@@ -74,8 +74,6 @@ def cmd_generar(args):
     """Genera y publica analysis.json."""
     from dashboard.tema_aprobaciones import agregar_por_tema_automatico
     from analytics.queries import (
-        get_fb_comments_with_messages, get_tk_comments_with_messages,
-        get_ext_comments_with_messages,
         get_fb_stats, get_tk_stats, get_externos_stats,
         get_fb_daily_volumes, get_tk_daily_volumes,
         get_fb_monthly_sentiment, get_fb_per_theme_controversy,
@@ -114,22 +112,15 @@ def cmd_generar(args):
         print("No hay aprobaciones para generar el reporte.")
         return 1
 
-    # Obtener textos crudos de comentarios de las 3 plataformas
-    texts = []
-    comentarios_con_contexto = []
-    for fetcher in (get_fb_comments_with_messages, get_tk_comments_with_messages,
-                    get_ext_comments_with_messages):
-        try:
-            comments = fetcher()
-            texts.extend(msg for _, msg in comments if msg)
-        except Exception:
-            pass
-
-    # Obtener comentarios con contexto (post_id/video_id) para evidencia
     from analytics.queries import (
         get_fb_comments_with_context, get_tk_comments_with_context,
         get_ext_comments_with_context,
     )
+
+    # ÚNICA fuente de verdad: comentarios con contexto.
+    # texts se deriva de ella para garantizar alineación de índices
+    # con topic_results_by_text y la clasificación de emoción.
+    comentarios_con_contexto = []
     for ctx_fetcher in (get_fb_comments_with_context, get_tk_comments_with_context,
                         get_ext_comments_with_context):
         try:
@@ -137,6 +128,7 @@ def cmd_generar(args):
             comentarios_con_contexto.extend(ctx_comments)
         except Exception:
             pass
+    texts = [c["texto"] for c in comentarios_con_contexto if c.get("texto")]
 
     # Obtener stats de plataformas desde las DBs
     fb_stats = None

@@ -146,7 +146,79 @@ def test_resolver_ids_a_urls_fb_fallback():
 
 
 def test_resolver_evidencia_voz_sin_datos():
-    """Voz sin evidencia directa retorna lista vacia (por ahora)."""
+    """Voz sin posts en DB retorna lista vacia (no hardcoded)."""
     from analytics.evidence import resolver_evidencia_voz
-    result = resolver_evidencia_voz("Alcaldia", {})
+
+    with patch("analytics.evidence.get_fb_post_urls_by_pagina", return_value=[]):
+        with patch("analytics.evidence.get_tk_post_urls_by_cuenta", return_value=[]):
+            result = resolver_evidencia_voz("Alcaldia", {})
+
     assert result == []
+
+
+def test_resolver_evidencia_voz_retorna_urls_fb():
+    """Voz con posts en FB retorna URLs reales."""
+    from analytics.evidence import resolver_evidencia_voz
+
+    with patch("analytics.evidence.get_fb_post_urls_by_pagina",
+               return_value=["https://fb.com/post1", "https://fb.com/post2"]):
+        with patch("analytics.evidence.get_tk_post_urls_by_cuenta", return_value=[]):
+            result = resolver_evidencia_voz("Alcaldia", {})
+
+    assert "https://fb.com/post1" in result
+    assert "https://fb.com/post2" in result
+    assert len(result) == 2
+
+
+def test_resolver_evidencia_voz_combina_fb_y_tk():
+    """Voz con posts en FB y TikTok combina ambos."""
+    from analytics.evidence import resolver_evidencia_voz
+
+    with patch("analytics.evidence.get_fb_post_urls_by_pagina",
+               return_value=["https://fb.com/post1"]):
+        with patch("analytics.evidence.get_tk_post_urls_by_cuenta",
+                   return_value=["https://tiktok.com/video1"]):
+            result = resolver_evidencia_voz("Alcaldia", {})
+
+    assert len(result) == 2
+    assert "https://fb.com/post1" in result
+    assert "https://tiktok.com/video1" in result
+
+
+def test_resolver_evidencia_voz_sin_duplicados():
+    """Voz no duplica URLs aunque las mismas aparezcan en FB y TK."""
+    from analytics.evidence import resolver_evidencia_voz
+
+    with patch("analytics.evidence.get_fb_post_urls_by_pagina",
+               return_value=["https://shared.com/post1"]):
+        with patch("analytics.evidence.get_tk_post_urls_by_cuenta",
+                   return_value=["https://shared.com/post1"]):
+            result = resolver_evidencia_voz("Alcaldia", {})
+
+    assert len(result) == 1
+
+
+def test_resolver_evidencia_voz_pagina_vacia():
+    """Pagina vacia retorna lista vacia sin llamar queries."""
+    from analytics.evidence import resolver_evidencia_voz
+
+    with patch("analytics.evidence.get_fb_post_urls_by_pagina") as mock_fb:
+        with patch("analytics.evidence.get_tk_post_urls_by_cuenta") as mock_tk:
+            result = resolver_evidencia_voz("", {})
+
+    assert result == []
+    assert not mock_fb.called
+    assert not mock_tk.called
+
+
+def test_resolver_evidencia_voz_fb_falla_tk_funciona():
+    """Si FB falla, still returns TikTok URLs."""
+    from analytics.evidence import resolver_evidencia_voz
+
+    with patch("analytics.evidence.get_fb_post_urls_by_pagina",
+               side_effect=Exception("DB error")):
+        with patch("analytics.evidence.get_tk_post_urls_by_cuenta",
+                   return_value=["https://tiktok.com/video1"]):
+            result = resolver_evidencia_voz("Alcaldia", {})
+
+    assert result == ["https://tiktok.com/video1"]

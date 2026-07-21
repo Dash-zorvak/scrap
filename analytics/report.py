@@ -28,7 +28,7 @@ from analytics.compute import (
     clamp,
 )
 from analytics.sentiment import aggregate_sentiment, SENTIMENT_ORDER
-from analytics.emotion import aggregate_emotions
+from analytics.emotion import aggregate_emotions, classify_emotion
 from analytics.topic import classify_topic, TopicResult
 from analytics.emergent import analizar_emergentes
 from analytics.zona import detectar_zona, es_propuesta_zona
@@ -228,18 +228,15 @@ def construir_analysis(aprobaciones_agrupadas: list,
             tr = topic_results_by_text.get(i)
             if tr and tr.tema and tr.tema != "no_aplica":
                 evidencia_por_tema.setdefault(tr.tema, set()).add(post_id)
-        # Acumular emociones si hay datos de emociones por comentario
-        emo_agg_for_evidence = aggregate_emotions(
-            [c["texto"] for c in comentarios_con_contexto if c.get("texto")],
-            es_oficial=es_oficial,
-        ) if comentarios_con_contexto else None
-        if emo_agg_for_evidence:
-            dominante = emo_agg_for_evidence.get("dominante", "")
-            if dominante:
-                for ctx in comentarios_con_contexto:
-                    post_id = ctx.get("post_id", "")
-                    if post_id:
-                        evidencia_por_emocion.setdefault(dominante, set()).add(post_id)
+        # Clasificar emoción de CADA comentario individualmente para evidencia
+        for i, ctx in enumerate(comentarios_con_contexto):
+            post_id = ctx.get("post_id", "")
+            texto = ctx.get("texto", "")
+            if not post_id or not texto:
+                continue
+            emo_result = classify_emotion(texto, es_oficial=es_oficial)
+            if emo_result.emocion and emo_result.emocion != "calma":
+                evidencia_por_emocion.setdefault(emo_result.emocion, set()).add(post_id)
 
     # ── §G: HHI de concentración temática ──
     shares_para_hhi = [r.get("share", 0) for r in ramas if isinstance(r, dict)]

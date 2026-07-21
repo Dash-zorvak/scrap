@@ -201,3 +201,51 @@ def test_emergentes_no_incluye_textos_con_tema_claro():
         # En este caso todos los textos con "baches" tienen tema claro → no debe haber emergentes
         # o si los hay, son de los textos no_aplica
         assert isinstance(tema_texto, str)
+
+
+# ── Bug 1: evidencia_por_emocion per-comentario (no global) ──
+
+def test_evidencia_por_emocion_multiple_keys_distinct_emotions(tmp_path):
+    """evidencia_por_emocion tiene múltiples claves cuando los comentarios
+    tienen emociones distintas (no colapsa a una sola emoción global)."""
+    # Comentarios con emociones claramente distintas
+    contexto = [
+        {"id": "c1", "texto": "Estoy furioso con todo, odio esto", "post_id": "p1", "plataforma": "facebook"},
+        {"id": "c2", "texto": "Qué alegría, me encanta este proyecto", "post_id": "p2", "plataforma": "facebook"},
+        {"id": "c3", "texto": "Muy triste lo que pasó, me duele", "post_id": "p3", "plataforma": "facebook"},
+        {"id": "c4", "texto": "Otro furioso más, indignado completamente", "post_id": "p4", "plataforma": "facebook"},
+    ]
+
+    data = construir_analysis(
+        _sample_aprobaciones(), "2026-04", "2026-04-30",
+        comentarios_texts=[c["texto"] for c in contexto],
+        comentarios_con_contexto=contexto,
+    )
+
+    # Leer evidencia persistida
+    evidencia_path = tmp_path.parent / "data" / "_evidencia_periodo.json"
+    # La evidencia se escribe en data/_evidencia_periodo.json del repo
+    import os
+    evidencia_data_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "data", "_evidencia_periodo.json"
+    )
+    # Verificar que el dict en memoria tiene múltiples claves
+    # (construir_analysis lo escribe a disco; verificamos que no colapsa)
+    # Forzamos re-ejecución para leer el archivo
+    import json
+    with open(evidencia_data_path, "r") as f:
+        evidencia = json.load(f)
+
+    por_emocion = evidencia.get("por_emocion", {})
+    # Debe haber al menos 2 emociones distintas (no una sola global)
+    assert len(por_emocion) >= 2, (
+        f"Se esperaban >=2 emociones distintas, se obtuvo {len(por_emocion)}: "
+        f"{list(por_emocion.keys())}"
+    )
+    # Cada emoción solo debe contener post_ids de comentarios con esa emoción
+    all_post_ids = set()
+    for post_ids in por_emocion.values():
+        all_post_ids.update(post_ids)
+    # Todos los post_ids de los comentarios deben estar en al menos una emoción
+    assert all_post_ids == {"p1", "p2", "p3", "p4"}

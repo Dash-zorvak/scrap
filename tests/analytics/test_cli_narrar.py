@@ -247,3 +247,94 @@ def test_narrar_archivo_no_existe(monkeypatch, tmp_path):
     from analytics.cli import cmd_narrar
     result = cmd_narrar(args)
     assert result == 1
+
+
+# ── Bug 2: texts derived from comentarios_con_contexto ──
+
+def test_cmd_generar_derives_texts_from_context(monkeypatch):
+    """cmd_generar derives texts from comentarios_con_contexto, not from
+    independent *_with_messages queries. If someone reintroduces dual
+    queries, this test should catch it."""
+    from contextlib import ExitStack
+    from analytics.cli import cmd_generar
+
+    ctx_comments = [
+        {"id": "c1", "texto": "comentario alegre", "post_id": "p1", "plataforma": "facebook"},
+        {"id": "c2", "texto": "comentario triste", "post_id": "p2", "plataforma": "tiktok"},
+    ]
+
+    mock_fb_ctx = MagicMock(return_value=ctx_comments[:1])
+    mock_tk_ctx = MagicMock(return_value=ctx_comments[1:])
+    mock_ext_ctx = MagicMock(return_value=[])
+
+    mock_fb_msg = MagicMock(return_value=[])
+    mock_tk_msg = MagicMock(return_value=[])
+    mock_ext_msg = MagicMock(return_value=[])
+
+    mock_aprob = MagicMock(return_value=[
+        {"id": 1, "categoria": "seguridad", "label": "Seguridad",
+         "doc_count": 10, "apoyo": 5, "critica": 3, "neutral": 2,
+         "pct": 50.0, "pct_apoyo": 50.0, "pct_critica": 30.0, "pct_neutral": 20.0,
+         "saldo": 2, "ejemplo": "", "ejemplo_critica": "",
+         "emociones": {}, "emocion_dominante": "calma"}
+    ])
+
+    args = MagicMock()
+    args.db = None
+    args.periodo = "2026-04"
+    args.fecha_hasta = "2026-04-30"
+    args.output = None
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    mock_gen = MagicMock(return_value=(
+        {"meta": {}, "bloque1": {}, "bloque2": {}, "bloque3": {}, "bloque4": {}},
+        MagicMock(es_publicable=True, bloqueantes=lambda: [], advertencias=lambda: []),
+    ))
+    mock_pub = MagicMock(return_value=MagicMock(es_publicable=True, advertencias=lambda: []))
+
+    patches = [
+        ("dashboard.tema_aprobaciones.agregar_por_tema_automatico", mock_aprob),
+        ("analytics.queries.get_fb_comments_with_context", mock_fb_ctx),
+        ("analytics.queries.get_tk_comments_with_context", mock_tk_ctx),
+        ("analytics.queries.get_ext_comments_with_context", mock_ext_ctx),
+        ("analytics.queries.get_fb_comments_with_messages", mock_fb_msg),
+        ("analytics.queries.get_tk_comments_with_messages", mock_tk_msg),
+        ("analytics.queries.get_ext_comments_with_messages", mock_ext_msg),
+        ("analytics.queries.get_fb_stats", MagicMock(return_value=None)),
+        ("analytics.queries.get_tk_stats", MagicMock(return_value=None)),
+        ("analytics.queries.get_externos_stats", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_daily_volumes", MagicMock(return_value=[])),
+        ("analytics.queries.get_tk_daily_volumes", MagicMock(return_value=[])),
+        ("analytics.queries.get_fb_monthly_sentiment", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_per_theme_controversy", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_posts_with_sentiment", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_controversial_posts", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_anger_by_zone", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_monthly_controversy", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_monthly_theme_controversy", MagicMock(return_value=None)),
+        ("analytics.queries.get_fb_monthly_er", MagicMock(return_value=[])),
+        ("analytics.queries.get_tk_monthly_er", MagicMock(return_value=[])),
+        ("analytics.cli.generar_reporte_completo", mock_gen),
+        ("analytics.cli.publicar_analysis", mock_pub),
+    ]
+
+    with ExitStack() as stack:
+        for target, replacement in patches:
+            stack.enter_context(patch(target, replacement))
+        cmd_generar(args)
+
+    # Verify *_with_context was called (the single source of truth)
+    assert mock_fb_ctx.called
+    assert mock_tk_ctx.called
+    # Verify *_with_messages was NOT called (the old dual-query pattern)
+    assert not mock_fb_msg.called
+    assert not mock_tk_msg.called
+    assert not mock_ext_msg.called
+
+    # Verify the texts passed to generar_reporte_completo are derived from context
+    call_kwargs = mock_gen.call_args[1]
+    passed_texts = call_kwargs.get("comentarios_texts")
+    passed_ctx = call_kwargs.get("comentarios_con_contexto")
+    assert passed_texts == ["comentario alegre", "comentario triste"]
+    assert passed_ctx == ctx_comments

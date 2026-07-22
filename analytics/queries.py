@@ -31,6 +31,28 @@ def get_fb_comments_with_messages(db_path=None):
         conn.close()
 
 
+def get_fb_comments_with_context(db_path=None):
+    """Fetch non-empty FB comments with their parent post_id for evidence tracing.
+
+    Returns list of dicts: {"id": comment_id, "texto": message,
+    "post_id": post_id, "plataforma": "facebook"}.
+    """
+    db_path = db_path or _cfg.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT comment_id, message, post_id FROM fb_comments "
+            "WHERE message IS NOT NULL AND message != ''"
+        ).fetchall()
+        return [
+            {"id": r["comment_id"], "texto": r["message"],
+             "post_id": r["post_id"], "plataforma": "facebook"}
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
 def get_tk_comments_with_messages(db_path=None):
     """Fetch all non-empty TikTok comments for theme review."""
     db_path = db_path or _cfg.TIKTOK_DB
@@ -45,6 +67,28 @@ def get_tk_comments_with_messages(db_path=None):
         conn.close()
 
 
+def get_tk_comments_with_context(db_path=None):
+    """Fetch non-empty TikTok comments with their parent video_id for evidence tracing.
+
+    Returns list of dicts: {"id": comment_id, "texto": text,
+    "post_id": video_id, "plataforma": "tiktok"}.
+    """
+    db_path = db_path or _cfg.TIKTOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT id, text, video_id FROM comments "
+            "WHERE text IS NOT NULL AND text != ''"
+        ).fetchall()
+        return [
+            {"id": r["id"], "texto": r["text"],
+             "post_id": r["video_id"], "plataforma": "tiktok"}
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
 def get_ext_comments_with_messages(db_path=None):
     """Fetch all non-empty Externos comments for theme review."""
     db_path = db_path or _cfg.EXTERNOS_DB
@@ -55,6 +99,28 @@ def get_ext_comments_with_messages(db_path=None):
             "WHERE message IS NOT NULL AND message != ''"
         ).fetchall()
         return [(r["comment_id"], r["message"]) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_ext_comments_with_context(db_path=None):
+    """Fetch non-empty Externos comments with their parent post_id for evidence tracing.
+
+    Returns list of dicts: {"id": comment_id, "texto": message,
+    "post_id": post_id, "plataforma": "externos"}.
+    """
+    db_path = db_path or _cfg.EXTERNOS_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT comment_id, message, post_id FROM external_comments "
+            "WHERE message IS NOT NULL AND message != ''"
+        ).fetchall()
+        return [
+            {"id": r["comment_id"], "texto": r["message"],
+             "post_id": r["post_id"], "plataforma": "externos"}
+            for r in rows
+        ]
     finally:
         conn.close()
 
@@ -940,6 +1006,52 @@ def get_fb_posts_by_zone(zona, db_path=None):
             (zona,),
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_fb_post_urls_by_pagina(pagina, limit=10, db_path=None):
+    """Voces — URLs de posts FB de una página específica para evidencia de voz.
+
+    Retorna lista de post_url de posts de la página indicada.
+    Filtra por page_name (case-insensitive match parcial).
+    """
+    if not pagina:
+        return []
+    db_path = db_path or _cfg.FACEBOOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT post_url FROM fb_posts "
+            "WHERE page_name LIKE ? "
+            "AND post_url IS NOT NULL AND TRIM(post_url) != '' "
+            "ORDER BY created_time DESC LIMIT ?",
+            (f"%{pagina}%", limit),
+        ).fetchall()
+        return [r["post_url"] for r in rows if r["post_url"]]
+    finally:
+        conn.close()
+
+
+def get_tk_post_urls_by_cuenta(cuenta, limit=10, db_path=None):
+    """Voces — URLs de videos TikTok de una cuenta específica para evidencia de voz.
+
+    Retorna lista de post_url de videos de la cuenta indicada.
+    Filtra por account_id (case-insensitive match parcial).
+    """
+    if not cuenta:
+        return []
+    db_path = db_path or _cfg.TIKTOK_DB
+    conn = _conn(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT post_url FROM videos "
+            "WHERE account_id LIKE ? "
+            "AND post_url IS NOT NULL AND TRIM(post_url) != '' "
+            "ORDER BY created_at DESC LIMIT ?",
+            (f"%{cuenta}%", limit),
+        ).fetchall()
+        return [r["post_url"] for r in rows if r["post_url"]]
     finally:
         conn.close()
 

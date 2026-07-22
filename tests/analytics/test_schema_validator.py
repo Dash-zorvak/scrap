@@ -78,7 +78,7 @@ def _base_valid():
 def test_valido_base_es_publicable():
     r = validar(_base_valid())
     assert r.es_publicable
-    assert len(r.errores) == 0
+    assert len(r.bloqueantes()) == 0
 
 
 def test_no_es_dict():
@@ -320,6 +320,119 @@ def test_v11_tema_valido():
     d = _base_valid()
     r = validar(d)
     assert not any(e.codigo == "V11_TEMA_NO_VALIDO" for e in r.errores)
+
+
+# ── V12 ──
+def test_v12_narrativa_vacia_con_datos():
+    """V12: narrativa vacia con datos sustantivos genera advertencia."""
+    d = _base_valid()
+    d["bloque1"]["clima_narrativo"]["narrativa"] = ""
+    d["bloque1"]["clima_narrativo"]["n_total_comentarios"] = 200
+    r = validar(d)
+    assert r.es_publicable  # advertencia, no bloqueante
+    assert any(e.codigo == "V12_NARRATIVA_VACIA_CON_DATOS" for e in r.errores)
+
+
+def test_v12_narrativa_vacia_sin_datos():
+    """V12: narrativa vacia sin datos no genera advertencia para esa seccion."""
+    d = _base_valid()
+    d["bloque1"]["clima_narrativo"]["narrativa"] = ""
+    d["bloque1"]["clima_narrativo"]["n_total_comentarios"] = 0
+    r = validar(d)
+    # No debe haber V12 para clima_narrativo especificamente
+    assert not any(e.codigo == "V12_NARRATIVA_VACIA_CON_DATOS"
+                   and "clima_narrativo" in e.seccion
+                   for e in r.errores)
+
+
+def test_v12_narrativa_con_texto_ok():
+    """V12: narrativa con texto no genera advertencia para esa seccion."""
+    d = _base_valid()
+    d["bloque1"]["clima_narrativo"]["narrativa"] = "Clima positivo."
+    r = validar(d)
+    # No debe haber V12 para clima_narrativo especificamente
+    assert not any(e.codigo == "V12_NARRATIVA_VACIA_CON_DATOS"
+                   and "clima_narrativo" in e.seccion
+                   for e in r.errores)
+
+
+def test_v12_voz_con_engagement_vacia():
+    """V12: voz con engagement pero narrativa vacia."""
+    d = _base_valid()
+    d["bloque2"]["voces_influencia"][0]["narrativa"] = ""
+    r = validar(d)
+    assert any(e.codigo == "V12_NARRATIVA_VACIA_CON_DATOS"
+               and "voces_influencia" in e.seccion
+               for e in r.errores)
+
+
+def test_v12_friccion_con_negativos_vacia():
+    """V12: friccion con n_negativos pero narrativa vacia."""
+    d = _base_valid()
+    d["bloque3"]["puntos_friccion"][0]["narrativa"] = ""
+    r = validar(d)
+    assert any(e.codigo == "V12_NARRATIVA_VACIA_CON_DATOS"
+               and "puntos_friccion" in e.seccion
+               for e in r.errores)
+
+
+# ── V13 ──
+def test_v13_narrativa_con_cifras_sin_enlaces():
+    """V13: narrativa con cifras pero enlaces vacios genera advertencia."""
+    d = _base_valid()
+    d["bloque1"]["clima_narrativo"]["narrativa"] = "Hay 150 comentarios negativos."
+    d["bloque1"]["clima_narrativo"]["enlaces_referencia"] = []
+    r = validar(d)
+    assert r.es_publicable  # advertencia
+    assert any(e.codigo == "V13_NARRATIVA_SIN_EVIDENCIA" for e in r.errores)
+
+
+def test_v13_narrativa_con_cifras_con_enlaces():
+    """V13: narrativa con cifras y enlaces OK."""
+    d = _base_valid()
+    d["bloque1"]["clima_narrativo"]["narrativa"] = "Hay 150 comentarios negativos."
+    d["bloque1"]["clima_narrativo"]["enlaces_referencia"] = ["https://fb.com/post1"]
+    r = validar(d)
+    assert not any(e.codigo == "V13_NARRATIVA_SIN_EVIDENCIA" for e in r.errores)
+
+
+def test_v13_narrativa_sin_cifras():
+    """V13: narrativa sin cifras no genera advertencia."""
+    d = _base_valid()
+    d["bloque1"]["clima_narrativo"]["narrativa"] = "Clima estable sin incidentes."
+    d["bloque1"]["clima_narrativo"]["enlaces_referencia"] = []
+    r = validar(d)
+    assert not any(e.codigo == "V13_NARRATIVA_SIN_EVIDENCIA" for e in r.errores)
+
+
+def test_v13_narrativa_vacia():
+    """V13: narrativa vacia no genera advertencia."""
+    d = _base_valid()
+    d["bloque1"]["clima_narrativo"]["narrativa"] = ""
+    r = validar(d)
+    assert not any(e.codigo == "V13_NARRATIVA_SIN_EVIDENCIA" for e in r.errores)
+
+
+def test_v13_friccion_con_cifras_sin_enlaces():
+    """V13: narrativa de friccion con cifras y enlaces_relacionados vacios."""
+    d = _base_valid()
+    d["bloque3"]["puntos_friccion"][0]["narrativa"] = "100 comentarios criticos en seguridad."
+    d["bloque3"]["puntos_friccion"][0]["enlaces_relacionados"] = []
+    r = validar(d)
+    assert any(e.codigo == "V13_NARRATIVA_SIN_EVIDENCIA"
+               and "puntos_friccion" in e.seccion
+               for e in r.errores)
+
+
+def test_v13_voz_con_cifras_porcentaje_sin_enlaces():
+    """V13: narrativa con porcentaje sin enlaces."""
+    d = _base_valid()
+    d["bloque2"]["voces_influencia"][0]["narrativa"] = "Esta pagina tiene 45% engagement."
+    d["bloque2"]["voces_influencia"][0]["enlaces_referencia"] = []
+    r = validar(d)
+    assert any(e.codigo == "V13_NARRATIVA_SIN_EVIDENCIA"
+               and "voces_influencia" in e.seccion
+               for e in r.errores)
 
 
 # ── ValidationResult helpers ──

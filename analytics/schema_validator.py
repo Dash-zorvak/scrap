@@ -185,6 +185,12 @@ def validar(data: dict) -> ValidationResult:
     # ── V11: Temas en analysis.json existen en aprobaciones ──
     _validar_temas_en_aprobaciones(data, result)
 
+    # ── V12: Narrativa vacia con datos sustantivos (advertencia) ──
+    _validar_narrativa_vacia_con_datos(data, result)
+
+    # ── V13: Narrativa sin evidencia cuando cita cifras (advertencia) ──
+    _validar_narrativa_sin_evidencia(data, result)
+
     return result
 
 
@@ -464,6 +470,116 @@ def _validar_temas_en_aprobaciones(data: dict, result: ValidationResult):
                 mensaje_tecnico=f"tema '{tema}' no esta en el catalogo de aprobaciones",
                 mensaje_humano=f"El tema '{tema}' en friccion no esta en el catalogo oficial.",
             ))
+
+
+def _validar_narrativa_vacia_con_datos(data: dict, result: ValidationResult):
+    """V12: Seccion con datos sustantivos pero narrativa vacia (advertencia).
+
+    Si una seccion tiene datos reales (n_total_comentarios > 0, doc_count > 0,
+    etc.) pero narrativa == "" despues de un narrar exitoso, marca advertencia.
+    """
+    b1 = data.get("bloque1", {})
+    b2 = data.get("bloque2", {})
+    b3 = data.get("bloque3", {})
+
+    # Bloque 1
+    cn = b1.get("clima_narrativo", {})
+    if isinstance(cn, dict) and cn.get("narrativa", "") == "":
+        n_total = cn.get("n_total_comentarios", 0) or 0
+        if n_total > 0:
+            result.errores.append(ValidationError(
+                codigo="V12_NARRATIVA_VACIA_CON_DATOS",
+                seccion="bloque1.clima_narrativo",
+                severidad="advertencia",
+                mensaje_tecnico=f"narrativa vacia con n_total_comentarios={n_total}",
+                mensaje_humano="La seccion clima_narrativo tiene datos pero narrativa vacia.",
+            ))
+
+    ct = b1.get("concentracion_tematica", {})
+    if isinstance(ct, dict) and ct.get("narrativa", "") == "":
+        ramas = ct.get("ramas", [])
+        if ramas and len(ramas) > 0:
+            result.errores.append(ValidationError(
+                codigo="V12_NARRATIVA_VACIA_CON_DATOS",
+                seccion="bloque1.concentracion_tematica",
+                severidad="advertencia",
+                mensaje_tecnico=f"narrativa vacia con {len(ramas)} ramas de datos",
+                mensaje_humano="La seccion concentracion_tematica tiene datos pero narrativa vacia.",
+            ))
+
+    # Bloque 2: voces con engagement
+    for i, v in enumerate(b2.get("voces_influencia", [])):
+        if isinstance(v, dict) and v.get("narrativa", "") == "":
+            eng = v.get("engagement", 0) or 0
+            if eng > 0:
+                result.errores.append(ValidationError(
+                    codigo="V12_NARRATIVA_VACIA_CON_DATOS",
+                    seccion=f"bloque2.voces_influencia[{i}]",
+                    severidad="advertencia",
+                    mensaje_tecnico=f"narrativa vacia para voz '{v.get('pagina', '')}' con engagement={eng}",
+                    mensaje_humano=f"La voz '{v.get('pagina', '')}' tiene datos pero narrativa vacia.",
+                ))
+
+    # Bloque 3: fricciones con criticas
+    for i, fr in enumerate(b3.get("puntos_friccion", [])):
+        if isinstance(fr, dict) and fr.get("narrativa", "") == "":
+            n_neg = fr.get("n_negativos", 0) or 0
+            if n_neg > 0:
+                result.errores.append(ValidationError(
+                    codigo="V12_NARRATIVA_VACIA_CON_DATOS",
+                    seccion=f"bloque3.puntos_friccion[{i}]",
+                    severidad="advertencia",
+                    mensaje_tecnico=f"narrativa vacia para friccion '{fr.get('tema', '')}' con n_negativos={n_neg}",
+                    mensaje_humano=f"El punto de friccion '{fr.get('tema', '')}' tiene datos pero narrativa vacia.",
+                ))
+
+
+def _validar_narrativa_sin_evidencia(data: dict, result: ValidationResult):
+    """V13: Narrativa que cita cifras pero no tiene enlaces_referencia (advertencia).
+
+    Implementa RG-5 del ANALYST_GUIDE de forma automatica: si la narrativa
+    no esta vacia y contiene un numero o porcentaje, pero enlaces_referencia
+    esta vacio, marca advertencia.
+    """
+    import re
+    patron_cifra = re.compile(r'\d+[%]|\d+[\.,]?\d*\s*(comentarios?|posts?|publicaciones?|reacciones?|votos?)')
+
+    def _checar(texto, enlaces, seccion):
+        if not isinstance(texto, str) or not texto:
+            return
+        if not isinstance(enlaces, list):
+            enlaces = []
+        if patron_cifra.search(texto) and not enlaces:
+            result.errores.append(ValidationError(
+                codigo="V13_NARRATIVA_SIN_EVIDENCIA",
+                seccion=seccion,
+                severidad="advertencia",
+                mensaje_tecnico=f"Narrativa en {seccion} cita cifras pero enlaces_referencia esta vacio",
+                mensaje_humano=f"La narrativa de {seccion} referencia datos sin fuentes verificables.",
+            ))
+
+    # Recorrer todas las narrativas
+    for bloque_key in ["bloque1", "bloque2", "bloque3", "bloque4"]:
+        bloque = data.get(bloque_key, {})
+        if not isinstance(bloque, dict):
+            continue
+        for sec_key, sec_val in bloque.items():
+            if isinstance(sec_val, dict):
+                enl_key = "enlaces_referencia" if "enlaces_referencia" in sec_val else "enlaces_relacionados"
+                _checar(
+                    sec_val.get("narrativa", ""),
+                    sec_val.get(enl_key, []),
+                    f"{bloque_key}.{sec_key}",
+                )
+            elif isinstance(sec_val, list):
+                for i, item in enumerate(sec_val):
+                    if isinstance(item, dict):
+                        enl_key = "enlaces_referencia" if "enlaces_referencia" in item else "enlaces_relacionados"
+                        _checar(
+                            item.get("narrativa", ""),
+                            item.get(enl_key, []),
+                            f"{bloque_key}.{sec_key}[{i}]",
+                        )
 
 
 def _n(v, default=0):

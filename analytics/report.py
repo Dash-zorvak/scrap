@@ -28,7 +28,7 @@ from analytics.compute import (
     clamp,
 )
 from analytics.sentiment import aggregate_sentiment, SENTIMENT_ORDER
-from analytics.emotion import aggregate_emotions
+from analytics.emotion import aggregate_emotions, classify_emotion
 from analytics.topic import classify_topic, TopicResult
 from analytics.emergent import analizar_emergentes
 from analytics.zona import detectar_zona, es_propuesta_zona
@@ -43,6 +43,7 @@ def construir_analysis(aprobaciones_agrupadas: list,
                        externos_stats: dict | None = None,
                        tema_aprobaciones_db: str | None = None,
                        comentarios_texts: list[str] | None = None,
+                       comentarios_con_contexto: list[dict] | None = None,
                        textos_previos: list[str] | None = None,
                        es_oficial: bool = False,
                        # Bloque 6.1: historical data
@@ -71,6 +72,12 @@ def construir_analysis(aprobaciones_agrupadas: list,
         externos_stats: estadisticas de Externos (posts, comments, engagement).
         comentarios_texts: textos crudos de comentarios para clasificar
             sentimiento, emoción, tema y zona con reglas léxicas.
+        comentarios_con_contexto: lista de dicts con keys "id", "texto",
+            "post_id", "plataforma" para preservar trazabilidad
+            comentario -> post. Se usa para generar el archivo de
+            evidencia (_evidencia_periodo.json) que el paso narrar
+            consume para resolver URLs reales. Campo interno no
+            incluido en analysis.json; se persiste aparte.
         textos_previos: textos del período anterior para temas emergentes.
         es_oficial: True si los posts son de fuentes oficiales (activa
             regla "me divierte" en clasificación de emoción).
@@ -207,6 +214,29 @@ def construir_analysis(aprobaciones_agrupadas: list,
             "share": pct,
             "emocion_dominante": t.get("emocion_dominante", "calma"),
         })
+
+    # ── Evidencia: mapear post_id -> tema/emocion para trazabilidad ──
+    # Se persiste en _evidencia_periodo.json para que el paso narrar resuelva
+    # URLs reales sin volver a tocar las DBs crudas.
+    evidencia_por_tema: dict[str, set[str]] = {}
+    evidencia_por_emocion: dict[str, set[str]] = {}
+    if comentarios_con_contexto and topic_results_by_text:
+        for i, ctx in enumerate(comentarios_con_contexto):
+            post_id = ctx.get("post_id", "")
+            if not post_id:
+                continue
+            tr = topic_results_by_text.get(i)
+            if tr and tr.tema and tr.tema != "no_aplica":
+                evidencia_por_tema.setdefault(tr.tema, set()).add(post_id)
+        # Clasificar emoción de CADA comentario individualmente para evidencia
+        for i, ctx in enumerate(comentarios_con_contexto):
+            post_id = ctx.get("post_id", "")
+            texto = ctx.get("texto", "")
+            if not post_id or not texto:
+                continue
+            emo_result = classify_emotion(texto, es_oficial=es_oficial)
+            if emo_result.emocion and emo_result.emocion != "calma":
+                evidencia_por_emocion.setdefault(emo_result.emocion, set()).add(post_id)
 
     # ── §G: HHI de concentración temática ──
     shares_para_hhi = [r.get("share", 0) for r in ramas if isinstance(r, dict)]
@@ -842,6 +872,23 @@ def construir_analysis(aprobaciones_agrupadas: list,
             "fecha": "", "n_picos": 0, "coincidencias": 0,
             "indice_correlacion": 0.0,
         }
+
+    # ── Persistir evidencia para paso narrar ──
+    evidencia_data = {
+        "periodo": periodo,
+        "fecha_datos_hasta": fecha_hasta,
+        "por_tema": {k: sorted(v) for k, v in evidencia_por_tema.items()},
+        "por_emocion": {k: sorted(v) for k, v in evidencia_por_emocion.items()},
+    }
+    evidencia_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "data", "_evidencia_periodo.json"
+    )
+    try:
+        os.makedirs(os.path.dirname(evidencia_path), exist_ok=True)
+        with open(evidencia_path, "w", encoding="utf-8") as f:
+            json.dump(evidencia_data, f, ensure_ascii=False, indent=2)
+    except OSError:
+        pass  # no bloquear el pipeline si falla la persistencia de evidencia
 
     return {
         "meta": meta,
